@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  border-color: theme("colors.base.border");
+}
+
+html {
+  background: #050509;
+}
+
+body {
+  background: radial-gradient(ellipse 1200px 600px at 50% -10%, rgb(139 92 246 / 0.14), transparent 60%), #050509;
+  color: theme("colors.ink.DEFAULT");
+  min-height: 100dvh;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+::selection {
+  background: theme("colors.brand.DEFAULT" / 40%);
+  color: white;
+}
+
+/* Sichtbarer, konsistenter Fokusring für Tastaturbedienung – nie entfernen, nur stylen. */
+:focus-visible {
+  outline: 2px solid theme("colors.brand.cyan");
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: theme("colors.base.border-strong");
+  border-radius: 999px;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+/* "Reduce Motion" des Betriebssystems respektieren: Animationen/Transitions global deaktivieren. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.text-gradient-brand {
+  background: linear-gradient(90deg, #a78bfa, #22d3ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

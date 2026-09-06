@@ -1,0 +1,409 @@
+// WinRace – Datenmodell
+//
+// Layout-Hinweis: Ein RoomMember ist zugleich der "TeamMember" aus der
+// Spezifikation – jede Raum-Mitgliedschaft trägt optional eine teamId.
+// Das vermeidet eine redundante Zwischentabelle, ohne Informationen zu
+// verlieren (Rolle, Team-Lead-Flag und Team-Zugehörigkeit hängen ohnehin
+// untrennbar an der Mitgliedschaft in genau einem Raum).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Users & Auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  displayName  String
+  avatarUrl    String?
+  locale       String   @default("de")
+  soundEnabled Boolean  @default(true)
+  reduceMotion Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  hostedRooms         Room[]                 @relation("RoomHost")
+  memberships         RoomMember[]
+  invitesCreated       RoomInvite[]           @relation("InviteCreatedBy")
+  activityEvents       ActivityEvent[]
+  notifications        Notification[]
+  twitchConnection     TwitchConnection?
+  passwordResets       PasswordResetToken[]
+  progressLogsActed    TeamGameProgressLog[]
+  evidence             Evidence[]
+  overlayTokensCreated OverlayToken[]
+}
+
+model TwitchConnection {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  twitchLogin  String
+  twitchUserId String?
+  verified     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Rooms
+// ---------------------------------------------------------------------------
+
+enum RoomVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model Room {
+  id     String @id @default(cuid())
+  code   String @unique
+  name   String
+  logoUrl String?
+
+  passwordHash String
+
+  hostId String
+  host   User   @relation("RoomHost", fields: [hostId], references: [id])
+
+  maxMembersPerTeam Int       @default(4)
+  startAt           DateTime?
+  timeLimitMinutes  Int?
+  visibility        RoomVisibility @default(PRIVATE)
+
+  allowMemberProgress     Boolean @default(true)
+  onlyTeamLeadEdits       Boolean @default(false)
+  requireHostConfirmation Boolean @default(true)
+  requireJoinApproval     Boolean @default(false)
+  teamsLocked             Boolean @default(false)
+
+  isDemo     Boolean @default(false)
+  isArchived Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teams          Team[]
+  members        RoomMember[]
+  invites        RoomInvite[]
+  challenge      Challenge?
+  activityEvents ActivityEvent[]
+  overlayConfigs OverlayConfiguration[]
+  overlayTokens  OverlayToken[]
+  notifications  Notification[]
+
+  @@index([hostId])
+}
+
+enum TeamSide {
+  A
+  B
+}
+
+model Team {
+  id            String   @id @default(cuid())
+  roomId        String
+  room          Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  side          TeamSide
+  name          String
+  color         String
+  locked        Boolean  @default(false)
+  currentGameId String?
+
+  members  RoomMember[]
+  progress TeamGameProgress[]
+
+  @@unique([roomId, side])
+  @@index([roomId])
+}
+
+enum RoomRole {
+  HOST
+  TEAM_LEAD
+  MEMBER
+  SPECTATOR
+}
+
+enum MemberStatus {
+  PENDING
+  ACTIVE
+  REMOVED
+  BANNED
+}
+
+model RoomMember {
+  id     String @id @default(cuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role       RoomRole     @default(SPECTATOR)
+  teamId     String?
+  team       Team?        @relation(fields: [teamId], references: [id])
+  status     MemberStatus @default(ACTIVE)
+  isTeamLead Boolean      @default(false)
+
+  twitchLoginOverride String? // optionaler, vom Lead gepflegter Twitch-Kanal für dieses Mitglied
+
+  joinedAt   DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  evidence Evidence[]
+
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@index([userId])
+  @@index([teamId])
+}
+
+model RoomInvite {
+  id          String    @id @default(cuid())
+  roomId      String
+  room        Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  createdById String
+  createdBy   User      @relation("InviteCreatedBy", fields: [createdById], references: [id])
+  label       String?
+  maxUses     Int       @default(1)
+  useCount    Int       @default(0)
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([roomId])
+}
+
+// ---------------------------------------------------------------------------
+// Challenge
+// ---------------------------------------------------------------------------
+
+enum ChallengeStatus {
+  LOBBY
+  READY
+  RUNNING
+  PAUSED
+  FINISHED
+  ARCHIVED
+}
+
+model Challenge {
+  id     String @id @default(cuid())
+  roomId String @unique
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  status ChallengeStatus @default(LOBBY)
+
+  startedAt     DateTime?
+  pausedAt      DateTime?
+  totalPausedMs BigInt    @default(0)
+  endedAt       DateTime?
+
+  winnerTeamId        String?
+  winnerConfirmedAt    DateTime?
+  pendingWinnerTeamId  String?
+  pendingWinnerAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  games ChallengeGame[]
+}
+
+enum ProgressType {
+  WINS
+  POINTS
+  TASK
+}
+
+enum AppliesTo {
+  BOTH
+  TEAM_A
+  TEAM_B
+}
+
+model ChallengeGame {
+  id          String    @id @default(cuid())
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  order            Int
+  name             String
+  coverUrl         String?
+  progressType     ProgressType @default(WINS)
+  targetValue      Int          @default(1)
+  timeLimitMinutes Int?
+  rulesText        String?
+  appliesTo        AppliesTo    @default(BOTH)
+  difficulty       Int?
+  bonusPoints      Int?
+  requireEvidence  Boolean      @default(false)
+  requiresPreviousCompleted Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  progress TeamGameProgress[]
+
+  @@unique([challengeId, order])
+  @@index([challengeId])
+}
+
+enum GameProgressStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+}
+
+model TeamGameProgress {
+  id     String        @id @default(cuid())
+  gameId String
+  game   ChallengeGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  teamId String
+  team   Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  value       Int                @default(0)
+  status      GameProgressStatus @default(PENDING)
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  lastUpdatedById String?
+  lastUpdatedAt   DateTime?
+  version         Int       @default(0)
+
+  logs     TeamGameProgressLog[]
+  evidence Evidence[]
+
+  @@unique([gameId, teamId])
+  @@index([teamId])
+  @@index([gameId])
+}
+
+model TeamGameProgressLog {
+  id         String           @id @default(cuid())
+  progressId String
+  progress   TeamGameProgress @relation(fields: [progressId], references: [id], onDelete: Cascade)
+  actorId    String?
+  actor      User?            @relation(fields: [actorId], references: [id])
+
+  delta         Int
+  previousValue Int
+  newValue      Int
+  reverted      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([progressId])
+}
+
+model Evidence {
+  id         String            @id @default(cuid())
+  progressId String
+  progress   TeamGameProgress  @relation(fields: [progressId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User              @relation(fields: [authorId], references: [id])
+  memberId   String?
+  member     RoomMember?       @relation(fields: [memberId], references: [id])
+
+  url     String?
+  comment String?
+
+  createdAt DateTime @default(now())
+
+  @@index([progressId])
+}
+
+// ---------------------------------------------------------------------------
+// Activity, Overlays, Notifications
+// ---------------------------------------------------------------------------
+
+model ActivityEvent {
+  id      String @id @default(cuid())
+  roomId  String
+  room    Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  actorId String?
+  actor   User?  @relation(fields: [actorId], references: [id])
+
+  type    String
+  message String
+  data    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([roomId, createdAt])
+}
+
+enum OverlayType {
+  TEAM_COMPARISON
+  TEAM_A
+  TEAM_B
+  COMPACT
+  CURRENT_GAME
+  FULL_LIST
+  WINNER
+}
+
+model OverlayConfiguration {
+  id     String      @id @default(cuid())
+  roomId String
+  room   Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  type   OverlayType
+  config Json
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([roomId, type])
+}
+
+model OverlayToken {
+  id          String    @id @default(cuid())
+  roomId      String
+  room        Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  label       String?
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  revokedAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([roomId])
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String?
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roomId String?
+  room   Room?  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  type    String
+  message String
+  data    Json?
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([roomId])
+}
