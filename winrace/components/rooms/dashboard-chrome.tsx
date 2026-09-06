@@ -11,6 +11,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { Tabs, type TabItem } from "@/components/ui/tabs";
 import { ConnectionBanner } from "@/components/ui/connection-banner";
 import { ChallengeTimer } from "@/components/rooms/challenge-timer";
+import { NotificationBell } from "@/components/rooms/notification-bell";
 import { CHALLENGE_STATUS_COLORS, CHALLENGE_STATUS_LABELS } from "@/lib/labels";
 
 export function DashboardChrome({ children }: { children: ReactNode }) {
@@ -55,6 +56,7 @@ export function DashboardChrome({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-3">
             <ChallengeTimer challenge={state.challenge} />
+            <NotificationBell />
             <Link href={`/rooms/${code}/live`} className="text-ink-faint hover:text-ink" title="Öffentliche Live-Ansicht öffnen">
               <Eye className="h-5 w-5" />
             </Link>

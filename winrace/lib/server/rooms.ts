@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
 import { generateRoomCode, hashSecret, verifySecret, hashOpaqueToken } from "@/lib/codes";
 import { consumeRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
-import { createActivityEvent } from "@/lib/server/activity";
+import { createActivityEvent, createNotification } from "@/lib/server/activity";
 import type { CreateRoomInput } from "@/lib/validation";
 
 /** Erzeugt einen Raumcode, der garantiert noch nicht vergeben ist. */
@@ -122,10 +122,20 @@ export async function joinRoom(params: JoinRoomParams) {
           : `${user?.displayName} ist dem Raum beigetreten.`,
     });
 
-    return upserted;
+    let notification = null;
+    if (initialStatus === "PENDING") {
+      notification = await createNotification(tx, {
+        roomId: room.id,
+        userId: room.hostId,
+        type: "JOIN_REQUESTED",
+        message: `${user?.displayName} möchte dem Raum beitreten.`,
+      });
+    }
+
+    return { upserted, notification };
   });
 
-  return { room, member };
+  return { room, member: member.upserted, notification: member.notification };
 }
 
 /** Öffentlich sichere Vorschau eines Raums (für Join-/Invite-Seiten) – keine sensiblen Daten. */

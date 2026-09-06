@@ -66,6 +66,17 @@ body.site-shell {
   }
 }
 
+/* Zusätzliche, individuelle Nutzereinstellung (Profil → "Animationen
+   reduzieren") – dieselbe Wirkung wie oben, unabhängig vom Betriebssystem. */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
 .bg-grid {
   background-image:
     linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px),

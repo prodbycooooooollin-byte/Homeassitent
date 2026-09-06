@@ -35,7 +35,7 @@ export async function getRoomState(code: string, viewerUserId: string | null, op
         include: {
           members: {
             where: { status: { in: ["ACTIVE", "PENDING"] } },
-            include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
+            include: { user: { select: { id: true, displayName: true, avatarUrl: true, twitchConnection: { select: { twitchLogin: true } } } } },
             orderBy: { joinedAt: "asc" },
           },
         },
@@ -103,7 +103,7 @@ export async function getRoomState(code: string, viewerUserId: string | null, op
             role: m.role,
             isTeamLead: m.isTeamLead,
             status: m.status,
-            twitchLogin: m.twitchLoginOverride,
+            twitchLogin: m.twitchLoginOverride ?? m.user.twitchConnection?.twitchLogin ?? null,
             joinedAt: m.joinedAt,
           }))
         : [],
