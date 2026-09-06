@@ -26,7 +26,7 @@ export interface ViewerMember {
  * Reconnect-Refetch im Client) verwendet – eine einzige Quelle der
  * Wahrheit für "was darf dieser Betrachter sehen".
  */
-export async function getRoomState(code: string, viewerUserId: string | null) {
+export async function getRoomState(code: string, viewerUserId: string | null, options?: { forceFullDetails?: boolean }) {
   const room = await prisma.room.findUnique({
     where: { code: code.trim().toUpperCase() },
     include: {
@@ -50,7 +50,7 @@ export async function getRoomState(code: string, viewerUserId: string | null) {
     : null;
 
   const isPrivilegedViewer = Boolean(viewerMember && viewerMember.status === "ACTIVE");
-  const canSeeFullDetails = room.visibility === "PUBLIC" || isPrivilegedViewer || room.isDemo;
+  const canSeeFullDetails = Boolean(options?.forceFullDetails) || room.visibility === "PUBLIC" || isPrivilegedViewer || room.isDemo;
 
   const permMember: PermissionMember | null = viewerMember
     ? { role: viewerMember.role, status: viewerMember.status, isTeamLead: viewerMember.isTeamLead, teamId: viewerMember.teamId }

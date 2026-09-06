@@ -7,7 +7,7 @@ import type { RoomStateView } from "@/lib/types";
 interface RoomStateContextValue {
   state: RoomStateView;
   code: string;
-  currentUserId: string;
+  currentUserId: string | null;
   connectionStatus: ConnectionStatus;
   online: Set<string>;
   refetch: () => Promise<void>;
@@ -24,7 +24,7 @@ export function RoomStateProvider({
   children,
 }: {
   code: string;
-  currentUserId: string;
+  currentUserId: string | null;
   initialState: RoomStateView;
   children: ReactNode;
 }) {

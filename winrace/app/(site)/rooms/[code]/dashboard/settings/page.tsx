@@ -9,7 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { SaveStatusIndicator } from "@/components/ui/save-status";
 import { ColorField } from "@/components/rooms/color-field";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast-context";
+import { ShieldAlert } from "lucide-react";
 
 export default function SettingsPage() {
   const { state, code, refetch } = useRoomState();
@@ -64,6 +66,10 @@ export default function SettingsPage() {
     } else {
       toast.push({ variant: "error", title: "Fehler beim Ändern des Passworts" });
     }
+  }
+
+  if (!state.viewer.permissions.canManageRoom) {
+    return <EmptyState icon={<ShieldAlert className="h-6 w-6" />} title="Kein Zugriff" description="Nur der Host kann Raumeinstellungen ändern." />;
   }
 
   return (

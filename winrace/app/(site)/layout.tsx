@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Rajdhani } from "next/font/google";
-import "./globals.css";
+import "../globals.css";
 import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -19,8 +19,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="de" className={`${inter.variable} ${rajdhani.variable}`}>
-      <body className="min-h-dvh font-sans antialiased">
+    <html lang="de" className={`site-shell ${inter.variable} ${rajdhani.variable}`}>
+      <body className="site-shell min-h-dvh font-sans antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

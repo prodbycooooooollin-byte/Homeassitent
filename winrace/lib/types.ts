@@ -121,6 +121,31 @@ export interface RoomStateView {
  * auf den passenden `*View`-Typ gecastet, damit der Date→String-Wechsel
  * sichtbar bleibt statt (falsch) den Eingabetyp beizubehalten.
  */
+export interface TeamStatsView {
+  teamId: string;
+  side: TeamSide;
+  name: string;
+  color: string;
+  overallPercent: number;
+  completedGames: number;
+  totalApplicableGames: number;
+  totalWins: number;
+  remainingWins: number;
+  currentStreak: number;
+  averageTimePerGameMs: number | null;
+  fastestGame: { gameId: string; name: string; durationMs: number } | null;
+  lastWinAt: string | null;
+  mostActiveMember: { userId: string; displayName: string; actionCount: number } | null;
+  etaMs: number | null;
+  timeline: { gameId: string; gameName: string; completedAt: string }[];
+}
+
+export interface RoomStatsView {
+  teams: TeamStatsView[];
+  leadingTeamId: string | null;
+  leadMarginPercent: number | null;
+}
+
 export function serialize(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }

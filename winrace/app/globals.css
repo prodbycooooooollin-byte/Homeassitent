@@ -10,11 +10,16 @@
   border-color: theme("colors.base.border");
 }
 
-html {
+/* Nur die eigentliche Website bekommt den dunklen Seiten-Hintergrund –
+   OBS-Overlay-Seiten (app/(overlay)/…) importieren dieselbe globals.css für
+   Tailwind, brauchen aber einen transparenten <body>, damit die
+   Browserquelle in OBS wirklich durchsichtig ist. Daher an der Klasse
+   `.site-shell` festgemacht statt an bloßen Element-Selektoren. */
+html.site-shell {
   background: #050509;
 }
 
-body {
+body.site-shell {
   background: radial-gradient(ellipse 1200px 600px at 50% -10%, rgb(139 92 246 / 0.14), transparent 60%), #050509;
   color: theme("colors.ink.DEFAULT");
   min-height: 100dvh;
