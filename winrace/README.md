@@ -7,7 +7,9 @@ Echtzeit-Synchronisierung, Fortschrittsverwaltung, Twitch-Streams und
 OBS-Overlays sind real implementiert und Ende-zu-Ende getestet.
 
 > Dieses Verzeichnis ist eine eigenständige App innerhalb dieses Repos.
-> Der Rest des Repos (Smart-Home-Center) ist davon unberührt.
+> Der Rest des Repos (Smart-Home-Center) ist davon unberührt – einzige
+> Ausnahme ist `render.yaml` im Repo-Root (Render erwartet Blueprints dort),
+> das ausschließlich diese App beschreibt und Smart-Home-Center nicht antastet.
 
 ## Tech-Stack
 
@@ -46,10 +48,80 @@ Demo (`/demo`), auf „Raum erstellen“ und „Raum beitreten“.
 | `NEXT_PUBLIC_SITE_URL` | ja | Für generierte Einladungs-/Overlay-Links |
 | `PORT` | nein | Port des kombinierten Servers (Default 3000) |
 
+## Deployment (24/7-Betrieb)
+
+WinRace braucht einen **dauerhaft laufenden Node-Prozess** (der kombinierte
+Next.js + Socket.io Server in `server.ts`) – kein klassisches
+Vercel-Serverless. Mitgeliefert: ein produktionsreifes `Dockerfile`
+(Multi-Stage-Build), `.dockerignore`, ein `GET /api/health`-Endpunkt für
+Health-Checks sowie ein `render.yaml`-Blueprint im Repo-Root. `server.ts`
+liest `PORT` und bindet an `0.0.0.0` – kompatibel mit Railway, Render,
+Fly.io und jedem Docker-Host ohne Anpassung.
+
+### Option A: Render (ein Klick über das Blueprint)
+
+1. Repository bei GitHub verbunden lassen, im Render-Dashboard **New +** →
+   **Blueprint** wählen und dieses Repo auswählen. Render liest
+   `render.yaml` im Repo-Root und legt daraus automatisch einen Web-Service
+   (baut aus `winrace/Dockerfile`) **und** eine verwaltete PostgreSQL-
+   Datenbank an, bereits über `DATABASE_URL` verknüpft.
+2. Nach dem ersten Deploy: Render vergibt eine URL (z.B.
+   `https://winrace.onrender.com`). Diese als `NEXTAUTH_URL` **und**
+   `NEXT_PUBLIC_SITE_URL` im Dashboard eintragen (vor dem ersten Deploy
+   noch nicht bekannt, daher `sync: false` im Blueprint) und den Service
+   einmal manuell neu deployen.
+3. Optional `TWITCH_CLIENT_ID`/`_SECRET` bzw. `SMTP_*` im Dashboard
+   nachtragen (siehe Tabelle oben).
+4. `npm run seed` einmalig über die Render-Shell des Services ausführen,
+   falls der Demo-Raum gewünscht ist.
+
+### Option B: Railway
+
+1. **New Project** → **Deploy from GitHub repo** → dieses Repo wählen.
+2. Da die App in `winrace/` liegt: in den Service-Einstellungen **Root
+   Directory** auf `winrace` setzen. Railway erkennt das `Dockerfile`
+   automatisch.
+3. **+ New** → **Database** → **PostgreSQL** im selben Projekt hinzufügen;
+   Railway stellt `DATABASE_URL` als Referenzvariable bereit, im
+   Web-Service unter Variables auf die DB-Variable verweisen (oder Railways
+   "Reference"-Funktion nutzen).
+4. Die restlichen Variablen aus der Tabelle oben eintragen. `NEXTAUTH_URL`
+   und `NEXT_PUBLIC_SITE_URL` auf die von Railway vergebene Domain setzen
+   (unter Settings → Networking eine öffentliche Domain generieren, dann
+   erneut deployen).
+
+### Nach jedem Deploy (beide Optionen)
+
+- Der Container-Start führt automatisch `prisma migrate deploy` aus
+  (`npm run start:deploy`, siehe `Dockerfile`) – neue Migrationen werden
+  bei jedem Deploy angewendet, ohne manuellen Schritt.
+- `TWITCH_CLIENT_ID`/`_SECRET` gesetzt? Dann in der Twitch-App-Konsole
+  (dev.twitch.tv) die OAuth-Redirect-URL auf
+  `<NEXTAUTH_URL>/api/auth/callback/twitch` mit der echten Produktions-
+  domain aktualisieren.
+- Health-Check-Pfad für eigene Docker-/Kubernetes-Setups:
+  `GET /api/health` (prüft zusätzlich die Datenbankverbindung, liefert
+  `503` statt `200` wenn Postgres nicht erreichbar ist).
+
+### Eigener Server per Docker (ohne Railway/Render)
+
+```bash
+cd winrace
+docker build -t winrace .
+docker run -d --name winrace -p 3000:3000 --env-file .env winrace
+```
+
+Läuft der Container neben einer eigenen Postgres-Instanz (nicht im selben
+Docker-Netzwerk), `DATABASE_URL` in `.env` entsprechend auf deren
+erreichbare Adresse setzen. Für Neustarts/Autostart einen Prozess-Manager
+wie `systemd` oder `docker run --restart unless-stopped` verwenden.
+
 ## Architektur
 
 ```
 server.ts                     Kombinierter Next.js + Socket.io Server (siehe Kommentare darin)
+Dockerfile                     Produktions-Image (Multi-Stage), siehe Abschnitt "Deployment"
+../render.yaml                 Render-Blueprint (liegt im Repo-Root, siehe "Deployment")
 prisma/schema.prisma           Vollständiges Datenmodell
 prisma/seed.ts                 Demo-Raum "WinRace Demo-Arena" (isDemo: true, klar isoliert)
 
@@ -109,9 +181,9 @@ per REST nachgeladen (kein Vertrauen auf während der Trennung verpasste
 Events). Eine einfache In-Memory-Präsenz zeigt Online-Status pro
 Mitglied.
 
-**Hinweis für den Betrieb:** Der kombinierte Server benötigt einen
-lang laufenden Node-Prozess (funktioniert auf jedem Node-Host, Docker,
-Railway/Render/Fly.io). Auf klassischem Vercel-Serverless funktioniert
+**Hinweis für den Betrieb:** Der kombinierte Server benötigt einen lang
+laufenden Node-Prozess – siehe Abschnitt [Deployment](#deployment-24-7-betrieb)
+für Railway/Render/Docker. Auf klassischem Vercel-Serverless funktioniert
 der Socket.io-Teil nicht ohne Weiteres – dort müsste auf einen externen
 Realtime-Dienst (z.B. Pusher, Ably oder Supabase Realtime) umgestellt
 werden. Die Emit-Aufrufe sind an einer zentralen Stelle
