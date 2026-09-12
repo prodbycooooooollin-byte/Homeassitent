@@ -344,7 +344,7 @@ export function ServerConnectionPanel({ server }: { server: ServerConnectionData
                   </div>
                   <p className="text-xs text-danger">
                     Wird nur einmal angezeigt - trage ihn jetzt in die Agent-Konfiguration
-                    ein (<code>connector/config.json</code>, Feld <code>apiKey</code>).
+                    ein (<code>connector/config.json</code>, Feld <code>agentApiKey</code>).
                   </p>
                 </>
               ) : (
