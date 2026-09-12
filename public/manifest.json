@@ -1,0 +1,10 @@
+{
+  "name": "Craftboard",
+  "short_name": "Craftboard",
+  "description": "Der gemeinsame Treffpunkt für euren Minecraft-Server.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e0c",
+  "theme_color": "#0a0e0c",
+  "icons": []
+}

@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   },
   description:
     "Der gemeinsame Treffpunkt für euren Minecraft-Server: Statistiken, Spieler, Weltkarte und Modpack an einem Ort.",
+  manifest: "/manifest.json",
 };
 
 export const viewport: Viewport = {

@@ -12,7 +12,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "smoke-test": "node scripts/smoke-test.mjs"
+    "smoke-test": "node scripts/smoke-test.mjs",
+    "smoke-test:map": "node scripts/smoke-test-map.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -22,7 +23,6 @@
     "adm-zip": "^0.6.1",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
-    "date-fns": "^4.4.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.45.0",
     "next": "^15.5.25",
