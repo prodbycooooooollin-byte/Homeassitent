@@ -9,3 +9,17 @@ npm-debug.log*
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts
+
+# Prisma / SQLite (echte, aber lokale Datenspeicherung)
+/prisma/dev.db
+/prisma/dev.db-journal
+/prisma/*.db
+/prisma/*.db-journal
+
+# Lokal gespeicherte Uploads (Modpacks, Bilder)
+/storage
+
+# Connector-Agent hat ein eigenes package.json / node_modules
+/connector/node_modules
+/connector/*.log
+/connector/config.json

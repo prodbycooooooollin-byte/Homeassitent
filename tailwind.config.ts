@@ -1,16 +1,10 @@
-// Alle Farbtokens werden über CSS-Variablen (RGB-Tripel) aufgelöst, damit
-// Hell-/Dunkelmodus (siehe app/globals.css und ThemeEffect) zur Laufzeit
-// umgeschaltet werden kann. `<alpha-value>` ist Tailwinds eingebauter
-// Platzhalter für Opacity-Modifier (z. B. bg-accent/20) - die "weichen"
-// Töne (line, *-soft) sind dabei bereits als fertig abgetönte RGB-Werte in
-// den CSS-Variablen hinterlegt (siehe app/globals.css), damit sie ohne
-// Modifier standardmäßig dezent statt kräftig erscheinen.
-function withAlpha(variable: string) {
-  return `rgb(var(${variable}) / <alpha-value>)`;
-}
+import type { Config } from "tailwindcss";
 
-const config = {
-  darkMode: ["class"],
+// Craftboard-Designsystem: dunkler Hintergrund, dezente Grüntöne, gut
+// lesbare System-Schrift. Es gibt bewusst nur EIN (dunkles) Theme - siehe
+// Aufgabenstellung - daher feste Farbwerte statt CSS-Variablen-Umschaltung.
+const config: Config = {
+  darkMode: "class",
   content: [
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
@@ -23,93 +17,81 @@ const config = {
       },
       colors: {
         base: {
-          DEFAULT: withAlpha("--color-base"),
+          DEFAULT: "#0a0e0c",
+          raised: "#0d1310",
         },
         surface: {
-          DEFAULT: withAlpha("--color-surface"),
-          raised: withAlpha("--color-surface-raised"),
-          hover: withAlpha("--color-surface-hover"),
-          navy: withAlpha("--color-surface-navy"),
+          DEFAULT: "#121917",
+          raised: "#182019",
+          hover: "#1d2721",
         },
         line: {
-          DEFAULT: withAlpha("--color-line"),
-          soft: withAlpha("--color-line-soft"),
-          strong: withAlpha("--color-line-strong"),
+          DEFAULT: "#233028",
+          soft: "#1a241e",
         },
         ink: {
-          DEFAULT: withAlpha("--color-ink"),
-          muted: withAlpha("--color-ink-muted"),
-          faint: withAlpha("--color-ink-faint"),
+          DEFAULT: "#e8f0ea",
+          muted: "#9db3a5",
+          faint: "#6b8177",
         },
         accent: {
-          DEFAULT: withAlpha("--color-accent"),
-          soft: withAlpha("--color-accent-soft"),
-          strong: withAlpha("--color-accent-strong"),
-          dim: withAlpha("--color-accent-dim"),
+          DEFAULT: "#4ade80",
+          strong: "#22c55e",
+          soft: "#16351f",
+          faint: "#0f2417",
         },
-        good: {
-          DEFAULT: withAlpha("--color-good"),
-          soft: withAlpha("--color-good-soft"),
+        gold: {
+          DEFAULT: "#eab308",
+          soft: "#3a2f0d",
         },
-        warn: {
-          DEFAULT: withAlpha("--color-warn"),
-          soft: withAlpha("--color-warn-soft"),
+        danger: {
+          DEFAULT: "#f87171",
+          soft: "#3a1616",
         },
-        solar: {
-          DEFAULT: withAlpha("--color-warn"),
-          soft: withAlpha("--color-warn-soft"),
-        },
-        bad: {
-          DEFAULT: withAlpha("--color-bad"),
-          soft: withAlpha("--color-bad-soft"),
+        info: {
+          DEFAULT: "#60a5fa",
+          soft: "#132436",
         },
       },
       fontFamily: {
         sans: [
-          "var(--font-sans)",
           "-apple-system",
           "BlinkMacSystemFont",
           "Segoe UI",
+          "Inter",
           "Roboto",
           "Helvetica Neue",
           "Arial",
           "sans-serif",
         ],
-      },
-      borderRadius: {
-        xl2: "1.25rem",
-        xl3: "1.75rem",
+        mono: [
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Consolas",
+          "monospace",
+        ],
       },
       boxShadow: {
-        card: "0 1px 0 0 rgba(255,255,255,0.03) inset, 0 8px 24px -12px rgba(0,0,0,0.6)",
-        glowAccent: "0 0 0 1px rgba(61,139,253,0.25), 0 0 24px -4px rgba(61,139,253,0.45)",
-        glowGood: "0 0 0 1px rgba(47,214,129,0.25), 0 0 24px -4px rgba(47,214,129,0.4)",
-        glowWarn: "0 0 0 1px rgba(245,165,36,0.25), 0 0 24px -4px rgba(245,165,36,0.4)",
-        glowBad: "0 0 0 1px rgba(242,73,92,0.25), 0 0 24px -4px rgba(242,73,92,0.4)",
+        panel: "0 1px 0 0 rgba(255,255,255,0.03) inset, 0 8px 24px -12px rgba(0,0,0,0.6)",
+        glow: "0 0 0 1px rgba(74,222,128,0.25), 0 0 24px -4px rgba(74,222,128,0.35)",
+      },
+      borderRadius: {
+        panel: "14px",
       },
       keyframes: {
-        "fade-in": {
-          "0%": { opacity: "0", transform: "translateY(4px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
-        "flow-dash": {
-          "0%": { strokeDashoffset: "40" },
-          "100%": { strokeDashoffset: "0" },
-        },
-        "pulse-soft": {
+        pulseDot: {
           "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.55" },
+          "50%": { opacity: "0.35" },
         },
-        shimmer: {
-          "0%": { backgroundPosition: "-400px 0" },
-          "100%": { backgroundPosition: "400px 0" },
+        fadeIn: {
+          from: { opacity: "0", transform: "translateY(4px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
-        "fade-in": "fade-in 0.25s ease-out",
-        "flow-dash": "flow-dash 1.2s linear infinite",
-        "pulse-soft": "pulse-soft 2.4s ease-in-out infinite",
-        shimmer: "shimmer 1.6s linear infinite",
+        "pulse-dot": "pulseDot 2s ease-in-out infinite",
+        "fade-in": "fadeIn 0.15s ease-out",
       },
     },
   },

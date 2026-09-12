@@ -1,0 +1,13 @@
+{
+  "craftboardUrl": "https://craftboard.example.com",
+  "agentApiKey": "cba_6K3_r58tEBPHWO-GqsjMpEnpgEgFNbLZ",
+  "serverDir": "/pfad/zum/minecraft-server",
+  "rcon": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 25575,
+    "password": "aus-server.properties"
+  },
+  "statsIntervalSeconds": 300,
+  "positionIntervalSeconds": 15
+}

@@ -1,52 +1,37 @@
-import { Icon } from "./icon";
+import type { LucideIcon } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 
-type Tone = "accent" | "good" | "warn" | "bad" | "neutral";
-
-const toneClasses: Record<Tone, string> = {
-  accent: "bg-accent-soft text-accent-strong",
-  good: "bg-good-soft text-good",
-  warn: "bg-warn-soft text-warn",
-  bad: "bg-bad-soft text-bad",
-  neutral: "bg-surface-raised text-ink-muted",
-};
-
 export function StatCard({
-  icon,
   label,
   value,
   sub,
-  tone = "neutral",
-  trend,
+  icon: Icon,
+  unavailable,
+  className,
 }: {
-  icon: string;
   label: string;
   value: string;
   sub?: string;
-  tone?: Tone;
-  trend?: { direction: "up" | "down"; label: string };
+  icon?: LucideIcon;
+  /** Zeigt "Nicht verfügbar" statt eines erfundenen Werts. */
+  unavailable?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="rounded-xl2 border border-line bg-surface p-4 shadow-card sm:p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg", toneClasses[tone])}>
-          <Icon name={icon} size={17} />
-        </div>
-        {trend && (
-          <span
-            className={cn(
-              "flex items-center gap-0.5 text-[0.7rem] font-medium",
-              trend.direction === "up" ? "text-warn" : "text-good",
-            )}
-          >
-            <Icon name={trend.direction === "up" ? "trending-up" : "trending-down"} size={12} />
-            {trend.label}
-          </span>
-        )}
+    <Card className={cn("p-4", className)}>
+      <div className="flex items-start justify-between">
+        <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+          {label}
+        </span>
+        {Icon && <Icon size={16} className="text-accent/70" />}
       </div>
-      <p className="text-[1.35rem] font-semibold leading-tight text-ink sm:text-2xl">{value}</p>
-      <p className="mt-0.5 text-xs text-ink-muted">{label}</p>
-      {sub && <p className="mt-1 text-[0.7rem] text-ink-faint">{sub}</p>}
-    </div>
+      {unavailable ? (
+        <p className="mt-2 text-sm text-ink-faint">Nicht verfügbar</p>
+      ) : (
+        <p className="mt-2 text-2xl font-semibold text-ink">{value}</p>
+      )}
+      {sub && !unavailable && <p className="mt-1 text-xs text-ink-muted">{sub}</p>}
+    </Card>
   );
 }

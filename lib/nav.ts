@@ -1,17 +1,26 @@
+import {
+  LayoutDashboard,
+  Users,
+  BarChart3,
+  Map,
+  Hammer,
+  Package,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
+
 export interface NavItem {
   href: string;
   label: string;
-  icon: string;
-  primaryMobile?: boolean;
+  icon: LucideIcon;
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Home", icon: "home", primaryMobile: true },
-  { href: "/energie", label: "Energie", icon: "zap", primaryMobile: true },
-  { href: "/klima", label: "Klima", icon: "thermometer", primaryMobile: true },
-  { href: "/geraete", label: "Geräte", icon: "plug-zap", primaryMobile: true },
-  { href: "/raeume", label: "Räume", icon: "layout-grid" },
-  { href: "/automationen", label: "Automationen", icon: "workflow" },
-  { href: "/sicherheit", label: "Sicherheit", icon: "shield" },
-  { href: "/einstellungen", label: "Einstellungen", icon: "settings" },
+  { href: "/", label: "Übersicht", icon: LayoutDashboard },
+  { href: "/spieler", label: "Spieler", icon: Users },
+  { href: "/statistiken", label: "Statistiken", icon: BarChart3 },
+  { href: "/karte", label: "Weltkarte", icon: Map },
+  { href: "/projekte", label: "Projekte", icon: Hammer },
+  { href: "/modpack", label: "Modpack", icon: Package },
+  { href: "/einstellungen", label: "Einstellungen", icon: Settings },
 ];

@@ -1,65 +1,94 @@
-// Kleine, wiederverwendbare Formatierungshelfer.
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 60 * 60 * 24 * 365],
+  ["month", 60 * 60 * 24 * 30],
+  ["week", 60 * 60 * 24 * 7],
+  ["day", 60 * 60 * 24],
+  ["hour", 60 * 60],
+  ["minute", 60],
+];
 
-export function formatKw(value: number, digits = 2): string {
-  return `${value.toFixed(digits)} kW`;
+const rtf = new Intl.RelativeTimeFormat("de", { numeric: "auto" });
+
+export function formatRelativeTime(date: Date | string | number): string {
+  const d = new Date(date);
+  const diffSeconds = Math.round((d.getTime() - Date.now()) / 1000);
+  const abs = Math.abs(diffSeconds);
+
+  if (abs < 30) return "gerade eben";
+
+  for (const [unit, secondsInUnit] of RELATIVE_UNITS) {
+    if (abs >= secondsInUnit) {
+      return rtf.format(Math.round(diffSeconds / secondsInUnit), unit);
+    }
+  }
+  return rtf.format(Math.round(diffSeconds / 60), "minute");
 }
 
-export function formatKwh(value: number, digits = 1): string {
-  return `${value.toFixed(digits)} kWh`;
-}
-
-export function formatWatt(value: number): string {
-  if (value >= 1000) return `${(value / 1000).toFixed(2)} kW`;
-  return `${Math.round(value)} W`;
-}
-
-export function formatCurrency(value: number, currency: "EUR" | "USD" | "CHF" = "EUR"): string {
-  const symbols: Record<string, string> = { EUR: "€", USD: "$", CHF: "CHF" };
-  return `${value.toFixed(2)} ${symbols[currency]}`;
-}
-
-export function formatTemperature(value: number): string {
-  return `${value.toFixed(1)}°`;
-}
-
-export function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-}
-
-export function formatRelativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const diffMin = Math.round(diffMs / 60000);
-  if (diffMin < 1) return "gerade eben";
-  if (diffMin < 60) return `vor ${diffMin} Min.`;
-  const diffH = Math.round(diffMin / 60);
-  if (diffH < 24) return `vor ${diffH} Std.`;
-  const diffD = Math.round(diffH / 24);
-  return `vor ${diffD} Tag${diffD > 1 ? "en" : ""}`;
-}
-
-export function formatDateLong(date: Date): string {
-  return date.toLocaleDateString("de-DE", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
+export function formatDateTime(date: Date | string | number): string {
+  return new Date(date).toLocaleString("de-DE", {
+    dateStyle: "medium",
+    timeStyle: "short",
   });
 }
 
-export function formatClock(date: Date): string {
-  return date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+export function formatDate(date: Date | string | number): string {
+  return new Date(date).toLocaleDateString("de-DE", { dateStyle: "long" });
 }
 
-export function formatDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m} Min.`;
-  return `${h} Std. ${m} Min.`;
+export function formatNumber(n: number): string {
+  return n.toLocaleString("de-DE");
 }
 
-export function greetingForHour(hour: number): string {
-  if (hour < 5) return "Guten Abend";
-  if (hour < 11) return "Guten Morgen";
-  if (hour < 17) return "Guten Tag";
-  if (hour < 22) return "Guten Abend";
-  return "Gute Nacht";
+/** Minecraft-Ticks (20/Sek.) in eine lesbare Dauer wie "12 Std. 34 Min." */
+export function formatTicksDuration(ticks: number): string {
+  return formatSecondsDuration(Math.round(ticks / 20));
+}
+
+export function formatSecondsDuration(totalSeconds: number): string {
+  if (totalSeconds < 60) return `${totalSeconds} Sek.`;
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days} T.`);
+  if (hours > 0 || days > 0) parts.push(`${hours} Std.`);
+  if (days === 0) parts.push(`${minutes} Min.`);
+  return parts.join(" ");
+}
+
+/** Minecraft speichert Distanzen in Zentimetern. */
+export function formatCentimeters(cm: number): string {
+  const km = cm / 100_000;
+  if (km >= 1) return `${km.toLocaleString("de-DE", { maximumFractionDigits: 1 })} km`;
+  const m = cm / 100;
+  return `${m.toLocaleString("de-DE", { maximumFractionDigits: 0 })} m`;
+}
+
+/** Für das Serveralter: liefert z. B. "8 Monate" oder "1 Jahr, 2 Monate". */
+export function formatAge(since: Date | string | number): string {
+  const days = Math.floor((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24));
+  if (days < 1) return "heute gegründet";
+  if (days < 60) return `${days} Tage`;
+  const months = Math.floor(days / 30.44);
+  if (months < 24) return `${months} Monate`;
+  const years = Math.floor(months / 12);
+  const remMonths = months % 12;
+  return remMonths > 0 ? `${years} Jahre, ${remMonths} Monate` : `${years} Jahre`;
+}
+
+/** "minecraft:oak_log" -> "Oak log". Keine vollständige Übersetzungstabelle
+ * für ~1000 Spielobjekte - zeigt lesbar den echten Spiel-Key statt
+ * potenziell falscher erfundener Übersetzungen. */
+export function humanizeGameKey(key: string): string {
+  const short = key.split(":").pop() ?? key;
+  const words = short.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+export function formatCoords(x: number, y: number | null | undefined, z: number): string {
+  const rx = Math.round(x);
+  const rz = Math.round(z);
+  if (y === null || y === undefined) return `${rx}, ${rz}`;
+  return `${rx}, ${Math.round(y)}, ${rz}`;
 }

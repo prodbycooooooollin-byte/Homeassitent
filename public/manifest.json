@@ -1,10 +1,10 @@
 {
-  "name": "Smart-Home-Center",
-  "short_name": "Smart-Home",
-  "description": "Zentrale Oberfläche zur Überwachung und Steuerung deines Zuhauses.",
+  "name": "Craftboard",
+  "short_name": "Craftboard",
+  "description": "Der gemeinsame Treffpunkt für euren Minecraft-Server.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#05070d",
-  "theme_color": "#05070d",
+  "background_color": "#0a0e0c",
+  "theme_color": "#0a0e0c",
   "icons": []
 }
