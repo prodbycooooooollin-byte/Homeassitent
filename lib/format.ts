@@ -77,6 +77,15 @@ export function formatAge(since: Date | string | number): string {
   return remMonths > 0 ? `${years} Jahre, ${remMonths} Monate` : `${years} Jahre`;
 }
 
+/** "minecraft:oak_log" -> "Oak log". Keine vollständige Übersetzungstabelle
+ * für ~1000 Spielobjekte - zeigt lesbar den echten Spiel-Key statt
+ * potenziell falscher erfundener Übersetzungen. */
+export function humanizeGameKey(key: string): string {
+  const short = key.split(":").pop() ?? key;
+  const words = short.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function formatCoords(x: number, y: number | null | undefined, z: number): string {
   const rx = Math.round(x);
   const rz = Math.round(z);
