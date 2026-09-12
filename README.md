@@ -138,7 +138,10 @@ einem Reverse Proxy), diese Variable wieder entfernen.
    automatisch übernehmen.
 3. **Umgebungsvariablen** im Render-Dashboard setzen (Render liest kein
    `.env` aus dem Repo - `.env` ist bewusst nicht eingecheckt):
-   - `DATABASE_URL=file:./dev.db`
+   - `DATABASE_URL=file:./dev.db` (falls diese Variable fehlt, startet
+     `npm run start` seit `scripts/start.mjs` trotzdem mit genau diesem
+     Standardwert statt komplett abzubrechen - explizit setzen ist trotzdem
+     empfohlen, spätestens beim Umstieg auf Render Disk/Postgres).
    - `CREDENTIALS_ENCRYPTION_KEY=<mit `openssl rand -hex 32` erzeugen>`
      (ohne diese Variable wird zwar automatisch ein Schlüssel unter
      `storage/credentials.key` erzeugt, der aber ohne persistenten
