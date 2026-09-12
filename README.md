@@ -121,13 +121,21 @@ einem Reverse Proxy), diese Variable wieder entfernen.
 
 ## Deployment auf Render (oder ähnlichen PaaS)
 
-1. **Web Service** anlegen, GitHub-Repo verbinden, Branch wählen.
-2. **Build Command**: `npm install` (löst über `postinstall` automatisch
-   `prisma generate` aus). **Start Command**: `npm run start` (führt vor
-   dem eigentlichen Start automatisch `prisma migrate deploy` aus - das
-   legt bei einem frischen Deploy die SQLite-Datei samt aller Tabellen
-   überhaupt erst an. Ohne diesen Schritt bricht **jede** Seite mit einem
-   serverseitigen Fehler ab, weil die Datenbank/Tabellen fehlen).
+1. **Web Service** anlegen, GitHub-Repo verbinden, Branch wählen. **Root
+   Directory** leer lassen (Repo-Wurzel) - der Ordner `connector/` hat
+   zwar eine eigene `package.json`, gehört aber **nicht** hierher: Der
+   Connector ist ein separates Programm, das auf dem echten
+   Minecraft-Server-Rechner läuft (siehe `connector/README.md`), nicht
+   auf Render.
+2. **Build Command**: `npm install && npm run build` (löst über
+   `postinstall` automatisch `prisma generate` aus). **Start Command**:
+   `npm run start` (führt vor dem eigentlichen Start automatisch
+   `prisma migrate deploy` aus - das legt bei einem frischen Deploy die
+   SQLite-Datei samt aller Tabellen überhaupt erst an. Ohne diesen
+   Schritt bricht **jede** Seite mit einem serverseitigen Fehler ab, weil
+   die Datenbank/Tabellen fehlen). Die Node-Version ist über
+   `.node-version`/`engines.node` auf 20 festgelegt, Render sollte sie
+   automatisch übernehmen.
 3. **Umgebungsvariablen** im Render-Dashboard setzen (Render liest kein
    `.env` aus dem Repo - `.env` ist bewusst nicht eingecheckt):
    - `DATABASE_URL=file:./dev.db`
