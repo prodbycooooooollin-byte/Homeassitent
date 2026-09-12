@@ -1,21 +1,29 @@
-import { Icon } from "./icon";
+import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 export function EmptyState({
-  icon = "search",
+  icon: Icon,
   title,
   description,
+  action,
 }: {
-  icon?: string;
+  icon?: LucideIcon;
   title: string;
   description?: string;
+  action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl2 border border-dashed border-line px-6 py-12 text-center">
-      <div className="mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-surface-raised text-ink-faint">
-        <Icon name={icon} size={22} />
+    <div className="flex flex-col items-center justify-center gap-3 rounded-panel border border-dashed border-line px-6 py-12 text-center">
+      {Icon && (
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-ink-faint">
+          <Icon size={20} />
+        </div>
+      )}
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-ink">{title}</p>
+        {description && <p className="max-w-sm text-sm text-ink-muted">{description}</p>}
       </div>
-      <p className="text-sm font-medium text-ink">{title}</p>
-      {description && <p className="max-w-xs text-xs text-ink-muted">{description}</p>}
+      {action}
     </div>
   );
 }

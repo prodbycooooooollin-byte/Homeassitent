@@ -1,0 +1,533 @@
+// Craftboard Datenmodell
+//
+// WICHTIG: Der SQLite-Connector von Prisma unterstützt keine nativen
+// `enum`-Typen. Alle "Enums" (Rolle, Dimension, Kategorie, ...) sind daher
+// als String-Spalten modelliert; die erlaubten Werte werden zentral in
+// lib/constants.ts als TypeScript-Union-Typen + Zod-Schemas geprüft.
+//
+// Produktion: DATABASE_URL kann ohne Schemaänderung auf eine
+// PostgreSQL-Verbindung umgestellt werden (provider wechseln + migrieren) -
+// siehe README, Abschnitt "Datenbank".
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Accounts, Sessions, Rollen
+// ---------------------------------------------------------------------------
+
+/// role: "ADMIN" | "MEMBER" | "GUEST"
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  role         String   @default("MEMBER")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions                 Session[]
+  linkCodes                LinkCode[]
+  minecraftAccount         MinecraftAccount?
+  ownedMarkers             MapMarker[]
+  ownedDrawings            MapDrawing[]
+  createdProjects          BuildProject[]    @relation("ProjectCreator")
+  projectMembers           ProjectMember[]
+  assignedTasks            ProjectTask[]
+  createdGoals             ServerGoal[]
+  createdEvents            ServerEvent[]
+  createdPortals           Portal[]
+  publishedModpackVersions ModpackVersion[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  userAgent String?
+  ip        String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Einmaliger Ingame-Code, um einen Website-Account mit einem
+/// Minecraft-Spieler zu verknüpfen (Spieler schreibt "!link CODE" im
+/// Server-Chat, der Connector-Agent bestätigt das serverseitig).
+model LinkCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Ein tatsächlicher Minecraft-Spieler (per UUID identifiziert). Existiert
+/// unabhängig von einem Website-Account - der Connector legt diese
+/// Datensätze an, sobald ein Spieler auf dem Server gesehen wird.
+/// userId ist erst gesetzt, nachdem der Spieler seinen Account verknüpft hat.
+model MinecraftAccount {
+  id          String    @id @default(cuid())
+  uuid        String    @unique
+  username    String
+  userId      String?   @unique
+  firstSeenAt DateTime?
+  lastSeenAt  DateTime?
+  isOnline    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user          User?                @relation(fields: [userId], references: [id])
+  statSnapshots PlayerStatSnapshot[]
+  blockStats    PlayerBlockStat[]
+  mobStats      PlayerMobStat[]
+  distanceStats PlayerDistanceStat[]
+  advancements  PlayerAdvancement[]
+  sessions      PlayerSession[]
+  deathEvents   DeathEvent[]
+
+  @@index([username])
+}
+
+// ---------------------------------------------------------------------------
+// Serververbindung
+// ---------------------------------------------------------------------------
+
+/// Aktuell wird genau ein Minecraft-Server verwaltet (getPrimaryServer()
+/// liefert die erste Zeile). Als Tabelle modelliert, damit eine spätere
+/// Mehrserver-Unterstützung keine Schemaänderung braucht.
+/// platform: z. B. "fabric" (aktuell einzige geprüfte Kombination: 1.20.1 + Fabric)
+model MinecraftServer {
+  id               String @id @default(cuid())
+  name             String
+  host             String
+  port             Int    @default(25565)
+  minecraftVersion String
+  platform         String
+
+  foundedAt        DateTime?
+  lastStartedAt    DateTime?
+  setupCompletedAt DateTime?
+
+  // Letzter Stand der einfachen Statusabfrage (Server List Ping), die ohne
+  // Connector funktioniert.
+  lastSlpCheckAt    DateTime?
+  lastSlpOnline     Boolean?
+  lastSlpPlayers    Int?
+  lastSlpMaxPlayers Int?
+  lastSlpMotd       String?
+  lastSlpVersion    String?
+  lastSlpLatencyMs  Int?
+
+  // Vollständige Anbindung über den Connector-Agent (RCON / Statistikdateien
+  // / Logdatei). agentApiKeyHash speichert nur den Hash - der Klartext-Key
+  // wird einmalig angezeigt und muss server-seitig in der Agent-Konfiguration
+  // hinterlegt werden.
+  agentApiKeyHash      String?
+  agentKeyGeneratedAt  DateTime?
+  lastAgentContactAt   DateTime?
+  reportedCapabilities String? // JSON-Array, z. B. ["rcon","statsFiles","logTail"]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  statusSnapshots StatusSnapshot[]
+  healthSnapshots ServerHealthSnapshot[]
+  modpacks        Modpack[]
+  goals           ServerGoal[]
+  events          ServerEvent[]
+  markers         MapMarker[]
+  drawings        MapDrawing[]
+  portals         Portal[]
+  buildProjects   BuildProject[]
+}
+
+/// source: "SLP" | "AGENT"
+model StatusSnapshot {
+  id            String   @id @default(cuid())
+  serverId      String
+  capturedAt    DateTime @default(now())
+  online        Boolean
+  playersOnline Int?
+  playersMax    Int?
+  motd          String?
+  latencyMs     Int?
+  source        String
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, capturedAt])
+}
+
+/// tps/tickTimeMs/memory nur befüllt, wenn der Connector sie liefert -
+/// fehlende Werte bleiben NULL statt 0.
+model ServerHealthSnapshot {
+  id           String   @id @default(cuid())
+  serverId     String
+  capturedAt   DateTime @default(now())
+  tps          Float?
+  tickTimeMs   Float?
+  memoryUsedMb Int?
+  memoryMaxMb  Int?
+  playerCount  Int?
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, capturedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Spieler-Statistiken
+// ---------------------------------------------------------------------------
+
+/// Zeitreihe der kumulierten Kennzahlen (vom Connector periodisch gemeldet).
+/// Grundlage für Wochen-/Monats-Ranglisten per Delta-Berechnung - siehe
+/// lib/stats/leaderboards.ts. Es wird nie rückwirkend Tageshistorie erfunden:
+/// die erste Zeile pro Spieler markiert den Beginn der Datenerfassung.
+model PlayerStatSnapshot {
+  id                 String   @id @default(cuid())
+  minecraftAccountId String
+  capturedAt         DateTime @default(now())
+  playtimeTicks      Int
+  blocksMinedTotal   Int
+  mobKillsTotal      Int
+  deathsTotal        Int
+
+  account MinecraftAccount @relation(fields: [minecraftAccountId], references: [id], onDelete: Cascade)
+
+  @@index([minecraftAccountId, capturedAt])
+}
+
+/// Aktueller kumulierter Stand je Blockart (upsert bei jeder Meldung).
+model PlayerBlockStat {
+  id                 String   @id @default(cuid())
+  minecraftAccountId String
+  blockKey           String
+  count              Int
+  updatedAt          DateTime @updatedAt
+
+  account MinecraftAccount @relation(fields: [minecraftAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([minecraftAccountId, blockKey])
+}
+
+model PlayerMobStat {
+  id                 String   @id @default(cuid())
+  minecraftAccountId String
+  mobKey             String
+  kills              Int
+  updatedAt          DateTime @updatedAt
+
+  account MinecraftAccount @relation(fields: [minecraftAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([minecraftAccountId, mobKey])
+}
+
+/// type = roher Vanilla-Statistik-Key (z. B. "minecraft:walk_one_cm",
+/// "minecraft:aviate_one_cm" für Elytra-Strecken). cm = Zentimeter, wie von
+/// Minecraft gespeichert.
+model PlayerDistanceStat {
+  id                 String   @id @default(cuid())
+  minecraftAccountId String
+  type               String
+  cm                 Int
+  updatedAt          DateTime @updatedAt
+
+  account MinecraftAccount @relation(fields: [minecraftAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([minecraftAccountId, type])
+}
+
+model PlayerAdvancement {
+  id                 String   @id @default(cuid())
+  minecraftAccountId String
+  advancementKey     String
+  unlockedAt         DateTime
+
+  account MinecraftAccount @relation(fields: [minecraftAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([minecraftAccountId, advancementKey])
+}
+
+/// Join/Leave-Ereignisse für "zuletzt online", Session-Dauer und den
+/// Wochenrückblick ("aktivste Spieler"). leftAt = null bedeutet: noch online.
+model PlayerSession {
+  id                 String    @id @default(cuid())
+  minecraftAccountId String
+  joinedAt           DateTime
+  leftAt             DateTime?
+
+  account MinecraftAccount @relation(fields: [minecraftAccountId], references: [id], onDelete: Cascade)
+
+  @@index([minecraftAccountId, joinedAt])
+}
+
+/// Persönlicher Todesmarker. visibility: "PRIVATE" (Standard) | "SERVER".
+model DeathEvent {
+  id                 String   @id @default(cuid())
+  minecraftAccountId String
+  occurredAt         DateTime
+  message            String?
+  x                  Float?
+  y                  Float?
+  z                  Float?
+  dimension          String?
+  visibility         String   @default("PRIVATE")
+  createdAt          DateTime @default(now())
+
+  account MinecraftAccount @relation(fields: [minecraftAccountId], references: [id], onDelete: Cascade)
+
+  @@index([minecraftAccountId, occurredAt])
+}
+
+// ---------------------------------------------------------------------------
+// Serverchronik
+// ---------------------------------------------------------------------------
+
+/// type: "MILESTONE" | "SERVER_START" | "SERVER_STOP" | "ADVANCEMENT" |
+///       "GOAL_COMPLETED" | "PROJECT_CREATED" | "PLAYER_FIRST_JOIN" | "OTHER"
+model ServerEvent {
+  id              String   @id @default(cuid())
+  serverId        String
+  occurredAt      DateTime
+  type            String
+  title           String
+  description     String?
+  isAutomatic     Boolean  @default(false)
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  server        MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  createdByUser User?           @relation(fields: [createdByUserId], references: [id])
+
+  @@index([serverId, occurredAt])
+}
+
+// ---------------------------------------------------------------------------
+// Modpack
+// ---------------------------------------------------------------------------
+
+model Modpack {
+  id                String   @id @default(cuid())
+  serverId          String
+  name              String
+  description       String?
+  iconUrl           String?
+  modrinthProjectId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  server   MinecraftServer  @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  versions ModpackVersion[]
+}
+
+/// source: "UPLOAD" | "MODRINTH". isCurrent = die vom Admin freigegebene,
+/// für den Server vorgeschriebene Version (nur eine pro Modpack).
+model ModpackVersion {
+  id                  String    @id @default(cuid())
+  modpackId           String
+  versionNumber       String
+  minecraftVersion    String
+  loader              String
+  changelog           String?
+  isCurrent           Boolean   @default(false)
+  source              String
+  fileName            String?
+  filePath            String?
+  fileSizeBytes       Int?
+  modrinthVersionId   String?
+  modrinthDownloadUrl String?
+  modList             String? // JSON-Array [{ name, version? }] - nur befüllt, wenn zuverlässig aus Metadaten lesbar
+  releasedAt          DateTime?
+  publishedByUserId   String?
+  createdAt           DateTime  @default(now())
+
+  modpack         Modpack @relation(fields: [modpackId], references: [id], onDelete: Cascade)
+  publishedByUser User?   @relation(fields: [publishedByUserId], references: [id])
+
+  @@index([modpackId, isCurrent])
+}
+
+// ---------------------------------------------------------------------------
+// Weltkarte: Markierungen & Zeichnungen
+// ---------------------------------------------------------------------------
+
+/// dimension: "OVERWORLD" | "NETHER" | "END"
+/// category: "BASE" | "FARM" | "PORTAL" | "SHOP" | "PROJECT" | "OTHER"
+/// visibility: "PRIVATE" | "SERVER"
+model MapMarker {
+  id          String   @id @default(cuid())
+  serverId    String
+  dimension   String
+  x           Float
+  y           Float?
+  z           Float
+  title       String
+  description String?
+  category    String
+  ownerId     String
+  visibility  String   @default("SERVER")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  owner  User            @relation(fields: [ownerId], references: [id])
+
+  @@index([serverId, dimension])
+}
+
+/// type: "FREEHAND" | "LINE" | "AREA" | "TEXT"
+/// points: JSON-Array [{ x, z }] in Weltkoordinaten (mind. 1 Punkt bei TEXT)
+model MapDrawing {
+  id         String   @id @default(cuid())
+  serverId   String
+  dimension  String
+  type       String
+  points     String // JSON
+  text       String?
+  color      String
+  ownerId    String
+  visibility String   @default("SERVER")
+  layerName  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  owner  User            @relation(fields: [ownerId], references: [id])
+
+  @@index([serverId, dimension])
+}
+
+/// Portalverzeichnis. dimension = physischer Standort DIESES Portals.
+/// linkedPortalId wird erst gesetzt, wenn ein Nutzer eine Verbindung
+/// tatsächlich bestätigt hat - bis dahin liefert die API nur ein
+/// berechnetes (÷8 bzw. ×8), klar als "berechnet" markiertes Ziel.
+model Portal {
+  id              String   @id @default(cuid())
+  serverId        String
+  name            String
+  dimension       String
+  x               Float
+  y               Float?
+  z               Float
+  linkedPortalId  String?  @unique
+  createdByUserId String
+  createdAt       DateTime @default(now())
+
+  server        MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  createdByUser User            @relation(fields: [createdByUserId], references: [id])
+  linkedPortal  Portal?         @relation("PortalLink", fields: [linkedPortalId], references: [id])
+  linkedFrom    Portal?         @relation("PortalLink")
+
+  @@index([serverId, dimension])
+}
+
+// ---------------------------------------------------------------------------
+// Bauprojekte
+// ---------------------------------------------------------------------------
+
+/// status: "PLANNING" | "IN_PROGRESS" | "DONE" | "ON_HOLD"
+model BuildProject {
+  id              String   @id @default(cuid())
+  serverId        String
+  title           String
+  description     String?
+  status          String   @default("PLANNING")
+  dimension       String?
+  x               Float?
+  y               Float?
+  z               Float?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  server        MinecraftServer   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  createdByUser User              @relation("ProjectCreator", fields: [createdByUserId], references: [id])
+  members       ProjectMember[]
+  tasks         ProjectTask[]
+  materials     ProjectMaterial[]
+
+  @@index([serverId, status])
+}
+
+model ProjectMember {
+  id        String @id @default(cuid())
+  projectId String
+  userId    String
+
+  project BuildProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model ProjectTask {
+  id             String   @id @default(cuid())
+  projectId      String
+  title          String
+  done           Boolean  @default(false)
+  assigneeUserId String?
+  createdAt      DateTime @default(now())
+
+  project  BuildProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?        @relation(fields: [assigneeUserId], references: [id])
+}
+
+/// gathered wird aktuell manuell gepflegt (siehe Aufgabenstellung) -
+/// spätere automatische Inventar-/Lager-Anbindung ist nicht Teil dieser Version.
+model ProjectMaterial {
+  id        String @id @default(cuid())
+  projectId String
+  itemName  String
+  needed    Int
+  gathered  Int    @default(0)
+
+  project BuildProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Serverziele
+// ---------------------------------------------------------------------------
+
+/// metric: "BLOCKS_MINED" | "MOB_KILLS" | "DEATHS" | "PLAYTIME_HOURS"
+/// Fortschritt wird nicht gespeichert, sondern bei jedem Abruf live aus den
+/// PlayerStatSnapshot-Deltas seit startAt berechnet (lib/stats/goals.ts).
+model ServerGoal {
+  id              String    @id @default(cuid())
+  serverId        String
+  title           String
+  description     String?
+  metric          String
+  target          Float
+  startAt         DateTime  @default(now())
+  completedAt     DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+
+  server        MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  createdByUser User            @relation(fields: [createdByUserId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// App-weite Einstellungen (Singleton)
+// ---------------------------------------------------------------------------
+
+model AppSettings {
+  id              String   @id @default("singleton")
+  demoModeEnabled Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+}
