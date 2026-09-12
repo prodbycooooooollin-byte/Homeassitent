@@ -1,0 +1,13 @@
+{
+  "craftboardUrl": "https://craftboard.example.com",
+  "agentApiKey": "cba_hier-den-in-den-einstellungen-erzeugten-schluessel-eintragen",
+  "serverDir": "/pfad/zum/minecraft-server",
+  "rcon": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 25575,
+    "password": "aus-server.properties"
+  },
+  "statsIntervalSeconds": 300,
+  "positionIntervalSeconds": 15
+}

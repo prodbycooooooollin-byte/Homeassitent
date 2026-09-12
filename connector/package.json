@@ -1,0 +1,14 @@
+{
+  "name": "craftboard-agent",
+  "version": "1.0.0",
+  "description": "Connector-Agent für Craftboard: liest Minecraft-Server-Statistiken/Logs lokal und meldet sie an die Craftboard-Webapp.",
+  "type": "module",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
