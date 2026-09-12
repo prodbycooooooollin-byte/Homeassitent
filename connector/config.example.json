@@ -1,6 +1,6 @@
 {
   "craftboardUrl": "https://craftboard.example.com",
-  "agentApiKey": "cba_hier-den-in-den-einstellungen-erzeugten-schluessel-eintragen",
+  "agentApiKey": "cba_6K3_r58tEBPHWO-GqsjMpEnpgEgFNbLZ",
   "serverDir": "/pfad/zum/minecraft-server",
   "rcon": {
     "enabled": false,
