@@ -11,6 +11,12 @@ import { StatCard } from "@/components/ui/stat-card";
 import { ServerHeader } from "@/components/dashboard/server-header";
 import { OnlinePlayersCard } from "@/components/dashboard/online-players-card";
 import { ActivityChart } from "@/components/dashboard/activity-chart";
+import { ChronicleSection } from "@/components/dashboard/chronicle-section";
+import { WeeklyRecapCard } from "@/components/dashboard/weekly-recap-card";
+import { getRecentEvents } from "@/lib/queries/chronicle";
+import { getWeeklyRecap } from "@/lib/queries/weekly-recap";
+import { getDemoChronicle, getDemoWeeklyRecap } from "@/lib/demo/chronicle";
+import { canCreateContent } from "@/lib/auth/permissions";
 import { formatAge, formatNumber, formatSecondsDuration, formatTicksDuration, formatRelativeTime } from "@/lib/format";
 
 export default async function OverviewPage() {
@@ -23,6 +29,10 @@ export default async function OverviewPage() {
   }
 
   const data = demoMode || !server ? getDemoOverviewData() : await getOverviewData(server);
+  const [events, recap] =
+    demoMode || !server
+      ? [getDemoChronicle(), getDemoWeeklyRecap()]
+      : await Promise.all([getRecentEvents(server.id), getWeeklyRecap(server.id)]);
 
   const uptimeSeconds = data.server.lastStartedAt
     ? Math.floor((Date.now() - data.server.lastStartedAt.getTime()) / 1000)
@@ -96,6 +106,9 @@ export default async function OverviewPage() {
       <OnlinePlayersCard online={data.players.online} max={data.players.max} list={data.players.onlineList} />
 
       <ActivityChart days={data.activityDays} />
+
+      <WeeklyRecapCard recap={recap} />
+      <ChronicleSection events={events} canAdd={!demoMode && canCreateContent(user.role)} />
     </div>
   );
 }

@@ -18,7 +18,9 @@ import { TextModal } from "@/components/map/text-modal";
 import { mapApi } from "@/components/map/map-api";
 import { useMapEventsStream } from "@/lib/hooks/use-map-events-stream";
 import { canCreateContent } from "@/lib/auth/permissions";
+import { listPortalsAction } from "@/lib/actions/portals";
 import type { MarkerView, DrawingView, LivePlayerPosition } from "@/lib/queries/map";
+import type { PortalView } from "@/lib/queries/portals";
 
 export type MapMode = "view" | "place-marker" | "draw-freehand" | "draw-line" | "draw-area" | "draw-text";
 
@@ -69,6 +71,7 @@ export default function MapShell({
   const [markers, setMarkers] = useState<MarkerView[]>([]);
   const [drawings, setDrawings] = useState<DrawingView[]>([]);
   const [players, setPlayers] = useState<LivePlayerPosition[]>([]);
+  const [portals, setPortals] = useState<PortalView[]>([]);
   const [mode, setMode] = useState<MapMode>("view");
   const [color, setColor] = useState(distinctColor(currentUser.id));
   const [followUuid, setFollowUuid] = useState<string | null>(null);
@@ -101,11 +104,18 @@ export default function MapShell({
   const reloadPlayers = useCallback(() => {
     mapApi.listPlayers().then(setPlayers).catch(() => {});
   }, []);
+  const reloadPortals = useCallback(() => {
+    listPortalsAction().then(setPortals).catch(() => {});
+  }, []);
 
   useEffect(() => {
     reloadMarkers();
     reloadDrawings();
   }, [reloadMarkers, reloadDrawings]);
+
+  useEffect(() => {
+    reloadPortals();
+  }, [reloadPortals]);
 
   useEffect(() => {
     reloadPlayers();
@@ -330,6 +340,10 @@ export default function MapShell({
           markers={visibleMarkers}
           drawings={visibleDrawings}
           players={players}
+          portals={portals}
+          dimension={dimension}
+          canManagePortals={canEdit}
+          onRefreshPortals={reloadPortals}
           followUuid={followUuid}
           onSelectPlayer={setFollowUuid}
           onFlyToMarker={(m) => mapRef.current?.panTo(worldToLatLng(m.x, m.z))}

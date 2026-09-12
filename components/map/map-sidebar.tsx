@@ -1,18 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Users, Layers, MapPin, type LucideIcon } from "lucide-react";
+import { Users, Layers, MapPin, DoorOpen, type LucideIcon } from "lucide-react";
 import { PlayerAvatar } from "@/components/ui/player-avatar";
 import { CopyButton } from "@/components/ui/copy-button";
-import { MARKER_CATEGORY_LABELS, type MarkerCategory } from "@/lib/constants";
+import { MARKER_CATEGORY_LABELS, type MarkerCategory, type Dimension } from "@/lib/constants";
 import { formatCoords } from "@/lib/format";
 import type { MarkerView, DrawingView, LivePlayerPosition } from "@/lib/queries/map";
+import type { PortalView } from "@/lib/queries/portals";
+import { PortalsPanel } from "@/components/map/portals-panel";
 import { cn } from "@/lib/cn";
 
 export function MapSidebar({
   markers,
   drawings,
   players,
+  portals,
+  dimension,
+  canManagePortals,
+  onRefreshPortals,
   followUuid,
   onSelectPlayer,
   onFlyToMarker,
@@ -24,6 +30,10 @@ export function MapSidebar({
   markers: MarkerView[];
   drawings: DrawingView[];
   players: LivePlayerPosition[];
+  portals: PortalView[];
+  dimension: Dimension;
+  canManagePortals: boolean;
+  onRefreshPortals: () => void;
   followUuid: string | null;
   onSelectPlayer: (uuid: string | null) => void;
   onFlyToMarker: (m: MarkerView) => void;
@@ -32,10 +42,11 @@ export function MapSidebar({
   onToggleOwner: (owner: string) => void;
   onToggleCategory: (cat: string) => void;
 }) {
-  const [tab, setTab] = useState<"marker" | "spieler" | "ebenen">("marker");
+  const [tab, setTab] = useState<"marker" | "spieler" | "portale" | "ebenen">("marker");
   const TABS: { key: typeof tab; label: string; icon: LucideIcon }[] = [
     { key: "marker", label: "Marker", icon: MapPin },
     { key: "spieler", label: "Spieler", icon: Users },
+    { key: "portale", label: "Portale", icon: DoorOpen },
     { key: "ebenen", label: "Ebenen", icon: Layers },
   ];
 
@@ -105,6 +116,15 @@ export function MapSidebar({
               </button>
             ))}
           </div>
+        )}
+
+        {tab === "portale" && (
+          <PortalsPanel
+            portals={portals}
+            dimension={dimension === "END" ? "END" : dimension}
+            canManage={canManagePortals}
+            onRefresh={onRefreshPortals}
+          />
         )}
 
         {tab === "ebenen" && (
