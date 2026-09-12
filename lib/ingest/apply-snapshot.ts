@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import type { SnapshotPayload } from "@/lib/ingest/schemas";
 import type { MinecraftServer } from "@prisma/client";
+import { publishMapEvent } from "@/lib/realtime/bus";
 
 /**
  * Wendet eine periodische Meldung des Connector-Agents an. Wird bewusst
@@ -16,6 +17,16 @@ export async function applySnapshot(server: MinecraftServer, payload: SnapshotPa
   for (const p of payload.players) {
     const existing = await prisma.minecraftAccount.findUnique({ where: { uuid: p.uuid } });
 
+    const positionFields = p.position
+      ? {
+          posX: p.position.x,
+          posY: p.position.y,
+          posZ: p.position.z,
+          posDimension: p.position.dimension,
+          posUpdatedAt: capturedAt,
+        }
+      : {};
+
     const account = existing
       ? await prisma.minecraftAccount.update({
           where: { uuid: p.uuid },
@@ -23,6 +34,7 @@ export async function applySnapshot(server: MinecraftServer, payload: SnapshotPa
             username: p.username,
             isOnline: p.online,
             lastSeenAt: p.online ? capturedAt : existing.lastSeenAt,
+            ...positionFields,
           },
         })
       : await prisma.minecraftAccount.create({
@@ -32,6 +44,7 @@ export async function applySnapshot(server: MinecraftServer, payload: SnapshotPa
             isOnline: p.online,
             firstSeenAt: p.firstSeenAt ? new Date(p.firstSeenAt) : capturedAt,
             lastSeenAt: capturedAt,
+            ...positionFields,
           },
         });
 
@@ -151,4 +164,8 @@ export async function applySnapshot(server: MinecraftServer, payload: SnapshotPa
         ]
       : []),
   ]);
+
+  if (payload.players.some((p) => p.position)) {
+    publishMapEvent({ kind: "players.update" });
+  }
 }

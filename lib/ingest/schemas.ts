@@ -22,6 +22,14 @@ export const snapshotSchema = z.object({
         .array(z.object({ key: z.string(), unlockedAt: z.string().datetime() }))
         .optional(),
       firstSeenAt: z.string().datetime().optional(),
+      position: z
+        .object({
+          x: z.number(),
+          y: z.number(),
+          z: z.number(),
+          dimension: z.enum(["OVERWORLD", "NETHER", "END"]),
+        })
+        .optional(),
     }),
   ),
   health: z

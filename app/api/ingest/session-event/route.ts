@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAgent } from "@/lib/ingest/auth";
 import { sessionEventSchema } from "@/lib/ingest/schemas";
 import { prisma } from "@/lib/db";
+import { publishMapEvent } from "@/lib/realtime/bus";
 
 export const runtime = "nodejs";
 
@@ -64,5 +65,6 @@ export async function POST(req: Request) {
     data: { lastAgentContactAt: new Date() },
   });
 
+  publishMapEvent({ kind: "players.update" });
   return NextResponse.json({ ok: true });
 }

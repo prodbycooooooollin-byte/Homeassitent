@@ -79,6 +79,7 @@ const configSchema = z.object({
   foundedAt: z.string().optional(),
   rconPort: z.coerce.number().int().min(1).max(65535).optional(),
   rconPassword: z.string().max(200).optional(),
+  mapTileUrlTemplate: z.string().trim().max(500).optional(),
 });
 
 export interface SaveConfigResult {
@@ -95,6 +96,7 @@ export interface SaveConfigInput {
   foundedAt?: string;
   rconPort?: number | string;
   rconPassword?: string;
+  mapTileUrlTemplate?: string;
 }
 
 export async function saveServerConfigAction(input: SaveConfigInput): Promise<SaveConfigResult> {
@@ -105,6 +107,7 @@ export async function saveServerConfigAction(input: SaveConfigInput): Promise<Sa
     foundedAt: input.foundedAt || undefined,
     rconPort: input.rconPort || undefined,
     rconPassword: input.rconPassword || undefined,
+    mapTileUrlTemplate: input.mapTileUrlTemplate || undefined,
   };
   const parsed = configSchema.safeParse(raw);
   if (!parsed.success) {
@@ -132,6 +135,7 @@ export async function saveServerConfigAction(input: SaveConfigInput): Promise<Sa
       platform: data.platform,
       foundedAt: data.foundedAt ? new Date(data.foundedAt) : existing?.foundedAt ?? null,
       rconPort,
+      mapTileUrlTemplate: data.mapTileUrlTemplate ?? null,
       ...(data.rconPassword ? { rconPasswordEncrypted: encryptSecret(data.rconPassword) } : {}),
     },
     create: {
@@ -142,6 +146,7 @@ export async function saveServerConfigAction(input: SaveConfigInput): Promise<Sa
       platform: data.platform,
       foundedAt: data.foundedAt ? new Date(data.foundedAt) : null,
       rconPort,
+      mapTileUrlTemplate: data.mapTileUrlTemplate ?? null,
       rconPasswordEncrypted: data.rconPassword ? encryptSecret(data.rconPassword) : null,
     },
   });

@@ -91,6 +91,15 @@ model MinecraftAccount {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  // Aktuelle Position (nur befüllt, wenn der Connector sie meldet - v1
+  // zeigt sie allen angemeldeten Mitgliedern für Online-Spieler, siehe
+  // README "Bekannte Einschränkungen" zur fehlenden feingranularen ACL).
+  posX          Float?
+  posY          Float?
+  posZ          Float?
+  posDimension  String?
+  posUpdatedAt  DateTime?
+
   user          User?                @relation(fields: [userId], references: [id])
   statSnapshots PlayerStatSnapshot[]
   blockStats    PlayerBlockStat[]
@@ -150,6 +159,11 @@ model MinecraftServer {
   rconPasswordEncrypted  String?
   lastRconCheckAt        DateTime?
   lastRconOnline         Boolean?
+
+  // Optionale Kartenkacheln (z. B. selbst gehosteter Dynmap-"flat"-Export)
+  // als Leaflet-Tile-URL-Vorlage mit {z}/{x}/{y}. Ohne Angabe zeigt die
+  // Weltkarte ein neutrales Koordinatenraster statt erfundener Kacheln.
+  mapTileUrlTemplate String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

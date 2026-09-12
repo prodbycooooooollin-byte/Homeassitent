@@ -65,6 +65,7 @@ export default async function SettingsPage() {
                     platform: server.platform,
                     foundedAt: server.foundedAt?.toISOString() ?? null,
                     rconPort: server.rconPort,
+                    mapTileUrlTemplate: server.mapTileUrlTemplate,
                     hasRconPassword: !!server.rconPasswordEncrypted,
                     setupCompletedAt: server.setupCompletedAt?.toISOString() ?? null,
                     agentKeyGeneratedAt: server.agentKeyGeneratedAt?.toISOString() ?? null,

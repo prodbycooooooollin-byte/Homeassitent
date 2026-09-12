@@ -28,6 +28,7 @@ export interface ServerConnectionData {
   platform: string;
   foundedAt: string | null; // ISO-Datum
   rconPort: number | null;
+  mapTileUrlTemplate: string | null;
   hasRconPassword: boolean;
   setupCompletedAt: string | null;
   agentKeyGeneratedAt: string | null;
@@ -67,6 +68,7 @@ export function ServerConnectionPanel({ server }: { server: ServerConnectionData
   const [foundedAt, setFoundedAt] = useState(server?.foundedAt?.slice(0, 10) ?? "");
   const [rconPort, setRconPort] = useState(server?.rconPort ? String(server.rconPort) : "");
   const [rconPassword, setRconPassword] = useState("");
+  const [mapTileUrlTemplate, setMapTileUrlTemplate] = useState(server?.mapTileUrlTemplate ?? "");
 
   const [slpResult, setSlpResult] = useState<Awaited<ReturnType<typeof testSlpAction>> | null>(null);
   const [rconResult, setRconResult] = useState<Awaited<ReturnType<typeof testRconAction>> | null>(null);
@@ -107,6 +109,7 @@ export function ServerConnectionPanel({ server }: { server: ServerConnectionData
         foundedAt: foundedAt || undefined,
         rconPort: rconPort || undefined,
         rconPassword: rconPassword || undefined,
+        mapTileUrlTemplate: mapTileUrlTemplate || undefined,
       });
       if (!result.ok) {
         setSaveError(result.error ?? "Speichern fehlgeschlagen.");
@@ -252,6 +255,17 @@ export function ServerConnectionPanel({ server }: { server: ServerConnectionData
               />
             </Field>
           </div>
+          <Field
+            label="Kartenkacheln-URL (optional)"
+            hint="z. B. selbst gehosteter Dynmap-„flat“-Export, Muster mit {z}/{x}/{y}. Ohne Angabe zeigt die Weltkarte ein neutrales Raster statt erfundener Kacheln."
+          >
+            <input
+              className={inputClass}
+              value={mapTileUrlTemplate}
+              onChange={(e) => setMapTileUrlTemplate(e.target.value)}
+              placeholder="https://karte.unserserver.de/tiles/{z}/{x}/{y}.png"
+            />
+          </Field>
         </div>
       )}
 
