@@ -94,6 +94,31 @@ Empfohlen hinter einem Reverse Proxy (nginx/Caddy) mit HTTPS - die
 Session-Cookies sind `secure` in Produktion (`NODE_ENV=production`) und
 werden ohne HTTPS vom Browser verworfen.
 
+### Im Heimnetz (LAN) ohne HTTPS öffnen
+
+`next dev` und `next start` lauschen standardmäßig auf allen
+Netzwerkschnittstellen und zeigen beim Start neben "Local" auch eine
+"Network"-Adresse an, z. B. `http://192.168.1.23:3000` - das ist die
+Adresse, unter der andere Geräte im selben WLAN/LAN die App erreichen
+(IP mit `ip addr` bzw. `ipconfig` prüfen, falls sie nicht angezeigt wird).
+Ggf. muss die Firewall des Rechners eingehende Verbindungen auf dem Port
+erlauben (Linux: `sudo ufw allow 3000`; Windows: Eingehende Regel in der
+Firewall für Node.js/den Port anlegen).
+
+Bei `npm run dev` funktioniert das Login darüber direkt. Bei
+**`npm run start` (Produktion)** dagegen setzt Next `NODE_ENV=production`,
+wodurch das Session-Cookie als "Secure" markiert wird - Browser verwerfen
+"Secure"-Cookies ohne HTTPS, das Login schlägt dann ohne sichtbare
+Fehlermeldung fehl. Für reinen LAN-Zugriff ohne eigene HTTPS-Einrichtung
+in `.env` setzen:
+
+```bash
+ALLOW_INSECURE_COOKIES=true
+```
+
+Sobald die App unter einer echten Domain mit HTTPS läuft (z. B. hinter
+einem Reverse Proxy), diese Variable wieder entfernen.
+
 ## Umgebungsvariablen (`.env`)
 
 | Variable | Zweck | Standard |

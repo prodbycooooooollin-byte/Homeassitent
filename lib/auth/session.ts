@@ -48,7 +48,12 @@ export async function createSession(
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // "Secure"-Cookies werden von Browsern nur über HTTPS akzeptiert. Für
+    // reinen LAN-Zugriff ohne HTTPS (z. B. http://192.168.x.x:3000 im
+    // Heimnetz) ALLOW_INSECURE_COOKIES=true setzen - sonst schlägt das
+    // Login dort sonst ohne erkennbare Fehlermeldung fehl, weil der Browser
+    // das Cookie verwirft. Produktion mit echter Domain: unverändert lassen.
+    secure: process.env.NODE_ENV === "production" && process.env.ALLOW_INSECURE_COOKIES !== "true",
     sameSite: "lax",
     path: "/",
     expires: expiresAt,
