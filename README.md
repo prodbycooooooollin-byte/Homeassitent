@@ -119,6 +119,42 @@ ALLOW_INSECURE_COOKIES=true
 Sobald die App unter einer echten Domain mit HTTPS läuft (z. B. hinter
 einem Reverse Proxy), diese Variable wieder entfernen.
 
+## Deployment auf Render (oder ähnlichen PaaS)
+
+1. **Web Service** anlegen, GitHub-Repo verbinden, Branch wählen.
+2. **Build Command**: `npm install` (löst über `postinstall` automatisch
+   `prisma generate` aus). **Start Command**: `npm run start` (führt vor
+   dem eigentlichen Start automatisch `prisma migrate deploy` aus - das
+   legt bei einem frischen Deploy die SQLite-Datei samt aller Tabellen
+   überhaupt erst an. Ohne diesen Schritt bricht **jede** Seite mit einem
+   serverseitigen Fehler ab, weil die Datenbank/Tabellen fehlen).
+3. **Umgebungsvariablen** im Render-Dashboard setzen (Render liest kein
+   `.env` aus dem Repo - `.env` ist bewusst nicht eingecheckt):
+   - `DATABASE_URL=file:./dev.db`
+   - `CREDENTIALS_ENCRYPTION_KEY=<mit `openssl rand -hex 32` erzeugen>`
+     (ohne diese Variable wird zwar automatisch ein Schlüssel unter
+     `storage/credentials.key` erzeugt, der aber ohne persistenten
+     Speicher - siehe Punkt 4 - bei jedem Deploy verloren geht).
+   - `ALLOW_INSECURE_COOKIES` **nicht** setzen: Render terminiert HTTPS
+     selbst, `*.onrender.com` ist bereits `https://`.
+4. **Wichtig - dauerhafte Datenspeicherung:** Ohne zusätzlichen Schritt
+   liegt `prisma/dev.db` (und `storage/`) auf dem **ephemeren**
+   Dateisystem des Web-Service - ein Redeploy oder Neustart der Instanz
+   löscht dann alle Accounts, Statistiken, Marker und Zeichnungen
+   ersatzlos. Für echten Dauerbetrieb eine der beiden Optionen wählen:
+   - **Render Disk** (persistentes Volume) anlegen, z. B. unter `/data`
+     einhängen, und `DATABASE_URL=file:/data/dev.db` sowie
+     `STORAGE_DIR=/data/storage` setzen, **oder**
+   - auf eine **Postgres-Datenbank** (z. B. Render Postgres) umstellen:
+     in `prisma/schema.prisma` `provider = "sqlite"` auf `"postgresql"`
+     ändern, `DATABASE_URL` auf die Postgres-Verbindung setzen, neu
+     deployen (Uploads unter `storage/` bräuchten dann zusätzlich einen
+     Disk oder externen Objektspeicher, dafür ist aktuell nichts
+     vorbereitet).
+5. Tritt trotzdem ein serverseitiger Fehler auf: im Render-Dashboard unter
+   "Logs" nachsehen - dort steht die eigentliche Fehlermeldung (die
+   Nutzeroberfläche zeigt nur einen anonymisierten "Digest"-Code).
+
 ## Umgebungsvariablen (`.env`)
 
 | Variable | Zweck | Standard |
