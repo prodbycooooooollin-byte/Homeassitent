@@ -14,9 +14,11 @@ function hashHue(input: string): number {
 
 /**
  * Minecraft-Spielerkopf. Rendert den echten Kopf über den öffentlichen
- * mc-heads.net-Dienst (per UUID oder Name); schlägt der Abruf fehl (z. B.
- * offline, oder ein frei erfundener Demo-Name), wird auf einen generierten
- * Initialen-Avatar zurückgefallen statt kaputte Bilder zu zeigen.
+ * mc-heads.net-Dienst (per UUID oder Name). Der Initialen-Platzhalter liegt
+ * IMMER als Basisebene darunter und bleibt sichtbar, bis das Bild
+ * tatsächlich geladen ist - so blitzt bei langsamem/fehlendem Laden nie ein
+ * kaputtes Bildsymbol auf (z. B. Demo-Namen ohne echten Skin, oder wenn der
+ * Avatar-Dienst blockiert/nicht erreichbar ist).
  */
 export function PlayerAvatar({
   uuid,
@@ -33,6 +35,7 @@ export function PlayerAvatar({
   className?: string;
   rounded?: boolean;
 }) {
+  const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const identifier = uuid || username;
   const src = `https://mc-heads.net/avatar/${encodeURIComponent(identifier)}/${Math.min(
@@ -42,28 +45,29 @@ export function PlayerAvatar({
 
   return (
     <div className={cn("relative shrink-0", className)} style={{ width: size, height: size }}>
-      {failed ? (
-        <div
-          className={cn(
-            "flex h-full w-full items-center justify-center font-semibold text-white",
-            rounded ? "rounded-md" : "",
-          )}
-          style={{
-            background: `hsl(${hashHue(username)}, 45%, 32%)`,
-            fontSize: size * 0.4,
-          }}
-        >
-          {username.slice(0, 2).toUpperCase()}
-        </div>
-      ) : (
+      <div
+        className={cn(
+          "flex h-full w-full items-center justify-center font-semibold text-white",
+          rounded ? "rounded-md" : "",
+        )}
+        style={{ background: `hsl(${hashHue(username)}, 45%, 32%)`, fontSize: size * 0.4 }}
+      >
+        {username.slice(0, 2).toUpperCase()}
+      </div>
+      {!failed && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
           alt={username}
           width={size}
           height={size}
+          onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
-          className={cn("h-full w-full object-cover", rounded ? "rounded-md" : "")}
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover transition-opacity",
+            loaded ? "opacity-100" : "opacity-0",
+            rounded ? "rounded-md" : "",
+          )}
           style={{ imageRendering: "pixelated" }}
         />
       )}

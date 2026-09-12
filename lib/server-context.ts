@@ -18,14 +18,18 @@ export async function getAppSettings() {
   });
 }
 
-export type ConnectionLevel = "none" | "basic" | "full";
+export type ConnectionLevel = "none" | "unreachable" | "basic" | "full";
 
 /**
- * "basic"  = Server-List-Ping erfolgreich (Adresse erreichbar), aber kein
- *            Connector-Agent hat sich je gemeldet.
- * "full"   = Connector-Agent hat sich innerhalb der letzten 10 Minuten gemeldet
- *            (RCON/Statistikdateien/Log-Tailing verfügbar).
- * "none"   = noch kein Server eingerichtet.
+ * "none"        = noch kein Server eingerichtet.
+ * "unreachable" = ein Server ist eingerichtet, aber noch NIE erfolgreich per
+ *                 Server-List-Ping erreicht worden (z. B. falsche Adresse) -
+ *                 unabhängig vom aktuellen Online/Offline-Status, der sich
+ *                 laufend ändern kann (siehe lib/minecraft/live-status.ts).
+ * "basic"       = Server-List-Ping war mindestens einmal erfolgreich, aber
+ *                 kein Connector-Agent hat sich je gemeldet.
+ * "full"        = Connector-Agent hat sich innerhalb der letzten 10 Minuten
+ *                 gemeldet (RCON/Statistikdateien/Log-Tailing verfügbar).
  */
 export function getConnectionLevel(server: {
   lastSlpCheckAt: Date | null;
@@ -36,7 +40,7 @@ export function getConnectionLevel(server: {
     return "full";
   }
   if (server.lastSlpCheckAt) return "basic";
-  return "none";
+  return "unreachable";
 }
 
 /**

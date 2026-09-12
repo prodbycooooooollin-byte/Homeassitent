@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Wifi, WifiOff, Cable } from "lucide-react";
+import { Wifi, WifiOff, Cable, AlertTriangle } from "lucide-react";
 import type { ConnectionLevel } from "@/lib/server-context";
 import { cn } from "@/lib/cn";
 
@@ -11,6 +11,11 @@ const CONFIG: Record<
     label: "Kein Server eingerichtet",
     icon: WifiOff,
     className: "text-ink-faint bg-surface-raised border-line",
+  },
+  unreachable: {
+    label: "Server noch nie erreicht",
+    icon: AlertTriangle,
+    className: "text-danger bg-danger-soft border-danger/30",
   },
   basic: {
     label: "Basis-Statusabfrage aktiv",
@@ -24,7 +29,14 @@ const CONFIG: Record<
   },
 };
 
-export function ConnectionIndicator({ level }: { level: ConnectionLevel }) {
+export function ConnectionIndicator({
+  level,
+  alwaysShowLabel = false,
+}: {
+  level: ConnectionLevel;
+  /** true in Kontexten mit genug Platz (z. B. mobiles Drawer-Menü). */
+  alwaysShowLabel?: boolean;
+}) {
   const { label, icon: Icon, className } = CONFIG[level];
   return (
     <Link
@@ -36,7 +48,7 @@ export function ConnectionIndicator({ level }: { level: ConnectionLevel }) {
       title={label}
     >
       <Icon size={13} />
-      <span className="hidden sm:inline">{label}</span>
+      <span className={alwaysShowLabel ? "" : "hidden sm:inline"}>{label}</span>
     </Link>
   );
 }

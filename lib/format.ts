@@ -65,6 +65,18 @@ export function formatCentimeters(cm: number): string {
   return `${m.toLocaleString("de-DE", { maximumFractionDigits: 0 })} m`;
 }
 
+/** Für das Serveralter: liefert z. B. "8 Monate" oder "1 Jahr, 2 Monate". */
+export function formatAge(since: Date | string | number): string {
+  const days = Math.floor((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24));
+  if (days < 1) return "heute gegründet";
+  if (days < 60) return `${days} Tage`;
+  const months = Math.floor(days / 30.44);
+  if (months < 24) return `${months} Monate`;
+  const years = Math.floor(months / 12);
+  const remMonths = months % 12;
+  return remMonths > 0 ? `${years} Jahre, ${remMonths} Monate` : `${years} Jahre`;
+}
+
 export function formatCoords(x: number, y: number | null | undefined, z: number): string {
   const rx = Math.round(x);
   const rz = Math.round(z);

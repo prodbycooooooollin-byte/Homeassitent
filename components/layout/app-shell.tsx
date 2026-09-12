@@ -85,7 +85,7 @@ export function AppShell({
               </button>
             </div>
             <div className="mb-3">
-              <ConnectionIndicator level={connectionLevel} />
+              <ConnectionIndicator level={connectionLevel} alwaysShowLabel />
             </div>
             <div className="flex-1 overflow-y-auto">
               <NavLinks onNavigate={() => setDrawerOpen(false)} />
