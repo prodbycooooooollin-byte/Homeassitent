@@ -142,6 +142,15 @@ model MinecraftServer {
   lastAgentContactAt   DateTime?
   reportedCapabilities String? // JSON-Array, z. B. ["rcon","statsFiles","logTail"]
 
+  // Optionale direkte RCON-Verbindung (für den "Verbindung testen"-Knopf im
+  // Assistenten und admin-seitige Serverbefehle). Das Passwort liegt nur
+  // AES-256-GCM-verschlüsselt in der DB (siehe lib/crypto/secret-box.ts) und
+  // verlässt den Server nie im Klartext.
+  rconPort               Int?
+  rconPasswordEncrypted  String?
+  lastRconCheckAt        DateTime?
+  lastRconOnline         Boolean?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
