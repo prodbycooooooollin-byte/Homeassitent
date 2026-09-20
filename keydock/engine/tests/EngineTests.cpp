@@ -133,6 +133,26 @@ int main()
                      + " BPM is detected (octave-correct: "
                      + (octave ? "half/double" : "no") + ")", describe(r));
     }
+    std::printf("\n== BPM precision and metrical level ==\n");
+    {
+        // Reported from FL Studio: a 135 BPM beat displayed as 136. The cause
+        // was linear interpolation of the autocorrelation, whose maximum can
+        // only ever land on an integer lag - and the lags either side of
+        // 135 BPM are 136.0 and 132.5, so 135 was unreachable.
+        for (double bpm : { 90.0, 120.0, 128.0, 135.0, 140.0, 174.0 })
+        {
+            auto mix = test::mix(test::renderProgression(9, true, bpm, 22.0, hostRate),
+                                 test::renderDrumLoop(bpm, 22.0, hostRate), 0.8f);
+            auto r = runThroughEngine(engine, mix, hostRate, 22.0f);
+
+            const double error = std::abs(r.tempo.bpm - bpm);
+            check(error <= 0.5,
+                  "full mix at " + std::to_string(static_cast<int>(bpm))
+                      + " BPM is measured within 0.5 BPM",
+                  std::to_string(r.tempo.bpm) + " (error "
+                      + std::to_string(error) + ")");
+        }
+    }
     {
         // Held chords with no percussion: the onset function is almost empty,
         // so the metrical level is decided by the prior rather than by the

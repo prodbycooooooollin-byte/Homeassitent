@@ -12,7 +12,7 @@ target_include_directories(KeyDockOverlay PRIVATE
 
 target_link_libraries(KeyDockOverlay PRIVATE
     keydock_engine
-    user32 gdi32 shell32 psapi)
+    user32 gdi32 shell32 psapi dwmapi)
 
 target_compile_features(KeyDockOverlay PRIVATE cxx_std_17)
 

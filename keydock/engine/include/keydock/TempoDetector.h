@@ -42,9 +42,24 @@ private:
     std::vector<float> prevBands_;
     std::vector<float> odf_;
 
-    void  buildOdf(const std::vector<float>& mono);
-    float combSalience(const std::vector<float>& acf, double lag) const;
-    float beatGridScore(float bpm) const;
+    /// Onset energy on the beat grid versus halfway between beats, measured
+    /// at the best-fitting phase. Comparable offbeat energy means the grid is
+    /// an octave too slow.
+    struct GridStats
+    {
+        float onbeatMean  = 0.0f;
+        float offbeatMean = 0.0f;
+        float globalMean  = 0.0f;
+        float score       = 0.0f;   ///< 0..1, how much beats stand out
+        float offbeatRatio() const
+        {
+            return onbeatMean > 1.0e-9f ? offbeatMean / onbeatMean : 0.0f;
+        }
+    };
+
+    void      buildOdf(const std::vector<float>& mono);
+    float     combSalience(const std::vector<float>& acf, double lag) const;
+    GridStats gridStats(float bpm) const;
 };
 
 } // namespace keydock

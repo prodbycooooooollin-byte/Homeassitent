@@ -72,7 +72,7 @@ private:
     uint64_t            instanceId_ = 0;
     uint32_t            instanceIndex_ = 0;
 
-    std::atomic<float>  captureSeconds_ { 20.0f };
+    std::atomic<float>  captureSeconds_ { 30.0f };
     std::atomic<double> hostBpm_        { 0.0 };
     std::atomic<bool>   hostPlaying_    { false };
     std::atomic<bool>   overlayRequested_ { false };

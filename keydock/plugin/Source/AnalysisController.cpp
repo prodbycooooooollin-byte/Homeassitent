@@ -78,9 +78,9 @@ void AnalysisController::pushAudio(const float* const* channels,
         ring_.push(monoScratch_.data(), static_cast<size_t>(limit));
 }
 
-void AnalysisController::startAnalysis(float seconds)
+void AnalysisController::startAnalysis(float maxSeconds)
 {
-    requestedSeconds_.store(std::clamp(seconds, 0.0f, kMaxCaptureSeconds));
+    requestedSeconds_.store(std::clamp(maxSeconds, 0.0f, kMaxCaptureSeconds));
     stopRequested_.store(false);
     resetRequested_.store(false);
     // A new id invalidates any analysis still in flight: a late result from
@@ -147,12 +147,39 @@ void AnalysisController::restoreResult(const AnalysisResult& r, uint32_t analysi
     publish(s);
 }
 
+bool AnalysisController::resultsAgree(const AnalysisResult& a,
+                                      const AnalysisResult& b) const
+{
+    if (! a.valid || ! b.valid)
+        return false;
+
+    const bool keyAgrees = a.key.tonal && b.key.tonal
+                        && a.key.best.tonic == b.key.best.tonic
+                        && a.key.best.isMinor == b.key.best.isMinor;
+
+    // Half a BPM is the engine's demonstrated accuracy, so anything inside
+    // that is the same answer rather than a drifting one.
+    const bool tempoAgrees = a.tempo.bpm > 0.0f && b.tempo.bpm > 0.0f
+                          && std::abs(a.tempo.bpm - b.tempo.bpm) <= 0.5f;
+
+    // Only settle once both dimensions are decided and neither is a guess.
+    return keyAgrees && tempoAgrees
+        && a.key.confidence   >= Confidence::medium
+        && b.key.confidence   >= Confidence::medium
+        && a.tempo.confidence >= Confidence::medium
+        && b.tempo.confidence >= Confidence::medium;
+}
+
 void AnalysisController::workerLoop()
 {
     Snapshot state;
     uint32_t activeId = 0;
     float    target   = 0.0f;
     bool     sawAudio = false;
+
+    AnalysisResult previousInterim;
+    bool           haveInterim = false;
+    float          lastEvaluationSeconds = 0.0f;
 
     while (! quit_.load())
     {
@@ -171,6 +198,9 @@ void AnalysisController::workerLoop()
             activeId = wanted;
             target   = requestedSeconds_.load();
             sawAudio = false;
+            haveInterim = false;
+            lastEvaluationSeconds = 0.0f;
+            previousInterim = AnalysisResult {};
 
             // Hard reset: no sample of the previous take may survive.
             ring_.clear();
@@ -243,12 +273,47 @@ void AnalysisController::workerLoop()
 
         if (! full && ! stopNow)
         {
+            const float captured = engine_.capturedSeconds();
+
+            // Progressive evaluation: as soon as there is enough material,
+            // analyse what we have every couple of seconds and finish early
+            // once two consecutive evaluations give the same answer.
+            if (captured >= kFirstEvaluationSeconds
+                && captured - lastEvaluationSeconds >= kEvaluationIntervalSeconds)
+            {
+                lastEvaluationSeconds = captured;
+
+                state.status = ipc::Status::analysing;
+                publish(state);
+
+                AnalysisResult interim = engine_.analyse();
+
+                // A newer request arrived while we were analysing.
+                if (requestedId_.load() != activeId)
+                    continue;
+
+                if (haveInterim && resultsAgree(previousInterim, interim))
+                {
+                    capturing_.store(false);
+                    state.status          = ipc::Status::haveResult;
+                    state.result          = interim;
+                    state.haveResult      = true;
+                    state.progress        = 1.0f;
+                    state.capturedSeconds = interim.analysedSeconds;
+                    publish(state);
+                    continue;
+                }
+
+                previousInterim = interim;
+                haveInterim     = true;
+            }
+
             if (drained > 0 || state.status != ipc::Status::listening)
             {
                 state.status          = ipc::Status::listening;
-                state.capturedSeconds = engine_.capturedSeconds();
+                state.capturedSeconds = captured;
                 state.progress        = target > 0.0f
-                                      ? std::min(1.0f, state.capturedSeconds / target)
+                                      ? std::min(1.0f, captured / target)
                                       : 0.0f;
                 publish(state);
             }

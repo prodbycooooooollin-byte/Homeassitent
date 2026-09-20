@@ -107,7 +107,13 @@ std::wstring OverlayWindow::bpmText(const InstanceInfo& info) const
         return L"--";
 
     wchar_t buffer[32];
-    std::swprintf(buffer, 32, L"%.1f", info.result.bpm * bpmDisplayFactor_);
+    const float shown = info.result.bpm * bpmDisplayFactor_;
+    if (bpmDisplayFactor_ > 1.01f)
+        std::swprintf(buffer, 32, L"%.1f x2", shown);
+    else if (bpmDisplayFactor_ < 0.99f)
+        std::swprintf(buffer, 32, L"%.1f /2", shown);
+    else
+        std::swprintf(buffer, 32, L"%.1f", shown);
     return buffer;
 }
 
@@ -144,6 +150,19 @@ std::wstring OverlayWindow::statusLine(const InstanceInfo& info) const
 
 void OverlayWindow::onPaint()
 {
+    // A new analysis always starts from the measured tempo. Without this the
+    // half/double choice from the previous take silently carried over and
+    // multiplied the next reading.
+    {
+        InstanceInfo info;
+        if (currentInstance(info) && info.haveResult
+            && info.result.analysisId != bpmFactorAnalysisId_)
+        {
+            bpmFactorAnalysisId_ = info.result.analysisId;
+            bpmDisplayFactor_    = 1.0f;
+        }
+    }
+
     PAINTSTRUCT ps {};
     HDC screenDc = BeginPaint(hwnd_, &ps);
 
@@ -398,11 +417,11 @@ void OverlayWindow::paintDetails(HDC dc, RECT bounds)
 
     wchar_t lengthLabel[24];
     if (settings_.captureSeconds > 0.0f)
-        std::swprintf(lengthLabel, 24, L"%.0f s", settings_.captureSeconds);
+        std::swprintf(lengthLabel, 24, L"max %.0f s", settings_.captureSeconds);
     else
         std::swprintf(lengthLabel, 24, L"manuell");
 
-    button(lengthLabel, HitTarget::lengthCycle, 46);
+    button(lengthLabel, HitTarget::lengthCycle, 58);
     button(L"1/2", HitTarget::halfTime, 30);
     button(L"x2",  HitTarget::doubleTime, 30);
     button(L"Reset", HitTarget::reset, 44);

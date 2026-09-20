@@ -29,8 +29,10 @@ struct Settings
     Mode   mode          = Mode::docked;
 
     /// Docked: offset in DIPs from the FL main window's top-right corner.
-    int    anchorRight   = 16;
-    int    anchorTop     = 6;
+    /// The default clears the window's caption buttons; anchorTop of 6 put
+    /// the bar straight over FL Studio's close button.
+    int    anchorRight   = 24;
+    int    anchorTop     = 46;
 
     /// Floating: absolute virtual-desktop position in DIPs.
     int    floatX        = 200;
@@ -40,7 +42,9 @@ struct Settings
     int    scalePercent  = 100;   // extra user scaling on top of the system DPI
     bool   showCamelot   = true;
     bool   detailsOpen   = false;
-    float  captureSeconds = 20.0f;
+    /// Upper bound, not a fixed duration: the analysis stops as soon as the
+    /// result is stable.
+    float  captureSeconds = 30.0f;
 
     Theme  theme;
 

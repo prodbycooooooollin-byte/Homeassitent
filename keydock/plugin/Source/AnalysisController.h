@@ -46,8 +46,12 @@ public:
     /// Never allocates, never locks, never touches the file system.
     void pushAudio(const float* const* channels, int numChannels, int numSamples) noexcept;
 
-    /// @param seconds  capture length; 0 means "capture until stopped".
-    void startAnalysis(float seconds);
+    /// Starts a fresh analysis.
+    /// @param maxSeconds  upper bound on how long to listen; 0 means "until
+    ///                    stopped". The analysis finishes as soon as the
+    ///                    result stops changing, so a clear loop typically
+    ///                    completes well before this bound.
+    void startAnalysis(float maxSeconds);
     /// Stops capturing now and analyses whatever was captured.
     void stopCaptureAndAnalyse();
     /// Abandons the current analysis without producing a result.
@@ -91,6 +95,14 @@ private:
     std::atomic<bool>       capturing_    { false };
     std::atomic<bool>       stopRequested_{ false };
     std::atomic<bool>       resetRequested_{ false };
+
+    /// Progressive evaluation: re-analyse every so often and stop as soon as
+    /// two consecutive evaluations agree. Waiting for a fixed duration made
+    /// every analysis feel equally slow no matter how obvious the material.
+    static constexpr float kFirstEvaluationSeconds = 5.0f;
+    static constexpr float kEvaluationIntervalSeconds = 2.0f;
+
+    bool  resultsAgree(const AnalysisResult& a, const AnalysisResult& b) const;
 };
 
 } // namespace keydock

@@ -306,7 +306,7 @@ void KeyDockProcessor::setStateInformation(const void* data, int sizeInBytes)
     if (! tree.isValid() || tree.getType().toString() != "KeyDock")
         return;
 
-    captureSeconds_.store(static_cast<float>(tree.getProperty("captureSeconds", 20.0)));
+    captureSeconds_.store(static_cast<float>(tree.getProperty("captureSeconds", 30.0)));
 
     const auto stored = tree.getChildWithName("Result");
     if (! stored.isValid())

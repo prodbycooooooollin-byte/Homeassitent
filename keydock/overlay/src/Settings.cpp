@@ -98,7 +98,7 @@ void Settings::load()
     scalePercent   = num("scalePercent", scalePercent);
     showCamelot    = num("showCamelot", 1) != 0;
     detailsOpen    = num("detailsOpen", 0) != 0;
-    captureSeconds = static_cast<float>(num("captureSeconds", 20));
+    captureSeconds = static_cast<float>(num("captureSeconds", 30));
 
     if (raw_.count("themeName"))   theme.name       = raw_["themeName"];
     if (raw_.count("background"))  theme.background = parseColour(raw_["background"], theme.background);

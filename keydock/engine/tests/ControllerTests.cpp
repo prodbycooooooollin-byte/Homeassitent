@@ -59,6 +59,15 @@ void feed(AnalysisController& c, const std::vector<float>& mono, double speedup 
     }
 }
 
+std::string describe(const AnalysisResult& r)
+{
+    if (! r.valid)
+        return "invalid: " + r.note;
+    return keyName(r.key.best.tonic, r.key.best.isMinor)
+         + " / " + std::to_string(r.tempo.bpm) + " BPM"
+         + " after " + std::to_string(r.analysedSeconds) + " s";
+}
+
 bool waitForStatus(AnalysisController& c, ipc::Status wanted, int timeoutMs)
 {
     const auto deadline = std::chrono::steady_clock::now()
@@ -182,6 +191,35 @@ int main()
               "the second sample is not contaminated by the first",
               got ? keyName(s.result.key.best.tonic, s.result.key.best.isMinor)
                   : "timed out");
+    }
+
+    std::printf("\n== Clear material finishes early instead of running the full window ==\n");
+    {
+        // Reported from FL Studio: every analysis took the same time no matter
+        // how obvious the material. The capture length is now an upper bound.
+        AnalysisController c;
+        c.prepare(kRate, kBlock);
+
+        auto mix = test::mix(test::renderProgression(9, true, 128.0, 30.0, kRate),
+                             test::renderDrumLoop(128.0, 30.0, kRate), 0.8f);
+
+        c.startAnalysis(30.0f);
+        std::atomic<bool> stop { false };
+        std::thread feeder([&] { feed(c, mix, 16.0, &stop); });
+
+        AnalysisController::Snapshot s;
+        const bool got = waitForResult(c, s, 30000);
+        stop.store(true);
+        feeder.join();
+
+        check(got && s.result.valid,
+              "a clear loop produces a result", describe(s.result));
+        check(got && s.result.analysedSeconds < 25.0f,
+              "it settles before the 30 s bound",
+              std::to_string(s.result.analysedSeconds) + " s used");
+        check(got && std::abs(s.result.tempo.bpm - 128.0f) <= 0.5f,
+              "the early result is still accurate",
+              std::to_string(s.result.tempo.bpm));
     }
 
     std::printf("\n== Cancel leaves no stale result behind ==\n");

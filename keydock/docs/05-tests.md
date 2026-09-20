@@ -15,8 +15,8 @@ Legende:
 
 ## 5.1 Was ich tatsächlich ausgeführt habe
 
-Linux, GCC 13, Release. `ctest`: **2/2 Suiten bestanden, 40 Einzelprüfungen,
-0 Fehler** (26,8 s).
+Linux, GCC 13, Release. `ctest`: **2/2 Suiten bestanden, 49 Einzelprüfungen,
+0 Fehler**. Dieselben Suiten laufen in CI unter MSVC mit `/fp:fast`.
 
 | # | Prüfung | Status | Ergebnis |
 |---|---|---|---|
@@ -46,6 +46,9 @@ Linux, GCC 13, Release. `ctest`: **2/2 Suiten bestanden, 40 Einzelprüfungen,
 | 24 | Reset setzt auf „Bereit" zurück | **A** | bestätigt |
 | 25 | Akkorde ohne Drums → nie sicheres Tempo | **A** | auf „unsicher" gedeckelt |
 | 26 | Besser passende Tempo-Alternative wird erklärt | **A** | Hinweistext gesetzt |
+| 27 | BPM-Genauigkeit bei 90/120/128/135/140/174 | **A** | max. 0,15 BPM Abweichung |
+| 28 | 174 BPM wird nicht auf 87 halbiert | **A** | korrekte metrische Ebene |
+| 29 | Klares Material bricht vor der Obergrenze ab | **A** | 8,25 s statt 30 s, weiterhin genau |
 
 Nachvollziehbar mit `ctest --test-dir build --output-on-failure`.
 
@@ -234,7 +237,24 @@ normal schnell.
 - **Themes als einzelne Dateien speichern/laden.** Aktuell wird das aktive
   Theme in `overlay.cfg` gespeichert; ein Dateibrowser dafür fehlt noch.
 
-## 5.6 Kalibrierung der Sicherheitsangabe
+## 5.6 Aus dem Praxistest in FL Studio behoben
+
+Gemeldet nach dem ersten echten Einsatz, alle reproduziert und behoben:
+
+| Meldung | Ursache | Behebung |
+|---|---|---|
+| 135-BPM-Beat wurde als 136 angezeigt | Die Autokorrelation wurde **linear** interpoliert. Eine lineare Interpolation kann ihre Stützstellen nie überschreiten, also liegt das Maximum zwangsläufig auf einem ganzzahligen Lag — und die Nachbarn von 135 BPM sind 136,0 und 132,5. 135 war schlicht unerreichbar. | Quadratische Interpolation durch drei Stützstellen. Fehler jetzt max. 0,15 BPM. |
+| 544 BPM nach mehrmaligem Scannen | Die `x2`-Taste multiplizierte **unbegrenzt** und wurde bei einer neuen Analyse nicht zurückgesetzt: 136 × 2 × 2 = 544, und der Faktor blieb erhalten. | Faktor auf eine Oktave begrenzt, setzt sich bei jedem neuen Ergebnis zurück, und die Anzeige markiert einen abweichenden Faktor sichtbar mit `x2` bzw. `/2`. |
+| Analyse dauert immer gleich lang | Die Analysezeit war eine **feste** Dauer. | Sie ist jetzt eine **Obergrenze**: ab 5 s wird alle 2 s ausgewertet und abgebrochen, sobald zwei Auswertungen übereinstimmen. Ein klarer Loop ist typisch nach ~8 s fertig statt nach 30. |
+| Overlay liegt über FL Studios Schließen-Button | Standard-Abstand nach oben war 6 DIP — mitten in der Titelleiste. | Neuer Standard 46 DIP, zusätzlich weicht das Overlay den Fensterknöpfen aus, deren Lage über `DwmGetWindowAttribute(DWMWA_CAPTION_BUTTON_BOUNDS)` abgefragt wird. |
+
+Nebenbei gefunden: 174 BPM wurde auf 87 halbiert. Ursache war ein Bias in
+meiner eigenen Metrik — die Beat-Raster-Bewertung multiplizierte mit der
+Beat-Periode und bevorzugte damit systematisch langsamere Tempi. Ersetzt
+durch den sachlich richtigen Test: trägt die Position **zwischen** den Beats
+vergleichbare Onset-Energie, ist das Tempo eine Oktave zu tief.
+
+## 5.7 Kalibrierung der Sicherheitsangabe
 
 Die Sicherheitsangabe ist eine **ordinale Stufe** (sicher / wahrscheinlich /
 unsicher / nicht bestimmbar), **kein Prozentwert** — genau wie gefordert.

@@ -42,11 +42,13 @@ KeyDockEditor::KeyDockEditor(KeyDockProcessor& p)
     styleLabel(detailLabel_, 12.0f, kDim,    juce::Justification::centredLeft);
     styleLabel(hostLabel_,   11.0f, kDim,    juce::Justification::centredRight);
 
-    lengthBox_.addItem("10 s", 1);
-    lengthBox_.addItem("20 s", 2);
-    lengthBox_.addItem("30 s", 3);
+    // Upper bounds, not fixed durations: the analysis ends as soon as the
+    // result stops changing.
+    lengthBox_.addItem("max. 10 s", 1);
+    lengthBox_.addItem("max. 20 s", 2);
+    lengthBox_.addItem("max. 30 s", 3);
     lengthBox_.addItem("manuell stoppen", 4);
-    lengthBox_.setSelectedId(2, juce::dontSendNotification);
+    lengthBox_.setSelectedId(3, juce::dontSendNotification);
     addAndMakeVisible(lengthBox_);
 
     addAndMakeVisible(analyseButton_);

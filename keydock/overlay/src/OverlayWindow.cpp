@@ -2,6 +2,7 @@
 
 #include "keydock/Types.h"
 
+#include <dwmapi.h>
 #include <windowsx.h>
 
 #include <algorithm>
@@ -144,6 +145,26 @@ void OverlayWindow::refreshPlacement()
         const double scale = static_cast<double>(dpi_) / 96.0;
         x = static_cast<int>(std::lround(settings_.floatX * scale));
         y = static_cast<int>(std::lround(settings_.floatY * scale));
+    }
+
+    if (settings_.mode == Settings::Mode::docked)
+    {
+        // Never sit on the minimise/maximise/close buttons. DWM reports where
+        // they actually are, which beats guessing a caption height that
+        // changes with theme and DPI.
+        RECT caption {};
+        if (SUCCEEDED(DwmGetWindowAttribute(host.hwnd, DWMWA_CAPTION_BUTTON_BOUNDS,
+                                            &caption, sizeof(caption)))
+            && caption.bottom > caption.top)
+        {
+            // Window-relative, so lift it into screen coordinates.
+            const LONG captionBottom = host.frame.top + caption.bottom;
+            const LONG captionLeft   = host.frame.left + caption.left;
+
+            const bool overlapsHorizontally = (x + width) > captionLeft;
+            if (overlapsHorizontally && y < captionBottom)
+                y = captionBottom + scaled(4);
+        }
     }
 
     // Keep the whole window on a real monitor even after a layout change.
@@ -431,11 +452,15 @@ void OverlayWindow::activate(HitTarget target)
 
         // Half/double time change the displayed interpretation only. They do
         // not re-run the analysis and they never write FL Studio's tempo.
+        //
+        // Clamped to one octave either side: an earlier version multiplied
+        // without limit, so two taps on x2 turned a 136 BPM reading into 544
+        // and it stayed that way into the next analysis.
         case HitTarget::halfTime:
-            bpmDisplayFactor_ = bpmDisplayFactor_ * 0.5f;
+            bpmDisplayFactor_ = std::clamp(bpmDisplayFactor_ * 0.5f, 0.5f, 2.0f);
             break;
         case HitTarget::doubleTime:
-            bpmDisplayFactor_ = bpmDisplayFactor_ * 2.0f;
+            bpmDisplayFactor_ = std::clamp(bpmDisplayFactor_ * 2.0f, 0.5f, 2.0f);
             break;
 
         case HitTarget::themeCycle:

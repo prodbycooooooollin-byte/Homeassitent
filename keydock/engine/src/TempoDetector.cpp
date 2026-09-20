@@ -16,14 +16,32 @@ constexpr double kMaxBpm = 200.0;
 // the two with room on both sides.
 constexpr float kAlternateOutfitsChosen = 1.15f;
 
+/// Quadratic interpolation through the three nearest samples.
+///
+/// Linear interpolation cannot be used here: it can never exceed its two
+/// endpoints, so the maximum of a linearly interpolated curve always lands on
+/// an integer lag. At 135 BPM the neighbouring integer lags are 136.0 and
+/// 132.5 BPM, which is why the estimate used to snap to 136 and could not
+/// reach 135 at all. A parabola through three samples has a genuine
+/// sub-sample maximum.
 float interpolateAt(const std::vector<float>& v, double x)
 {
-    if (x <= 0.0 || x >= static_cast<double>(v.size()) - 1.0)
+    if (x < 1.0 || x >= static_cast<double>(v.size()) - 1.0)
         return 0.0f;
-    const int   i    = static_cast<int>(x);
-    const float frac = static_cast<float>(x - i);
-    return v[static_cast<size_t>(i)] * (1.0f - frac)
-         + v[static_cast<size_t>(i + 1)] * frac;
+
+    const int    i = static_cast<int>(x + 0.5);
+    if (i < 1 || i + 1 >= static_cast<int>(v.size()))
+        return 0.0f;
+
+    const double d  = x - i;                       // -0.5 .. 0.5
+    const double y0 = v[static_cast<size_t>(i - 1)];
+    const double y1 = v[static_cast<size_t>(i)];
+    const double y2 = v[static_cast<size_t>(i + 1)];
+
+    // p(d) = y1 + d*(y2 - y0)/2 + d^2*(y0 - 2*y1 + y2)/2
+    const double value = y1 + 0.5 * d * (y2 - y0)
+                            + 0.5 * d * d * (y0 - 2.0 * y1 + y2);
+    return static_cast<float>(value);
 }
 
 /// Weak preference for perceptually central tempi, used only to pick between
@@ -138,48 +156,83 @@ float TempoDetector::combSalience(const std::vector<float>& acf, double lag) con
         const double l = lag * m;
         if (l >= static_cast<double>(acf.size()) - 1.0)
             break;
-        // Take a small local max so a slightly-off period still scores.
-        float best = 0.0f;
-        for (double d = -1.0; d <= 1.0; d += 0.5)
-            best = std::max(best, interpolateAt(acf, l + d));
-        sum  += kWeight[m - 1] * best;
+
+        // Read the autocorrelation exactly at the multiple. An earlier version
+        // took a local maximum around it to tolerate a slightly-off period,
+        // but that let every multiple drift independently and destroyed the
+        // precision the higher multiples exist to provide: one ODF frame is
+        // ~3.5 BPM at 135 BPM, so the smear alone cost about a whole BPM.
+        sum  += kWeight[m - 1] * interpolateAt(acf, l);
         norm += kWeight[m - 1];
     }
     return norm > 0.0f ? sum / norm : 0.0f;
 }
 
-float TempoDetector::beatGridScore(float bpm) const
+TempoDetector::GridStats TempoDetector::gridStats(float bpm) const
 {
+    GridStats stats;
     if (bpm <= 0.0f || odf_.empty())
-        return 0.0f;
+        return stats;
 
     const double period = 60.0 * odfRate() / bpm;
-    if (period < 2.0)
-        return 0.0f;
+    if (period < 4.0)
+        return stats;
 
-    const float total = std::accumulate(odf_.begin(), odf_.end(), 0.0f);
-    if (total <= 1.0e-9f)
-        return 0.0f;
+    stats.globalMean = std::accumulate(odf_.begin(), odf_.end(), 0.0f)
+                     / static_cast<float>(odf_.size());
+    if (stats.globalMean <= 1.0e-9f)
+        return stats;
 
-    // Try every phase within one beat period and keep the best alignment.
-    float best = 0.0f;
+    // Allow +/- 1 ODF frame of jitter (~12 ms) when sampling the grid.
+    const auto sampleAround = [this](double p)
+    {
+        float local = 0.0f;
+        for (double d = -1.0; d <= 1.0; d += 1.0)
+            local = std::max(local, interpolateAt(odf_, p + d));
+        return local;
+    };
+
+    // Try every phase within one beat and keep the best-aligned one.
+    double bestPhase = 0.0;
+    float  bestSum   = -1.0f;
     for (double phase = 0.0; phase < period; phase += 0.5)
     {
         float sum = 0.0f;
-        int   hits = 0;
-        for (double p = phase; p < static_cast<double>(odf_.size()) - 1.0; p += period)
+        int   n   = 0;
+        for (double p = phase; p < static_cast<double>(odf_.size()) - 2.0; p += period)
         {
-            // Allow +/- 1 ODF frame of jitter (~12 ms).
-            float local = 0.0f;
-            for (double d = -1.0; d <= 1.0; d += 1.0)
-                local = std::max(local, interpolateAt(odf_, p + d));
-            sum += local;
-            ++hits;
+            sum += sampleAround(p);
+            ++n;
         }
-        if (hits > 0)
-            best = std::max(best, sum / total * static_cast<float>(period) / 3.0f);
+        if (n > 0 && sum / n > bestSum)
+        {
+            bestSum   = sum / n;
+            bestPhase = phase;
+        }
     }
-    return std::min(1.0f, best);
+    if (bestSum < 0.0f)
+        return stats;
+
+    stats.onbeatMean = bestSum;
+
+    // Halfway between the beats. If those carry comparable energy, an onset
+    // sits on every other position too and the real tactus is twice as fast.
+    float offSum = 0.0f;
+    int   offN   = 0;
+    for (double p = bestPhase + period * 0.5;
+         p < static_cast<double>(odf_.size()) - 2.0; p += period)
+    {
+        offSum += sampleAround(p);
+        ++offN;
+    }
+    if (offN > 0)
+        stats.offbeatMean = offSum / offN;
+
+    // Deliberately free of any period term: an earlier version multiplied by
+    // the beat period, which made every slower candidate score higher and
+    // biased the octave decision towards half time.
+    stats.score = std::min(1.0f, stats.onbeatMean / (2.0f * stats.globalMean));
+    return stats;
 }
 
 TempoResult TempoDetector::analyse(const std::vector<float>& mono)
@@ -240,7 +293,7 @@ TempoResult TempoDetector::analyse(const std::vector<float>& mono)
     std::vector<Cand> grid;
     grid.reserve(1600);
 
-    for (double bpm = kMinBpm; bpm <= kMaxBpm; bpm += 0.1)
+    for (double bpm = kMinBpm; bpm <= kMaxBpm; bpm += 0.05)
     {
         const double lag = 60.0 * odfRate() / bpm;
         const float  s   = combSalience(acf, lag);
@@ -257,15 +310,31 @@ TempoResult TempoDetector::analyse(const std::vector<float>& mono)
         return result;
     }
 
-    const double chosenBpm = bestWeighted->bpm;
-    const float  chosenSal = bestWeighted->salience;
-
     const auto salienceAt = [&](double bpm) -> float
     {
         if (bpm < kMinBpm * 0.4 || bpm > kMaxBpm * 2.5)
             return 0.0f;
         return combSalience(acf, 60.0 * odfRate() / bpm);
     };
+
+    // ---- Decide the metrical level on evidence, not on the prior alone ----
+    // Autocorrelation is nearly blind between a tempo and its half: a backbeat
+    // correlates strongly at both, and the prior then decides, which drags
+    // genuinely fast material (drum & bass, trap at 140-175) down an octave.
+    // The grid statistics settle it: while the positions halfway between the
+    // beats carry comparable onset energy, every other onset is being ignored
+    // and the real tactus is twice as fast.
+    double chosenBpm = bestWeighted->bpm;
+    for (int step = 0; step < 2; ++step)
+    {
+        const double doubled = chosenBpm * 2.0;
+        if (doubled > kMaxBpm)
+            break;
+        if (gridStats(static_cast<float>(chosenBpm)).offbeatRatio() < 0.6f)
+            break;
+        chosenBpm = doubled;
+    }
+    const float chosenSal = salienceAt(chosenBpm);
 
     result.bpm         = static_cast<float>(chosenBpm);
     result.rhythmic    = true;
@@ -291,7 +360,7 @@ TempoResult TempoDetector::analyse(const std::vector<float>& mono)
         result.alternates.resize(3);
 
     // ---- Confidence -----------------------------------------------------
-    const float gridScore = beatGridScore(result.bpm);
+    const float gridScore = gridStats(result.bpm).score;
 
     // How much does the winner stand out from unrelated tempi?
     float offPeak = 0.0f;
