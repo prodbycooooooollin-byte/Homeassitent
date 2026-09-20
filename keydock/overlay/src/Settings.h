@@ -1,0 +1,60 @@
+// Overlay settings, persisted as a flat key=value file under
+// %APPDATA%\KeyDock\overlay.cfg. Deliberately dependency-free.
+#pragma once
+
+#include <cstdint>
+#include <map>
+#include <string>
+
+namespace keydock
+{
+
+struct Theme
+{
+    uint32_t background = 0xF21B1E23;  // AARRGGBB
+    uint32_t text       = 0xFFE6E8EC;
+    uint32_t dimText    = 0xFF8B929C;
+    uint32_t accent     = 0xFF4DA3FF;
+    uint32_t outline    = 0xFF2E333B;
+    std::string name    = "KeyDock Dark";
+};
+
+struct Settings
+{
+    /// Anchoring mode. Docked positions relative to the FL Studio main window;
+    /// floating keeps an absolute desktop position for toolbar presets that
+    /// leave no free space.
+    enum class Mode { docked, floating };
+
+    Mode   mode          = Mode::docked;
+
+    /// Docked: offset in DIPs from the FL main window's top-right corner.
+    int    anchorRight   = 16;
+    int    anchorTop     = 6;
+
+    /// Floating: absolute virtual-desktop position in DIPs.
+    int    floatX        = 200;
+    int    floatY        = 200;
+
+    int    width         = 430;   // DIPs
+    int    scalePercent  = 100;   // extra user scaling on top of the system DPI
+    bool   showCamelot   = true;
+    bool   detailsOpen   = false;
+    float  captureSeconds = 20.0f;
+
+    Theme  theme;
+
+    void load();
+    void save() const;
+
+    static std::string configPath();
+
+private:
+    std::map<std::string, std::string> raw_;
+};
+
+/// Built-in themes the settings panel cycles through.
+int         numBuiltInThemes();
+Theme       builtInTheme(int index);
+
+} // namespace keydock
