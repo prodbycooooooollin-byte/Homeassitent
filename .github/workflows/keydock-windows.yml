@@ -73,6 +73,13 @@ jobs:
         run: cmake --build build --config Release
         working-directory: keydock
 
+      # The engine runs under MSVC with /fp:fast here, not GCC. Building the
+      # test binaries without running them would leave that unverified in
+      # exactly the build that gets shipped.
+      - name: Run tests
+        run: ctest --test-dir build -C Release --output-on-failure
+        working-directory: keydock
+
       - name: Collect install layout
         shell: pwsh
         run: |
