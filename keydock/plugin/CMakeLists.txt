@@ -48,6 +48,12 @@ if (WIN32)
     target_compile_definitions(KeyDockPlugin PUBLIC NOMINMAX)
 endif()
 
+if (MSVC)
+    # /utf-8: the sources are UTF-8 without a BOM, which MSVC would otherwise
+    # decode using the system code page - German labels would become mojibake.
+    target_compile_options(KeyDockPlugin PRIVATE /utf-8)
+endif()
+
 target_include_directories(KeyDockPlugin PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source
     ${CMAKE_SOURCE_DIR}/shared)

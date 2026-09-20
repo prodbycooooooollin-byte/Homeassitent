@@ -23,7 +23,9 @@ target_compile_definitions(KeyDockOverlay PRIVATE
     WIN32_LEAN_AND_MEAN)
 
 if (MSVC)
-    target_compile_options(KeyDockOverlay PRIVATE /W4)
+    # /utf-8: the sources are UTF-8 without a BOM, which MSVC would
+    # otherwise decode using the system code page.
+    target_compile_options(KeyDockOverlay PRIVATE /W4 /utf-8)
     # Per-monitor DPI v2 and a modern common-controls manifest.
     set_target_properties(KeyDockOverlay PROPERTIES
         LINK_FLAGS "/MANIFESTUAC:\"level='asInvoker' uiAccess='false'\"")

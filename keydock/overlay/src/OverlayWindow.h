@@ -46,9 +46,22 @@ public:
 private:
     enum class HitTarget
     {
-        none, dragHandle, analyse, lengthCycle, details, settings,
-        resizeGrip, instancePicker, halfTime, doubleTime, reset, copy,
-        themeCycle, modeToggle, camelotToggle, scaleDown, scaleUp
+        none, dragHandle, analyse, details, resizeGrip, instancePicker,
+
+        // Analyse
+        len10, len20, len30, lenManual,
+
+        // Ergebnis
+        tempoHalf, tempoNormal, tempoDouble,
+        camelotOn, camelotOff,
+        copy, reset,
+
+        // Fenster
+        modeDocked, modeFloating,
+        scaleDown, scaleUp,
+        themePrev, themeNext,
+        opacityDown, opacityUp,
+        resetPosition,
     };
 
     struct HitZone
@@ -69,9 +82,19 @@ private:
     // --- layout / rendering helpers ---
     int   scaled(int dip) const;
     int   currentHeight() const;
+    int   currentWidth() const;
+    void  applyOpacity();
     void  paintBar(HDC dc, RECT bounds);
     void  paintDetails(HDC dc, RECT bounds);
     void  addZone(RECT r, HitTarget target);
+
+    // Drawn rather than typed: relying on font glyphs for the chevron and the
+    // grip produced mojibake under MSVC and depends on the installed font.
+    void  drawChevron(HDC dc, RECT box, bool pointsUp, COLORREF colour) const;
+    void  drawGripDots(HDC dc, RECT box, COLORREF colour) const;
+    void  drawSettingsIcon(HDC dc, RECT box, COLORREF colour) const;
+    void  drawConfidenceDots(HDC dc, RECT box, uint32_t confidence,
+                             COLORREF on, COLORREF off) const;
     HitTarget hitTest(POINT pt) const;
 
     std::wstring statusLine(const InstanceInfo& info) const;
@@ -103,6 +126,10 @@ private:
 
     int    themeIndex_ = 0;
     bool   visible_    = false;
+
+    /// Registered per row while painting the settings panel, so hovering a
+    /// control can explain what it does instead of leaving the label cryptic.
+    std::wstring hoverHelp_;
 };
 
 } // namespace keydock

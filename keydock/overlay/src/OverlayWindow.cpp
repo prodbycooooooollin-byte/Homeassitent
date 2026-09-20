@@ -18,13 +18,24 @@ namespace
 {
 constexpr wchar_t kClassName[] = L"KeyDockOverlayWindow";
 constexpr UINT    kTimerId     = 1;
-constexpr int     kBarHeightDip     = 36;
-constexpr int     kDetailHeightDip  = 118;
+constexpr int     kBarHeightDip     = 40;
+// Measured against what paintDetails actually lays out:
+//   10 padding + 3 section headers (15) + 8 rows (30) + footer (~50).
+constexpr int     kDetailHeightDip  = 350;
 constexpr int     kMinWidthDip      = 300;
 constexpr int     kMaxWidthDip      = 900;
 
-BYTE alphaOf(uint32_t argb) { return static_cast<BYTE>((argb >> 24) & 0xFF); }
-
+std::wstring widenUtf8(const std::string& s)
+{
+    if (s.empty())
+        return {};
+    const int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
+    if (n <= 1)
+        return {};
+    std::wstring out(static_cast<size_t>(n - 1), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, out.data(), n);
+    return out;
+}
 } // namespace
 
 OverlayWindow::OverlayWindow(IpcServer& server, Settings& settings)
@@ -54,6 +65,13 @@ int OverlayWindow::currentHeight() const
     return scaled(kBarHeightDip + (settings_.detailsOpen ? kDetailHeightDip : 0));
 }
 
+/// The settings panel needs more width than the bar to lay its rows out.
+int OverlayWindow::currentWidth() const
+{
+    const int minimum = settings_.detailsOpen ? 560 : kMinWidthDip;
+    return scaled(std::max(settings_.width, minimum));
+}
+
 bool OverlayWindow::create(HINSTANCE instance)
 {
     WNDCLASSEXW wc {};
@@ -74,7 +92,7 @@ bool OverlayWindow::create(HINSTANCE instance)
     if (hwnd_ == nullptr)
         return false;
 
-    SetLayeredWindowAttributes(hwnd_, 0, alphaOf(settings_.theme.background), LWA_ALPHA);
+    applyOpacity();
 
     tracker_.setOverlayWindow(hwnd_);
     tracker_.onHostChanged = [this]
@@ -94,6 +112,15 @@ bool OverlayWindow::create(HINSTANCE instance)
     SetTimer(hwnd_, kTimerId, 100, nullptr);
     refreshPlacement();
     return true;
+}
+
+void OverlayWindow::applyOpacity()
+{
+    if (hwnd_ == nullptr)
+        return;
+    const int percent = std::clamp(settings_.opacityPercent, 40, 100);
+    SetLayeredWindowAttributes(hwnd_, 0,
+                               static_cast<BYTE>(percent * 255 / 100), LWA_ALPHA);
 }
 
 void OverlayWindow::requestRepaint()
@@ -129,7 +156,7 @@ void OverlayWindow::refreshPlacement()
 
     dpi_ = host.dpi;
 
-    const int width  = scaled(settings_.width);
+    const int width  = currentWidth();
     const int height = currentHeight();
 
     int x = 0, y = 0;
@@ -381,6 +408,18 @@ void OverlayWindow::activate(HitTarget target)
     InstanceInfo info;
     const bool have = currentInstance(info);
 
+    const auto send = [&](ipc::CommandId id, float param)
+    {
+        if (have)
+            server_.sendCommand(info.hello.instanceId, id, param);
+    };
+
+    const auto setLength = [&](float seconds)
+    {
+        settings_.captureSeconds = seconds;
+        settings_.save();
+    };
+
     switch (target)
     {
         case HitTarget::analyse:
@@ -392,25 +431,16 @@ void OverlayWindow::activate(HitTarget target)
                            || status == ipc::Status::waitingForAudio;
             // Starting a fresh analysis always discards the previous capture;
             // that reset happens in the plugin, not here.
-            server_.sendCommand(info.hello.instanceId,
-                                busy ? ipc::CommandId::stopCapture
-                                     : ipc::CommandId::startAnalysis,
-                                settings_.captureSeconds);
+            send(busy ? ipc::CommandId::stopCapture : ipc::CommandId::startAnalysis,
+                 settings_.captureSeconds);
             bpmDisplayFactor_ = 1.0f;
             break;
         }
 
-        case HitTarget::lengthCycle:
-        {
-            static const float lengths[] = { 10.0f, 20.0f, 30.0f, 0.0f };
-            int index = 0;
-            for (int i = 0; i < 4; ++i)
-                if (std::abs(lengths[i] - settings_.captureSeconds) < 0.1f)
-                    index = i;
-            settings_.captureSeconds = lengths[(index + 1) % 4];
-            settings_.save();
-            break;
-        }
+        case HitTarget::len10:     setLength(10.0f); break;
+        case HitTarget::len20:     setLength(20.0f); break;
+        case HitTarget::len30:     setLength(30.0f); break;
+        case HitTarget::lenManual: setLength(0.0f);  break;
 
         case HitTarget::details:
             settings_.detailsOpen = ! settings_.detailsOpen;
@@ -419,8 +449,7 @@ void OverlayWindow::activate(HitTarget target)
             break;
 
         case HitTarget::reset:
-            if (have)
-                server_.sendCommand(info.hello.instanceId, ipc::CommandId::reset, 0.0f);
+            send(ipc::CommandId::reset, 0.0f);
             bpmDisplayFactor_ = 1.0f;
             break;
 
@@ -429,19 +458,36 @@ void OverlayWindow::activate(HitTarget target)
             if (! have || ! info.haveResult || info.result.valid == 0)
                 break;
 
-            wchar_t text[160] = {};
-            const auto& r = info.result;
-            std::wstring keyPart = keyText(info);
-            std::swprintf(text, 160, L"%s - %.1f BPM",
-                          keyPart.c_str(), r.bpm * bpmDisplayFactor_);
+            // Written the way a producer would paste it into a file name or a
+            // project note.
+            std::wstring text;
+            if (info.result.keyTonic >= 0)
+            {
+                text = widenUtf8(keyName(info.result.keyTonic,
+                                         info.result.keyIsMinor != 0));
+                if (settings_.showCamelot)
+                    text += L" (" + widenUtf8(camelot(info.result.keyTonic,
+                                                      info.result.keyIsMinor != 0)) + L")";
+            }
+            if (info.result.bpm > 0.0f)
+            {
+                wchar_t buffer[32];
+                std::swprintf(buffer, 32, L"%.1f BPM",
+                              info.result.bpm * bpmDisplayFactor_);
+                if (! text.empty())
+                    text += L" - ";
+                text += buffer;
+            }
+            if (text.empty())
+                break;
 
             if (OpenClipboard(hwnd_))
             {
                 EmptyClipboard();
-                const size_t bytes = (std::wcslen(text) + 1) * sizeof(wchar_t);
+                const size_t bytes = (text.size() + 1) * sizeof(wchar_t);
                 if (HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, bytes))
                 {
-                    std::memcpy(GlobalLock(mem), text, bytes);
+                    std::memcpy(GlobalLock(mem), text.c_str(), bytes);
                     GlobalUnlock(mem);
                     SetClipboardData(CF_UNICODETEXT, mem);
                 }
@@ -452,61 +498,82 @@ void OverlayWindow::activate(HitTarget target)
 
         // Half/double time change the displayed interpretation only. They do
         // not re-run the analysis and they never write FL Studio's tempo.
-        //
-        // Clamped to one octave either side: an earlier version multiplied
-        // without limit, so two taps on x2 turned a 136 BPM reading into 544
-        // and it stayed that way into the next analysis.
-        case HitTarget::halfTime:
-            bpmDisplayFactor_ = std::clamp(bpmDisplayFactor_ * 0.5f, 0.5f, 2.0f);
-            break;
-        case HitTarget::doubleTime:
-            bpmDisplayFactor_ = std::clamp(bpmDisplayFactor_ * 2.0f, 0.5f, 2.0f);
-            break;
+        // Absolute rather than multiplying: an earlier version multiplied
+        // without limit, so two taps turned 136 BPM into 544.
+        case HitTarget::tempoHalf:   bpmDisplayFactor_ = 0.5f; break;
+        case HitTarget::tempoNormal: bpmDisplayFactor_ = 1.0f; break;
+        case HitTarget::tempoDouble: bpmDisplayFactor_ = 2.0f; break;
 
-        case HitTarget::themeCycle:
-            themeIndex_ = (themeIndex_ + 1) % numBuiltInThemes();
-            settings_.theme = builtInTheme(themeIndex_);
-            SetLayeredWindowAttributes(hwnd_, 0,
-                                       alphaOf(settings_.theme.background), LWA_ALPHA);
+        case HitTarget::camelotOn:
+        case HitTarget::camelotOff:
+            settings_.showCamelot = (target == HitTarget::camelotOn);
             settings_.save();
             break;
 
-        case HitTarget::modeToggle:
+        case HitTarget::themePrev:
+        case HitTarget::themeNext:
         {
+            const int count = numBuiltInThemes();
+            themeIndex_ = (themeIndex_ + (target == HitTarget::themeNext ? 1 : count - 1))
+                        % count;
+            settings_.theme = builtInTheme(themeIndex_);
+            settings_.save();
+            break;
+        }
+
+        case HitTarget::modeDocked:
+        case HitTarget::modeFloating:
+        {
+            const auto wanted = target == HitTarget::modeDocked
+                              ? Settings::Mode::docked : Settings::Mode::floating;
+            if (settings_.mode == wanted)
+                break;
+
             // Switching to floating keeps the window where it currently is.
-            RECT r {};
-            GetWindowRect(hwnd_, &r);
-            const double scale = static_cast<double>(dpi_) / 96.0;
-            if (settings_.mode == Settings::Mode::docked)
+            if (wanted == Settings::Mode::floating)
             {
-                settings_.mode   = Settings::Mode::floating;
+                RECT r {};
+                GetWindowRect(hwnd_, &r);
+                const double scale = static_cast<double>(dpi_) / 96.0;
                 settings_.floatX = static_cast<int>(r.left / scale);
                 settings_.floatY = static_cast<int>(r.top / scale);
             }
-            else
-            {
-                settings_.mode = Settings::Mode::docked;
-            }
+            settings_.mode = wanted;
             settings_.save();
             refreshPlacement();
             break;
         }
 
-        case HitTarget::camelotToggle:
-            settings_.showCamelot = ! settings_.showCamelot;
+        case HitTarget::resetPosition:
+        {
+            // A stored position from an older version outranks a better
+            // default, so this is the way back without editing a file.
+            const Settings defaults;
+            settings_.mode        = defaults.mode;
+            settings_.anchorRight = defaults.anchorRight;
+            settings_.anchorTop   = defaults.anchorTop;
+            settings_.width       = defaults.width;
             settings_.save();
+            refreshPlacement();
             break;
+        }
 
         case HitTarget::scaleDown:
-            settings_.scalePercent = std::max(70, settings_.scalePercent - 10);
+        case HitTarget::scaleUp:
+            settings_.scalePercent = std::clamp(
+                settings_.scalePercent + (target == HitTarget::scaleUp ? 10 : -10),
+                70, 200);
             settings_.save();
             refreshPlacement();
             break;
 
-        case HitTarget::scaleUp:
-            settings_.scalePercent = std::min(200, settings_.scalePercent + 10);
+        case HitTarget::opacityDown:
+        case HitTarget::opacityUp:
+            settings_.opacityPercent = std::clamp(
+                settings_.opacityPercent + (target == HitTarget::opacityUp ? 8 : -8),
+                40, 100);
             settings_.save();
-            refreshPlacement();
+            applyOpacity();
             break;
 
         case HitTarget::instancePicker:

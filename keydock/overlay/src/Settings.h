@@ -40,6 +40,7 @@ struct Settings
 
     int    width         = 430;   // DIPs
     int    scalePercent  = 100;   // extra user scaling on top of the system DPI
+    int    opacityPercent = 96;   // window opacity, 40..100
     bool   showCamelot   = true;
     bool   detailsOpen   = false;
     /// Upper bound, not a fixed duration: the analysis stops as soon as the

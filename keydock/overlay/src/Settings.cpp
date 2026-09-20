@@ -96,6 +96,7 @@ void Settings::load()
     floatY         = num("floatY", floatY);
     width          = num("width", width);
     scalePercent   = num("scalePercent", scalePercent);
+    opacityPercent = num("opacityPercent", opacityPercent);
     showCamelot    = num("showCamelot", 1) != 0;
     detailsOpen    = num("detailsOpen", 0) != 0;
     captureSeconds = static_cast<float>(num("captureSeconds", 30));
@@ -112,6 +113,8 @@ void Settings::load()
     if (width > 1200) width = 1200;
     if (scalePercent < 70)  scalePercent = 70;
     if (scalePercent > 200) scalePercent = 200;
+    if (opacityPercent < 40)  opacityPercent = 40;
+    if (opacityPercent > 100) opacityPercent = 100;
 }
 
 void Settings::save() const
@@ -143,6 +146,7 @@ void Settings::save() const
     out << "floatY="         << floatY         << "\n";
     out << "width="          << width          << "\n";
     out << "scalePercent="   << scalePercent   << "\n";
+    out << "opacityPercent=" << opacityPercent << "\n";
     out << "showCamelot="    << (showCamelot ? 1 : 0) << "\n";
     out << "detailsOpen="    << (detailsOpen ? 1 : 0) << "\n";
     out << "captureSeconds=" << static_cast<int>(captureSeconds) << "\n";

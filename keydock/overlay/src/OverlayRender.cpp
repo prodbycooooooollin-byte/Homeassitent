@@ -1,5 +1,9 @@
-// Painting for OverlayWindow. Kept apart from the window/lifecycle logic so
-// the layout can be reworked without touching the Win32 plumbing.
+// Painting for OverlayWindow.
+//
+// Two surfaces: a compact bar that stays out of the way, and a settings panel
+// that explains every control instead of leaving the user to guess. All icons
+// are drawn with GDI primitives rather than font glyphs - relying on glyphs
+// produced mojibake under MSVC and depends on which fonts are installed.
 #include "OverlayWindow.h"
 
 #include "keydock/Types.h"
@@ -18,6 +22,15 @@ COLORREF toCOLORREF(uint32_t argb)
     return RGB((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF);
 }
 
+/// Blends towards white or black, for subtle surfaces that follow the theme.
+COLORREF mix(COLORREF a, COLORREF b, double t)
+{
+    const auto lerp = [t](int x, int y) { return static_cast<int>(x + (y - x) * t); };
+    return RGB(lerp(GetRValue(a), GetRValue(b)),
+               lerp(GetGValue(a), GetGValue(b)),
+               lerp(GetBValue(a), GetBValue(b)));
+}
+
 void fillRect(HDC dc, const RECT& r, COLORREF colour)
 {
     HBRUSH brush = CreateSolidBrush(colour);
@@ -25,11 +38,28 @@ void fillRect(HDC dc, const RECT& r, COLORREF colour)
     DeleteObject(brush);
 }
 
-void frameRect(HDC dc, const RECT& r, COLORREF colour)
+void fillRounded(HDC dc, const RECT& r, int radius, COLORREF colour)
 {
     HBRUSH brush = CreateSolidBrush(colour);
-    FrameRect(dc, &r, brush);
+    HPEN   pen   = CreatePen(PS_SOLID, 1, colour);
+    auto*  oldB  = SelectObject(dc, brush);
+    auto*  oldP  = SelectObject(dc, pen);
+    RoundRect(dc, r.left, r.top, r.right, r.bottom, radius, radius);
+    SelectObject(dc, oldB);
+    SelectObject(dc, oldP);
     DeleteObject(brush);
+    DeleteObject(pen);
+}
+
+void strokeRounded(HDC dc, const RECT& r, int radius, COLORREF colour)
+{
+    HPEN  pen  = CreatePen(PS_SOLID, 1, colour);
+    auto* oldP = SelectObject(dc, pen);
+    auto* oldB = SelectObject(dc, GetStockObject(NULL_BRUSH));
+    RoundRect(dc, r.left, r.top, r.right, r.bottom, radius, radius);
+    SelectObject(dc, oldP);
+    SelectObject(dc, oldB);
+    DeleteObject(pen);
 }
 
 RECT makeRect(int x, int y, int w, int h) { return RECT { x, y, x + w, y + h }; }
@@ -60,23 +90,34 @@ const wchar_t* confidenceWord(uint32_t c)
 /// Scoped font that restores the previous selection.
 struct ScopedFont
 {
-    ScopedFont(HDC dc, int height, int weight, bool italic = false)
+    ScopedFont(HDC dc, int height, int weight, int letterSpacing = 0)
         : dc_(dc)
     {
-        font_ = CreateFontW(-height, 0, 0, 0, weight, italic ? TRUE : FALSE,
-                            FALSE, FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
-                            CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                            VARIABLE_PITCH, L"Segoe UI");
-        old_ = static_cast<HFONT>(SelectObject(dc_, font_));
+        LOGFONTW lf {};
+        lf.lfHeight         = -height;
+        lf.lfWeight         = weight;
+        lf.lfCharSet        = DEFAULT_CHARSET;
+        lf.lfOutPrecision   = OUT_TT_PRECIS;
+        lf.lfQuality        = CLEARTYPE_QUALITY;
+        lf.lfPitchAndFamily = VARIABLE_PITCH;
+        wcscpy_s(lf.lfFaceName, L"Segoe UI");
+        font_ = CreateFontIndirectW(&lf);
+        old_  = static_cast<HFONT>(SelectObject(dc_, font_));
+        if (letterSpacing != 0)
+            SetTextCharacterExtra(dc_, letterSpacing);
+        spacing_ = letterSpacing;
     }
     ~ScopedFont()
     {
+        if (spacing_ != 0)
+            SetTextCharacterExtra(dc_, 0);
         SelectObject(dc_, old_);
         DeleteObject(font_);
     }
     HDC   dc_;
     HFONT font_ = nullptr;
     HFONT old_  = nullptr;
+    int   spacing_ = 0;
 };
 
 void drawText(HDC dc, const RECT& r, const std::wstring& text,
@@ -86,19 +127,98 @@ void drawText(HDC dc, const RECT& r, const std::wstring& text,
     RECT copy = r;
     DrawTextW(dc, text.c_str(), -1, &copy, format | DT_SINGLELINE | DT_NOPREFIX);
 }
+
+int textWidth(HDC dc, const std::wstring& text)
+{
+    SIZE size {};
+    GetTextExtentPoint32W(dc, text.c_str(), static_cast<int>(text.size()), &size);
+    return size.cx;
+}
 } // namespace
+
+// --- drawn icons ----------------------------------------------------------
+
+void OverlayWindow::drawChevron(HDC dc, RECT box, bool pointsUp, COLORREF colour) const
+{
+    const int cx = (box.left + box.right) / 2;
+    const int cy = (box.top + box.bottom) / 2;
+    const int w  = std::max(3, scaled(4));
+    const int h  = std::max(2, scaled(2));
+
+    HPEN  pen  = CreatePen(PS_SOLID, std::max(1, scaled(1)), colour);
+    auto* oldP = SelectObject(dc, pen);
+
+    const POINT pts[3] =
+    {
+        { cx - w, pointsUp ? cy + h : cy - h },
+        { cx,     pointsUp ? cy - h : cy + h },
+        { cx + w, pointsUp ? cy + h : cy - h },
+    };
+    Polyline(dc, pts, 3);
+
+    SelectObject(dc, oldP);
+    DeleteObject(pen);
+}
+
+void OverlayWindow::drawGripDots(HDC dc, RECT box, COLORREF colour) const
+{
+    const int cx = (box.left + box.right) / 2;
+    const int cy = (box.top + box.bottom) / 2;
+    const int d  = std::max(1, scaled(2));
+    const int gap = std::max(3, scaled(4));
+
+    for (int i = -1; i <= 1; ++i)
+    {
+        RECT dot = makeRect(cx - d / 2, cy + i * gap - d / 2, d, d);
+        fillRect(dc, dot, colour);
+    }
+}
+
+void OverlayWindow::drawSettingsIcon(HDC dc, RECT box, COLORREF colour) const
+{
+    // Three sliders: unmistakably "settings" without needing a gear glyph.
+    const int w  = scaled(11);
+    const int cx = (box.left + box.right) / 2;
+    const int cy = (box.top + box.bottom) / 2;
+    const int gap = std::max(3, scaled(4));
+    const int thickness = std::max(1, scaled(1));
+
+    const int knobAt[3] = { scaled(7), scaled(3), scaled(8) };
+
+    for (int i = 0; i < 3; ++i)
+    {
+        const int y = cy + (i - 1) * gap;
+        fillRect(dc, makeRect(cx - w / 2, y, w, thickness), colour);
+
+        const int knobSize = std::max(2, scaled(3));
+        fillRect(dc, makeRect(cx - w / 2 + knobAt[i] - knobSize / 2,
+                              y - knobSize / 2 + thickness / 2,
+                              knobSize, knobSize), colour);
+    }
+}
+
+void OverlayWindow::drawConfidenceDots(HDC dc, RECT box, uint32_t confidence,
+                                       COLORREF on, COLORREF off) const
+{
+    const int filled = static_cast<int>(confidence);   // none=0 .. high=3
+    const int d   = std::max(2, scaled(3));
+    const int gap = std::max(3, scaled(5));
+    const int cy  = (box.top + box.bottom) / 2 - d / 2;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        RECT dot = makeRect(box.left + i * gap, cy, d, d);
+        fillRect(dc, dot, i < filled ? on : off);
+    }
+}
+
+// --- text helpers ---------------------------------------------------------
 
 std::wstring OverlayWindow::keyText(const InstanceInfo& info) const
 {
     if (! info.haveResult || info.result.valid == 0 || info.result.keyTonic < 0)
         return L"--";
-
-    std::wstring text = widen(keyName(info.result.keyTonic,
-                                      info.result.keyIsMinor != 0));
-    if (settings_.showCamelot)
-        text += L"  " + widen(camelot(info.result.keyTonic,
-                                      info.result.keyIsMinor != 0));
-    return text;
+    return widen(keyName(info.result.keyTonic, info.result.keyIsMinor != 0));
 }
 
 std::wstring OverlayWindow::bpmText(const InstanceInfo& info) const
@@ -107,46 +227,42 @@ std::wstring OverlayWindow::bpmText(const InstanceInfo& info) const
         return L"--";
 
     wchar_t buffer[32];
-    const float shown = info.result.bpm * bpmDisplayFactor_;
-    if (bpmDisplayFactor_ > 1.01f)
-        std::swprintf(buffer, 32, L"%.1f x2", shown);
-    else if (bpmDisplayFactor_ < 0.99f)
-        std::swprintf(buffer, 32, L"%.1f /2", shown);
-    else
-        std::swprintf(buffer, 32, L"%.1f", shown);
+    std::swprintf(buffer, 32, L"%.1f", info.result.bpm * bpmDisplayFactor_);
     return buffer;
 }
 
 std::wstring OverlayWindow::statusLine(const InstanceInfo& info) const
 {
-    wchar_t buffer[128];
+    wchar_t buffer[160];
 
     switch (static_cast<ipc::Status>(info.state.status))
     {
         case ipc::Status::ready:
-            return L"Bereit";
+            return L"Bereit – Wiedergabe starten und „Analysieren“ drücken";
         case ipc::Status::waitingForAudio:
-            return L"Warte auf Audio";
+            return L"Warte auf Audio …";
         case ipc::Status::listening:
             if (info.state.targetSeconds > 0.0f)
-                std::swprintf(buffer, 128, L"Hoere zu  %.0f / %.0f s",
-                              info.state.capturedSeconds, info.state.targetSeconds);
+                std::swprintf(buffer, 160, L"Höre zu – %.0f s (endet früher, sobald stabil)",
+                              info.state.capturedSeconds);
             else
-                std::swprintf(buffer, 128, L"Hoere zu  %.0f s",
+                std::swprintf(buffer, 160, L"Höre zu – %.0f s",
                               info.state.capturedSeconds);
             return buffer;
         case ipc::Status::analysing:
-            return L"Analysiere ...";
+            return L"Analysiere …";
         case ipc::Status::haveResult:
-            std::swprintf(buffer, 128, L"Ergebnis  -  %.0f s analysiert",
+            std::swprintf(buffer, 160, L"Fertig nach %.0f s",
                           info.result.analysedSeconds);
             return buffer;
         case ipc::Status::unsuitable:
-            return L"Zu wenig bzw. ungeeignetes Audiomaterial";
+            return L"Material nicht auswertbar";
         default:
             return L"Gestoppt";
     }
 }
+
+// --- paint ----------------------------------------------------------------
 
 void OverlayWindow::onPaint()
 {
@@ -170,7 +286,6 @@ void OverlayWindow::onPaint()
     GetClientRect(hwnd_, &client);
     const int w = client.right, h = client.bottom;
 
-    // Double buffered: everything is drawn into a memory DC first.
     HDC     memDc  = CreateCompatibleDC(screenDc);
     HBITMAP bitmap = CreateCompatibleBitmap(screenDc, w, h);
     HBITMAP oldBmp = static_cast<HBITMAP>(SelectObject(memDc, bitmap));
@@ -179,17 +294,16 @@ void OverlayWindow::onPaint()
     fillRect(memDc, client, toCOLORREF(settings_.theme.background));
 
     zones_.clear();
+    hoverHelp_.clear();
 
-    RECT bar = makeRect(0, 0, w, scaled(36));
-    paintBar(memDc, bar);
+    const int barH = scaled(40);
+    paintBar(memDc, makeRect(0, 0, w, barH));
 
     if (settings_.detailsOpen)
-    {
-        RECT details = makeRect(0, scaled(36), w, h - scaled(36));
-        paintDetails(memDc, details);
-    }
+        paintDetails(memDc, makeRect(0, barH, w, h - barH));
 
-    frameRect(memDc, client, toCOLORREF(settings_.theme.outline));
+    strokeRounded(memDc, RECT { 0, 0, w, h }, scaled(8),
+                  toCOLORREF(settings_.theme.outline));
 
     BitBlt(screenDc, 0, 0, w, h, memDc, 0, 0, SRCCOPY);
 
@@ -202,109 +316,178 @@ void OverlayWindow::onPaint()
 void OverlayWindow::paintBar(HDC dc, RECT bounds)
 {
     const auto& theme = settings_.theme;
-    const COLORREF text   = toCOLORREF(theme.text);
-    const COLORREF dim    = toCOLORREF(theme.dimText);
-    const COLORREF accent = toCOLORREF(theme.accent);
+    const COLORREF text    = toCOLORREF(theme.text);
+    const COLORREF dim     = toCOLORREF(theme.dimText);
+    const COLORREF accent  = toCOLORREF(theme.accent);
+    const COLORREF surface = mix(toCOLORREF(theme.background), text, 0.07);
+    const COLORREF outline = toCOLORREF(theme.outline);
 
     InstanceInfo info;
     const bool have = currentInstance(info);
+    const bool haveResult = have && info.haveResult && info.result.valid != 0;
 
-    int x = scaled(8);
-    const int centreY = bounds.top + (bounds.bottom - bounds.top) / 2;
-    const int rowH = scaled(20);
-    const auto row = [&](int width) { return makeRect(x, centreY - rowH / 2, width, rowH); };
+    const int top = bounds.top;
+    const int barH = bounds.bottom - bounds.top;
+    int x = scaled(10);
 
-    // --- drag handle ---------------------------------------------------
+    // --- drag handle: an accent bar doubling as the brand mark ----------
     {
-        RECT handle = makeRect(x, bounds.top + scaled(10), scaled(6), scaled(16));
-        fillRect(dc, handle, accent);
-        addZone(makeRect(x - scaled(4), bounds.top, scaled(14),
-                         bounds.bottom - bounds.top), HitTarget::dragHandle);
-        x += scaled(14);
+        RECT handle = makeRect(x, top + scaled(12), scaled(3), barH - scaled(24));
+        fillRounded(dc, handle, scaled(2), accent);
+        addZone(makeRect(x - scaled(6), top, scaled(15), barH), HitTarget::dragHandle);
+        x += scaled(13);
     }
 
-    // --- analyse button -------------------------------------------------
+    // --- primary action --------------------------------------------------
     {
         const auto status = have ? static_cast<ipc::Status>(info.state.status)
                                  : ipc::Status::ready;
         const bool busy = status == ipc::Status::listening
-                       || status == ipc::Status::waitingForAudio;
+                       || status == ipc::Status::waitingForAudio
+                       || status == ipc::Status::analysing;
 
-        RECT button = makeRect(x, bounds.top + scaled(7),
-                               scaled(84), bounds.bottom - bounds.top - scaled(14));
-        fillRect(dc, button, hot_ == HitTarget::analyse
-                                ? accent : toCOLORREF(theme.outline));
+        RECT button = makeRect(x, top + scaled(8), scaled(88), barH - scaled(16));
+        const bool hot = hot_ == HitTarget::analyse;
+
+        if (busy)
+        {
+            fillRounded(dc, button, scaled(5), surface);
+            strokeRounded(dc, button, scaled(5), hot ? accent : outline);
+        }
+        else
+        {
+            fillRounded(dc, button, scaled(5),
+                        hot ? mix(accent, RGB(255, 255, 255), 0.18) : accent);
+        }
 
         ScopedFont font(dc, scaled(12), FW_SEMIBOLD);
         drawText(dc, button, busy ? L"Stoppen" : L"Analysieren",
-                 hot_ == HitTarget::analyse ? toCOLORREF(theme.background) : text,
+                 busy ? text : toCOLORREF(theme.background),
                  DT_CENTER | DT_VCENTER);
 
         addZone(button, HitTarget::analyse);
-        x += scaled(90);
+        x += scaled(96);
     }
 
-    // --- key ------------------------------------------------------------
+    // --- KEY -------------------------------------------------------------
     {
-        ScopedFont font(dc, scaled(17), FW_SEMIBOLD);
-        const auto key = have ? keyText(info) : L"--";
-        RECT r = row(scaled(118));
-        drawText(dc, r, key, text, DT_LEFT | DT_VCENTER);
-        x += scaled(122);
-    }
-
-    // --- bpm --------------------------------------------------------------
-    {
-        ScopedFont font(dc, scaled(17), FW_SEMIBOLD);
-        RECT r = row(scaled(58));
-        drawText(dc, r, have ? bpmText(info) : L"--", text, DT_RIGHT | DT_VCENTER);
-        x += scaled(60);
-
-        ScopedFont small(dc, scaled(10), FW_NORMAL);
-        RECT unit = row(scaled(28));
-        drawText(dc, unit, L"BPM", dim, DT_LEFT | DT_VCENTER);
-        x += scaled(30);
-    }
-
-    // --- status, filling whatever space is left ---------------------------
-    {
-        const int detailsX = bounds.right - scaled(50);
-        const int available = detailsX - x - scaled(8);
-        if (available > scaled(60))
         {
-            ScopedFont font(dc, scaled(11), FW_NORMAL);
-            RECT r = row(available);
-            const auto line = have ? statusLine(info) : L"Kein Plugin verbunden";
-            drawText(dc, r, line,
-                     have && info.state.status == static_cast<uint32_t>(ipc::Status::analysing)
-                         ? accent : dim,
+            ScopedFont caps(dc, scaled(8), FW_SEMIBOLD, scaled(1));
+            drawText(dc, makeRect(x, top + scaled(7), scaled(60), scaled(10)),
+                     L"TONART", dim, DT_LEFT | DT_TOP);
+        }
+        ScopedFont value(dc, scaled(16), FW_SEMIBOLD);
+        const auto key = have ? keyText(info) : L"--";
+        drawText(dc, makeRect(x, top + scaled(17), scaled(104), scaled(18)),
+                 key, haveResult ? text : dim, DT_LEFT | DT_VCENTER);
+
+        const int keyW = std::min(scaled(104), textWidth(dc, key) + scaled(6));
+
+        // Camelot as a chip next to the key, clearly secondary.
+        if (settings_.showCamelot && haveResult && info.result.keyTonic >= 0)
+        {
+            const auto code = widen(camelot(info.result.keyTonic,
+                                            info.result.keyIsMinor != 0));
+            ScopedFont chipFont(dc, scaled(9), FW_SEMIBOLD);
+            const int cw = textWidth(dc, code) + scaled(10);
+            RECT chip = makeRect(x + keyW, top + scaled(19), cw, scaled(14));
+            fillRounded(dc, chip, scaled(4), surface);
+            drawText(dc, chip, code, accent, DT_CENTER | DT_VCENTER);
+        }
+
+        if (haveResult)
+            drawConfidenceDots(dc, makeRect(x, top + scaled(9), scaled(20), scaled(6)),
+                               info.result.keyConfidence, accent,
+                               mix(toCOLORREF(theme.background), dim, 0.35));
+
+        x += scaled(118);
+    }
+
+    // --- BPM --------------------------------------------------------------
+    {
+        {
+            ScopedFont caps(dc, scaled(8), FW_SEMIBOLD, scaled(1));
+            drawText(dc, makeRect(x, top + scaled(7), scaled(50), scaled(10)),
+                     L"TEMPO", dim, DT_LEFT | DT_TOP);
+        }
+        ScopedFont value(dc, scaled(16), FW_SEMIBOLD);
+        const auto bpm = have ? bpmText(info) : L"--";
+        drawText(dc, makeRect(x, top + scaled(17), scaled(56), scaled(18)),
+                 bpm, haveResult ? text : dim, DT_LEFT | DT_VCENTER);
+        const int bpmW = std::min(scaled(56), textWidth(dc, bpm) + scaled(4));
+
+        {
+            ScopedFont unit(dc, scaled(9), FW_NORMAL);
+            drawText(dc, makeRect(x + bpmW, top + scaled(21), scaled(30), scaled(12)),
+                     L"BPM", dim, DT_LEFT | DT_VCENTER);
+        }
+
+        // Make a non-neutral half/double choice impossible to miss.
+        if (haveResult && std::abs(bpmDisplayFactor_ - 1.0f) > 0.01f)
+        {
+            ScopedFont chipFont(dc, scaled(8), FW_SEMIBOLD);
+            const std::wstring tag = bpmDisplayFactor_ > 1.0f ? L"×2" : L"÷2";
+            RECT chip = makeRect(x + bpmW + scaled(28), top + scaled(20),
+                                 scaled(20), scaled(13));
+            fillRounded(dc, chip, scaled(3), accent);
+            drawText(dc, chip, tag, toCOLORREF(theme.background),
+                     DT_CENTER | DT_VCENTER);
+        }
+
+        if (haveResult)
+            drawConfidenceDots(dc, makeRect(x, top + scaled(9), scaled(20), scaled(6)),
+                               info.result.bpmConfidence, accent,
+                               mix(toCOLORREF(theme.background), dim, 0.35));
+
+        x += scaled(92);
+    }
+
+    // --- status -----------------------------------------------------------
+    {
+        const int iconsX = bounds.right - scaled(56);
+        const int available = iconsX - x - scaled(10);
+        if (available > scaled(70))
+        {
+            ScopedFont font(dc, scaled(10), FW_NORMAL);
+            const auto line = have ? statusLine(info)
+                                   : L"Kein KeyDock-Plugin verbunden";
+            const bool active = have
+                && (info.state.status == static_cast<uint32_t>(ipc::Status::analysing)
+                 || info.state.status == static_cast<uint32_t>(ipc::Status::listening));
+            drawText(dc, makeRect(x, top, available, barH), line,
+                     active ? accent : dim,
                      DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
         }
     }
 
-    // --- details toggle and resize grip -----------------------------------
+    // --- settings toggle + resize grip -------------------------------------
     {
-        RECT toggle = makeRect(bounds.right - scaled(46), bounds.top + scaled(7),
-                               scaled(22), bounds.bottom - bounds.top - scaled(14));
-        ScopedFont font(dc, scaled(12), FW_NORMAL);
-        drawText(dc, toggle, settings_.detailsOpen ? L"⌃" : L"⌄",
-                 hot_ == HitTarget::details ? accent : dim, DT_CENTER | DT_VCENTER);
+        RECT toggle = makeRect(bounds.right - scaled(52), top + scaled(9),
+                               scaled(24), barH - scaled(18));
+        if (hot_ == HitTarget::details)
+            fillRounded(dc, toggle, scaled(4),
+                        mix(toCOLORREF(theme.background), toCOLORREF(theme.text), 0.1));
+        drawSettingsIcon(dc, toggle,
+                         hot_ == HitTarget::details || settings_.detailsOpen
+                             ? accent : dim);
         addZone(toggle, HitTarget::details);
 
-        RECT grip = makeRect(bounds.right - scaled(16), bounds.top,
-                             scaled(16), bounds.bottom - bounds.top);
-        ScopedFont gripFont(dc, scaled(12), FW_NORMAL);
-        drawText(dc, grip, L"⋮", dim, DT_CENTER | DT_VCENTER);
+        RECT chevron = makeRect(bounds.right - scaled(28), top + scaled(9),
+                                scaled(14), barH - scaled(18));
+        drawChevron(dc, chevron, settings_.detailsOpen, dim);
+        addZone(chevron, HitTarget::details);
+
+        RECT grip = makeRect(bounds.right - scaled(14), top, scaled(14), barH);
+        drawGripDots(dc, grip, mix(toCOLORREF(theme.background), dim, 0.55));
         addZone(grip, HitTarget::resizeGrip);
     }
 
-    // --- capture progress -------------------------------------------------
+    // --- capture progress ---------------------------------------------------
     if (have && info.state.status == static_cast<uint32_t>(ipc::Status::listening)
         && info.state.targetSeconds > 0.0f)
     {
-        RECT track = makeRect(0, bounds.bottom - scaled(2),
-                              bounds.right, scaled(2));
-        fillRect(dc, track, toCOLORREF(theme.outline));
+        RECT track = makeRect(0, bounds.bottom - scaled(2), bounds.right, scaled(2));
+        fillRect(dc, track, outline);
         RECT fill = track;
         fill.right = static_cast<LONG>(track.right
                         * std::clamp(info.state.progress, 0.0f, 1.0f));
@@ -315,131 +498,226 @@ void OverlayWindow::paintBar(HDC dc, RECT bounds)
 void OverlayWindow::paintDetails(HDC dc, RECT bounds)
 {
     const auto& theme = settings_.theme;
-    const COLORREF text   = toCOLORREF(theme.text);
-    const COLORREF dim    = toCOLORREF(theme.dimText);
-    const COLORREF accent = toCOLORREF(theme.accent);
+    const COLORREF text    = toCOLORREF(theme.text);
+    const COLORREF dim     = toCOLORREF(theme.dimText);
+    const COLORREF accent  = toCOLORREF(theme.accent);
+    const COLORREF outline = toCOLORREF(theme.outline);
+    const COLORREF surface = mix(toCOLORREF(theme.background), text, 0.06);
 
-    RECT divider = makeRect(bounds.left, bounds.top, bounds.right - bounds.left, 1);
-    fillRect(dc, divider, toCOLORREF(theme.outline));
+    fillRect(dc, makeRect(bounds.left, bounds.top,
+                          bounds.right - bounds.left, 1), outline);
 
     InstanceInfo info;
     const bool have = currentInstance(info);
+    const bool haveResult = have && info.haveResult && info.result.valid != 0;
 
-    int y = bounds.top + scaled(8);
-    const int left = scaled(12);
-    const int lineH = scaled(15);
+    const int left   = scaled(14);
+    const int right  = bounds.right - scaled(14);
+    const int labelW = scaled(118);
+    int y = bounds.top + scaled(10);
 
-    const auto line = [&](const std::wstring& label, const std::wstring& value,
-                          COLORREF valueColour)
+    const auto sectionHeader = [&](const wchar_t* title)
     {
-        ScopedFont font(dc, scaled(10), FW_NORMAL);
-        drawText(dc, makeRect(left, y, scaled(96), lineH), label, dim,
+        ScopedFont font(dc, scaled(8), FW_SEMIBOLD, scaled(2));
+        drawText(dc, makeRect(left, y, right - left, scaled(12)), title, accent,
                  DT_LEFT | DT_VCENTER);
-        drawText(dc, makeRect(left + scaled(100), y,
-                              bounds.right - left - scaled(112), lineH),
-                 value, valueColour, DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
-        y += lineH;
+        y += scaled(15);
     };
 
-    if (! have)
+    /// One settings row: a label, a control strip on the right, and a line of
+    /// plain German underneath saying what the control actually does.
+    const auto rowLabel = [&](const wchar_t* label, const wchar_t* help)
     {
-        line(L"Status", L"Kein KeyDock-Plugin verbunden. Plugin auf dem Master einsetzen.", dim);
-    }
-    else
-    {
-        const auto& r = info.result;
+        ScopedFont font(dc, scaled(10), FW_SEMIBOLD);
+        drawText(dc, makeRect(left, y, labelW, scaled(16)), label, text,
+                 DT_LEFT | DT_VCENTER);
+        ScopedFont small(dc, scaled(9), FW_NORMAL);
+        drawText(dc, makeRect(left, y + scaled(15), right - left, scaled(12)),
+                 help, dim, DT_LEFT | DT_TOP | DT_END_ELLIPSIS);
+    };
 
-        // Confidence is an ordinal bucket, never a percentage.
-        if (info.haveResult && r.valid != 0)
+    int segX = 0;
+    const auto beginSegments = [&]() { segX = left + labelW; };
+
+    /// A segmented option. The selected one is filled, so the current state is
+    /// readable at a glance rather than having to be remembered.
+    const auto segment = [&](const wchar_t* label, HitTarget target, bool selected)
+    {
+        ScopedFont font(dc, scaled(9), selected ? FW_SEMIBOLD : FW_NORMAL);
+        const int w = textWidth(dc, label) + scaled(14);
+        RECT box = makeRect(segX, y, w, scaled(17));
+
+        if (selected)
+            fillRounded(dc, box, scaled(4), accent);
+        else if (hot_ == target)
+            fillRounded(dc, box, scaled(4), surface);
+        strokeRounded(dc, box, scaled(4), selected ? accent : outline);
+
+        drawText(dc, box, label, selected ? toCOLORREF(theme.background) : text,
+                 DT_CENTER | DT_VCENTER);
+        addZone(box, target);
+        segX += w + scaled(4);
+    };
+
+    const auto endRow = [&]() { y += scaled(30); };
+
+    // ---------------- ANALYSE ----------------
+    sectionHeader(L"ANALYSE");
+    rowLabel(L"Maximale Dauer",
+             L"Obergrenze. KeyDock hört früher auf, sobald das Ergebnis stabil bleibt.");
+    beginSegments();
+    segment(L"10 s", HitTarget::len10, std::abs(settings_.captureSeconds - 10.0f) < 0.1f);
+    segment(L"20 s", HitTarget::len20, std::abs(settings_.captureSeconds - 20.0f) < 0.1f);
+    segment(L"30 s", HitTarget::len30, std::abs(settings_.captureSeconds - 30.0f) < 0.1f);
+    segment(L"Bis ich stoppe", HitTarget::lenManual, settings_.captureSeconds <= 0.0f);
+    endRow();
+
+    // ---------------- ERGEBNIS ----------------
+    sectionHeader(L"ERGEBNIS");
+
+    rowLabel(L"Tempo-Ablesung",
+             L"Ändert nur die Anzeige, nie die Analyse und nie das Projekttempo.");
+    beginSegments();
+    segment(L"Halbes Tempo", HitTarget::tempoHalf, bpmDisplayFactor_ < 0.99f);
+    segment(L"Gemessen", HitTarget::tempoNormal,
+            std::abs(bpmDisplayFactor_ - 1.0f) <= 0.01f);
+    segment(L"Doppeltes Tempo", HitTarget::tempoDouble, bpmDisplayFactor_ > 1.01f);
+    endRow();
+
+    rowLabel(L"Camelot-Code",
+             L"DJ-Notation wie 11A – gleiche Zahl heißt harmonisch mischbar.");
+    beginSegments();
+    segment(L"Anzeigen", HitTarget::camelotOn, settings_.showCamelot);
+    segment(L"Ausblenden", HitTarget::camelotOff, ! settings_.showCamelot);
+    endRow();
+
+    {
+        wchar_t help[192];
+        if (haveResult)
         {
-            line(L"Sicherheit",
-                 std::wstring(L"Tonart ") + confidenceWord(r.keyConfidence)
-                     + L"  |  Tempo " + confidenceWord(r.bpmConfidence),
-                 text);
-
-            std::wstring alts;
-            for (const auto& alt : r.altKeys)
-            {
-                if (alt.tonic < 0)
-                    continue;
-                if (! alts.empty())
-                    alts += L",  ";
-                alts += widen(keyName(alt.tonic, alt.isMinor != 0));
-            }
-            line(L"Alternativen", alts.empty() ? L"keine" : alts, dim);
-
-            std::wstring tempoAlts;
-            wchar_t buffer[32];
-            for (const auto& alt : r.altTempos)
-            {
-                if (alt.bpm <= 0.0f)
-                    continue;
-                if (! tempoAlts.empty())
-                    tempoAlts += L",  ";
-                std::swprintf(buffer, 32, L"%.1f", alt.bpm);
-                tempoAlts += buffer;
-            }
-            line(L"Tempo-Optionen", tempoAlts.empty() ? L"keine" : tempoAlts, dim);
-
-            if (r.note[0] != '\0')
-                line(L"Hinweis", widen(r.note), accent);
+            std::swprintf(help, 192, L"Legt „%s%s%.1f BPM“ in die Zwischenablage.",
+                          keyText(info).c_str(), L" – ",
+                          info.result.bpm * bpmDisplayFactor_);
         }
         else
         {
-            line(L"Ergebnis", info.haveResult
-                     ? widen(r.note) : L"Noch keine Analyse gestartet.", dim);
+            std::swprintf(help, 192,
+                          L"Legt Tonart und Tempo als Text in die Zwischenablage.");
+        }
+        rowLabel(L"Ergebnis", help);
+    }
+    beginSegments();
+    segment(L"Kopieren", HitTarget::copy, false);
+    segment(L"Verwerfen", HitTarget::reset, false);
+    endRow();
+
+    // ---------------- FENSTER ----------------
+    sectionHeader(L"FENSTER");
+
+    rowLabel(L"Position",
+             L"Angeheftet folgt dem FL-Studio-Fenster. Frei bleibt fest auf dem Bildschirm.");
+    beginSegments();
+    segment(L"Angeheftet", HitTarget::modeDocked,
+            settings_.mode == Settings::Mode::docked);
+    segment(L"Frei", HitTarget::modeFloating,
+            settings_.mode == Settings::Mode::floating);
+    segment(L"Zurücksetzen", HitTarget::resetPosition, false);
+    endRow();
+
+    {
+        wchar_t help[128];
+        std::swprintf(help, 128, L"Aktuell %d %% – zusätzlich zur Windows-Skalierung.",
+                      settings_.scalePercent);
+        rowLabel(L"Größe", help);
+    }
+    beginSegments();
+    segment(L"Kleiner", HitTarget::scaleDown, false);
+    segment(L"Größer", HitTarget::scaleUp, false);
+    endRow();
+
+    {
+        wchar_t help[128];
+        std::swprintf(help, 128, L"Aktuell %d %% – niedriger heißt durchscheinender.",
+                      settings_.opacityPercent);
+        rowLabel(L"Deckkraft", help);
+    }
+    beginSegments();
+    segment(L"Schwächer", HitTarget::opacityDown, false);
+    segment(L"Stärker", HitTarget::opacityUp, false);
+    endRow();
+
+    {
+        wchar_t help[128];
+        std::swprintf(help, 128, L"Farbschema: %s", widen(theme.name).c_str());
+        rowLabel(L"Design", help);
+    }
+    beginSegments();
+    segment(L"Vorheriges", HitTarget::themePrev, false);
+    segment(L"Nächstes", HitTarget::themeNext, false);
+    endRow();
+
+    // ---------------- Status footer ----------------
+    {
+        fillRect(dc, makeRect(left, y, right - left, 1), outline);
+        y += scaled(8);
+
+        ScopedFont font(dc, scaled(9), FW_NORMAL);
+
+        std::wstring line;
+        if (! have)
+        {
+            line = L"Kein Plugin verbunden – KeyDock auf einen Master-Slot legen.";
+        }
+        else if (haveResult)
+        {
+            wchar_t buffer[256];
+            std::swprintf(buffer, 256,
+                          L"Tonart %s · Tempo %s · %.0f s analysiert · Projekttempo %.2f BPM (nur Anzeige)",
+                          confidenceWord(info.result.keyConfidence),
+                          confidenceWord(info.result.bpmConfidence),
+                          info.result.analysedSeconds,
+                          info.state.hostBpm);
+            line = buffer;
+        }
+        else if (info.haveResult)
+        {
+            line = widen(info.result.note);
+        }
+        else
+        {
+            line = L"Noch keine Analyse gestartet.";
         }
 
-        // Host tempo is shown next to, never instead of, the measured tempo.
-        wchar_t host[96];
-        std::swprintf(host, 96, L"%.2f BPM (nur Anzeige, kein Analyseergebnis)",
-                      info.state.hostBpm);
-        line(L"Projekt-Tempo", info.state.hostBpm > 0.0 ? host : L"unbekannt", dim);
+        drawText(dc, makeRect(left, y, right - left, scaled(13)), line, dim,
+                 DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
+        y += scaled(14);
 
-        line(L"Instanz", widen(info.hello.displayName), dim);
-    }
+        if (haveResult && info.result.note[0] != '\0')
+        {
+            drawText(dc, makeRect(left, y, right - left, scaled(13)),
+                     widen(info.result.note), accent,
+                     DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
+            y += scaled(14);
+        }
 
-    // --- buttons ---------------------------------------------------------
-    y = bounds.bottom - scaled(26);
-    int x = left;
+        const auto list = server_.instances();
+        if (list.size() > 1)
+        {
+            size_t index = 0;
+            for (size_t i = 0; i < list.size(); ++i)
+                if (list[i].hello.instanceId == server_.preferredInstance())
+                    index = i;
 
-    const auto button = [&](const std::wstring& label, HitTarget target, int widthDip)
-    {
-        RECT r = makeRect(x, y, scaled(widthDip), scaled(18));
-        fillRect(dc, r, hot_ == target ? accent : toCOLORREF(theme.outline));
-        ScopedFont font(dc, scaled(10), FW_NORMAL);
-        drawText(dc, r, label,
-                 hot_ == target ? toCOLORREF(theme.background) : text,
-                 DT_CENTER | DT_VCENTER);
-        addZone(r, target);
-        x += scaled(widthDip + 5);
-    };
+            wchar_t buffer[128];
+            std::swprintf(buffer, 128, L"Instanz %d von %d – klicken zum Wechseln: %s",
+                          static_cast<int>(index + 1), static_cast<int>(list.size()),
+                          widen(info.hello.displayName).c_str());
 
-    wchar_t lengthLabel[24];
-    if (settings_.captureSeconds > 0.0f)
-        std::swprintf(lengthLabel, 24, L"max %.0f s", settings_.captureSeconds);
-    else
-        std::swprintf(lengthLabel, 24, L"manuell");
-
-    button(lengthLabel, HitTarget::lengthCycle, 58);
-    button(L"1/2", HitTarget::halfTime, 30);
-    button(L"x2",  HitTarget::doubleTime, 30);
-    button(L"Reset", HitTarget::reset, 44);
-    button(L"Kopieren", HitTarget::copy, 56);
-    button(settings_.mode == Settings::Mode::docked ? L"Angeheftet" : L"Frei",
-           HitTarget::modeToggle, 62);
-    button(L"Theme", HitTarget::themeCycle, 46);
-    button(settings_.showCamelot ? L"Camelot an" : L"Camelot aus",
-           HitTarget::camelotToggle, 66);
-    button(L"-", HitTarget::scaleDown, 20);
-    button(L"+", HitTarget::scaleUp, 20);
-
-    const auto list = server_.instances();
-    if (list.size() > 1)
-    {
-        wchar_t label[32];
-        std::swprintf(label, 32, L"Instanz %d/%d", 1, static_cast<int>(list.size()));
-        button(label, HitTarget::instancePicker, 70);
+            RECT row = makeRect(left, y, right - left, scaled(14));
+            drawText(dc, row, buffer, hot_ == HitTarget::instancePicker ? accent : dim,
+                     DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
+            addZone(row, HitTarget::instancePicker);
+        }
     }
 }
 
