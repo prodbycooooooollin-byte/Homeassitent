@@ -4,6 +4,7 @@
 #include "TestSignals.h"
 
 #include "keydock/AnalysisEngine.h"
+#include "keydock/PitchShifter.h"
 #include "keydock/RingBuffer.h"
 #include "keydock/Types.h"
 
@@ -135,6 +136,15 @@ int main()
     }
     std::printf("\n== BPM precision and metrical level ==\n");
     {
+        // Snapping must not swallow a genuinely off-grid tempo.
+        auto mix = test::mix(test::renderProgression(9, true, 137.5, 22.0, hostRate),
+                             test::renderDrumLoop(137.5, 22.0, hostRate), 0.8f);
+        auto r = runThroughEngine(engine, mix, hostRate, 22.0f);
+        check(! r.tempo.snappedToWholeBpm && std::abs(r.tempo.bpm - 137.5f) < 0.5f,
+              "a genuine 137.5 BPM tempo is left unsnapped",
+              std::to_string(r.tempo.bpm));
+    }
+    {
         // Reported from FL Studio: a 135 BPM beat displayed as 136. The cause
         // was linear interpolation of the autocorrelation, whose maximum can
         // only ever land on an integer lag - and the lags either side of
@@ -145,12 +155,13 @@ int main()
                                  test::renderDrumLoop(bpm, 22.0, hostRate), 0.8f);
             auto r = runThroughEngine(engine, mix, hostRate, 22.0f);
 
-            const double error = std::abs(r.tempo.bpm - bpm);
-            check(error <= 0.5,
+            // Reported from FL Studio: a 140 BPM loop showing 139.9 reads as
+            // wrong even though it is within measurement error.
+            check(r.tempo.bpm == static_cast<float>(bpm),
                   "full mix at " + std::to_string(static_cast<int>(bpm))
-                      + " BPM is measured within 0.5 BPM",
-                  std::to_string(r.tempo.bpm) + " (error "
-                      + std::to_string(error) + ")");
+                      + " BPM reports exactly that",
+                  std::to_string(r.tempo.bpm) + " (raw "
+                      + std::to_string(r.tempo.bpmRaw) + ")");
         }
     }
     {
@@ -247,6 +258,115 @@ int main()
     }
 
     // ---------------------------------------------------------------
+    std::printf("\n== Pitch shifting preserves length and lands on pitch ==\n");
+    {
+        const double rate = kAnalysisSampleRate;
+        auto tone = test::renderSingleTone(440.0, 8.0, rate);
+
+        // Autocorrelation rather than an FFT peak: a bin peak is only accurate
+        // to a few cents, which is the size of the error being measured.
+        const auto measureHz = [](const std::vector<float>& x, double sr, double near)
+        {
+            const size_t n = x.size(), from = n / 4;
+            const size_t to = std::min(n, from + static_cast<size_t>(sr * 2.0));
+            const double lag0 = sr / near;
+            const int lo = static_cast<int>(lag0 * 0.7), hi = static_cast<int>(lag0 * 1.4);
+            const auto ac = [&](int lag)
+            {
+                double acc = 0.0;
+                for (size_t i = from; i + lag < to; ++i)
+                    acc += static_cast<double>(x[i]) * x[i + lag];
+                return acc;
+            };
+            int best = lo; double bestValue = -1.0e30;
+            for (int l = lo; l <= hi; ++l)
+            {
+                const double v = ac(l);
+                if (v > bestValue) { bestValue = v; best = l; }
+            }
+            const double a = ac(best - 1), b = ac(best), c = ac(best + 1);
+            const double d = (a - 2 * b + c) != 0.0 ? 0.5 * (a - c) / (a - 2 * b + c) : 0.0;
+            return sr / (best + d);
+        };
+
+        double worstCents = 0.0;
+        for (int semitones : { -12, -7, -3, -1, 1, 3, 5, 12 })
+        {
+            PitchShifter shifter(rate);
+            PitchShifter::Options options;
+            options.semitones = semitones;
+            const auto out = shifter.process(tone, options);
+
+            const double expected = 440.0 * std::pow(2.0, semitones / 12.0);
+            const double cents = 1200.0 * std::log2(measureHz(out, rate, expected) / expected);
+            worstCents = std::max(worstCents, std::abs(cents));
+
+            check(out.size() == tone.size(),
+                  "shifting by " + std::to_string(semitones)
+                      + " semitones keeps the length exactly");
+        }
+        check(worstCents < 0.5,
+              "every semitone shift lands within half a cent",
+              "worst " + std::to_string(worstCents) + " cents");
+
+        // The tuning correction has to be accurate at the scale it corrects.
+        double worstFine = 0.0;
+        for (float cents : { -50.0f, -23.0f, 23.0f, 50.0f })
+        {
+            PitchShifter shifter(rate);
+            PitchShifter::Options options;
+            options.cents = cents;
+            const auto out = shifter.process(tone, options);
+            const double expected = 440.0 * std::pow(2.0, cents / 1200.0);
+            worstFine = std::max(worstFine, std::abs(
+                1200.0 * std::log2(measureHz(out, rate, expected) / expected)));
+        }
+        check(worstFine < 0.5, "cent-sized corrections land within half a cent",
+              "worst " + std::to_string(worstFine) + " cents");
+
+        // Semitones and cents are separate settings; applying both must shift
+        // by their sum exactly once.
+        {
+            PitchShifter shifter(rate);
+            PitchShifter::Options options;
+            options.semitones = 2;
+            options.cents     = -23.0f;
+            const auto out = shifter.process(tone, options);
+            const double expected = 440.0 * std::pow(2.0, (2.0 - 0.23) / 12.0);
+            const double cents = 1200.0 * std::log2(measureHz(out, rate, expected) / expected);
+            check(std::abs(cents) < 0.5,
+                  "a semitone shift and a cent correction combine once, not twice",
+                  std::to_string(cents) + " cents off");
+        }
+
+        {
+            PitchShifter shifter(rate);
+            PitchShifter::Options options;   // no shift at all
+            const auto out = shifter.process(tone, options);
+            check(out == tone, "no shift returns the input untouched");
+        }
+    }
+    {
+        // The musical claim: transposing really changes the key.
+        const double rate = kAnalysisSampleRate;
+        auto cMajor = test::renderProgression(0, false, 120.0, 18.0, rate);
+
+        PitchShifter shifter(rate);
+        PitchShifter::Options options;
+        options.semitones = 1;
+        const auto shifted = shifter.process(cMajor, options);
+
+        KeyDetector detector(rate);
+        const auto before = detector.analyse(cMajor);
+        const auto after  = detector.analyse(shifted);
+
+        check(before.best.tonic == 0 && after.best.tonic == 1
+              && after.best.isMinor == before.best.isMinor,
+              "C major transposed up one semitone is detected as C# major",
+              keyName(before.best.tonic, before.best.isMinor) + " -> "
+                  + keyName(after.best.tonic, after.best.isMinor));
+    }
+
     std::printf("\n== Capture plumbing ==\n");
     {
         RingBuffer ring;

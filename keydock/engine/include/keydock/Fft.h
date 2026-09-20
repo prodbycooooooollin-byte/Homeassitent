@@ -23,6 +23,10 @@ public:
     /// In-place complex forward transform, interleaved re/im, `size()` bins.
     void forwardComplex(std::vector<float>& reim) const;
 
+    /// In-place complex inverse transform, interleaved re/im, normalised by
+    /// 1/size so forward followed by inverse is the identity.
+    void inverseComplex(std::vector<float>& reim) const;
+
 private:
     int                size_;
     int                order_;

@@ -16,6 +16,14 @@ constexpr double kMaxBpm = 200.0;
 // the two with room on both sides.
 constexpr float kAlternateOutfitsChosen = 1.15f;
 
+// Most produced music sits on a whole BPM. The engine's demonstrated accuracy
+// on the test corpus is 0.15 BPM, so a measurement within this window of a
+// whole number is that tempo plus noise - reporting 139.9 for a 140 BPM loop
+// is a worse answer than reporting 140. Anything further out is left alone,
+// which keeps genuinely off-grid material (135.5, a tape-speed sample, a live
+// take) reported as measured.
+constexpr float kWholeBpmSnapWindow = 0.35f;
+
 /// Quadratic interpolation through the three nearest samples.
 ///
 /// Linear interpolation cannot be used here: it can never exceed its two
@@ -336,8 +344,16 @@ TempoResult TempoDetector::analyse(const std::vector<float>& mono)
     }
     const float chosenSal = salienceAt(chosenBpm);
 
-    result.bpm         = static_cast<float>(chosenBpm);
-    result.rhythmic    = true;
+    result.bpmRaw   = static_cast<float>(chosenBpm);
+    result.bpm      = result.bpmRaw;
+    result.rhythmic = true;
+
+    const float nearestWhole = std::round(result.bpmRaw);
+    if (std::abs(result.bpmRaw - nearestWhole) <= kWholeBpmSnapWindow)
+    {
+        result.bpm = nearestWhole;
+        result.snappedToWholeBpm = true;
+    }
     result.octaveRatio = chosenSal > 1.0e-9f ? salienceAt(chosenBpm * 0.5) / chosenSal : 0.0f;
 
     // ---- Metrically related alternates ---------------------------------
@@ -350,7 +366,13 @@ TempoResult TempoDetector::analyse(const std::vector<float>& mono)
         if (b < 40.0 || b > 260.0)
             continue;
         const float s = salienceAt(b);
-        result.alternates.push_back({ static_cast<float>(b),
+        // Snap the alternates the same way, so switching to half time shows
+        // 70 rather than 69.9 next to a snapped 140.
+        float shown = static_cast<float>(b);
+        const float whole = std::round(shown);
+        if (std::abs(shown - whole) <= kWholeBpmSnapWindow)
+            shown = whole;
+        result.alternates.push_back({ shown,
                                       chosenSal > 1.0e-9f ? s / chosenSal : 0.0f });
     }
     std::sort(result.alternates.begin(), result.alternates.end(),

@@ -68,6 +68,23 @@ void Fft::forwardComplex(std::vector<float>& reim) const
     }
 }
 
+void Fft::inverseComplex(std::vector<float>& reim) const
+{
+    // Conjugate, forward transform, conjugate again, scale: avoids a second
+    // twiddle table.
+    for (int i = 0; i < size_; ++i)
+        reim[static_cast<size_t>(2 * i + 1)] = -reim[static_cast<size_t>(2 * i + 1)];
+
+    forwardComplex(reim);
+
+    const float scale = 1.0f / static_cast<float>(size_);
+    for (int i = 0; i < size_; ++i)
+    {
+        reim[static_cast<size_t>(2 * i)]     *= scale;
+        reim[static_cast<size_t>(2 * i + 1)] *= -scale;
+    }
+}
+
 void Fft::magnitudeSpectrum(const float* input, std::vector<float>& magnitudes)
 {
     for (int i = 0; i < size_; ++i)

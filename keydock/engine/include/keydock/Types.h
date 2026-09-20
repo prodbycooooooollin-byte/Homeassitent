@@ -46,7 +46,13 @@ struct TempoCandidate
 
 struct TempoResult
 {
+    /// The tempo to display. Snapped to a whole BPM when the raw measurement
+    /// is close enough that the difference is measurement noise rather than a
+    /// genuinely off-grid tempo.
     float                       bpm = 0.0f;
+    /// The unsnapped measurement, kept so the details view can stay honest.
+    float                       bpmRaw = 0.0f;
+    bool                        snappedToWholeBpm = false;
     std::vector<TempoCandidate> alternates;  ///< typically half/double/related
     Confidence                  confidence = Confidence::none;
     float                       octaveRatio = 0.0f; ///< salience(bpm/2) / salience(bpm)

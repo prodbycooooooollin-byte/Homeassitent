@@ -4,6 +4,7 @@ add_library(keydock_engine STATIC
     src/Resampler.cpp
     src/KeyDetector.cpp
     src/TempoDetector.cpp
+    src/PitchShifter.cpp
     src/AnalysisEngine.cpp)
 
 target_include_directories(keydock_engine
