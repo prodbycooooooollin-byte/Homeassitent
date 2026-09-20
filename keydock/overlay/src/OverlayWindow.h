@@ -10,7 +10,14 @@
 // there is no invisible area that could swallow clicks meant for FL Studio.
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN
+// NOMINMAX: windows.h otherwise defines min/max as macros, which breaks every
+// std::min / std::max call in this translation unit under MSVC.
+#ifndef NOMINMAX
+  #define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+  #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 
 #include "HostTracker.h"

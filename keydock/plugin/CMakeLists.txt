@@ -43,6 +43,11 @@ target_compile_definitions(KeyDockPlugin PUBLIC
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_REPORT_APP_USAGE=0)
 
+if (WIN32)
+    # Same reason as the overlay: keep the windows.h min/max macros out.
+    target_compile_definitions(KeyDockPlugin PUBLIC NOMINMAX)
+endif()
+
 target_include_directories(KeyDockPlugin PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source
     ${CMAKE_SOURCE_DIR}/shared)

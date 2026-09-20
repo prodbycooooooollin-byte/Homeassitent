@@ -2,11 +2,19 @@
 #include "PluginEditor.h"
 #include "OverlayLauncher.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 
 #if defined(_WIN32)
-  #define WIN32_LEAN_AND_MEAN
+  // NOMINMAX: windows.h otherwise defines min/max as macros, which breaks every
+  // std::min / std::max call in this translation unit under MSVC.
+  #ifndef NOMINMAX
+    #define NOMINMAX
+  #endif
+  #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+  #endif
   #include <windows.h>
 #endif
 
@@ -26,11 +34,18 @@ uint32_t currentProcessId()
 #endif
 }
 
+/// Copies into a fixed protocol field, always NUL terminated and never
+/// overrunning. Avoids strncpy, which MSVC flags and which would not
+/// terminate on truncation anyway.
 void copyString(char* dest, size_t size, const juce::String& src)
 {
-    const auto utf8 = src.toRawUTF8();
-    std::strncpy(dest, utf8, size - 1);
-    dest[size - 1] = '\0';
+    if (size == 0)
+        return;
+
+    const auto* utf8 = src.toRawUTF8();
+    const size_t length = std::min(std::strlen(utf8), size - 1);
+    std::memcpy(dest, utf8, length);
+    dest[length] = '\0';
 }
 
 ipc::Confidence toIpc(Confidence c)

@@ -400,7 +400,7 @@ void OverlayWindow::paintDetails(HDC dc, RECT bounds)
     if (settings_.captureSeconds > 0.0f)
         std::swprintf(lengthLabel, 24, L"%.0f s", settings_.captureSeconds);
     else
-        std::wcscpy(lengthLabel, L"manuell");
+        std::swprintf(lengthLabel, 24, L"manuell");
 
     button(lengthLabel, HitTarget::lengthCycle, 46);
     button(L"1/2", HitTarget::halfTime, 30);

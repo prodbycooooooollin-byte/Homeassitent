@@ -16,6 +16,12 @@ target_link_libraries(KeyDockOverlay PRIVATE
 
 target_compile_features(KeyDockOverlay PRIVATE cxx_std_17)
 
+# Belt and braces alongside the per-file guards: nothing in this target may
+# ever see the windows.h min/max macros.
+target_compile_definitions(KeyDockOverlay PRIVATE
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN)
+
 if (MSVC)
     target_compile_options(KeyDockOverlay PRIVATE /W4)
     # Per-monitor DPI v2 and a modern common-controls manifest.

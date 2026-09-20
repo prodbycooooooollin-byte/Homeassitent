@@ -313,12 +313,15 @@ KeyResult KeyDetector::analyse(const std::vector<float>& mono)
     if (! result.alternates.empty())
     {
         const auto& runnerUp = result.alternates.front();
-        const int   relMinor = (result.best.tonic + 9) % 12;
-        const int   relMajor = (result.best.tonic + 3) % 12;
+        // Tonics, not modes - the outer relMinor above is a bool.
+        const int   relativeMinorTonic = (result.best.tonic + 9) % 12;
+        const int   relativeMajorTonic = (result.best.tonic + 3) % 12;
 
         const bool relative =
-            (! result.best.isMinor && runnerUp.isMinor && runnerUp.tonic == relMinor) ||
-            (result.best.isMinor && ! runnerUp.isMinor && runnerUp.tonic == relMajor);
+            (! result.best.isMinor && runnerUp.isMinor
+                && runnerUp.tonic == relativeMinorTonic) ||
+            (result.best.isMinor && ! runnerUp.isMinor
+                && runnerUp.tonic == relativeMajorTonic);
         const bool parallel =
             runnerUp.tonic == result.best.tonic && runnerUp.isMinor != result.best.isMinor;
 
