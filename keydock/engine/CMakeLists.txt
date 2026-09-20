@@ -4,6 +4,11 @@ add_library(keydock_engine STATIC
     src/Resampler.cpp
     src/KeyDetector.cpp
     src/TempoDetector.cpp
+    src/KeyTransposer.cpp
+    src/LookbackBuffer.cpp
+    src/TuningEstimator.cpp
+    src/WavWriter.cpp
+    src/EditSession.cpp
     src/PitchShifter.cpp
     src/AnalysisEngine.cpp)
 

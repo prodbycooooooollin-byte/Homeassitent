@@ -4,11 +4,18 @@
 #include "TestSignals.h"
 
 #include "keydock/AnalysisEngine.h"
+#include "keydock/EditSession.h"
+#include "keydock/KeyTransposer.h"
+#include "keydock/WavWriter.h"
+#include "keydock/LookbackBuffer.h"
 #include "keydock/PitchShifter.h"
+#include "keydock/TuningEstimator.h"
 #include "keydock/RingBuffer.h"
 #include "keydock/Types.h"
 
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -365,6 +372,283 @@ int main()
               "C major transposed up one semitone is detected as C# major",
               keyName(before.best.tonic, before.best.isMinor) + " -> "
                   + keyName(after.best.tonic, after.best.isMinor));
+    }
+
+    std::printf("\n== Detuning is measured, or honestly refused ==\n");
+    {
+        const double rate = kAnalysisSampleRate;
+        TuningEstimator estimator(rate);
+
+        double worst = 0.0;
+        for (float cents : { -40.0f, -23.0f, -7.0f, 0.0f, 12.0f, 23.0f, 44.0f })
+        {
+            // Detune by actually pitch-shifting, so the expected answer is
+            // produced independently of the estimator.
+            PitchShifter shifter(rate);
+            PitchShifter::Options options;
+            options.cents = cents;
+            const auto detuned = shifter.process(
+                test::renderProgression(0, false, 120.0, 16.0, rate), options);
+
+            const auto r = estimator.analyse(detuned);
+            worst = std::max(worst, static_cast<double>(std::abs(r.cents - cents)));
+
+            check(r.reliable, "a " + std::to_string(static_cast<int>(cents))
+                                  + " cent detuning is measurable",
+                  std::to_string(r.cents) + " cents, " + toString(r.confidence));
+        }
+        check(worst < 3.0, "every detuning lands within 3 cents of the truth",
+              "worst " + std::to_string(worst) + " cents");
+
+        // The suggested correction must undo the deviation, not repeat it.
+        {
+            PitchShifter shifter(rate);
+            PitchShifter::Options options;
+            options.cents = -23.0f;
+            const auto detuned = shifter.process(
+                test::renderProgression(0, false, 120.0, 16.0, rate), options);
+
+            const auto before = estimator.analyse(detuned);
+
+            PitchShifter fixer(rate);
+            PitchShifter::Options fix;
+            fix.cents = before.suggestedCorrectionCents();
+            const auto corrected = fixer.process(detuned, fix);
+
+            const auto after = estimator.analyse(corrected);
+            check(std::abs(after.cents) < 3.0f,
+                  "applying the suggested correction brings it back to pitch",
+                  std::to_string(before.cents) + " -> " + std::to_string(after.cents));
+        }
+
+        check(! estimator.analyse(test::renderDrumLoop(128.0, 16.0, rate)).reliable,
+              "drums do not produce a tuning figure");
+        check(! estimator.analyse(test::renderWhiteNoise(16.0, rate)).reliable,
+              "noise does not produce a tuning figure");
+
+        {
+            // Two instruments a quarter-tone apart have no single tuning.
+            PitchShifter shifter(rate);
+            PitchShifter::Options options;
+            options.cents = 40.0f;
+            const auto second = shifter.process(
+                test::renderProgression(7, false, 120.0, 16.0, rate), options);
+            const auto mixed = test::mix(
+                test::renderProgression(0, false, 120.0, 16.0, rate), second, 1.0f);
+
+            const auto r = estimator.analyse(mixed);
+            check(! r.reliable,
+                  "differently tuned instruments are refused, not averaged", r.note);
+        }
+    }
+
+    std::printf("\n== Transposing to a target key ==\n");
+    {
+        const auto plan = planTranspose(0, false, 6, false);   // C major -> F# major
+        check(plan.possible && plan.semitones == 6,
+              "C major to F# major is +6 semitones", std::to_string(plan.semitones));
+        check(plan.alternativeSemitones == -6,
+              "the other octave direction is offered",
+              std::to_string(plan.alternativeSemitones));
+    }
+    {
+        const auto plan = planTranspose(9, true, 0, true);     // A minor -> C minor
+        check(plan.possible && plan.semitones == 3,
+              "A minor to C minor is +3 semitones", std::to_string(plan.semitones));
+    }
+    {
+        const auto plan = planTranspose(0, false, 10, false);  // C major -> A# major
+        check(plan.possible && plan.semitones == -2,
+              "C major to A# major takes the short way down",
+              std::to_string(plan.semitones));
+    }
+    {
+        // The claim that must never be faked.
+        const auto plan = planTranspose(0, false, 0, true);    // C major -> C minor
+        check(! plan.possible,
+              "C major to C minor is reported as impossible", plan.explanation);
+        check(plan.reachableTonic == 0 && ! plan.reachableIsMinor,
+              "what transposing would actually produce is named",
+              keyName(plan.reachableTonic, plan.reachableIsMinor));
+    }
+    {
+        const auto plan = planTranspose(-1, false, 3, false);
+        check(! plan.possible, "an unknown source key blocks the plan", plan.explanation);
+    }
+
+    std::printf("\n== Lookback buffer ==\n");
+    {
+        LookbackBuffer lookback;
+        check(! lookback.enabled(), "the lookback buffer is off until configured");
+
+        lookback.configure(10.0f);
+        std::vector<float> chunk(static_cast<size_t>(kAnalysisSampleRate * 3.0), 0.25f);
+        lookback.append(chunk.data(), chunk.size());
+        check(std::abs(lookback.availableSeconds() - 3.0f) < 0.05f,
+              "a partly filled buffer reports what it really holds",
+              std::to_string(lookback.availableSeconds()));
+
+        for (int i = 0; i < 4; ++i)
+            lookback.append(chunk.data(), chunk.size());
+        check(std::abs(lookback.availableSeconds() - 10.0f) < 0.05f,
+              "it never grows past the configured length",
+              std::to_string(lookback.availableSeconds()));
+
+        const auto snapshot = lookback.snapshot(4.0f);
+        check(snapshot.size() == static_cast<size_t>(kAnalysisSampleRate * 4.0),
+              "a snapshot returns the requested span",
+              std::to_string(snapshot.size()));
+
+        // The snapshot must be detached: more recording cannot rewrite it.
+        std::vector<float> different(static_cast<size_t>(kAnalysisSampleRate * 6.0), -0.9f);
+        lookback.append(different.data(), different.size());
+        check(snapshot[0] == 0.25f && snapshot.back() == 0.25f,
+              "continued recording cannot overwrite a taken snapshot");
+
+        check(lookback.snapshot(4.0f)[0] == -0.9f,
+              "a later snapshot does see the newer audio");
+
+        lookback.clear();
+        check(lookback.availableSeconds() == 0.0f, "clear empties the buffer");
+        check(lookback.enabled(), "clear does not switch it off");
+
+        lookback.configure(0.0f);
+        check(! lookback.enabled() && lookback.snapshot(1.0f).empty(),
+              "configuring zero seconds releases it entirely");
+    }
+
+    std::printf("\n== Edit session: analyse the source, apply edits once ==\n");
+    {
+        const double rate = kAnalysisSampleRate;
+
+        // A C major sample that is also 23 cents flat: both a key change and a
+        // tuning fix are wanted, and neither may be applied twice.
+        PitchShifter detuner(rate);
+        PitchShifter::Options detune;
+        detune.cents = -23.0f;
+        auto sample = detuner.process(
+            test::renderProgression(0, false, 120.0, 16.0, rate), detune);
+
+        EditSession session;
+        session.setSource(sample, "Test 16 s");
+        session.analyseSource();
+
+        check(session.effectiveSourceTonic() == 0 && ! session.effectiveSourceIsMinor(),
+              "the source key is detected",
+              keyName(session.effectiveSourceTonic(), session.effectiveSourceIsMinor()));
+        check(std::abs(session.tuning().cents + 23.0f) < 3.0f,
+              "the source detuning is measured",
+              std::to_string(session.tuning().cents));
+
+        // Target D major: +2 semitones.
+        session.setTargetKey(2, false);
+        check(session.plan().possible && session.effectiveSemitones() == 2,
+              "the plan to D major is +2 semitones",
+              std::to_string(session.effectiveSemitones()));
+
+        session.setApplyTuningCorrection(true);
+        check(std::abs(session.effectiveCents() - 23.0f) < 3.0f,
+              "the tuning correction is the opposite of the deviation",
+              std::to_string(session.effectiveCents()));
+
+        const auto& rendered = session.rendered();
+        check(rendered.size() == sample.size(),
+              "the edit keeps the sample length exactly");
+
+        // Now the real check: the result must be D major, in tune.
+        EditSession verify;
+        verify.setSource(rendered, "gerendert");
+        verify.analyseSource();
+        check(verify.effectiveSourceTonic() == 2 && ! verify.effectiveSourceIsMinor(),
+              "the rendered sample really is in D major",
+              keyName(verify.effectiveSourceTonic(), verify.effectiveSourceIsMinor()));
+        check(std::abs(verify.tuning().cents) < 4.0f,
+              "the rendered sample is in tune - the correction was applied once",
+              std::to_string(verify.tuning().cents) + " cents");
+
+        // Re-rendering must not stack on the previous render.
+        const auto again = session.rendered();
+        check(again == rendered, "re-rendering does not stack edits");
+
+        // The alternative direction is the same key, an octave the other way.
+        session.useAlternativeDirection();
+        check(session.effectiveSemitones() == -10,
+              "the alternative direction reaches the same key downwards",
+              std::to_string(session.effectiveSemitones()));
+
+        session.resetEdits();
+        check(! session.hasEdit() && session.rendered() == sample,
+              "reset returns the untouched source");
+    }
+    {
+        // Mode changes must not be faked, and must not silently shift.
+        const double rate = kAnalysisSampleRate;
+        EditSession session;
+        session.setSource(test::renderProgression(0, false, 120.0, 14.0, rate), "Test");
+        session.analyseSource();
+        session.setTargetKey(0, true);        // C major -> C minor
+
+        check(! session.plan().possible,
+              "C major to C minor is refused", session.plan().explanation);
+        check(session.effectiveSemitones() == 0,
+              "an impossible target applies no shift at all",
+              std::to_string(session.effectiveSemitones()));
+        check(session.rendered() == session.source(),
+              "and leaves the audio untouched");
+    }
+    {
+        // An uncertain detection can be corrected by hand.
+        const double rate = kAnalysisSampleRate;
+        EditSession session;
+        session.setSource(test::renderProgression(0, false, 120.0, 14.0, rate), "Test");
+        session.analyseSource();
+        session.setSourceKeyOverride(9, true);      // claim A minor
+        session.setTargetKey(0, true);              // to C minor
+        check(session.keyIsOverridden() && session.plan().possible
+              && session.effectiveSemitones() == 3,
+              "a manual source key feeds the plan",
+              std::to_string(session.effectiveSemitones()));
+    }
+    {
+        // A new source clears everything derived from the old one.
+        const double rate = kAnalysisSampleRate;
+        EditSession session;
+        session.setSource(test::renderProgression(0, false, 120.0, 14.0, rate), "erste");
+        session.analyseSource();
+        session.setTargetKey(5, false);
+        session.setApplyTuningCorrection(true);
+
+        session.setSource(test::renderProgression(6, true, 90.0, 14.0, rate), "zweite");
+        check(! session.hasEdit() && ! session.applyingTuningCorrection()
+              && session.sourceLabel() == "zweite",
+              "a new sample carries over no edit from the previous one");
+    }
+
+    std::printf("\n== WAV export ==\n");
+    {
+        const double rate = kAnalysisSampleRate;
+        const auto sample = test::renderProgression(0, false, 120.0, 6.0, rate);
+
+        const std::string path = "keydock_export_test.wav";
+        const auto error = writeWav24(path, sample, rate);
+        check(error.empty(), "a 24-bit WAV is written", error);
+
+        std::ifstream in(path, std::ios::binary);
+        std::vector<char> bytes((std::istreambuf_iterator<char>(in)),
+                                 std::istreambuf_iterator<char>());
+        in.close();
+        std::remove(path.c_str());
+
+        const size_t expected = 44 + sample.size() * 3;
+        check(bytes.size() == expected,
+              "the file is exactly header plus 24-bit samples",
+              std::to_string(bytes.size()) + " vs " + std::to_string(expected));
+        check(bytes.size() > 12 && std::string(bytes.data(), 4) == "RIFF"
+              && std::string(bytes.data() + 8, 4) == "WAVE",
+              "it carries a RIFF/WAVE header");
+
+        check(! writeWav24(path, {}, rate).empty(),
+              "refusing to write an empty file is an error, not a silent no-op");
     }
 
     std::printf("\n== Capture plumbing ==\n");
