@@ -1,8 +1,12 @@
 # 5. Teststatus — was geprüft ist und was nicht
 
-**FL Studio und Windows standen in meiner Build-Umgebung nicht zur
-Verfügung.** Ich habe deshalb nichts als „im Host getestet" bezeichnet, was
-ich nicht ausgeführt habe. Die Tabelle trennt drei Stufen strikt.
+**FL Studio stand nicht zur Verfügung.** Ich habe deshalb nichts als „im Host
+getestet" bezeichnet, was ich nicht ausgeführt habe. Die Tabelle trennt drei
+Stufen strikt.
+
+Der Windows-Build läuft inzwischen in GitHub Actions auf `windows-2022` mit
+MSVC — inklusive `ctest`. Was dort grün ist, gilt als geprüft; was FL Studio
+selbst betrifft, weiterhin nicht.
 
 Legende:
 **A** = implementiert und automatisiert getestet ·
@@ -100,12 +104,19 @@ Mit `x86_64-w64-mingw32-g++ 13` gegen die echten Windows-Header übersetzt:
 
 | Komponente | Status | Bemerkung |
 |---|---|---|
-| `KeyDockOverlay.exe` | **B** | Übersetzt **und gelinkt** zu einer echten PE32+-GUI-Binary, warnungsfrei (`-Wall -Wextra`). Nicht ausgeführt. |
+| `KeyDockOverlay.exe` | **B** | Unter MSVC in CI warnungsfrei übersetzt und gelinkt; zusätzlich unter MinGW als PE32+-Binary. **Nie ausgeführt** — Fensterverhalten, Anheften, DPI und Fokus sind damit weiterhin ungeprüft. |
 | `HostTracker`, `IpcServer`, `OverlayWindow`, `OverlayRender`, `Settings` | **B** | warnungsfrei übersetzt |
 | `IpcClient`, `AnalysisController` (Windows-Pfad) | **B** | warnungsfrei übersetzt |
-| `PluginProcessor`, `PluginEditor`, `OverlayLauncher` | **B** | Gegen JUCE 8.0.8 **fehlerfrei typgeprüft** (`g++ -fsyntax-only`, nativ; JUCE lehnt MinGW ausdrücklich ab). Der `#if defined(_WIN32)`-Zweig im `OverlayLauncher` wurde dabei **nicht** erfasst. |
-| Vollständiger MSVC-Build (VST3-Wrapper, Linker, Bundle) | **C** | Läuft erstmals im GitHub-Actions-Workflow. Bis dessen erster Lauf grün ist, gilt der MSVC-Build als ungeprüft. |
+| `PluginProcessor`, `PluginEditor`, `OverlayLauncher` | **B** | Unter MSVC in CI warnungsfrei übersetzt, inklusive der `_WIN32`-Zweige. |
+| Vollständiger MSVC-Build (VST3-Wrapper, Linker, Bundle) | **B** | Grün in CI: `KeyDock.vst3` wird als Bundle samt `Contents/Resources/moduleinfo.json` erzeugt. Dass FL Studio es lädt, ist damit **nicht** gezeigt. |
+| Engine-Tests unter MSVC (`/fp:fast`) | **A** | `ctest` in CI: 2/2 Suiten, 40 Prüfungen, 0 Fehler — dieselben Ergebnisse wie unter GCC. |
 
+> Der erste MSVC-Lauf scheiterte an etwas, das MinGW nicht zeigt: `windows.h`
+> definiert `min`/`max` als Makros, wodurch jedes `std::max(` als `std::(`
+> geparst wird (C2589/C2059). Behoben über `NOMINMAX`-Guards an jedem
+> `windows.h`-Include plus Target-Definitionen in CMake. Das VST3 selbst war
+> schon in diesem Lauf fehlerfrei gebaut — betroffen war nur das Overlay.
+>
 > Die Typprüfung gegen JUCE fand die Pfadauflösung des `OverlayLauncher`
 > als echten Fehler: ein VST3 ist auf Windows ein Bundle, die DLL liegt also in
 > `KeyDock.vst3/Contents/x86_64-win/`. Die Suche ging nur zwei Ebenen hoch, die
@@ -117,6 +128,11 @@ Mit `x86_64-w64-mingw32-g++ 13` gegen die echten Windows-Header übersetzt:
 > Bundle-Aufbau. Das entscheidet sich erst im MSVC-Build.
 
 ## 5.4 Im Host ungeprüft — bitte manuell abnehmen
+
+Dies ist der verbleibende Teil. Ein grüner CI-Build zeigt, dass das Plugin
+übersetzt, gelinkt und als Bundle korrekt aufgebaut ist — **nicht**, dass FL
+Studio es lädt, dass sich das Overlay anheftet oder dass der Audio-Durchlauf
+bitgenau ist.
 
 Konkrete Schritte, jeweils mit dem erwarteten Ergebnis.
 
