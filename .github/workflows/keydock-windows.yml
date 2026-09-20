@@ -103,6 +103,13 @@ jobs:
 
           Copy-Item keydock\docs\04-einrichtung-fl-studio.md -Destination "$out\EINRICHTUNG.md"
           Copy-Item keydock\docs\05-tests.md -Destination "$out\TESTSTATUS.md"
+          Copy-Item keydock\docs\07-neue-funktionen.md -Destination "$out\NEUE-FUNKTIONEN.md"
+
+          # The tempo handover is unusable without this script, so it ships
+          # inside the artifact rather than only in the repository.
+          New-Item -ItemType Directory -Force -Path "$out\FL-Studio-Skript" | Out-Null
+          Copy-Item keydock\integration\FLStudio\device_KeyDock.py `
+                    -Destination "$out\FL-Studio-Skript\device_KeyDock.py"
 
           $readme = @(
             'KeyDock - Installation',
@@ -115,7 +122,13 @@ jobs:
             '3. Mixer (F9) -> Master -> freier Slot -> KeyDock.',
             '',
             'Details in EINRICHTUNG.md.',
+            'Neue Funktionen (Zieltonart, Rueckblick, Feinstimmung,',
+            'Tempo-Uebernahme): NEUE-FUNKTIONEN.md',
             'Was getestet ist und was nicht: TESTSTATUS.md.',
+            '',
+            'Tempo-Uebernahme an FL Studio braucht eine einmalige',
+            'Einrichtung. Das noetige Skript liegt in FL-Studio-Skript\.',
+            'Schritt fuer Schritt in NEUE-FUNKTIONEN.md, Abschnitt 7.4.',
             '',
             'keydock-analyze.exe prueft WAV-Dateien ohne FL Studio:',
             '   keydock-analyze.exe meintrack.wav'
