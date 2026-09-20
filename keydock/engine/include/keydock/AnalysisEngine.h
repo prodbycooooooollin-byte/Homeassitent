@@ -46,6 +46,10 @@ public:
     /// Peak level of the captured material in dBFS.
     float peakDb() const;
 
+    /// The captured audio at the analysis rate, so the sample editor can work
+    /// on exactly what was measured.
+    const std::vector<float>& capturedAudio() const { return buffer_; }
+
     static constexpr float kMinAnalysisSeconds = 4.0f;
 
 private:

@@ -15,7 +15,7 @@ Legende:
 
 ## 5.1 Was ich tatsächlich ausgeführt habe
 
-Linux, GCC 13, Release. `ctest`: **2/2 Suiten bestanden, 49 Einzelprüfungen,
+Linux, GCC 13, Release. `ctest`: **2/2 Suiten bestanden, 110 Einzelprüfungen,
 0 Fehler**. Dieselben Suiten laufen in CI unter MSVC mit `/fp:fast`.
 
 | # | Prüfung | Status | Ergebnis |
@@ -49,6 +49,24 @@ Linux, GCC 13, Release. `ctest`: **2/2 Suiten bestanden, 49 Einzelprüfungen,
 | 27 | BPM-Genauigkeit bei 90/120/128/135/140/174 | **A** | max. 0,15 BPM Abweichung |
 | 28 | 174 BPM wird nicht auf 87 halbiert | **A** | korrekte metrische Ebene |
 | 29 | Klares Material bricht vor der Obergrenze ab | **A** | 8,25 s statt 30 s, weiterhin genau |
+| 30 | BPM wird auf ganze Zahl gerundet, wenn sie nah ist | **A** | 135/140/174 exakt |
+| 31 | Echte 137,5 BPM bleiben ungerundet | **A** | nicht gerundet |
+| 32 | Pitch-Shift −12…+12 Halbtöne | **A** | max. 0,09 Cent Abweichung |
+| 33 | Pitch-Shift −50…+50 Cent | **A** | max. 0,09 Cent Abweichung |
+| 34 | Länge bleibt beim Transponieren exakt gleich | **A** | Sample-genau |
+| 35 | Halbtöne und Cent wirken zusammen, nicht doppelt | **A** | < 0,5 Cent |
+| 36 | C-Dur +1 Halbton wird als C#-Dur erkannt | **A** | musikalisch korrekt |
+| 37 | Verstimmung −40…+44 Cent erkannt | **A** | max. 3 Cent Fehler |
+| 38 | Vorgeschlagene Korrektur stellt die Stimmung her | **A** | < 3 Cent Rest |
+| 39 | Drums/Rauschen liefern keine Verstimmungszahl | **A** | verweigert |
+| 40 | Verschieden gestimmte Instrumente werden abgelehnt | **A** | nicht gemittelt |
+| 41 | Dur→Moll wird als unmöglich gemeldet | **A** | keine Verschiebung |
+| 42 | Zieltonart nimmt den kürzeren Weg | **A** | ±6 Halbtöne |
+| 43 | Rückblick-Puffer: leer, teilweise, voll | **A** | korrekt begrenzt |
+| 44 | Snapshot ist vom Mitschnitt entkoppelt | **A** | nicht überschreibbar |
+| 45 | Neues Sample übernimmt keine alte Bearbeitung | **A** | vollständig zurückgesetzt |
+| 46 | Gesamtkette: C-Dur −23 Cent → D-Dur, sauber | **A** | einmal angewandt |
+| 47 | WAV-Export 24 Bit, korrekte Größe und Kopf | **A** | bytegenau |
 
 Nachvollziehbar mit `ctest --test-dir build --output-on-failure`.
 
@@ -131,6 +149,21 @@ Mit `x86_64-w64-mingw32-g++ 13` gegen die echten Windows-Header übersetzt:
 > Bundle-Aufbau. Das entscheidet sich erst im MSVC-Build.
 
 ## 5.4 Im Host ungeprüft — bitte manuell abnehmen
+
+### Neu in dieser Version
+
+| Test | Erwartet |
+|---|---|
+| **T11 Transponieren** | Sample analysieren, Zieltonart wählen, **Vorhören → Bearbeitet**. Klingt transponiert, gleich lang, kein Tempowechsel. |
+| **T12 Dur/Moll** | C-Dur-Sample, Ziel C-Moll wählen → Meldung, dass das nicht geht; Audio bleibt unverändert. |
+| **T13 WAV-Export** | **Als WAV speichern** → Datei in `Dokumente\KeyDock`, in FL Studio ladbar, Originaldatei unangetastet. |
+| **T14 Rückblick** | 30 s einschalten, Beat 30 s spielen, Pfeil drücken → Ergebnis ohne erneutes Abspielen. Direkt nach dem Einschalten: Ablehnung statt Ergebnis. |
+| **T15 Feinstimmung** | Absichtlich verstimmtes Sample → Cent-Wert erscheint. **Korrigieren** + Vorhören → sauber. |
+| **T16 Keine Doppelkorrektur** | Zieltonart **und** Korrigieren zusammen → einmal transponiert, einmal gestimmt. |
+| **T17 Tempo-Übergabe** | Nach Einrichtung (7.4): Häkchen neben BPM → Projekttempo springt auf den angezeigten Wert. Ohne Klick passiert nichts. |
+| **T18 Ohne MIDI-Port** | Häkchen meldet „Kein MIDI-Port" und ändert nichts. |
+| **T19 Tempoautomation** | Bei automatisiertem Tempo prüfen, was FL Studio tatsächlich tut — hier ist mir die Grenze nicht sicher bekannt. |
+| **T20 Vorhören aus** | Alles auf Aus → Nullsummen-Test wie T1 muss weiterhin Stille ergeben. |
 
 Dies ist der verbleibende Teil. Ein grüner CI-Build zeigt, dass das Plugin
 übersetzt, gelinkt und als Bundle korrekt aufgebaut ist — **nicht**, dass FL

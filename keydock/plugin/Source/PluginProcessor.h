@@ -2,6 +2,7 @@
 
 #include "AnalysisController.h"
 #include "IpcClient.h"
+#include "SampleEditor.h"
 #include "KeyDockProtocol.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -45,6 +46,7 @@ public:
 
     // --- KeyDock --------------------------------------------------------
     AnalysisController& controller() noexcept           { return controller_; }
+    SampleEditor&       editor() noexcept               { return editor_; }
 
     void requestAnalysis(float seconds);
     void requestStop();
@@ -64,9 +66,11 @@ public:
 private:
     void timerCallback() override;
     void pushStateToOverlay();
+    void pushEditStateToOverlay();
     void handleCommand(const ipc::CommandMsg& cmd);
 
     AnalysisController  controller_;
+    SampleEditor        editor_;
     IpcClient           ipc_;
 
     uint64_t            instanceId_ = 0;

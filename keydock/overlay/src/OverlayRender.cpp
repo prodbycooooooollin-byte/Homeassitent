@@ -338,6 +338,38 @@ void OverlayWindow::paintBar(HDC dc, RECT bounds)
         x += scaled(13);
     }
 
+    // --- lookback: analyse what already played ---------------------------
+    {
+        const bool ready = have && info.edit.lookbackEnabled != 0
+                        && info.edit.lookbackAvailableSeconds >= 4.0f;
+
+        RECT button = makeRect(x, top + scaled(8), scaled(30), barH - scaled(16));
+        if (hot_ == HitTarget::lookbackTake)
+            fillRounded(dc, button, scaled(5), surface);
+        strokeRounded(dc, button, scaled(5), ready ? outline : mix(outline, surface, 0.5));
+
+        // A back-arrow drawn from primitives, same reason as the other icons.
+        {
+            const int cx = (button.left + button.right) / 2;
+            const int cy = (button.top + button.bottom) / 2;
+            const int r  = scaled(5);
+            HPEN pen = CreatePen(PS_SOLID, std::max(1, scaled(1)),
+                                 ready ? (hot_ == HitTarget::lookbackTake ? accent : text) : dim);
+            auto* oldPen = SelectObject(dc, pen);
+            auto* oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+            Arc(dc, cx - r, cy - r, cx + r, cy + r, cx, cy - r, cx - r, cy);
+            const POINT head[3] = { { cx - r + scaled(3), cy - scaled(1) },
+                                    { cx - r,             cy + scaled(2) },
+                                    { cx - r - scaled(3), cy - scaled(1) } };
+            Polyline(dc, head, 3);
+            SelectObject(dc, oldPen);
+            SelectObject(dc, oldBrush);
+            DeleteObject(pen);
+        }
+        addZone(button, HitTarget::lookbackTake);
+        x += scaled(36);
+    }
+
     // --- primary action --------------------------------------------------
     {
         const auto status = have ? static_cast<ipc::Status>(info.state.status)
@@ -440,6 +472,31 @@ void OverlayWindow::paintBar(HDC dc, RECT bounds)
                                mix(toCOLORREF(theme.background), dim, 0.35));
 
         x += scaled(92);
+
+        // One-shot handover to FL Studio's project tempo. Disabled without a
+        // valid result, so it can never set something meaningless.
+        {
+            const bool usable = haveResult && info.result.bpm > 0.0f;
+            RECT tick = makeRect(x - scaled(26), top + scaled(12), scaled(18), scaled(16));
+            if (hot_ == HitTarget::applyTempo && usable)
+                fillRounded(dc, tick, scaled(3), surface);
+
+            HPEN pen = CreatePen(PS_SOLID, std::max(1, scaled(2)),
+                                 usable ? (hot_ == HitTarget::applyTempo ? accent : dim)
+                                        : mix(toCOLORREF(theme.background), dim, 0.45));
+            auto* oldPen = SelectObject(dc, pen);
+            const int cx = (tick.left + tick.right) / 2;
+            const int cy = (tick.top + tick.bottom) / 2;
+            const POINT check[3] = { { cx - scaled(4), cy },
+                                     { cx - scaled(1), cy + scaled(3) },
+                                     { cx + scaled(4), cy - scaled(4) } };
+            Polyline(dc, check, 3);
+            SelectObject(dc, oldPen);
+            DeleteObject(pen);
+
+            if (usable)
+                addZone(tick, HitTarget::applyTempo);
+        }
     }
 
     // --- status -----------------------------------------------------------
@@ -480,6 +537,18 @@ void OverlayWindow::paintBar(HDC dc, RECT bounds)
         RECT grip = makeRect(bounds.right - scaled(14), top, scaled(14), barH);
         drawGripDots(dc, grip, mix(toCOLORREF(theme.background), dim, 0.55));
         addZone(grip, HitTarget::resizeGrip);
+    }
+
+    // --- short confirmation, e.g. after a tempo handover ---------------------
+    if (! toast_.empty())
+    {
+        ScopedFont font(dc, scaled(10), FW_SEMIBOLD);
+        const int w = textWidth(dc, toast_) + scaled(18);
+        RECT box = makeRect(std::max<int>(scaled(8), bounds.right - w - scaled(58)),
+                            top + scaled(9), w, barH - scaled(18));
+        fillRounded(dc, box, scaled(4), accent);
+        drawText(dc, box, toast_, toCOLORREF(theme.background),
+                 DT_CENTER | DT_VCENTER);
     }
 
     // --- capture progress ---------------------------------------------------
@@ -611,6 +680,36 @@ void OverlayWindow::paintDetails(HDC dc, RECT bounds)
     segment(L"Verwerfen", HitTarget::reset, false);
     endRow();
 
+    // ---------------- RÜCKBLICK ----------------
+    sectionHeader(L"RÜCKBLICK");
+    {
+        wchar_t help[192];
+        if (have && info.edit.lookbackEnabled != 0)
+            std::swprintf(help, 192,
+                          L"Läuft mit – %.0f s von %.0f s aufgezeichnet. "
+                          L"Der Pfeil oben analysiert sie.",
+                          info.edit.lookbackAvailableSeconds,
+                          info.edit.lookbackConfiguredSeconds);
+        else
+            std::swprintf(help, 192,
+                          L"Zeichnet mit, damit Gehörtes nachträglich "
+                          L"analysierbar ist. Nichts wird gespeichert.");
+        rowLabel(L"Mitschnitt", help);
+    }
+    beginSegments();
+    segment(L"Aus", HitTarget::lookbackOff, settings_.lookbackSeconds <= 0.0f);
+    segment(L"15 s", HitTarget::lookback15,
+            std::abs(settings_.lookbackSeconds - 15.0f) < 0.1f);
+    segment(L"30 s", HitTarget::lookback30,
+            std::abs(settings_.lookbackSeconds - 30.0f) < 0.1f);
+    segment(L"60 s", HitTarget::lookback60,
+            std::abs(settings_.lookbackSeconds - 60.0f) < 0.1f);
+    segment(L"Leeren", HitTarget::lookbackClear, false);
+    endRow();
+
+    // ---------------- SAMPLE ----------------
+    paintSampleSection(dc, y, left, right, have ? &info : nullptr);
+
     // ---------------- FENSTER ----------------
     sectionHeader(L"FENSTER");
 
@@ -719,6 +818,235 @@ void OverlayWindow::paintDetails(HDC dc, RECT bounds)
             addZone(row, HitTarget::instancePicker);
         }
     }
+}
+
+void OverlayWindow::paintSampleSection(HDC dc, int& y, int left, int right,
+                                       const InstanceInfo* info)
+{
+    const auto& theme = settings_.theme;
+    const COLORREF text    = toCOLORREF(theme.text);
+    const COLORREF dim     = toCOLORREF(theme.dimText);
+    const COLORREF accent  = toCOLORREF(theme.accent);
+    const COLORREF outline = toCOLORREF(theme.outline);
+    const COLORREF surface = mix(toCOLORREF(theme.background), text, 0.06);
+
+    const int labelW = scaled(118);
+
+    const auto sectionHeader = [&](const wchar_t* title)
+    {
+        ScopedFont font(dc, scaled(8), FW_SEMIBOLD, scaled(2));
+        drawText(dc, makeRect(left, y, right - left, scaled(12)), title, accent,
+                 DT_LEFT | DT_VCENTER);
+        y += scaled(15);
+    };
+
+    const auto rowLabel = [&](const wchar_t* label, const wchar_t* help)
+    {
+        ScopedFont font(dc, scaled(10), FW_SEMIBOLD);
+        drawText(dc, makeRect(left, y, labelW, scaled(16)), label, text,
+                 DT_LEFT | DT_VCENTER);
+        ScopedFont small(dc, scaled(9), FW_NORMAL);
+        drawText(dc, makeRect(left, y + scaled(15), right - left, scaled(12)),
+                 help, dim, DT_LEFT | DT_TOP | DT_END_ELLIPSIS);
+    };
+
+    int segX = 0;
+    const auto beginSegments = [&]() { segX = left + labelW; };
+
+    const auto segment = [&](const wchar_t* label, HitTarget target, bool selected,
+                             bool enabled = true)
+    {
+        ScopedFont font(dc, scaled(9), selected ? FW_SEMIBOLD : FW_NORMAL);
+        const int w = textWidth(dc, label) + scaled(14);
+        RECT box = makeRect(segX, y, w, scaled(17));
+
+        if (selected && enabled)
+            fillRounded(dc, box, scaled(4), accent);
+        else if (hot_ == target && enabled)
+            fillRounded(dc, box, scaled(4), surface);
+        strokeRounded(dc, box, scaled(4),
+                      selected && enabled ? accent
+                                          : (enabled ? outline : mix(outline, surface, 0.6)));
+
+        drawText(dc, box, label,
+                 ! enabled ? mix(toCOLORREF(theme.background), dim, 0.5)
+                           : (selected ? toCOLORREF(theme.background) : text),
+                 DT_CENTER | DT_VCENTER);
+        if (enabled)
+            addZone(box, target);
+        segX += w + scaled(4);
+    };
+
+    const auto endRow = [&]() { y += scaled(30); };
+
+    const bool hasSample = info != nullptr && info->haveEdit
+                        && info->edit.hasSource != 0;
+
+    sectionHeader(L"SAMPLE BEARBEITEN");
+
+    // --- which source is selected, and what it was measured as ---------
+    {
+        wchar_t help[224];
+        if (! hasSample)
+        {
+            std::swprintf(help, 224,
+                          L"Noch kein Ausschnitt. Analysieren oder den "
+                          L"Rückblick-Pfeil benutzen.");
+        }
+        else
+        {
+            const auto sourceKey = info->edit.sourceTonic >= 0
+                ? widen(keyName(info->edit.sourceTonic, info->edit.sourceIsMinor != 0))
+                : std::wstring(L"unbekannt");
+            std::swprintf(help, 224, L"%s · %.0f s · erkannt als %s%s",
+                          widen(info->edit.sourceLabel).c_str(),
+                          info->edit.sourceSeconds, sourceKey.c_str(),
+                          info->edit.sourceKeyOverridden ? L" (von Hand gesetzt)" : L"");
+        }
+        rowLabel(L"Quelle", help);
+    }
+    beginSegments();
+    segment(L"Tonart −", HitTarget::sourceKeyPrev, false, hasSample);
+    segment(L"Tonart +", HitTarget::sourceKeyNext, false, hasSample);
+    segment(hasSample && info->edit.sourceIsMinor ? L"Moll" : L"Dur",
+            HitTarget::sourceModeToggle, false, hasSample);
+    segment(L"Automatisch", HitTarget::sourceKeyAuto,
+            hasSample && info->edit.sourceKeyOverridden == 0, hasSample);
+    endRow();
+
+    // --- target key ----------------------------------------------------
+    {
+        wchar_t help[224];
+        if (hasSample && info->edit.targetTonic >= 0)
+        {
+            if (info->edit.planPossible)
+                std::swprintf(help, 224, L"%s  →  %+d Halbtöne",
+                              widen(info->edit.planExplanation).c_str(),
+                              info->edit.appliedSemitones);
+            else
+                std::swprintf(help, 224, L"%s", widen(info->edit.planExplanation).c_str());
+        }
+        else
+        {
+            std::swprintf(help, 224,
+                          L"Zieltonart wählen – das Sample wird wirklich "
+                          L"transponiert, Länge und Tempo bleiben gleich.");
+        }
+        rowLabel(L"Zieltonart", help);
+    }
+    beginSegments();
+    {
+        wchar_t label[24];
+        if (targetTonic_ >= 0)
+            std::swprintf(label, 24, L"%s %s",
+                          widen(pitchClassName(targetTonic_)).c_str(),
+                          targetIsMinor_ ? L"Moll" : L"Dur");
+        else
+            std::wcscpy(label, L"keine");
+
+        segment(L"−", HitTarget::targetKeyPrev, false, hasSample);
+        segment(label, HitTarget::targetModeToggle, targetTonic_ >= 0, hasSample);
+        segment(L"+", HitTarget::targetKeyNext, false, hasSample);
+        segment(L"Andere Richtung", HitTarget::directionToggle,
+                hasSample && info->edit.usingAlternative != 0,
+                hasSample && info->edit.planPossible != 0);
+        segment(L"Keine", HitTarget::targetClear, false, hasSample);
+    }
+    endRow();
+
+    // --- tuning ---------------------------------------------------------
+    {
+        wchar_t help[224];
+        if (hasSample && info->edit.tuningReliable)
+            std::swprintf(help, 224,
+                          L"%+.0f Cent gegenüber A440 – Korrektur wäre %+.0f Cent. "
+                          L"Manuell: %+.0f Cent.",
+                          info->edit.tuningCents, -info->edit.tuningCents,
+                          info->edit.manualCents);
+        else if (hasSample)
+            std::swprintf(help, 224, L"%s", widen(info->edit.tuningNote).c_str());
+        else
+            std::swprintf(help, 224,
+                          L"Misst, ob das Sample zwischen den Halbtönen liegt.");
+        rowLabel(L"Feinstimmung", help);
+    }
+    beginSegments();
+    segment(L"Korrigieren", HitTarget::tuningApply,
+            hasSample && info->edit.applyTuningCorrection != 0,
+            hasSample && info->edit.tuningReliable != 0);
+    segment(L"Aus", HitTarget::tuningOff,
+            hasSample && info->edit.applyTuningCorrection == 0, hasSample);
+    segment(L"Cent −", HitTarget::centsDown, false, hasSample);
+    segment(L"Cent +", HitTarget::centsUp, false, hasSample);
+    segment(L"Formanten", HitTarget::formantsToggle,
+            hasSample && info->edit.preserveFormants != 0, hasSample);
+    endRow();
+
+    // --- preview and export ---------------------------------------------
+    {
+        wchar_t help[256];
+        if (! hasSample)
+        {
+            std::swprintf(help, 256, L"Vorhören ersetzt den Master-Ausgang, "
+                                     L"solange es eingeschaltet ist.");
+        }
+        else if (info->edit.lastExportError[0] != '\0')
+        {
+            std::swprintf(help, 256, L"Export fehlgeschlagen: %s",
+                          widen(info->edit.lastExportError).c_str());
+        }
+        else if (info->edit.lastExportPath[0] != '\0')
+        {
+            std::swprintf(help, 256, L"Gespeichert: %s",
+                          widen(info->edit.lastExportPath).c_str());
+        }
+        else
+        {
+            std::swprintf(help, 256,
+                          L"Angewendet: %+d Halbtöne, %+.0f Cent. "
+                          L"Vorhören ersetzt den Master-Ausgang.",
+                          info->edit.appliedSemitones, info->edit.appliedCents);
+        }
+        rowLabel(L"Vorhören", help);
+    }
+    beginSegments();
+    segment(L"Aus", HitTarget::previewOff,
+            ! hasSample || info->edit.previewMode == 0, hasSample);
+    segment(L"Original", HitTarget::previewOriginal,
+            hasSample && info->edit.previewMode == 1, hasSample);
+    segment(L"Bearbeitet", HitTarget::previewEdited,
+            hasSample && info->edit.previewMode == 2,
+            hasSample && info->edit.hasEdit != 0);
+    segment(L"Als WAV speichern", HitTarget::exportWav, false, hasSample);
+    segment(L"Verwerfen", HitTarget::editReset, false, hasSample);
+    endRow();
+
+    // --- tempo handover ---------------------------------------------------
+    sectionHeader(L"TEMPO AN FL STUDIO");
+    {
+        wchar_t help[256];
+        if (tempoBridge_.isOpen())
+            std::swprintf(help, 256,
+                          L"Port: %s – das Häkchen neben der BPM-Zahl setzt "
+                          L"das Projekttempo.",
+                          tempoBridge_.openPortName().c_str());
+        else
+            std::swprintf(help, 256,
+                          L"Kein MIDI-Port gewählt. Einrichtung: "
+                          L"docs/07-neue-funktionen.md");
+        rowLabel(L"MIDI-Port", help);
+    }
+    beginSegments();
+    {
+        std::wstring label = tempoBridge_.isOpen()
+            ? tempoBridge_.openPortName() : std::wstring(L"keiner");
+        if (label.size() > 22)
+            label = label.substr(0, 21) + L"…";
+        segment(label.c_str(), HitTarget::tempoPortNext, tempoBridge_.isOpen());
+        segment(L"Verbindung testen", HitTarget::tempoPortTest, false,
+                tempoBridge_.isOpen());
+    }
+    endRow();
 }
 
 } // namespace keydock

@@ -99,7 +99,20 @@ void Settings::load()
     opacityPercent = num("opacityPercent", opacityPercent);
     showCamelot    = num("showCamelot", 1) != 0;
     detailsOpen    = num("detailsOpen", 0) != 0;
-    captureSeconds = static_cast<float>(num("captureSeconds", 30));
+    captureSeconds  = static_cast<float>(num("captureSeconds", 30));
+    lookbackSeconds = static_cast<float>(num("lookbackSeconds", 0));
+
+    if (raw_.count("tempoPort"))
+    {
+        const auto& utf8 = raw_["tempoPort"];
+        const int n = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
+        if (n > 1)
+        {
+            tempoPortName.assign(static_cast<size_t>(n - 1), L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1,
+                                tempoPortName.data(), n);
+        }
+    }
 
     if (raw_.count("themeName"))   theme.name       = raw_["themeName"];
     if (raw_.count("background"))  theme.background = parseColour(raw_["background"], theme.background);
@@ -115,6 +128,8 @@ void Settings::load()
     if (scalePercent > 200) scalePercent = 200;
     if (opacityPercent < 40)  opacityPercent = 40;
     if (opacityPercent > 100) opacityPercent = 100;
+    if (lookbackSeconds < 0.0f)  lookbackSeconds = 0.0f;
+    if (lookbackSeconds > 60.0f) lookbackSeconds = 60.0f;
 }
 
 void Settings::save() const
@@ -149,7 +164,16 @@ void Settings::save() const
     out << "opacityPercent=" << opacityPercent << "\n";
     out << "showCamelot="    << (showCamelot ? 1 : 0) << "\n";
     out << "detailsOpen="    << (detailsOpen ? 1 : 0) << "\n";
-    out << "captureSeconds=" << static_cast<int>(captureSeconds) << "\n";
+    out << "captureSeconds="  << static_cast<int>(captureSeconds)  << "\n";
+    out << "lookbackSeconds=" << static_cast<int>(lookbackSeconds) << "\n";
+
+    if (! tempoPortName.empty())
+    {
+        char utf8[512] = {};
+        if (WideCharToMultiByte(CP_UTF8, 0, tempoPortName.c_str(), -1,
+                                utf8, sizeof(utf8), nullptr, nullptr) > 0)
+            out << "tempoPort=" << utf8 << "\n";
+    }
     out << "themeName="      << theme.name     << "\n";
     out << "background="     << hex(theme.background) << "\n";
     out << "text="           << hex(theme.text)       << "\n";

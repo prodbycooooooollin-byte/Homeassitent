@@ -21,7 +21,7 @@ constexpr UINT    kTimerId     = 1;
 constexpr int     kBarHeightDip     = 40;
 // Measured against what paintDetails actually lays out:
 //   10 padding + 3 section headers (15) + 8 rows (30) + footer (~50).
-constexpr int     kDetailHeightDip  = 350;
+constexpr int     kDetailHeightDip  = 610;
 constexpr int     kMinWidthDip      = 300;
 constexpr int     kMaxWidthDip      = 900;
 
@@ -94,6 +94,11 @@ bool OverlayWindow::create(HINSTANCE instance)
 
     applyOpacity();
 
+    // Tempo handover needs a MIDI port the FL Studio script listens on.
+    // Silently unavailable when none is configured; the panel says so.
+    if (! settings_.tempoPortName.empty())
+        tempoBridge_.open(settings_.tempoPortName);
+
     tracker_.setOverlayWindow(hwnd_);
     tracker_.onHostChanged = [this]
     {
@@ -121,6 +126,23 @@ void OverlayWindow::applyOpacity()
     const int percent = std::clamp(settings_.opacityPercent, 40, 100);
     SetLayeredWindowAttributes(hwnd_, 0,
                                static_cast<BYTE>(percent * 255 / 100), LWA_ALPHA);
+}
+
+void OverlayWindow::showToast(const std::wstring& text, int milliseconds)
+{
+    toast_      = text;
+    toastUntil_ = GetTickCount() + static_cast<DWORD>(milliseconds);
+    requestRepaint();
+}
+
+void OverlayWindow::sendTargetKey()
+{
+    InstanceInfo info;
+    if (! currentInstance(info))
+        return;
+    server_.sendCommand(info.hello.instanceId, ipc::CommandId::setTargetKey,
+                        0.0f, static_cast<float>(targetTonic_),
+                        targetIsMinor_ ? 1 : 0);
 }
 
 void OverlayWindow::requestRepaint()
@@ -252,6 +274,11 @@ LRESULT OverlayWindow::handleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
         case WM_TIMER:
             refreshPlacement();
+            if (! toast_.empty() && GetTickCount() > toastUntil_)
+            {
+                toast_.clear();
+                requestRepaint();
+            }
             return 0;
 
         case WM_APP + 1:          // host window moved / foreground changed
@@ -408,10 +435,11 @@ void OverlayWindow::activate(HitTarget target)
     InstanceInfo info;
     const bool have = currentInstance(info);
 
-    const auto send = [&](ipc::CommandId id, float param)
+    const auto send = [&](ipc::CommandId id, float param0,
+                          float param1 = 0.0f, int32_t param2 = 0)
     {
         if (have)
-            server_.sendCommand(info.hello.instanceId, id, param);
+            server_.sendCommand(info.hello.instanceId, id, param0, param1, param2);
     };
 
     const auto setLength = [&](float seconds)
@@ -575,6 +603,204 @@ void OverlayWindow::activate(HitTarget target)
             settings_.save();
             applyOpacity();
             break;
+
+        // ---- Rückblick ----------------------------------------------
+        case HitTarget::lookbackOff:
+        case HitTarget::lookback15:
+        case HitTarget::lookback30:
+        case HitTarget::lookback60:
+        {
+            const float seconds = target == HitTarget::lookback15 ? 15.0f
+                                : target == HitTarget::lookback30 ? 30.0f
+                                : target == HitTarget::lookback60 ? 60.0f : 0.0f;
+            settings_.lookbackSeconds = seconds;
+            settings_.save();
+            send(ipc::CommandId::setLookbackSeconds, seconds);
+            break;
+        }
+
+        case HitTarget::lookbackTake:
+        {
+            if (! have || info.edit.lookbackEnabled == 0)
+            {
+                showToast(L"Rückblick ist ausgeschaltet");
+                break;
+            }
+            if (info.edit.lookbackAvailableSeconds < 4.0f)
+            {
+                showToast(L"Zu wenig aufgezeichnetes Audio");
+                break;
+            }
+            send(ipc::CommandId::analyseLookback, info.edit.lookbackAvailableSeconds);
+            break;
+        }
+
+        case HitTarget::lookbackClear:
+            send(ipc::CommandId::clearLookback, 0.0f);
+            break;
+
+        // ---- Zieltonart ----------------------------------------------
+        case HitTarget::targetKeyPrev:
+        case HitTarget::targetKeyNext:
+        {
+            const int step = target == HitTarget::targetKeyNext ? 1 : 11;
+            targetTonic_ = targetTonic_ < 0 ? 0 : (targetTonic_ + step) % 12;
+            sendTargetKey();
+            break;
+        }
+        case HitTarget::targetModeToggle:
+            targetIsMinor_ = ! targetIsMinor_;
+            if (targetTonic_ >= 0)
+                sendTargetKey();
+            break;
+        case HitTarget::targetClear:
+            targetTonic_ = -1;
+            sendTargetKey();
+            break;
+        case HitTarget::directionToggle:
+            send(ipc::CommandId::toggleDirection, 0.0f);
+            break;
+
+        // ---- Ausgangstonart von Hand ---------------------------------
+        case HitTarget::sourceKeyPrev:
+        case HitTarget::sourceKeyNext:
+        {
+            if (! have)
+                break;
+            const int current = info.edit.sourceTonic < 0 ? 0 : info.edit.sourceTonic;
+            const int step = target == HitTarget::sourceKeyNext ? 1 : 11;
+            server_.sendCommand(info.hello.instanceId,
+                                ipc::CommandId::setSourceKeyOverride, 0.0f,
+                                static_cast<float>((current + step) % 12),
+                                info.edit.sourceIsMinor != 0 ? 1 : 0);
+            break;
+        }
+        case HitTarget::sourceModeToggle:
+            if (have)
+                server_.sendCommand(info.hello.instanceId,
+                                    ipc::CommandId::setSourceKeyOverride, 0.0f,
+                                    static_cast<float>(info.edit.sourceTonic),
+                                    info.edit.sourceIsMinor != 0 ? 0 : 1);
+            break;
+        case HitTarget::sourceKeyAuto:
+            if (have)
+                server_.sendCommand(info.hello.instanceId,
+                                    ipc::CommandId::setSourceKeyOverride,
+                                    0.0f, -1.0f, 0);
+            break;
+
+        // ---- Feinstimmung ---------------------------------------------
+        case HitTarget::tuningApply:
+            send(ipc::CommandId::setApplyTuning, 0.0f, 0.0f, 1);
+            break;
+        case HitTarget::tuningOff:
+            send(ipc::CommandId::setApplyTuning, 0.0f, 0.0f, 0);
+            break;
+        case HitTarget::centsDown:
+        case HitTarget::centsUp:
+        {
+            if (! have)
+                break;
+            const float step = target == HitTarget::centsUp ? 1.0f : -1.0f;
+            send(ipc::CommandId::setManualCents, info.edit.manualCents + step);
+            break;
+        }
+        case HitTarget::formantsToggle:
+            if (have)
+                send(ipc::CommandId::setPreserveFormants, 0.0f, 0.0f,
+                     info.edit.preserveFormants != 0 ? 0 : 1);
+            break;
+
+        // ---- Vorhören und Export --------------------------------------
+        case HitTarget::previewOff:
+            send(ipc::CommandId::setPreviewMode, 0.0f, 0.0f, 0);
+            break;
+        case HitTarget::previewOriginal:
+            send(ipc::CommandId::setPreviewMode, 0.0f, 0.0f, 1);
+            break;
+        case HitTarget::previewEdited:
+            send(ipc::CommandId::setPreviewMode, 0.0f, 0.0f, 2);
+            break;
+        case HitTarget::exportWav:
+            send(ipc::CommandId::exportWav, 0.0f);
+            showToast(L"Exportiere …", 1500);
+            break;
+        case HitTarget::editReset:
+            targetTonic_ = -1;
+            send(ipc::CommandId::resetEdits, 0.0f);
+            break;
+
+        // ---- Tempo an FL Studio übergeben ------------------------------
+        case HitTarget::applyTempo:
+        {
+            if (! have || ! info.haveResult || info.result.valid == 0
+                || info.result.bpm <= 0.0f)
+            {
+                showToast(L"Kein gültiges Tempo");
+                break;
+            }
+            if (! tempoBridge_.isOpen())
+            {
+                showToast(L"Kein MIDI-Port – siehe Einstellungen", 3600);
+                break;
+            }
+
+            // The displayed value, including a half/double choice the user
+            // made: what you see is what FL Studio gets.
+            const double bpm = info.result.bpm * bpmDisplayFactor_;
+            const auto error = tempoBridge_.sendTempo(bpm);
+            if (error.empty())
+            {
+                wchar_t text[64];
+                std::swprintf(text, 64, L"Projekttempo → %.2f BPM", bpm);
+                showToast(text);
+            }
+            else
+            {
+                showToast(widenUtf8(error), 4000);
+            }
+            break;
+        }
+
+        case HitTarget::tempoPortNext:
+        {
+            const auto ports = TempoBridge::availablePorts();
+            if (ports.empty())
+            {
+                showToast(L"Kein MIDI-Ausgang gefunden", 3600);
+                break;
+            }
+            size_t index = ports.size();   // one past the end means "none"
+            for (size_t i = 0; i < ports.size(); ++i)
+                if (ports[i].name == settings_.tempoPortName)
+                    index = i;
+
+            // Cycle through the ports and back to "none".
+            index = (index + 1) % (ports.size() + 1);
+            settings_.tempoPortName = index < ports.size() ? ports[index].name
+                                                           : std::wstring {};
+            settings_.save();
+
+            if (settings_.tempoPortName.empty())
+                tempoBridge_.close();
+            else if (! tempoBridge_.open(settings_.tempoPortName))
+                showToast(L"MIDI-Port ließ sich nicht öffnen", 3600);
+            break;
+        }
+
+        case HitTarget::tempoPortTest:
+        {
+            if (! tempoBridge_.isOpen())
+            {
+                showToast(L"Kein MIDI-Port gewählt", 3000);
+                break;
+            }
+            const auto error = tempoBridge_.sendPing();
+            showToast(error.empty()
+                          ? L"Ping gesendet – FL Studio sollte „KeyDock verbunden“ zeigen"
+                          : widenUtf8(error), 4000);
+            break;
+        }
 
         case HitTarget::instancePicker:
         {

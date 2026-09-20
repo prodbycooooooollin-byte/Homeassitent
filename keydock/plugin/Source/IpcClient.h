@@ -31,6 +31,7 @@ public:
 
     void sendState(const ipc::StateMsg& msg);
     void sendResult(const ipc::ResultMsg& msg);
+    void sendEditState(const ipc::EditStateMsg& msg);
 
     bool isConnected() const noexcept { return connected_.load(); }
 

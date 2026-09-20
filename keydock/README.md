@@ -19,6 +19,7 @@ Browserwechsel, ohne großes Pluginfenster.
 | `plugin/` | VST3-Analyse-Effekt (JUCE 8). Reicht Audio unverändert durch. |
 | `overlay/` | Rahmenlose Win32-Begleitanwendung, die am FL-Hauptfenster hängt. |
 | `cli/` | `keydock-analyze` — WAV-Dateien mit derselben Engine prüfen, ohne FL Studio. |
+| `integration/` | FL-Studio-MIDI-Skript für die Tempo-Übergabe. |
 | `shared/` | IPC-Protokoll, von beiden Seiten genutzt. |
 | `docs/` | Machbarkeit, Architektur, Build, Einrichtung, Teststatus, Lizenzen. |
 
@@ -76,6 +77,8 @@ Eigene Dateien gegenprüfen, ohne VST3-Build:
    Projektvorlage, Overlay positionieren
 5. [Teststatus](docs/05-tests.md) — **getestet vs. ungeprüft, sauber getrennt**
 6. [Lizenzlage](docs/06-lizenzen.md) — JUCE, VST 3 SDK, Essentia
+7. [Neue Funktionen](docs/07-neue-funktionen.md) — Zieltonart, Rückblick,
+   Feinstimmung, Tempo-Übergabe samt Einrichtung
 
 ## Was KeyDock ehrlich *nicht* kann
 

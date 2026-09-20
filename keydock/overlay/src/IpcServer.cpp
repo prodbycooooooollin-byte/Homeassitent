@@ -162,6 +162,25 @@ void IpcServer::handleMessage(HANDLE pipe, const uint8_t* data, DWORD bytes,
             break;
         }
 
+        case ipc::MsgType::editState:
+        {
+            if (header->payloadBytes != sizeof(ipc::EditStateMsg))
+                return;
+            ipc::EditStateMsg edit {};
+            std::memcpy(&edit, payload, sizeof(edit));
+            edit.sourceLabel[sizeof(edit.sourceLabel) - 1]         = '\0';
+            edit.tuningNote[sizeof(edit.tuningNote) - 1]           = '\0';
+            edit.planExplanation[sizeof(edit.planExplanation) - 1] = '\0';
+            edit.lastExportPath[sizeof(edit.lastExportPath) - 1]   = '\0';
+            edit.lastExportError[sizeof(edit.lastExportError) - 1] = '\0';
+
+            auto& info = instances_[edit.instanceId];
+            info.edit      = edit;
+            info.haveEdit  = true;
+            info.lastSeen  = now;
+            break;
+        }
+
         case ipc::MsgType::goodbye:
         {
             if (boundId != 0)
@@ -256,12 +275,15 @@ void IpcServer::setPreferredInstance(uint64_t id)
     preferred_.store(id);
 }
 
-void IpcServer::sendCommand(uint64_t instanceId, ipc::CommandId id, float param0)
+void IpcServer::sendCommand(uint64_t instanceId, ipc::CommandId id,
+                            float param0, float param1, int32_t param2)
 {
     ipc::CommandMsg cmd {};
     cmd.targetInstanceId = instanceId;
     cmd.commandId        = static_cast<uint32_t>(id);
     cmd.param0           = param0;
+    cmd.param1           = param1;
+    cmd.param2           = param2;
 
     uint8_t buffer[sizeof(ipc::Header) + sizeof(ipc::CommandMsg)];
     auto* header = reinterpret_cast<ipc::Header*>(buffer);

@@ -76,6 +76,11 @@ void IpcClient::sendResult(const ipc::ResultMsg& msg)
     enqueue(ipc::MsgType::result, &msg, sizeof(msg));
 }
 
+void IpcClient::sendEditState(const ipc::EditStateMsg& msg)
+{
+    enqueue(ipc::MsgType::editState, &msg, sizeof(msg));
+}
+
 #if defined(_WIN32)
 
 void IpcClient::closeConnection()

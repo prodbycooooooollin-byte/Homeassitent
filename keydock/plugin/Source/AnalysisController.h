@@ -65,6 +65,18 @@ public:
     /// Used to push updates to the overlay; must not block.
     std::function<void()> onUpdate;
 
+    /// Receives analysis-rate mono audio on the worker thread, for the
+    /// lookback buffer. Set before prepare(); must not block.
+    std::function<void(const float*, size_t)> onAnalysisRateAudio;
+
+    /// Keeps the audio thread pushing into the ring buffer even when no
+    /// analysis is running, so the lookback buffer can be filled.
+    void setLookbackActive(bool active) { lookbackActive_.store(active); }
+
+    /// The audio that was just analysed, at the analysis rate, so it can be
+    /// handed to the sample editor. Empty when no capture has completed.
+    std::vector<float> lastCapturedAudio() const;
+
     /// Restores a result that was saved with the project.
     void restoreResult(const AnalysisResult& r, uint32_t analysisId);
 
@@ -95,6 +107,13 @@ private:
     std::atomic<bool>       capturing_    { false };
     std::atomic<bool>       stopRequested_{ false };
     std::atomic<bool>       resetRequested_{ false };
+    std::atomic<bool>       lookbackActive_{ false };
+
+    Resampler               lookbackResampler_;
+    std::vector<float>      lookbackScratch_;
+
+    mutable std::mutex      capturedMutex_;
+    std::vector<float>      lastCaptured_;
 
     /// Progressive evaluation: re-analyse every so often and stop as soon as
     /// two consecutive evaluations agree. Waiting for a fixed duration made

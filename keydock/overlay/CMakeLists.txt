@@ -4,7 +4,8 @@ add_executable(KeyDockOverlay WIN32
     src/OverlayRender.cpp
     src/HostTracker.cpp
     src/IpcServer.cpp
-    src/Settings.cpp)
+    src/Settings.cpp
+    src/TempoBridge.cpp)
 
 target_include_directories(KeyDockOverlay PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -12,7 +13,7 @@ target_include_directories(KeyDockOverlay PRIVATE
 
 target_link_libraries(KeyDockOverlay PRIVATE
     keydock_engine
-    user32 gdi32 shell32 psapi dwmapi)
+    user32 gdi32 shell32 psapi dwmapi winmm)
 
 target_compile_features(KeyDockOverlay PRIVATE cxx_std_17)
 

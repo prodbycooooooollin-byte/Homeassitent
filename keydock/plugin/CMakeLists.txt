@@ -33,6 +33,7 @@ target_sources(KeyDockPlugin PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/AnalysisController.cpp
+    Source/SampleEditor.cpp
     Source/IpcClient.cpp
     Source/OverlayLauncher.cpp)
 

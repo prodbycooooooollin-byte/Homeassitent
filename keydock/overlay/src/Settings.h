@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <map>
+#include <cstdint>
 #include <string>
 
 namespace keydock
@@ -46,6 +47,14 @@ struct Settings
     /// Upper bound, not a fixed duration: the analysis stops as soon as the
     /// result is stable.
     float  captureSeconds = 30.0f;
+
+    /// Rolling history length in seconds; 0 keeps the feature off, which is
+    /// the default so an existing project behaves exactly as before.
+    float  lookbackSeconds = 0.0f;
+
+    /// MIDI output that the FL Studio tempo script listens on. Empty means
+    /// tempo handover is unavailable and the UI says so.
+    std::wstring tempoPortName;
 
     Theme  theme;
 

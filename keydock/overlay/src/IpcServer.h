@@ -31,7 +31,9 @@ struct InstanceInfo
     ipc::Hello      hello {};
     ipc::StateMsg   state {};
     ipc::ResultMsg  result {};
+    ipc::EditStateMsg edit {};
     bool            haveResult = false;
+    bool            haveEdit   = false;
     bool            connected  = true;
     std::chrono::steady_clock::time_point lastSeen {};
     std::chrono::steady_clock::time_point lastAudio {};
@@ -55,7 +57,8 @@ public:
     void setPreferredInstance(uint64_t id);
     uint64_t preferredInstance() const { return preferred_.load(); }
 
-    void sendCommand(uint64_t instanceId, ipc::CommandId id, float param0);
+    void sendCommand(uint64_t instanceId, ipc::CommandId id,
+                     float param0 = 0.0f, float param1 = 0.0f, int32_t param2 = 0);
 
     /// Raised on a worker thread whenever state or a result arrives.
     std::function<void()> onChanged;

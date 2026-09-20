@@ -40,6 +40,10 @@ void AnalysisController::prepare(double sampleRate, int maxBlockSize)
     ring_.prepare(static_cast<size_t>(sampleRate * kRingSeconds));
     drainScratch_.assign(static_cast<size_t>(sampleRate * 0.25), 0.0f);
 
+    lookbackResampler_.reset(sampleRate_.load(), kAnalysisSampleRate);
+    lookbackScratch_.clear();
+    lookbackScratch_.reserve(static_cast<size_t>(kAnalysisSampleRate * 0.5));
+
     // A sample-rate change invalidates anything captured at the old rate.
     cancel();
 }
@@ -74,7 +78,10 @@ void AnalysisController::pushAudio(const float* const* channels,
     const float previous = audioPeak_.load(std::memory_order_relaxed);
     audioPeak_.store(std::max(peak, previous * 0.92f), std::memory_order_relaxed);
 
-    if (capturing_.load(std::memory_order_relaxed))
+    // Also push while idle when the lookback buffer wants audio; the worker
+    // decides where the samples go.
+    if (capturing_.load(std::memory_order_relaxed)
+        || lookbackActive_.load(std::memory_order_relaxed))
         ring_.push(monoScratch_.data(), static_cast<size_t>(limit));
 }
 
@@ -111,6 +118,12 @@ void AnalysisController::reset()
 {
     resetRequested_.store(true);
     cancel();
+}
+
+std::vector<float> AnalysisController::lastCapturedAudio() const
+{
+    std::lock_guard<std::mutex> lock(capturedMutex_);
+    return lastCaptured_;
 }
 
 AnalysisController::Snapshot AnalysisController::snapshot() const
@@ -225,8 +238,24 @@ void AnalysisController::workerLoop()
             continue;
         }
 
+        // ---- Feed the lookback buffer while idle -----------------------
         if (! capturing_.load())
+        {
+            if (lookbackActive_.load() && onAnalysisRateAudio)
+            {
+                while (true)
+                {
+                    const size_t n = ring_.pop(drainScratch_.data(), drainScratch_.size());
+                    if (n == 0)
+                        break;
+                    lookbackScratch_.clear();
+                    lookbackResampler_.process(drainScratch_.data(), n, lookbackScratch_);
+                    if (! lookbackScratch_.empty())
+                        onAnalysisRateAudio(lookbackScratch_.data(), lookbackScratch_.size());
+                }
+            }
             continue;
+        }
 
         // ---- Drain the ring buffer into the engine ---------------------
         size_t drained = 0;
@@ -236,6 +265,16 @@ void AnalysisController::workerLoop()
             if (n == 0)
                 break;
             drained += n;
+
+            // The same samples also keep the lookback buffer current, so a
+            // recording and the rolling history never disagree.
+            if (lookbackActive_.load() && onAnalysisRateAudio)
+            {
+                lookbackScratch_.clear();
+                lookbackResampler_.process(drainScratch_.data(), n, lookbackScratch_);
+                if (! lookbackScratch_.empty())
+                    onAnalysisRateAudio(lookbackScratch_.data(), lookbackScratch_.size());
+            }
 
             if (! sawAudio)
             {
@@ -331,6 +370,13 @@ void AnalysisController::workerLoop()
         // A newer request arrived while we were analysing: throw this away.
         if (requestedId_.load() != activeId)
             continue;
+
+        {
+            // Keep the analysed audio so the sample editor can work on
+            // exactly what was measured, not a fresh recording of it.
+            std::lock_guard<std::mutex> lock(capturedMutex_);
+            lastCaptured_ = engine_.capturedAudio();
+        }
 
         state.status          = result.valid ? ipc::Status::haveResult
                                              : ipc::Status::unsuitable;

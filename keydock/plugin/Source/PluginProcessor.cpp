@@ -69,6 +69,10 @@ KeyDockProcessor::KeyDockProcessor()
     instanceId_    = (static_cast<uint64_t>(currentProcessId()) << 32) | instanceIndex_;
 
     controller_.onUpdate = [this] { pushStateToOverlay(); };
+    controller_.onAnalysisRateAudio = [this](const float* data, size_t count)
+    {
+        editor_.appendToLookback(data, count);
+    };
 
     ipc::Hello hello {};
     hello.instanceId     = instanceId_;
@@ -106,8 +110,11 @@ KeyDockProcessor::~KeyDockProcessor()
 void KeyDockProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     // Analysis is passive: the plugin adds no latency to the signal path.
+    // Analysis is passive and the preview replaces the output rather than
+    // processing it, so neither adds latency.
     setLatencySamples(0);
     controller_.prepare(sampleRate, samplesPerBlock);
+    editor_.prepare(sampleRate, samplesPerBlock);
 }
 
 void KeyDockProcessor::releaseResources()
@@ -151,6 +158,18 @@ void KeyDockProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
         }
     }
 
+    // Preview is the only thing that may change what leaves the plugin, and
+    // only while the user has switched it on. It replaces the output rather
+    // than processing it, so the analysis path must not see it: capturing the
+    // preview would fold an edit back into the next measurement.
+    if (editor_.previewActive())
+    {
+        editor_.renderPreview(buffer.getArrayOfWritePointers(),
+                              buffer.getNumChannels(),
+                              buffer.getNumSamples());
+        return;
+    }
+
     controller_.pushAudio(buffer.getArrayOfReadPointers(),
                           buffer.getNumChannels(),
                           buffer.getNumSamples());
@@ -183,13 +202,70 @@ void KeyDockProcessor::handleCommand(const ipc::CommandMsg& cmd)
         case ipc::CommandId::stopCapture:   requestStop();               break;
         case ipc::CommandId::cancel:        controller_.cancel();        break;
         case ipc::CommandId::reset:         requestReset();              break;
+
+        case ipc::CommandId::setLookbackSeconds:
+            editor_.setLookbackSeconds(cmd.param0);
+            controller_.setLookbackActive(editor_.lookbackEnabled());
+            break;
+        case ipc::CommandId::clearLookback:
+            editor_.clearLookback();
+            break;
+        case ipc::CommandId::analyseLookback:
+            editor_.selectFromLookback(cmd.param0);
+            break;
+
+        case ipc::CommandId::setTargetKey:
+            editor_.setTargetKey(static_cast<int>(cmd.param1), cmd.param2 != 0);
+            break;
+        case ipc::CommandId::toggleDirection:
+            editor_.toggleDirection();
+            break;
+        case ipc::CommandId::setApplyTuning:
+            editor_.setApplyTuning(cmd.param2 != 0);
+            break;
+        case ipc::CommandId::setManualCents:
+            editor_.setManualCents(cmd.param0);
+            break;
+        case ipc::CommandId::setPreserveFormants:
+            editor_.setPreserveFormants(cmd.param2 != 0);
+            break;
+        case ipc::CommandId::setSourceKeyOverride:
+            editor_.setSourceKeyOverride(static_cast<int>(cmd.param1), cmd.param2 != 0);
+            break;
+        case ipc::CommandId::trimSelection:
+            editor_.trimSelection(cmd.param0, cmd.param1);
+            break;
+        case ipc::CommandId::resetEdits:
+            editor_.resetEdits();
+            break;
+        case ipc::CommandId::exportWav:
+            editor_.exportWav();
+            break;
+        case ipc::CommandId::setPreviewMode:
+            editor_.setPreviewMode(static_cast<uint32_t>(cmd.param2));
+            break;
+
         default: break;
     }
+
+    pushEditStateToOverlay();
+}
+
+void KeyDockProcessor::pushEditStateToOverlay()
+{
+    if (! ipc_.isConnected())
+        return;
+
+    ipc::EditStateMsg msg {};
+    msg.instanceId = instanceId_;
+    editor_.fillState(msg);
+    ipc_.sendEditState(msg);
 }
 
 void KeyDockProcessor::timerCallback()
 {
     pushStateToOverlay();
+    pushEditStateToOverlay();
 }
 
 void KeyDockProcessor::pushStateToOverlay()
@@ -215,6 +291,15 @@ void KeyDockProcessor::pushStateToOverlay()
     if (! snap.haveResult || snap.analysisId == lastSentAnalysisId_.load())
         return;
     lastSentAnalysisId_.store(snap.analysisId);
+
+    // A completed capture becomes the sample the editor works on, so a
+    // transpose acts on exactly the audio that was measured.
+    if (snap.result.valid)
+    {
+        auto captured = controller_.lastCapturedAudio();
+        if (! captured.empty())
+            editor_.selectFromCapture(captured, snap.result.analysedSeconds);
+    }
 
     const auto& r = snap.result;
 

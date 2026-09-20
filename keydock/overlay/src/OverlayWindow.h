@@ -22,6 +22,7 @@
 
 #include "HostTracker.h"
 #include "IpcServer.h"
+#include "TempoBridge.h"
 #include "Settings.h"
 
 #include <string>
@@ -62,6 +63,23 @@ private:
         themePrev, themeNext,
         opacityDown, opacityUp,
         resetPosition,
+
+        // Rückblick
+        lookbackOff, lookback15, lookback30, lookback60,
+        lookbackTake, lookbackClear,
+
+        // Tonhöhe / Sample
+        targetKeyPrev, targetKeyNext, targetModeToggle, targetClear,
+        directionToggle,
+        tuningApply, tuningOff,
+        centsDown, centsUp,
+        formantsToggle,
+        previewOff, previewOriginal, previewEdited,
+        exportWav, editReset,
+        sourceKeyPrev, sourceKeyNext, sourceModeToggle, sourceKeyAuto,
+
+        // Tempo-Übernahme
+        applyTempo, tempoPortNext, tempoPortTest,
     };
 
     struct HitZone
@@ -105,6 +123,7 @@ private:
     IpcServer& server_;
     Settings&  settings_;
     HostTracker tracker_;
+    TempoBridge tempoBridge_;
 
     HWND  hwnd_ = nullptr;
     UINT  dpi_  = 96;
@@ -130,6 +149,19 @@ private:
     /// Registered per row while painting the settings panel, so hovering a
     /// control can explain what it does instead of leaving the label cryptic.
     std::wstring hoverHelp_;
+
+    /// Target key the user is dialling in, before it is sent to the plugin.
+    int   targetTonic_ = -1;
+    bool  targetIsMinor_ = false;
+
+    /// Short confirmation under the bar, e.g. after a tempo handover.
+    std::wstring toast_;
+    DWORD        toastUntil_ = 0;
+    void showToast(const std::wstring& text, int milliseconds = 2600);
+
+    void  paintSampleSection(HDC dc, int& y, int left, int right,
+                             const InstanceInfo* info);
+    void  sendTargetKey();
 };
 
 } // namespace keydock
