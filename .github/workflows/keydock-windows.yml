@@ -5,7 +5,9 @@ name: KeyDock Windows Build
 # without a local toolchain.
 on:
   push:
-    branches: ["**"]
+    # Only the long-lived branches here; pull_request already covers feature
+    # branches, and running both would build every push twice.
+    branches: [main, master]
     paths:
       - "keydock/**"
       - ".github/workflows/keydock-windows.yml"
@@ -36,7 +38,9 @@ jobs:
 
   windows:
     name: VST3 + overlay (Windows/MSVC)
-    runs-on: windows-latest
+    # Pinned: windows-latest no longer carries a Visual Studio 2022 instance,
+    # so CMake's VS 17 generator cannot find a toolchain there.
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +50,20 @@ jobs:
         with:
           path: keydock/build/_deps
           key: juce-${{ runner.os }}-8.0.8
+
+      # Printed unconditionally: if the generator ever fails to find a
+      # toolchain again, the log says exactly what the image provides.
+      - name: Toolchain diagnostics
+        shell: pwsh
+        run: |
+          cmake --version
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            & $vswhere -all -products * -format value -property displayName
+            & $vswhere -all -products * -format value -property installationVersion
+          } else {
+            Write-Host "vswhere.exe not present on this image"
+          }
 
       - name: Configure
         run: cmake -B build -G "Visual Studio 17 2022" -A x64
