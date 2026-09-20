@@ -46,7 +46,21 @@ ctest --test-dir build --output-on-failure
 Das ist der Weg, auf dem die in `docs/05-tests.md` dokumentierten Ergebnisse
 entstanden sind.
 
-## 3.4 Installation
+## 3.4 Das Prüfwerkzeug `keydock-analyze`
+
+Wird von beiden Builds oben mitgebaut (`KEYDOCK_BUILD_CLI`, standardmäßig an):
+
+```
+build/cli/keydock-analyze            (Linux/macOS)
+build\cli\Release\keydock-analyze.exe  (Windows)
+```
+
+Es nutzt **exakt dieselbe Engine** wie das Plugin und liest WAV-Dateien
+(PCM 8/16/24/32 Bit und Float 32/64 Bit, mono oder mehrkanalig, beliebige
+Samplerate). Damit lässt sich die Analysequalität prüfen, bevor überhaupt ein
+VST3 gebaut ist. Siehe `docs/05-tests.md`, Abschnitt 5.2.
+
+## 3.5 Installation
 
 1. `KeyDock.vst3` **und** `KeyDockOverlay.exe` in **dasselbe** Verzeichnis
    kopieren, üblicherweise:
@@ -64,7 +78,7 @@ entstanden sind.
 
 Einrichtung in FL Studio: `docs/04-einrichtung-fl-studio.md`.
 
-## 3.5 Bekannte Build-Hinweise
+## 3.6 Bekannte Build-Hinweise
 
 - **Erster Build dauert lange**, weil JUCE geklont und übersetzt wird.
 - Der Overlay-Build erzeugt bewusst eine **GUI-Anwendung ohne Konsolenfenster**

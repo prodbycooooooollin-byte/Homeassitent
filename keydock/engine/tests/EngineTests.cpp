@@ -134,6 +134,23 @@ int main()
                      + (octave ? "half/double" : "no") + ")", describe(r));
     }
     {
+        // Held chords with no percussion: the onset function is almost empty,
+        // so the metrical level is decided by the prior rather than by the
+        // audio. That must not be reported as a confident tempo.
+        auto pad = test::renderProgression(0, false, 120.0, 20.0, hostRate);
+        auto r = runThroughEngine(engine, pad, hostRate, 20.0f);
+
+        float strongestAlt = 0.0f;
+        for (const auto& alt : r.tempo.alternates)
+            strongestAlt = std::max(strongestAlt, alt.salience);
+
+        check(r.tempo.confidence == Confidence::none
+              || r.tempo.confidence == Confidence::low,
+              "chords without drums never yield a confident tempo", describe(r));
+        check(strongestAlt <= 1.0f || ! r.tempo.note.empty(),
+              "a better-fitting alternate is explained, not hidden", r.tempo.note);
+    }
+    {
         // Same audio tempo, wildly different "project tempo": the engine has
         // no access to a host tempo at all, which is the point.
         auto audio = test::mix(test::renderProgression(0, false, 128.0, 20.0, hostRate),

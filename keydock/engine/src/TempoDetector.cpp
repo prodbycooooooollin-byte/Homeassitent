@@ -9,6 +9,13 @@ namespace
 constexpr double kMinBpm = 50.0;
 constexpr double kMaxBpm = 200.0;
 
+// How much better a metrically related tempo must fit before the chosen level
+// counts as unsupported. Measured on the test corpus: a real mix with drums
+// produces a near-tie (1.01) at its correct tempo, while held chords with no
+// percussion produce 1.53 at a level only the prior favours. 1.15 separates
+// the two with room on both sides.
+constexpr float kAlternateOutfitsChosen = 1.15f;
+
 float interpolateAt(const std::vector<float>& v, double x)
 {
     if (x <= 0.0 || x >= static_cast<double>(v.size()) - 1.0)
@@ -309,11 +316,33 @@ TempoResult TempoDetector::analyse(const std::vector<float>& mono)
     else
         result.confidence = Confidence::none;
 
-    if (result.octaveRatio > 0.85f)
+    // The contrast measure deliberately ignores metrically related tempi, so
+    // on its own it cannot see that a *related* level fits the signal better
+    // than the one the prior picked. Material without percussion - pads, held
+    // chords - lands exactly there, and would otherwise be reported with a
+    // confidence the evidence does not support.
+    float strongestAlternate = 0.0f;
+    for (const auto& alt : result.alternates)
+        strongestAlternate = std::max(strongestAlternate, alt.salience);
+
+    const auto cap = [&result](Confidence ceiling)
     {
+        if (result.confidence > ceiling)
+            result.confidence = ceiling;
+    };
+
+    if (strongestAlternate > kAlternateOutfitsChosen)
+    {
+        // A related level fits the onsets better than the chosen one: only the
+        // tempo prior separates them, which is not evidence.
+        cap(Confidence::low);
+        result.note = "Metrische Ebene unklar - eine Alternative passt besser "
+                      "zum Signal als der angezeigte Wert.";
+    }
+    else if (strongestAlternate > 0.85f || result.octaveRatio > 0.85f)
+    {
+        cap(Confidence::medium);
         result.note = "Half-/Double-Time ist mehrdeutig - Alternative pruefen.";
-        if (result.confidence == Confidence::high)
-            result.confidence = Confidence::medium;
     }
     else if (result.confidence == Confidence::none)
     {

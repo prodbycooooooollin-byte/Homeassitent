@@ -11,8 +11,8 @@ Legende:
 
 ## 5.1 Was ich tatsächlich ausgeführt habe
 
-Linux, GCC 13, Release. `ctest`: **2/2 Suiten bestanden, 38 Einzelprüfungen,
-0 Fehler** (25,8 s).
+Linux, GCC 13, Release. `ctest`: **2/2 Suiten bestanden, 40 Einzelprüfungen,
+0 Fehler** (26,8 s).
 
 | # | Prüfung | Status | Ergebnis |
 |---|---|---|---|
@@ -40,10 +40,61 @@ Linux, GCC 13, Release. `ctest`: **2/2 Suiten bestanden, 38 Einzelprüfungen,
 | 22 | Abbruch veröffentlicht nie ein Ergebnis | **A** | auch kein verspätetes |
 | 23 | Manuelles Stoppen wertet das Erfasste aus | **A** | korrekt |
 | 24 | Reset setzt auf „Bereit" zurück | **A** | bestätigt |
+| 25 | Akkorde ohne Drums → nie sicheres Tempo | **A** | auf „unsicher" gedeckelt |
+| 26 | Besser passende Tempo-Alternative wird erklärt | **A** | Hinweistext gesetzt |
 
 Nachvollziehbar mit `ctest --test-dir build --output-on-failure`.
 
-## 5.2 Übersetzt und gelinkt, Verhalten ungeprüft
+## 5.2 Selbst prüfen mit eigenen Dateien — `keydock-analyze`
+
+Der schnellste Weg, die Analysequalität zu beurteilen: exportiere Tracks,
+deren Tonart und Tempo du kennst, und lasse sie durch dieselbe Engine laufen,
+die auch im Plugin steckt — **ohne Windows, ohne FL Studio, ohne VST3-Build**.
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+./build/cli/keydock-analyze meintrack.wav
+```
+
+Mehrere Dateien und eine Tabelle für die Auswertung:
+
+```bash
+./build/cli/keydock-analyze --csv referenzen/*.wav > ergebnisse.csv
+```
+
+Nützliche Optionen:
+
+| Option | Wirkung |
+|---|---|
+| `--seconds N` | nur die ersten N Sekunden auswerten (vergleichbar mit 10/20/30 s im Plugin) |
+| `--offset N` | erst ab Sekunde N beginnen — praktisch, um das Intro zu überspringen |
+| `--csv` | eine Zeile pro Datei statt Bericht |
+
+Empfohlenes Vorgehen: 10–20 Tracks mit bekanntem Key/BPM sammeln, mit `--csv`
+durchlaufen lassen und die Trefferquote zählen. Achte dabei besonders auf die
+Sicherheitsstufe — ein falsches Ergebnis, das als „unsicher" markiert ist,
+verhält sich wie vorgesehen; ein falsches Ergebnis mit „sicher" ist ein Fehler.
+
+Beispielausgabe (aus generierten Referenzsignalen dieses Repos):
+
+```
+datei,tonart,camelot,tonart_sicherheit,bpm,bpm_sicherheit
+t_fsminor_90.wav,F# minor,11A,sicher,89.9,nicht bestimmbar
+t_mix_128.wav,A minor,8A,sicher,127.6,wahrscheinlich
+t_drums_140.wav,,,nicht bestimmbar,139.7,wahrscheinlich
+t_silence.wav,,,nicht bestimmbar,0.0,nicht bestimmbar
+```
+
+Gut ablesbar: reine Drums liefern **kein** Tonart-Ergebnis, Stille liefert gar
+keines, und die Flächen-Datei ohne Perkussion bekommt beim Tempo „unsicher"
+statt einer Scheingenauigkeit.
+
+> **Unterschied zur Liveanalyse:** Das CLI bewertet eine **Datei**. Das Plugin
+> bewertet das **live am Mixer-Slot ankommende** Signal, also inklusive der
+> Effekte darüber. Die beiden können deshalb auseinanderlaufen — das ist
+> gewollt und im Bericht auch so ausgewiesen („Quelle Datei, …").
+
+## 5.3 Übersetzt und gelinkt, Verhalten ungeprüft
 
 Mit `x86_64-w64-mingw32-g++ 13` gegen die echten Windows-Header übersetzt:
 
@@ -58,7 +109,7 @@ Mit `x86_64-w64-mingw32-g++ 13` gegen die echten Windows-Header übersetzt:
 > übersetzt** habe. Rechne dort am ehesten mit kleinen Anpassungen beim ersten
 > Visual-Studio-Build.
 
-## 5.3 Im Host ungeprüft — bitte manuell abnehmen
+## 5.4 Im Host ungeprüft — bitte manuell abnehmen
 
 Konkrete Schritte, jeweils mit dem erwarteten Ergebnis.
 
@@ -144,11 +195,12 @@ funktioniert weiter. Bei der nächsten Analyse startet das Overlay neu.
 **Erwartet:** Kein neues Live-Ergebnis, kein Fenster öffnet sich, Export
 normal schnell.
 
-## 5.4 Bewusst noch nicht gebaut
+## 5.5 Bewusst noch nicht gebaut
 
-- **Dateianalyse** importierter Audiodateien. Das Protokoll hat mit
-  `ResultMsg::sourceIsLive` bereits das Feld, um Live- und Dateiquelle
-  unterscheidbar zu halten; die Funktion selbst fehlt.
+- **Dateianalyse im Plugin/Overlay.** Das Kommandozeilenwerkzeug
+  `keydock-analyze` (Abschnitt 5.2) kann bereits Dateien auswerten, und das
+  Protokoll hält mit `ResultMsg::sourceIsLive` die Quellen auseinander — die
+  Anbindung an die Oberfläche fehlt aber noch.
 - **Energy, Danceability** und ähnliche Zusatzwerte — laut Auftrag erst, wenn
   eine nachvollziehbare Berechnung dafür existiert.
 - **Automatische Übernahme des FL-Studio-Themes.** Dafür ist keine verlässlich
@@ -159,7 +211,7 @@ normal schnell.
 - **Themes als einzelne Dateien speichern/laden.** Aktuell wird das aktive
   Theme in `overlay.cfg` gespeichert; ein Dateibrowser dafür fehlt noch.
 
-## 5.5 Kalibrierung der Sicherheitsangabe
+## 5.6 Kalibrierung der Sicherheitsangabe
 
 Die Sicherheitsangabe ist eine **ordinale Stufe** (sicher / wahrscheinlich /
 unsicher / nicht bestimmbar), **kein Prozentwert** — genau wie gefordert.
@@ -178,6 +230,24 @@ geraten, sondern am Testkorpus gemessen:
 
 Schwellwert **0,72** — mit Abstand zu beiden Gruppen. Oberhalb davon wird
 „sicher" auf „wahrscheinlich" gedeckelt und ein Hinweistext gesetzt.
+
+### Metrische Ebene beim Tempo
+
+Beim Tempo gilt dasselbe Prinzip. Der Kontrastwert ignoriert bewusst
+metrisch verwandte Tempi (halb, doppelt, 2/3, 3/2) — sonst würde jede
+4/4-Figur sich selbst niederkonkurrieren. Dadurch konnte er aber nicht sehen,
+wenn eine *verwandte* Ebene besser zum Signal passt als die vom Tempo-Prior
+gewählte. Gemessen:
+
+| Material | Salienz der besten Alternative |
+|---|---|
+| Vollmix mit Drums, 128 BPM (korrekt erkannt) | 1,01 — praktisch Gleichstand |
+| Akkordfläche ohne Perkussion | 1,53 — Alternative passt klar besser |
+
+Schwellwert **1,15**: darüber wird die Sicherheit auf „unsicher" gedeckelt und
+ein Hinweis gesetzt, denn dann trennt nur noch der Prior die beiden Ebenen —
+und ein Prior ist kein Messwert. Gefunden wurde das beim Testen mit
+`keydock-analyze`, nicht durch die ursprüngliche Testsuite.
 
 Das ist wichtig, weil `i–VI–III–VII` die häufigste Schleife moderner
 Produktionen ist und **tonvorrats-identisch** mit ihrer Dur-Parallele: aus dem

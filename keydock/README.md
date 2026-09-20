@@ -18,6 +18,7 @@ Browserwechsel, ohne großes Pluginfenster.
 | `engine/` | Analyse-Engine. Reines C++17, **keine Abhängigkeiten**, eigene FFT. Plattformunabhängig testbar. |
 | `plugin/` | VST3-Analyse-Effekt (JUCE 8). Reicht Audio unverändert durch. |
 | `overlay/` | Rahmenlose Win32-Begleitanwendung, die am FL-Hauptfenster hängt. |
+| `cli/` | `keydock-analyze` — WAV-Dateien mit derselben Engine prüfen, ohne FL Studio. |
 | `shared/` | IPC-Protokoll, von beiden Seiten genutzt. |
 | `docs/` | Machbarkeit, Architektur, Build, Einrichtung, Teststatus, Lizenzen. |
 
@@ -36,6 +37,12 @@ Nur Engine bauen und testen (jede Plattform):
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
 ctest --test-dir build --output-on-failure
+```
+
+Eigene Dateien gegenprüfen, ohne VST3-Build:
+
+```bash
+./build/cli/keydock-analyze meintrack.wav
 ```
 
 ## Dokumentation
