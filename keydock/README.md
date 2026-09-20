@@ -22,7 +22,27 @@ Browserwechsel, ohne großes Pluginfenster.
 | `shared/` | IPC-Protokoll, von beiden Seiten genutzt. |
 | `docs/` | Machbarkeit, Architektur, Build, Einrichtung, Teststatus, Lizenzen. |
 
-## Schnellstart
+## Fertigen Build herunterladen
+
+Jeder Push baut das Plugin auf echtem Windows mit MSVC. Du brauchst also
+keine lokale Toolchain:
+
+1. Im Repository auf **Actions** → Workflow **KeyDock Windows Build** →
+   den neuesten grünen Lauf öffnen.
+2. Unter **Artifacts** **`KeyDock-Windows-x64`** herunterladen und entpacken.
+3. `KeyDock.vst3` **und** `KeyDockOverlay.exe` gemeinsam nach
+   `C:\Program Files\Common Files\VST3\` kopieren — sie müssen im selben
+   Ordner liegen.
+4. FL Studio: **Options → Manage plugins → Find more plugins**.
+
+Im Archiv liegen außerdem `keydock-analyze.exe`, `EINRICHTUNG.md` und
+`TESTSTATUS.md`.
+
+> Der Windows-Build ist bisher **nie gelaufen**. Der erste Lauf dieses
+> Workflows ist zugleich der erste echte MSVC-Build des Plugins — siehe
+> [docs/05-tests.md](docs/05-tests.md).
+
+## Selbst bauen
 
 ```powershell
 cmake -B build -G "Visual Studio 17 2022" -A x64

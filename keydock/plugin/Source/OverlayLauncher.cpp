@@ -15,29 +15,42 @@ namespace
 {
 /// The overlay ships next to the .vst3 bundle, so it is found relative to the
 /// loaded module rather than through a registry key or the PATH.
+///
+/// On Windows a VST3 is a bundle, so currentApplicationFile points at
+///   <VST3 folder>/KeyDock.vst3/Contents/x86_64-win/KeyDock.vst3
+/// while the overlay sits four levels up, next to the bundle:
+///   <VST3 folder>/KeyDockOverlay.exe
+/// A plain (non-bundle) layout puts it one level up instead, so walk outwards
+/// rather than assuming either shape.
 juce::File overlayFile()
 {
     const auto module = juce::File::getSpecialLocation(
         juce::File::currentApplicationFile);
 
-    // Typical layout:
-    //   <VST3 folder>/KeyDock.vst3/...        (bundle)
-    //   <VST3 folder>/KeyDockOverlay.exe
-    const juce::File candidates[] =
+    juce::File directory = module.getParentDirectory();
+
+    // 5 levels covers the bundle layout (4) with one to spare; stop at the
+    // filesystem root so a malformed path cannot loop.
+    for (int level = 0; level < 5; ++level)
     {
-        module.getParentDirectory().getChildFile("KeyDockOverlay.exe"),
-        module.getChildFile("Contents").getChildFile("x86_64-win")
-              .getChildFile("KeyDockOverlay.exe"),
-        module.getParentDirectory().getParentDirectory()
-              .getChildFile("KeyDockOverlay.exe"),
-    };
+        const auto candidate = directory.getChildFile("KeyDockOverlay.exe");
+        if (candidate.existsAsFile())
+            return candidate;
 
-    for (const auto& f : candidates)
-        if (f.existsAsFile())
-            return f;
+        const auto parent = directory.getParentDirectory();
+        if (parent == directory)
+            break;
+        directory = parent;
+    }
 
-    return candidates[0];
+    // Nothing found: report the documented install location, which is what the
+    // editor shows when it explains that the overlay is missing.
+    auto bundle = module;
+    for (int level = 0; level < 4 && bundle.getParentDirectory() != bundle; ++level)
+        bundle = bundle.getParentDirectory();
+    return bundle.getChildFile("KeyDockOverlay.exe");
 }
+
 } // namespace
 
 std::string OverlayLauncher::expectedExecutablePath()

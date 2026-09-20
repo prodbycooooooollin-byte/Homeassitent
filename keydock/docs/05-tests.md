@@ -103,11 +103,18 @@ Mit `x86_64-w64-mingw32-g++ 13` gegen die echten Windows-Header übersetzt:
 | `KeyDockOverlay.exe` | **B** | Übersetzt **und gelinkt** zu einer echten PE32+-GUI-Binary, warnungsfrei (`-Wall -Wextra`). Nicht ausgeführt. |
 | `HostTracker`, `IpcServer`, `OverlayWindow`, `OverlayRender`, `Settings` | **B** | warnungsfrei übersetzt |
 | `IpcClient`, `AnalysisController` (Windows-Pfad) | **B** | warnungsfrei übersetzt |
-| `PluginProcessor`, `PluginEditor`, `OverlayLauncher` | **C** | brauchen JUCE; **nicht übersetzt**, da JUCE hier nicht gebaut werden konnte |
+| `PluginProcessor`, `PluginEditor`, `OverlayLauncher` | **B** | Gegen JUCE 8.0.8 **fehlerfrei typgeprüft** (`g++ -fsyntax-only`, nativ; JUCE lehnt MinGW ausdrücklich ab). Der `#if defined(_WIN32)`-Zweig im `OverlayLauncher` wurde dabei **nicht** erfasst. |
+| Vollständiger MSVC-Build (VST3-Wrapper, Linker, Bundle) | **C** | Läuft erstmals im GitHub-Actions-Workflow. Bis dessen erster Lauf grün ist, gilt der MSVC-Build als ungeprüft. |
 
-> Die JUCE-abhängigen Dateien sind die einzigen, die ich **überhaupt nicht
-> übersetzt** habe. Rechne dort am ehesten mit kleinen Anpassungen beim ersten
-> Visual-Studio-Build.
+> Die Typprüfung gegen JUCE fand die Pfadauflösung des `OverlayLauncher`
+> als echten Fehler: ein VST3 ist auf Windows ein Bundle, die DLL liegt also in
+> `KeyDock.vst3/Contents/x86_64-win/`. Die Suche ging nur zwei Ebenen hoch, die
+> dokumentierte Installation legt `KeyDockOverlay.exe` aber vier Ebenen höher
+> neben das Bundle — das Overlay wäre nie gefunden worden. Jetzt wird bis zu
+> fünf Ebenen nach außen gesucht, was Bundle- und Flach-Layout abdeckt.
+>
+> Was die Typprüfung **nicht** abdeckt: den VST3-Wrapper, das Linken und den
+> Bundle-Aufbau. Das entscheidet sich erst im MSVC-Build.
 
 ## 5.4 Im Host ungeprüft — bitte manuell abnehmen
 

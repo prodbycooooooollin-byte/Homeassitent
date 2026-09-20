@@ -1,5 +1,15 @@
 # 3. Bauen
 
+## 3.0 Ohne lokale Toolchain: Artefakt aus GitHub Actions
+
+Der Workflow `.github/workflows/keydock-windows.yml` baut bei jedem Push auf
+`windows-latest` mit Visual Studio 2022 und legt das Ergebnis als Artefakt
+`KeyDock-Windows-x64` ab. Für die reine Benutzung ist das der einfachste Weg —
+siehe README, Abschnitt „Fertigen Build herunterladen".
+
+Der Workflow baut zusätzlich unter Linux die Engine und lässt `ctest` laufen,
+damit die Testergebnisse im PR belegt sind und nicht nur lokal existieren.
+
 ## 3.1 Benötigte Werkzeuge
 
 | Werkzeug | Version | Wofür |
