@@ -162,10 +162,14 @@ public class AcceptanceTests
         try
         {
             string entryId;
-            var world = new TestWorld(new SqliteLibraryStore(new SqliteDatabase(dbPath))).WithDefaultSources();
-            world.AddShortcut("Spezialtool.lnk", @"C:\Tools\spezial\tool.exe");
 
+            // Die Datenbank wird bewusst geschlossen, bevor die naechste Instanz oeffnet:
+            // unter Windows ist eine geoeffnete Datei gesperrt.
+            using (var db = new SqliteDatabase(dbPath))
             {
+                var world = new TestWorld(new SqliteLibraryStore(db)).WithDefaultSources();
+                world.AddShortcut("Spezialtool.lnk", @"C:\Tools\spezial\tool.exe");
+
                 var library = world.BuildLibrary();
                 library.Refresh(world.Sources);
                 var entry = library.Entries.Single();
@@ -181,14 +185,17 @@ public class AcceptanceTests
             }
 
             // Neustart: frische Instanz auf derselben Datenbank.
-            var world2 = new TestWorld(new SqliteLibraryStore(new SqliteDatabase(dbPath))).WithDefaultSources();
-            world2.AddShortcut("Spezialtool.lnk", @"C:\Tools\spezial\tool.exe");
-            var library2 = world2.BuildLibrary();
-            library2.Refresh(world2.Sources);
+            using (var db2 = new SqliteDatabase(dbPath))
+            {
+                var world2 = new TestWorld(new SqliteLibraryStore(db2)).WithDefaultSources();
+                world2.AddShortcut("Spezialtool.lnk", @"C:\Tools\spezial\tool.exe");
+                var library2 = world2.BuildLibrary();
+                library2.Refresh(world2.Sources);
 
-            var primary = library2.GetPrimary(entryId);
-            Assert.Equal("music.audiotools", primary.CategoryId);
-            Assert.Equal(AssignmentSource.Manual, primary.Source);
+                var primary = library2.GetPrimary(entryId);
+                Assert.Equal("music.audiotools", primary.CategoryId);
+                Assert.Equal(AssignmentSource.Manual, primary.Source);
+            }
         }
         finally
         {
@@ -261,18 +268,20 @@ public class AcceptanceTests
             world.Fs.AddFile(TestWorld.Desktop + @"\Steam.lnk", 42);
 
             // "Neustart": neue Instanzen, nur das dauerhafte Journal wird gelesen.
-            using var db2 = new SqliteDatabase(dbPath);
-            var journal2 = new SqliteJournalStore(db2);
-            Assert.Single(journal2.GetUndoable(planId));
+            using (var db2 = new SqliteDatabase(dbPath))
+            {
+                var journal2 = new SqliteJournalStore(db2);
+                Assert.Single(journal2.GetUndoable(planId));
 
-            var undo = new ActionExecutor(world.Fs, journal2, world.Clock).Undo(planId);
+                var undo = new ActionExecutor(world.Fs, journal2, world.Clock).Undo(planId);
 
-            Assert.Equal(1, undo.Restored);
-            Assert.Single(undo.Conflicts);
-            // Beide Inhalte bleiben erhalten.
-            Assert.Equal(42, world.Fs.GetInfo(TestWorld.Desktop + @"\Steam.lnk")!.SizeBytes);
-            Assert.True(world.Fs.FileExists(undo.Conflicts[0].RestoredTo));
-            Assert.Empty(journal2.GetUndoable(planId));
+                Assert.Equal(1, undo.Restored);
+                Assert.Single(undo.Conflicts);
+                // Beide Inhalte bleiben erhalten.
+                Assert.Equal(42, world.Fs.GetInfo(TestWorld.Desktop + @"\Steam.lnk")!.SizeBytes);
+                Assert.True(world.Fs.FileExists(undo.Conflicts[0].RestoredTo));
+                Assert.Empty(journal2.GetUndoable(planId));
+            }
         }
         finally
         {
