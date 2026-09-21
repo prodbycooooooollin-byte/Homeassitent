@@ -178,15 +178,15 @@ Diese Punkte sind bewusst benannt, statt sie zu beschönigen:
    interne Nachrichten an das Explorer-Fenster `SHELLDLL_DefView` – ein nicht unterstützter Eingriff.
    Clearspace führt diesen Schritt deshalb nicht aus, erklärt den Windows-Weg und öffnet auf Wunsch
    die Einstellungen. Keine simulierte Automatik.
-2. **Die Windows-Integration ist hier nicht auf Windows getestet worden.** Die Entwicklungsumgebung
-   dieses Auftrags läuft auf Linux. `Clearspace.Core`, `Clearspace.Presentation` und
-   `Clearspace.Windows` **kompilieren** dort; die WPF-Oberfläche lässt sich dort nicht bauen, weil
-   das Windows-Desktop-SDK fehlt. Für echte Verifikation liegt der Workflow
-   `.github/workflows/clearspace-windows.yml` bei: er baut die gesamte Projektmappe auf
-   `windows-latest`, führt die Tests aus und erzeugt das Paket.
-   Auf einem Windows-Rechner konkret zu prüfen sind: Auflösung echter `.lnk`-Dateien,
-   Icon-Extraktion, Tastenkürzel-Registrierung, Infobereichssymbol, Startverhalten von
-   Steam- und Protokollverknüpfungen sowie das Verhalten auf einem OneDrive-Desktop.
+2. **Auf Windows gebaut und getestet, aber nicht von Hand bedient.** Die Entwicklungsumgebung
+   dieses Auftrags läuft auf Linux. Für echte Verifikation läuft der Workflow
+   `.github/workflows/clearspace-windows.yml` auf `windows-latest`. Dort sind **grün**:
+   der Build der gesamten Projektmappe einschließlich der WPF-Oberfläche, alle 33 Tests und
+   die Erzeugung des ausführbaren Pakets (als Artefakt `clearspace-win-x64` herunterladbar).
+   Was damit **nicht** geprüft ist, weil es einen Menschen an einem echten Rechner braucht:
+   Auflösung echter `.lnk`-Dateien, Icon-Extraktion, Registrierung des Tastenkürzels,
+   Infobereichssymbol, Startverhalten von Steam- und Protokollverknüpfungen sowie das
+   Verhalten auf einem OneDrive-Desktop.
 3. **Dateisortiermodus für gewöhnliche Dateien** ist nicht implementiert. Echte Dateien werden
    ausschließlich virtuell einsortiert. Das ist die sichere Variante und wurde bewusst so gewählt;
    der Plan- und Journalweg ist dafür bereits vorbereitet (`PlannedActionKind.MoveFile`).
@@ -202,7 +202,7 @@ Diese Punkte sind bewusst benannt, statt sie zu beschönigen:
 ## Geprüfte Abnahmefälle
 
 Alle Tests laufen in isolierten Testverzeichnissen bzw. einem nachgebildeten Dateisystem. Der echte
-Entwicklungsdesktop wird nie verändert. Stand: **25 Tests, alle grün**.
+Entwicklungsdesktop wird nie verändert. Stand: **33 Tests, alle grün – auf Linux und auf Windows**.
 
 | # | Fall | Test |
 |---|---|---|
@@ -223,7 +223,9 @@ Entwicklungsdesktop wird nie verändert. Stand: **25 Tests, alle grün**.
 
 Ergänzend: vollständiger Ablauf über die Ansichtsmodelle (erfassen → zuordnen → Vorschau →
 verschieben → starten → rückgängig), Suchqualität, Ordnermodus, Sichtbarkeitsmodus, Rangfolge
-manuell vor Regel, Schutzregeln und Regelvorschau.
+manuell vor Regel, Schutzregeln und Regelvorschau. Dazu sicherheitskritische Randfälle:
+Laufwerksgrenze, relative Zielpfade, Cloud-Platzhalter, Verweise, zwischenzeitlich geänderte
+oder verschwundene Quellen, getrennte Startprofile und kollisionsfreie Zielpfade.
 
 Fall 10 und 11 sind in der Logik geprüft; das Verhalten echter OneDrive-Pfade und echter
 Dateisystemereignisse gehört zusätzlich auf einen Windows-Rechner.
