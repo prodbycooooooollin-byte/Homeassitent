@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>Clearspace</AssemblyName>
+    <RootNamespace>Clearspace.App</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <SatelliteResourceLanguages>de;en</SatelliteResourceLanguages>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Clearspace.Core\Clearspace.Core.csproj" />
+    <ProjectReference Include="..\Clearspace.Presentation\Clearspace.Presentation.csproj" />
+    <ProjectReference Include="..\Clearspace.Windows\Clearspace.Windows.csproj" />
+  </ItemGroup>
+</Project>

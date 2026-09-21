@@ -222,9 +222,15 @@ public sealed class LibraryService
 
     private void RebuildIndex()
     {
+        // Auch die Namen der uebergeordneten Bereiche aufnehmen: Wer "Musikproduktion" sucht,
+        // soll die Eintraege der Unterkategorien finden.
         var names = _assignments.ToDictionary(
             kv => kv.Key,
-            kv => kv.Value.Select(a => _categories.TryGetValue(a.CategoryId, out var c) ? c.Name : a.CategoryId).ToList(),
+            kv => kv.Value
+                .SelectMany(a => CategoryCatalog.AncestorChain(_categories, a.CategoryId))
+                .Distinct(StringComparer.Ordinal)
+                .Select(id => _categories.TryGetValue(id, out var c) ? c.Name : id)
+                .ToList(),
             StringComparer.Ordinal);
         _index.Rebuild(_entries.Values.Where(e => !e.IsMissing), names);
     }

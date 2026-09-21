@@ -37,10 +37,34 @@ public static class FuzzySearch
         return previous[b.Length];
     }
 
+    private static readonly char[] WordSeparators = { ' ', '-', '_', '.' };
+
     /// <summary>
     /// Bewertet einen Kandidaten gegen die Suchanfrage. 0 = kein Treffer, hoeher = besser.
+    /// Mehrwortanfragen werden Wort fuer Wort bewertet, damit "fl studoi" weiterhin
+    /// "FL Studio 21" findet.
     /// </summary>
     public static int Score(string query, string candidate)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return 0;
+        var trimmed = query.Trim();
+        if (!trimmed.Contains(' ')) return ScoreToken(trimmed, candidate);
+
+        var tokens = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var total = 0;
+        foreach (var token in tokens)
+        {
+            var tokenScore = ScoreToken(token, candidate);
+            if (tokenScore <= 0) return 0;          // jedes Wort muss irgendwo zutreffen
+            total += tokenScore;
+        }
+
+        // Zusammenhaengender Treffer der gesamten Anfrage bleibt der beste Fall.
+        var whole = ScoreToken(trimmed.Replace(" ", string.Empty), candidate.Replace(" ", string.Empty));
+        return Math.Max(total / tokens.Length, whole);
+    }
+
+    private static int ScoreToken(string query, string candidate)
     {
         if (string.IsNullOrWhiteSpace(query)) return 0;
         var q = query.Trim().ToLowerInvariant();

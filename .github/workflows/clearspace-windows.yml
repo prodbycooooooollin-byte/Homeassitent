@@ -1,0 +1,66 @@
+name: Clearspace (Windows)
+
+on:
+  push:
+    paths:
+      - 'clearspace/**'
+      - '.github/workflows/clearspace-windows.yml'
+  pull_request:
+    paths:
+      - 'clearspace/**'
+      - '.github/workflows/clearspace-windows.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build und Tests auf Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: clearspace
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .NET 8 einrichten
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Abhaengigkeiten wiederherstellen
+        run: dotnet restore Clearspace.sln
+
+      - name: Gesamte Loesung bauen (inklusive WPF-Oberflaeche)
+        run: dotnet build Clearspace.sln -c Release --no-restore
+
+      - name: Tests ausfuehren
+        run: dotnet test tests/Clearspace.Core.Tests/Clearspace.Core.Tests.csproj -c Release --no-build --logger "trx;LogFileName=clearspace-tests.trx"
+
+      - name: Ausfuehrbares Paket erzeugen
+        run: dotnet publish src/Clearspace.App/Clearspace.App.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o artifacts/clearspace
+
+      - name: Paket hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: clearspace-win-x64
+          path: clearspace/artifacts/clearspace
+
+      - name: Testergebnisse hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clearspace-testergebnisse
+          path: clearspace/**/TestResults/*.trx
+
+  core-linux:
+    name: Kern und Tests plattformneutral
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clearspace
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet test Clearspace.Core.sln -c Release
