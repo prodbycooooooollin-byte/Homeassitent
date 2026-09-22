@@ -22,21 +22,79 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        StartupDiagnostics.Begin();
 
-        var resolver = new ShellLinkResolver();
-        var sources = new WindowsScanSourceProvider(resolver);
-        _session = new ClearspaceSession(new PhysicalFileSystem(), resolver, sources, new WindowsLauncher());
-        _shell = new ShellViewModel(_session);
+        // Spaetere Fehler im laufenden Betrieb ebenfalls sichtbar machen.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            StartupDiagnostics.Report(args.Exception, "laufender Betrieb");
+            args.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception ex) StartupDiagnostics.Report(ex, "Hintergrundarbeit");
+        };
 
-        ThemeService.Apply(ReadTheme(), _session.GetSetting("transparency", "true") == "true");
+        var phase = "Start";
+        try
+        {
+            phase = "Windows-Dienste vorbereiten";
+            StartupDiagnostics.Note(phase);
+            var resolver = new ShellLinkResolver();
+            var sources = new WindowsScanSourceProvider(resolver);
 
-        _window = new MainWindow { DataContext = _shell };
-        SetUpTrayIcon();
-        SetUpHotkey();
-        SetUpWatcher(sources);
+            phase = "Datenbank und Bibliothek oeffnen";
+            StartupDiagnostics.Note(phase);
+            _session = new ClearspaceSession(new PhysicalFileSystem(), resolver, sources, new WindowsLauncher());
 
-        // Mit "--tray" startet Clearspace unsichtbar im Infobereich (Autostart).
-        if (!e.Args.Contains("--tray")) ShowWindow();
+            phase = "Bibliothek aufbauen";
+            StartupDiagnostics.Note(phase);
+            _shell = new ShellViewModel(_session);
+
+            phase = "Darstellung einrichten";
+            StartupDiagnostics.Note(phase);
+            ThemeService.Apply(ReadTheme(), _session.GetSetting("transparency", "true") == "true");
+
+            phase = "Hauptfenster erzeugen";
+            StartupDiagnostics.Note(phase);
+            _window = new MainWindow { DataContext = _shell };
+
+            // Ab hier gibt es ein Fenster: Fehler duerfen den Start nicht mehr verhindern.
+            TryOptional("Infobereichssymbol", SetUpTrayIcon);
+            TryOptional("Tastenkuerzel", SetUpHotkey);
+            TryOptional("Ueberwachung des Desktops", () => SetUpWatcher(sources));
+
+            phase = "Fenster anzeigen";
+            StartupDiagnostics.Note(phase);
+            // Mit "--tray" startet Clearspace unsichtbar im Infobereich (Autostart).
+            if (!e.Args.Contains("--tray")) ShowWindow();
+
+            StartupDiagnostics.Note("Start abgeschlossen");
+        }
+        catch (Exception ex)
+        {
+            StartupDiagnostics.Report(ex, phase);
+            Shutdown(1);
+        }
+    }
+
+    /// <summary>
+    /// Nebensaechliche Bausteine: faellt einer aus, laeuft Clearspace trotzdem weiter und sagt es
+    /// in der Statuszeile, statt wortlos zu verschwinden.
+    /// </summary>
+    private void TryOptional(string name, Action action)
+    {
+        try
+        {
+            StartupDiagnostics.Note(name);
+            action();
+        }
+        catch (Exception ex)
+        {
+            StartupDiagnostics.Note($"{name} nicht verfuegbar: {ex.GetType().Name} - {ex.Message}");
+            if (_shell is not null)
+                _shell.StatusText = $"{name} steht nicht zur Verfuegung: {ex.Message}";
+        }
     }
 
     private AppTheme ReadTheme() => _session!.GetSetting("theme", "System") switch

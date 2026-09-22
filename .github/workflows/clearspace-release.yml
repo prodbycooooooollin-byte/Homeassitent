@@ -65,6 +65,51 @@ jobs:
           -p:DebugType=none
           -o artifacts/schlank
 
+      # Entscheidend: die fertige Datei wirklich starten. Ein Paket, das sich nicht oeffnet,
+      # darf nicht veroeffentlicht werden.
+      - name: Startversuch der fertigen Clearspace.exe
+        shell: pwsh
+        env:
+          CLEARSPACE_OHNE_DIALOG: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $protokoll = Join-Path $env:LOCALAPPDATA 'Clearspace\start-protokoll.txt'
+          if (Test-Path $protokoll) { Remove-Item $protokoll -Force }
+
+          $fehler = $false
+          foreach ($variante in @('eigenstaendig', 'schlank')) {
+            $exe = Resolve-Path "artifacts/$variante/Clearspace.exe"
+            Write-Host "== Starte $variante =="
+            if (Test-Path $protokoll) { Remove-Item $protokoll -Force }
+
+            $p = Start-Process -FilePath $exe -PassThru
+            Start-Sleep -Seconds 25
+
+            if (Test-Path $protokoll) {
+              Write-Host "--- Startprotokoll ---"
+              Get-Content $protokoll | ForEach-Object { Write-Host $_ }
+              Write-Host "----------------------"
+            } else {
+              Write-Host "Kein Startprotokoll gefunden."
+            }
+
+            if ($p.HasExited) {
+              Write-Host "::error::$variante hat sich sofort beendet (Code $($p.ExitCode))."
+              $fehler = $true
+            } else {
+              $inhalt = if (Test-Path $protokoll) { Get-Content $protokoll -Raw } else { '' }
+              if ($inhalt -notmatch 'Start abgeschlossen') {
+                Write-Host "::error::$variante laeuft, hat den Start aber nicht abgeschlossen."
+                $fehler = $true
+              } else {
+                Write-Host "$variante startet sauber."
+              }
+              Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+          if ($fehler) { exit 1 }
+
       - name: Dateien fuer das Release benennen
         shell: pwsh
         run: |

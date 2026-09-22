@@ -8,8 +8,11 @@
     <AssemblyName>Clearspace</AssemblyName>
     <RootNamespace>Clearspace.App</RootNamespace>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <SatelliteResourceLanguages>de;en</SatelliteResourceLanguages>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Einzeldatei-Pakete muessen die native SQLite-Bibliothek mitbringen, sonst bricht der
+         Start ab, sobald die Bibliothek geoeffnet wird. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <SatelliteResourceLanguages>de;en</SatelliteResourceLanguages>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Clearspace.Core\Clearspace.Core.csproj" />
