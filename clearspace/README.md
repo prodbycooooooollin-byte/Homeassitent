@@ -23,6 +23,10 @@ Beim ersten Start meldet sich der Windows-SmartScreen-Filter, weil die Datei nic
 verändert beim Start nichts — es wird erst etwas verschoben, nachdem du eine konkrete Vorschau
 bestätigt hast.
 
+**Wenn sich nichts öffnet:** Clearspace protokolliert jede Startphase nach
+`%LOCALAPPDATA%\Clearspace\start-protokoll.txt`. Diese Datei nennt den genauen Schritt und die
+Ursache. Ein Startfehler erscheint zusätzlich als Meldung.
+
 Ein neues Release entsteht, sobald in `clearspace/release-version.txt` eine neue Bezeichnung
 eingetragen und gepusht wird. Genau diese Bezeichnung bekommt das Release samt Tag.
 
@@ -197,11 +201,12 @@ Diese Punkte sind bewusst benannt, statt sie zu beschönigen:
    interne Nachrichten an das Explorer-Fenster `SHELLDLL_DefView` – ein nicht unterstützter Eingriff.
    Clearspace führt diesen Schritt deshalb nicht aus, erklärt den Windows-Weg und öffnet auf Wunsch
    die Einstellungen. Keine simulierte Automatik.
-2. **Auf Windows gebaut und getestet, aber nicht von Hand bedient.** Die Entwicklungsumgebung
-   dieses Auftrags läuft auf Linux. Für echte Verifikation läuft der Workflow
-   `.github/workflows/clearspace-windows.yml` auf `windows-latest`. Dort sind **grün**:
-   der Build der gesamten Projektmappe einschließlich der WPF-Oberfläche, alle 33 Tests und
-   die Erzeugung des ausführbaren Pakets (als Artefakt `clearspace-win-x64` herunterladbar).
+2. **Auf Windows gebaut, gestartet und getestet, aber nicht von Hand bedient.** Die
+   Entwicklungsumgebung dieses Auftrags läuft auf Linux. Auf `windows-latest` sind **grün**:
+   der Build der gesamten Projektmappe einschließlich der WPF-Oberfläche, alle 33 Tests,
+   die Erzeugung beider Pakete und – entscheidend – ein **echter Startversuch**: beide
+   `Clearspace.exe` werden gestartet und müssen ihren Start nachweislich abschließen,
+   sonst wird nichts veröffentlicht.
    Was damit **nicht** geprüft ist, weil es einen Menschen an einem echten Rechner braucht:
    Auflösung echter `.lnk`-Dateien, Icon-Extraktion, Registrierung des Tastenkürzels,
    Infobereichssymbol, Startverhalten von Steam- und Protokollverknüpfungen sowie das
