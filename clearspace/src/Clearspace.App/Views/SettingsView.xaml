@@ -10,7 +10,7 @@
                     <TextBlock Text="Darstellung" FontWeight="SemiBold" />
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                         <RadioButton x:Name="ThemeSystem" Content="Wie Windows" Checked="Theme_Checked"
-                                     Tag="System" IsChecked="True" Margin="0,0,14,0" />
+                                     Tag="System" Margin="0,0,14,0" />
                         <RadioButton x:Name="ThemeLight" Content="Hell" Checked="Theme_Checked" Tag="Light" Margin="0,0,14,0" />
                         <RadioButton x:Name="ThemeDark" Content="Dunkel" Checked="Theme_Checked" Tag="Dark" />
                     </StackPanel>

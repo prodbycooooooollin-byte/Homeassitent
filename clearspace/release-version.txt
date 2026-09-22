@@ -1,1 +1,1 @@
-clearspace-v0.1.1
+clearspace-v0.1.2

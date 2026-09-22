@@ -39,6 +39,40 @@ jobs:
       - name: Ausfuehrbares Paket erzeugen
         run: dotnet publish src/Clearspace.App/Clearspace.App.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o artifacts/clearspace
 
+      # Ein Paket, das sich nicht oeffnet, ist wertlos - also wirklich starten.
+      - name: Startversuch der fertigen Clearspace.exe
+        shell: pwsh
+        env:
+          CLEARSPACE_OHNE_DIALOG: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $protokoll = Join-Path $env:LOCALAPPDATA 'Clearspace\start-protokoll.txt'
+          if (Test-Path $protokoll) { Remove-Item $protokoll -Force }
+
+          $exe = Resolve-Path 'artifacts/clearspace/Clearspace.exe'
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 25
+
+          if (Test-Path $protokoll) {
+            Write-Host '--- Startprotokoll ---'
+            Get-Content $protokoll | ForEach-Object { Write-Host $_ }
+            Write-Host '----------------------'
+          }
+
+          if ($p.HasExited) {
+            Write-Host "::error::Clearspace hat sich sofort beendet (Code $($p.ExitCode))."
+            exit 1
+          }
+
+          $inhalt = if (Test-Path $protokoll) { Get-Content $protokoll -Raw } else { '' }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+
+          if ($inhalt -notmatch 'Start abgeschlossen') {
+            Write-Host '::error::Clearspace laeuft, hat den Start aber nicht abgeschlossen.'
+            exit 1
+          }
+          Write-Host 'Clearspace startet sauber.'
+
       - name: Paket hochladen
         uses: actions/upload-artifact@v4
         with:
