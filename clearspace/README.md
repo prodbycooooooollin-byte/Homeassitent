@@ -9,6 +9,25 @@ optionale Ausgabeform, nicht das Datenmodell.
 
 ---
 
+## Herunterladen und starten
+
+Die fertige Anwendung liegt unter **[Releases](https://github.com/prodbycooooooollin-byte/Homeassitent/releases)**:
+
+| Datei | Wann nehmen? | Voraussetzung |
+|---|---|---|
+| **`Clearspace.exe`** | Herunterladen, doppelklicken, fertig. | keine |
+| `Clearspace-klein.exe` | Wenn dir die Dateigröße wichtig ist. | .NET 8 Desktop Runtime installiert |
+
+Beim ersten Start meldet sich der Windows-SmartScreen-Filter, weil die Datei nicht signiert ist:
+**Weitere Informationen → Trotzdem ausführen**. Clearspace braucht keine Administratorrechte und
+verändert beim Start nichts — es wird erst etwas verschoben, nachdem du eine konkrete Vorschau
+bestätigt hast.
+
+Ein neues Release entsteht automatisch, sobald ein Tag `clearspace-v…` gesetzt wird, oder von Hand
+über den Workflow *Clearspace Release* unter „Actions".
+
+---
+
 ## Architekturentscheidung
 
 C# / .NET 8 mit WPF, aufgeteilt in vier Projekte:
