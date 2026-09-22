@@ -4,7 +4,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Keine invariante Globalisierung: WPF braucht echte Kulturdaten, sonst scheitert
+         jede Datenbindung mit "Cannot find non-neutral culture". -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <NeutralLanguage>de-DE</NeutralLanguage>
   </PropertyGroup>
 </Project>
