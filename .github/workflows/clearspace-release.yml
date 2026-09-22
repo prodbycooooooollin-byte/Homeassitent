@@ -2,16 +2,14 @@ name: Clearspace Release
 
 # Erzeugt eine fertige Clearspace.exe und haengt sie an ein GitHub-Release,
 # damit sie ohne Anmeldung direkt heruntergeladen werden kann.
+# Ausgeloest wird ein Release, indem clearspace/release-version.txt geaendert wird.
+# Dort steht die Versionsbezeichnung, die das Release und sein Tag bekommen.
 on:
   push:
-    tags:
-      - 'clearspace-v*'
+    paths:
+      - 'clearspace/release-version.txt'
+      - '.github/workflows/clearspace-release.yml'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Versionsbezeichnung des Releases (z. B. clearspace-v0.1.0)'
-        required: true
-        default: 'clearspace-v0.1.0'
 
 permissions:
   contents: write
@@ -32,15 +30,17 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Version bestimmen
+      - name: Version aus release-version.txt lesen
         id: version
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          TAG=$(tr -d ' \r\n' < release-version.txt)
+          if [ -z "$TAG" ]; then
+            echo "release-version.txt ist leer." >&2
+            exit 1
           fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Release-Bezeichnung: $TAG"
 
       - name: Tests ausfuehren
         run: dotnet test tests/Clearspace.Core.Tests/Clearspace.Core.Tests.csproj -c Release

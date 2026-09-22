@@ -23,8 +23,8 @@ Beim ersten Start meldet sich der Windows-SmartScreen-Filter, weil die Datei nic
 verändert beim Start nichts — es wird erst etwas verschoben, nachdem du eine konkrete Vorschau
 bestätigt hast.
 
-Ein neues Release entsteht automatisch, sobald ein Tag `clearspace-v…` gesetzt wird, oder von Hand
-über den Workflow *Clearspace Release* unter „Actions".
+Ein neues Release entsteht, sobald in `clearspace/release-version.txt` eine neue Bezeichnung
+eingetragen und gepusht wird. Genau diese Bezeichnung bekommt das Release samt Tag.
 
 ---
 
