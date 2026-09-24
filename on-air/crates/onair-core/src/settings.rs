@@ -314,6 +314,10 @@ pub struct Settings {
     pub nowplaying_file: NowPlayingFile,
     pub profiles: Vec<Profile>,
     pub active_profile: Option<String>,
+    /// Optionaler globaler Hotkey für „Song überspringen“ (z. B. `Ctrl+Alt+N`); leer = aus.
+    pub hotkey_skip: String,
+    /// Kompaktfenster immer im Vordergrund.
+    pub compact_on_top: bool,
 }
 
 impl Default for Settings {
@@ -332,6 +336,8 @@ impl Default for Settings {
             nowplaying_file: NowPlayingFile::default(),
             profiles: vec![],
             active_profile: None,
+            hotkey_skip: String::new(),
+            compact_on_top: true,
         }
     }
 }

@@ -1,7 +1,9 @@
 target/
 node_modules/
-ui/dist/
+dist/
 *.db
 *.db-wal
 *.db-shm
 .env
+test-results/
+playwright-report/

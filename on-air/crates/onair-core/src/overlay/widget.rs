@@ -39,7 +39,7 @@ body{font-family:var(--font);color:var(--text);font-size:calc(16px*var(--scale))
 .label{font-size:.7em;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:10px 0 6px}
 .q{list-style:none;display:grid;gap:6px}
 .q li{display:flex;align-items:center;gap:8px;min-width:0;font-size:.88em}
-.q img{width:calc(32px*var(--scale));height:calc(32px*var(--scale));border-radius:6px;object-fit:cover;flex:none;background:rgba(255,255,255,.06)}
+.q .qc{width:calc(32px*var(--scale));height:calc(32px*var(--scale));border-radius:6px;object-fit:cover;flex:none;background:rgba(255,255,255,.06)}
 .q .qm{min-width:0;flex:1}
 .q .qt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .q .qr{color:var(--muted);font-size:.85em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -78,7 +78,7 @@ function build(){
  if(s.show_progress&&PRESET!=="minimal")h+=`<div class="bar"><i id="p"></i></div>`;
  h+=`</div></div>`;
  if(PRESET==="queue"){
-  if(st.queue.length){h+=`<div class="label">Als Nächstes</div><ul class="q">`+st.queue.map(q=>`<li>${s.show_cover!==false?cover(q.image_url,""):""}<div class="qm"><div class="qt">${esc(q.title)} – ${esc((q.artists||[]).join(", "))}</div>${s.show_requester?`<div class="qr">${esc(q.requester)}</div>`:""}</div></li>`).join("")+`</ul>`;}
+  if(st.queue.length){h+=`<div class="label">Als Nächstes</div><ul class="q">`+st.queue.map(q=>`<li>${s.show_cover!==false?cover(q.image_url,"qc"):""}<div class="qm"><div class="qt">${esc(q.title)} – ${esc((q.artists||[]).join(", "))}</div>${s.show_requester?`<div class="qr">${esc(q.requester)}</div>`:""}</div></li>`).join("")+`</ul>`;}
  }
  return h+`</div>`;}
 function render(){

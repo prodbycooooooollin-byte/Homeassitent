@@ -22,7 +22,7 @@ async fn raw(port: u16, req: String) -> String {
     String::from_utf8_lossy(&buf).to_string()
 }
 
-fn get(port: u16, path: &str, host: &str) -> String {
+fn get(_port: u16, path: &str, host: &str) -> String {
     format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")
 }
 
