@@ -2,6 +2,7 @@
 
 mod commands;
 mod keyring_store;
+mod updater;
 
 use onair_core::clock::SystemClock;
 use onair_core::events::AppEvent;
@@ -21,7 +22,7 @@ pub struct AppState {
     pub rt: Arc<Runtime>,
 }
 
-static QUITTING: AtomicBool = AtomicBool::new(false);
+pub(crate) static QUITTING: AtomicBool = AtomicBool::new(false);
 
 pub(crate) fn logs_dir(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_log_dir().ok()
@@ -208,6 +209,7 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -245,6 +247,16 @@ pub fn run() {
             tracing::info!(target: "app", version = env!("CARGO_PKG_VERSION"), "ON AIR gestartet");
             let hotkey = cfg::read(&rt.settings).hotkey_skip.clone();
             app.manage(AppState { rt: rt.clone() });
+            let updates = updater::UpdateManager::new();
+            app.manage(updates.clone());
+            // Optionale Prüfung beim Start: blockiert nichts, installiert nie automatisch.
+            if cfg::read(&rt.settings).updates.check_on_start && updater::pubkey().is_some() {
+                let h = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(20)).await;
+                    let _ = updates.check(&h).await;
+                });
+            }
             build_tray(&handle)?;
             apply_hotkey(&handle, &hotkey);
             spawn_emitter(handle.clone(), rt.clone());
@@ -331,6 +343,17 @@ pub fn run() {
             commands::open_compact,
             commands::close_action,
             commands::quit_app,
+            commands::plan_set_end,
+            commands::plan_extend,
+            commands::plan_set_buffer,
+            commands::plan_stop,
+            commands::redemption_decide,
+            commands::update_info,
+            commands::update_check,
+            commands::update_download,
+            commands::update_preflight,
+            commands::update_install,
+            commands::update_later,
         ]);
 
     let app = builder.build(tauri::generate_context!()).expect("ON AIR konnte nicht starten");

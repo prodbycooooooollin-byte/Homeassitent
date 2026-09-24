@@ -1,0 +1,128 @@
+name: ON AIR Release
+
+# Veröffentlicht eine signierte Windows-Version samt Update-Manifest.
+# Auslöser: Tag „on-air-vX.Y.Z“ (Stable) bzw. „on-air-vX.Y.Z-beta.N“ (Vorabversion, kein Update-Kanal)
+# oder manuell mit einem vorhandenen Tag.
+
+on:
+  push:
+    tags: ["on-air-v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Vorhandenes Tag, z. B. on-air-v0.2.0"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: on-air-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Windows-Release
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        working-directory: on-air
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Voraussetzungen prüfen
+        env:
+          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+          PUBKEY: ${{ vars.ONAIR_UPDATER_PUBKEY }}
+        run: |
+          if [ "$HAS_KEY" != "true" ]; then echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY fehlt (siehe on-air/docs/UPDATES.md)"; exit 1; fi
+          if [ -z "$PUBKEY" ]; then echo "::error::Repository-Variable ONAIR_UPDATER_PUBKEY fehlt (siehe on-air/docs/UPDATES.md)"; exit 1; fi
+
+      - name: Version prüfen
+        id: ver
+        run: node scripts/check-version.mjs "$TAG"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: on-air/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: on-air
+      - run: npm ci
+      - name: Tests
+        run: |
+          npm run typecheck
+          cargo test -p onair-core
+
+      - name: Signiert bauen
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          ONAIR_UPDATER_PUBKEY: ${{ vars.ONAIR_UPDATER_PUBKEY }}
+        run: npx tauri build --config src-tauri/tauri.release.conf.json
+
+      - name: Artefakte einsammeln und Manifest erzeugen
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist-release
+          nsis=$(ls target/release/bundle/nsis/*-setup.exe | head -1)
+          msi=$(ls target/release/bundle/msi/*.msi | head -1)
+          # Dateinamen ohne Leerzeichen (GitHub würde sie umbenennen).
+          cp "$nsis" "dist-release/ON-AIR_${VERSION}_x64-setup.exe"
+          cp "$nsis.sig" "dist-release/ON-AIR_${VERSION}_x64-setup.exe.sig"
+          cp "$msi" "dist-release/ON-AIR_${VERSION}_x64.msi"
+          cp "$msi.sig" "dist-release/ON-AIR_${VERSION}_x64.msi.sig"
+          node scripts/make-latest-json.mjs "$VERSION" "$TAG" "${{ github.repository }}" \
+            "dist-release/ON-AIR_${VERSION}_x64-setup.exe" "dist-release/ON-AIR_${VERSION}_x64.msi"
+          mv latest.json dist-release/latest.json
+          ls -la dist-release
+
+      - name: Release als Entwurf anlegen und hochladen
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          awk "/^## ${VERSION//./\\.}/{f=1;next}/^## /{f=0}f" CHANGELOG.md > notes.md || true
+          [ -s notes.md ] || echo "ON AIR ${VERSION}" > notes.md
+          gh release create "$TAG" --draft --title "ON AIR ${VERSION}" --notes-file notes.md --verify-tag \
+            $( [ "${{ steps.ver.outputs.channel }}" = "prerelease" ] && echo --prerelease ) dist-release/*
+
+      - name: Vollständigkeit prüfen und veröffentlichen
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          expected="ON-AIR_${VERSION}_x64-setup.exe ON-AIR_${VERSION}_x64-setup.exe.sig ON-AIR_${VERSION}_x64.msi ON-AIR_${VERSION}_x64.msi.sig latest.json"
+          assets=$(gh release view "$TAG" --json assets --jq '.assets[] | select(.size > 0) | .name')
+          for f in $expected; do
+            echo "$assets" | grep -qx "$f" || { echo "::error::Artefakt fehlt im Release: $f"; exit 1; }
+          done
+          gh release edit "$TAG" --draft=false --latest=false
+          # Öffentlich erreichbar?
+          for f in "ON-AIR_${VERSION}_x64-setup.exe" "ON-AIR_${VERSION}_x64-setup.exe.sig"; do
+            curl -fsIL "https://github.com/${{ github.repository }}/releases/download/${TAG}/${f}" > /dev/null
+          done
+
+      - name: Stable-Update-Kanal aktualisieren
+        if: steps.ver.outputs.channel == 'stable'
+        run: |
+          set -euo pipefail
+          # Erst jetzt – alle referenzierten Artefakte sind veröffentlicht und erreichbar.
+          if ! gh release view on-air-stable > /dev/null 2>&1; then
+            gh release create on-air-stable --prerelease --latest=false --target "${{ github.sha }}" \
+              --title "ON AIR Update-Kanal (stable)" \
+              --notes "Technischer Release für den integrierten Updater. Enthält nur latest.json – Installer liegen in den on-air-v*-Releases."
+          fi
+          gh release upload on-air-stable dist-release/latest.json --clobber
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/on-air-stable/latest.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.version!=='${{ steps.ver.outputs.version }}'){console.error('Kanal zeigt '+j.version);process.exit(1)}console.log('Kanal: '+j.version)})"

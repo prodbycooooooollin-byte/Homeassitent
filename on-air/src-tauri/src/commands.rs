@@ -284,3 +284,73 @@ pub async fn close_action(app: AppHandle, state: State<'_, AppState>, action: St
 pub fn quit_app(app: AppHandle) {
     crate::quit(&app);
 }
+
+// ---------------- Streamplanung ----------------
+
+#[tauri::command]
+pub fn plan_set_end(state: State<'_, AppState>, end_at_ms: i64, buffer_ms: Option<i64>) -> R<()> {
+    state.rt.plan_set_end(end_at_ms, buffer_ms).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn plan_extend(state: State<'_, AppState>, minutes: i64) -> R<()> {
+    state.rt.plan_extend(minutes).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn plan_set_buffer(state: State<'_, AppState>, buffer_ms: i64) -> R<()> {
+    state.rt.plan_set_buffer(buffer_ms).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn plan_stop(state: State<'_, AppState>) -> R<()> {
+    state.rt.plan_stop().map_err(Into::into)
+}
+
+// ---------------- Kanalpunkte ----------------
+
+#[tauri::command]
+pub fn redemption_decide(state: State<'_, AppState>, id: String, fulfill: bool) -> R<()> {
+    state.rt.redemption_decide(&id, fulfill).map_err(Into::into)
+}
+
+// ---------------- Updates ----------------
+
+type Updates<'a> = State<'a, std::sync::Arc<crate::updater::UpdateManager>>;
+
+#[tauri::command]
+pub fn update_info(app: AppHandle, updates: Updates<'_>) -> crate::updater::UpdateInfo {
+    updates.info(&app)
+}
+
+#[tauri::command]
+pub async fn update_check(app: AppHandle, updates: Updates<'_>) -> R<crate::updater::UpdateInfo> {
+    updates.check(&app).await.map_err(Into::into)
+}
+
+/// Startet den Download im Hintergrund; Fortschritt kommt über `onair://update`.
+#[tauri::command]
+pub fn update_download(app: AppHandle, updates: Updates<'_>) -> R<()> {
+    let st = updates.info(&app).state;
+    st.can_download().map_err(|e| CmdError::from(e.to_string()))?;
+    let m = updates.inner().clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = m.download(&app).await;
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_preflight(state: State<'_, AppState>, updates: Updates<'_>) -> R<crate::updater::Preflight> {
+    Ok(updates.preflight(&state.rt).await)
+}
+
+#[tauri::command]
+pub async fn update_install(app: AppHandle, state: State<'_, AppState>, updates: Updates<'_>) -> R<onair_core::runtime::UpdatePrep> {
+    updates.install(&app, state.rt.clone()).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn update_later(app: AppHandle, updates: Updates<'_>) {
+    updates.later(&app);
+}
