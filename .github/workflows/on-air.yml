@@ -1,0 +1,85 @@
+name: ON AIR
+
+on:
+  push:
+    paths:
+      - "on-air/**"
+      - ".github/workflows/on-air.yml"
+  pull_request:
+    paths:
+      - "on-air/**"
+      - ".github/workflows/on-air.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: on-air-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: on-air
+
+jobs:
+  checks:
+    name: Tests (Linux)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: on-air/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: on-air
+      - name: Systempakete für Tauri
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - run: npm ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Rust-Tests (Fake-Provider, simuliert)
+        run: cargo test -p onair-core
+      - name: Desktop-Hülle kompilieren
+        run: |
+          npm run build
+          cargo build -p onair-desktop
+      - name: UI-Layouttests
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test --reporter=line
+
+  windows:
+    name: Windows-Installer
+    runs-on: windows-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: on-air/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: on-air
+      - run: npm ci
+      - name: Rust-Tests unter Windows
+        run: cargo test -p onair-core
+      - name: Installer bauen (NSIS + MSI)
+        run: npx tauri build
+      - name: Installer hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: on-air-windows-installer
+          path: |
+            on-air/target/release/bundle/nsis/*.exe
+            on-air/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 14
