@@ -33,6 +33,8 @@ pub enum WsAction {
     Resumed { session_id: String, keepalive_s: u64 },
     Reconnect { url: String },
     Chat(ChatEvent),
+    /// Kanalpunkte-Einlösung (`update == true` bei späteren Statusänderungen).
+    Redemption { update: bool, event: super::helix::RedemptionInfo },
     Revoked { status: String, sub_type: String },
     Keepalive,
     Ignored,
@@ -128,8 +130,15 @@ impl EventSubProtocol {
                 if mid.is_empty() || !self.dedupe.insert(mid) {
                     return WsAction::Ignored;
                 }
-                if v["metadata"]["subscription_type"].as_str() != Some("channel.chat.message") {
-                    return WsAction::Ignored;
+                match v["metadata"]["subscription_type"].as_str() {
+                    Some("channel.chat.message") => {}
+                    Some(t @ ("channel.channel_points_custom_reward_redemption.add" | "channel.channel_points_custom_reward_redemption.update")) => {
+                        return match super::helix::parse_redemption(&v["payload"]["event"]) {
+                            Some(event) => WsAction::Redemption { update: t.ends_with(".update"), event },
+                            None => WsAction::Ignored,
+                        };
+                    }
+                    _ => return WsAction::Ignored,
                 }
                 let e = &v["payload"]["event"];
                 WsAction::Chat(ChatEvent {
@@ -190,6 +199,21 @@ mod tests {
         // Nach vollständigem Verbindungsverlust wird wieder abonniert.
         p.reset_for_fresh_connection();
         assert!(matches!(p.handle(&fixtures::welcome("s3")), WsAction::Subscribe { .. }));
+    }
+
+    #[test]
+    fn redemption_notifications() {
+        let mut p = EventSubProtocol::new();
+        let m = r#"{"metadata":{"message_id":"n1","message_type":"notification","subscription_type":"channel.channel_points_custom_reward_redemption.add"},"payload":{"event":{"id":"red-1","user_id":"7","user_login":"v","user_name":"V","user_input":"never gonna","status":"unfulfilled","reward":{"id":"rw"}}}}"#;
+        match p.handle(m) {
+            WsAction::Redemption { update: false, event } => {
+                assert_eq!(event.id, "red-1");
+                assert_eq!(event.reward_id, "rw");
+                assert_eq!(event.status, "UNFULFILLED");
+            }
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(p.handle(m), WsAction::Ignored, "doppelte Zustellung");
     }
 
     #[test]

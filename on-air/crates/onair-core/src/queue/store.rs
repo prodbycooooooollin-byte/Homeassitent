@@ -10,7 +10,8 @@ use rusqlite::{params, OptionalExtension, Row};
 
 const COLS: &str = "id, track_id, track_uri, title, artists, album, image_url, duration_ms, explicit, query, \
 requester_id, requester_name, requester_role, source, source_event, received_at, status, pending_reason, reason, \
-position, priority, updated_at, handoff_at, observed_at, finished_at, chat_message_id";
+position, priority, updated_at, handoff_at, observed_at, finished_at, chat_message_id, reward_id, redemption_id, \
+redemption_status, redemption_target, redemption_error";
 
 fn role_str(r: Role) -> &'static str {
     match r {
@@ -91,6 +92,16 @@ fn from_row(r: &Row) -> rusqlite::Result<SongRequest> {
         observed_at: r.get(23)?,
         finished_at: r.get(24)?,
         chat_message_id: r.get(25)?,
+        redemption: match (r.get::<_, Option<String>>(26)?, r.get::<_, Option<String>>(27)?) {
+            (Some(reward_id), Some(redemption_id)) => Some(super::Redemption {
+                reward_id,
+                redemption_id,
+                status: super::RedemptionStatus::parse(&r.get::<_, Option<String>>(28)?.unwrap_or_default()),
+                target: r.get::<_, Option<String>>(29)?.map(|t| super::RedemptionStatus::parse(&t)),
+                last_error: r.get(30)?,
+            }),
+            _ => None,
+        },
     })
 }
 
@@ -151,7 +162,7 @@ impl QueueStore {
     fn insert_on(c: &rusqlite::Connection, r: &SongRequest) -> DbResult<()> {
         let t = r.track.as_ref();
         c.execute(
-            &format!("INSERT INTO requests(provider, {COLS}) VALUES ('spotify', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)"),
+            &format!("INSERT INTO requests(provider, {COLS}) VALUES ('spotify', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)"),
             params![
                 r.id,
                 t.map(|t| t.id.clone()),
@@ -179,6 +190,11 @@ impl QueueStore {
                 r.observed_at,
                 r.finished_at,
                 r.chat_message_id,
+                r.redemption.as_ref().map(|x| x.reward_id.clone()),
+                r.redemption.as_ref().map(|x| x.redemption_id.clone()),
+                r.redemption.as_ref().map(|x| x.status.as_str()),
+                r.redemption.as_ref().and_then(|x| x.target.map(|t| t.as_str())),
+                r.redemption.as_ref().and_then(|x| x.last_error.clone()),
             ],
         )
         .map(|_| ())
@@ -307,6 +323,30 @@ impl QueueStore {
             )
             .map_err(|e| e.to_string())?;
         Ok(n == 1)
+    }
+
+    /// Kanalpunkte: Abwicklungsstatus setzen (nach bestätigter Twitch-Antwort).
+    pub fn set_redemption(&self, id: &str, status: super::RedemptionStatus, target: Option<super::RedemptionStatus>, error: Option<&str>, now: i64) -> DbResult<()> {
+        self.db
+            .conn()
+            .execute(
+                "UPDATE requests SET redemption_status=?2, redemption_target=?3, redemption_error=?4, updated_at=?5 WHERE id=?1",
+                params![id, status.as_str(), target.map(|t| t.as_str()), error, now],
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Kanalpunkte-Requests, deren Einlösung noch nicht endgültig abgewickelt ist.
+    pub fn open_redemptions(&self) -> Vec<SongRequest> {
+        self.query(
+            "WHERE redemption_id IS NOT NULL AND redemption_status IN ('unfulfilled','review','conflict') ORDER BY received_at ASC",
+            [],
+        )
+    }
+
+    pub fn by_redemption(&self, redemption_id: &str) -> Option<SongRequest> {
+        self.query("WHERE redemption_id = ?1", params![redemption_id]).into_iter().next()
     }
 
     pub fn set_position(&self, id: &str, position: f64, now: i64) -> DbResult<()> {

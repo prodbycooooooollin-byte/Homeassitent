@@ -1,7 +1,7 @@
 //! Tolerantes Parsen der Spotify-Antworten. Fehlende Felder (z. B. nach den
 //! Development-Mode-Änderungen vom Februar 2026) führen nicht zu Fehlern.
 
-use crate::model::{Actions, Device, Playback, Provider, Track};
+use crate::model::{Actions, Device, EpisodeInfo, Playback, Provider, Track};
 use serde_json::Value;
 
 pub fn parse_track(v: &Value) -> Option<Track> {
@@ -36,6 +36,20 @@ pub fn parse_track(v: &Value) -> Option<Track> {
     })
 }
 
+pub fn parse_episode(v: &Value) -> Option<EpisodeInfo> {
+    if v["type"].as_str() != Some("episode") {
+        return None;
+    }
+    let images = v["images"].as_array().or(v["show"]["images"].as_array());
+    Some(EpisodeInfo {
+        title: v["name"].as_str()?.to_string(),
+        show: v["show"]["name"].as_str().map(str::to_string),
+        image_url: images.and_then(|i| i.first()).and_then(|i| i["url"].as_str().map(str::to_string)),
+        duration_ms: v["duration_ms"].as_u64().unwrap_or(0),
+        external_url: v["external_urls"]["spotify"].as_str().map(str::to_string),
+    })
+}
+
 pub fn parse_device(v: &Value) -> Option<Device> {
     Some(Device {
         id: v["id"].as_str().map(str::to_string),
@@ -53,6 +67,7 @@ pub fn parse_playback(v: &Value, fetched_at_ms: i64) -> Playback {
     Playback {
         is_playing: v["is_playing"].as_bool().unwrap_or(false),
         track: parse_track(&v["item"]),
+        episode: parse_episode(&v["item"]),
         item_type: v["currently_playing_type"].as_str().map(str::to_string),
         progress_ms: v["progress_ms"].as_u64().unwrap_or(0),
         device: parse_device(&v["device"]),

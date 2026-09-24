@@ -210,7 +210,128 @@ impl FakeSpotify {
     }
 }
 
+/// Fake-Twitch: Token-Validierung, EventSub-Abo, Kanalpunkte-Belohnungen und -Einlösungen.
+#[derive(Default)]
+pub struct FakeTwitch {
+    pub rewards: Vec<(String, Value, bool)>, // (id, reward, manageable)
+    pub redemptions: Vec<(String, String, String, String, String)>, // (id, reward_id, user_id, input, status)
+    pub creates: u32,
+    pub reward_patches: u32,
+    pub redemption_patches: Vec<(String, String)>,
+    pub fail_patch: bool,
+    pub not_affiliate: bool,
+    pub offline: bool,
+    pub scopes: Vec<String>,
+    n: u32,
+}
+
+impl FakeTwitch {
+    pub fn new() -> Self {
+        Self { scopes: vec!["user:read:chat".into(), "user:write:chat".into(), "channel:manage:redemptions".into()], ..Default::default() }
+    }
+
+    pub fn add_redemption(&mut self, id: &str, reward_id: &str, user: &str, input: &str) {
+        self.redemptions.push((id.into(), reward_id.into(), user.into(), input.into(), "UNFULFILLED".into()));
+    }
+
+    pub fn redemption_status(&self, id: &str) -> Option<String> {
+        self.redemptions.iter().find(|r| r.0 == id).map(|r| r.4.clone())
+    }
+
+    fn red_json(r: &(String, String, String, String, String)) -> Value {
+        json!({"id": r.0, "reward": {"id": r.1}, "user_id": r.2, "user_login": format!("u{}", r.2), "user_name": format!("User{}", r.2), "user_input": r.3, "status": r.4})
+    }
+
+    pub fn handle(&mut self, req: &HttpRequest) -> Result<HttpResponse, TransportError> {
+        if self.offline {
+            return Err(TransportError::Connect("offline".into()));
+        }
+        let u = url::Url::parse(&req.url).unwrap();
+        let q: Vec<(String, String)> = u.query_pairs().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let get = |k: &str| q.iter().find(|(a, _)| a == k).map(|(_, v)| v.clone());
+        let ids: Vec<String> = q.iter().filter(|(k, _)| k == "id").map(|(_, v)| v.clone()).collect();
+        let body = match &req.body {
+            onair_core::http::Body::Json(v) => v.clone(),
+            _ => Value::Null,
+        };
+        let path = u.path().to_string();
+        match (req.method, path.as_str()) {
+            (Method::Get, "/oauth2/validate") => Ok(HttpResponse::json(200, json!({"client_id": "c", "login": "streamer", "user_id": "100", "scopes": self.scopes, "expires_in": 3600}))),
+            (Method::Post, "/eventsub/subscriptions") => Ok(HttpResponse::json(202, json!({"data": []}))),
+            (Method::Get, "/streams") => Ok(HttpResponse::json(200, json!({"data": []}))),
+            (Method::Post, "/channel_points/custom_rewards") => {
+                if self.not_affiliate {
+                    return Ok(HttpResponse::json(403, json!({"message": "The broadcaster must be a partner or affiliate"})));
+                }
+                let title = body["title"].as_str().unwrap_or("").to_string();
+                if self.rewards.iter().any(|(_, r, _)| r["title"].as_str().map(|t| t.eq_ignore_ascii_case(&title)).unwrap_or(false)) {
+                    return Ok(HttpResponse::json(400, json!({"message": "CREATE_CUSTOM_REWARD_DUPLICATE_REWARD"})));
+                }
+                self.n += 1;
+                self.creates += 1;
+                let id = format!("rw-{}", self.n);
+                let mut r = body.clone();
+                r["id"] = json!(id);
+                self.rewards.push((id, r.clone(), true));
+                Ok(HttpResponse::json(200, json!({"data": [r]})))
+            }
+            (Method::Patch, "/channel_points/custom_rewards") => {
+                if self.fail_patch {
+                    return Ok(HttpResponse::json(503, json!({"message": "unavailable"})));
+                }
+                self.reward_patches += 1;
+                let id = get("id").unwrap_or_default();
+                match self.rewards.iter_mut().find(|(i, _, m)| *i == id && *m) {
+                    None => Ok(HttpResponse::json(404, json!({"message": "not found"}))),
+                    Some((_, r, _)) => {
+                        if let Some(o) = body.as_object() {
+                            for (k, v) in o {
+                                r[k] = v.clone();
+                            }
+                        }
+                        Ok(HttpResponse::json(200, json!({"data": [r.clone()]})))
+                    }
+                }
+            }
+            (Method::Get, "/channel_points/custom_rewards") => {
+                let list: Vec<Value> = self.rewards.iter().filter(|(_, _, m)| *m).map(|(_, r, _)| r.clone()).collect();
+                Ok(HttpResponse::json(200, json!({"data": list})))
+            }
+            (Method::Get, "/channel_points/custom_rewards/redemptions") => {
+                let reward = get("reward_id").unwrap_or_default();
+                let status = get("status");
+                let list: Vec<Value> = self
+                    .redemptions
+                    .iter()
+                    .filter(|r| r.1 == reward)
+                    .filter(|r| ids.is_empty() || ids.contains(&r.0))
+                    .filter(|r| status.as_ref().map(|s| &r.4 == s).unwrap_or(true))
+                    .map(Self::red_json)
+                    .collect();
+                Ok(HttpResponse::json(200, json!({"data": list, "pagination": {}})))
+            }
+            (Method::Patch, "/channel_points/custom_rewards/redemptions") => {
+                if self.fail_patch {
+                    return Ok(HttpResponse::json(503, json!({"message": "unavailable"})));
+                }
+                let id = ids.first().cloned().unwrap_or_default();
+                let target = body["status"].as_str().unwrap_or("").to_string();
+                self.redemption_patches.push((id.clone(), target.clone()));
+                match self.redemptions.iter_mut().find(|r| r.0 == id && r.4 == "UNFULFILLED") {
+                    None => Ok(HttpResponse::json(404, json!({"message": "no redemptions found"}))),
+                    Some(r) => {
+                        r.4 = target.clone();
+                        Ok(HttpResponse::json(200, json!({"data": [{"id": id, "status": target}]})))
+                    }
+                }
+            }
+            _ => Ok(HttpResponse::json(404, json!({"message": "not found"}))),
+        }
+    }
+}
+
 pub struct Harness {
+    pub twitch: Arc<Mutex<FakeTwitch>>,
     pub fake: Arc<Mutex<FakeSpotify>>,
     pub transport: Arc<FakeTransport>,
     pub secrets: Arc<MemorySecretStore>,
@@ -220,9 +341,17 @@ pub struct Harness {
 impl Harness {
     pub fn new() -> Self {
         let fake = Arc::new(Mutex::new(FakeSpotify::default()));
+        let twitch = Arc::new(Mutex::new(FakeTwitch::new()));
         let f2 = fake.clone();
-        let transport = FakeTransport::new(move |r| f2.lock().unwrap().handle(r));
-        Self { fake, transport, secrets: Arc::new(MemorySecretStore::default()), clock: TokioClock::new() }
+        let t2 = twitch.clone();
+        let transport = FakeTransport::new(move |r| {
+            if r.url.starts_with("http://fake-helix") || r.url.starts_with("http://fake-twitch-id") {
+                t2.lock().unwrap().handle(r)
+            } else {
+                f2.lock().unwrap().handle(r)
+            }
+        });
+        Self { twitch, fake, transport, secrets: Arc::new(MemorySecretStore::default()), clock: TokioClock::new() }
     }
 
     pub fn tokens(&self, key: &str, expires_in_ms: i64) -> Arc<TokenManager> {
@@ -241,6 +370,19 @@ impl Harness {
             self.secrets.clone(),
             self.clock.clone(),
         )
+    }
+
+    /// Twitch-Anmeldung wie nach einem erfolgreichen Geräte-Code-Ablauf.
+    pub fn twitch_tokens(&self) {
+        let now = self.clock.now_ms();
+        let set = TokenSet {
+            access_token: "tw-0".into(),
+            refresh_token: Some("tr-0".into()),
+            expires_at_ms: now + 3_600_000,
+            scope: "user:read:chat user:write:chat channel:manage:redemptions".into(),
+            authorized_at_ms: now,
+        };
+        onair_core::secrets::SecretStore::save(&*self.secrets, onair_core::runtime::TWITCH_SECRET_KEY, &serde_json::to_string(&set).unwrap()).unwrap();
     }
 
     pub fn client(&self, tokens: Arc<TokenManager>) -> Arc<SpotifyClient> {

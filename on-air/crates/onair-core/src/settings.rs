@@ -40,7 +40,10 @@ pub enum AcceptMode {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RequestRules {
+    /// `false` = manuell pausiert („Requests pausieren“). Überlagert alle Quellen.
     pub open: bool,
+    /// Kostenlose Requests per Chatbefehl annehmen.
+    pub chat_enabled: bool,
     pub mode: AcceptMode,
     pub min_role: Role,
     pub max_queue: u32,
@@ -61,6 +64,7 @@ impl Default for RequestRules {
     fn default() -> Self {
         Self {
             open: false,
+            chat_enabled: true,
             mode: AcceptMode::Auto,
             min_role: Role::Everyone,
             max_queue: 25,
@@ -290,6 +294,51 @@ pub struct TwitchSettings {
     pub enabled: bool,
 }
 
+/// Songrequests über eine von ON AIR verwaltete Twitch-Kanalpunkte-Belohnung.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ChannelPointsSettings {
+    pub enabled: bool,
+    /// Titel der Belohnung (Twitch: max. 45 Zeichen, pro Kanal eindeutig).
+    pub title: String,
+    pub cost: u32,
+    /// Beschreibung/Eingabehinweis (Twitch: max. 200 Zeichen).
+    pub prompt: String,
+    pub global_cooldown_s: u32,
+    /// 0 = kein Limit.
+    pub max_per_stream: u32,
+    pub max_per_user_per_stream: u32,
+    pub mode: AcceptMode,
+}
+
+impl Default for ChannelPointsSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            title: "Song wünschen".into(),
+            cost: 500,
+            prompt: "Spotify-Link oder Titel und Interpret eingeben".into(),
+            global_cooldown_s: 0,
+            max_per_stream: 0,
+            max_per_user_per_stream: 0,
+            mode: AcceptMode::Auto,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct UpdateSettings {
+    /// Beim App-Start im Hintergrund nach Updates suchen (nie automatisch installieren).
+    pub check_on_start: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self { check_on_start: true }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Profile {
     pub id: String,
@@ -318,6 +367,8 @@ pub struct Settings {
     pub hotkey_skip: String,
     /// Kompaktfenster immer im Vordergrund.
     pub compact_on_top: bool,
+    pub channel_points: ChannelPointsSettings,
+    pub updates: UpdateSettings,
 }
 
 impl Default for Settings {
@@ -338,6 +389,8 @@ impl Default for Settings {
             active_profile: None,
             hotkey_skip: String::new(),
             compact_on_top: true,
+            channel_points: ChannelPointsSettings::default(),
+            updates: UpdateSettings::default(),
         }
     }
 }
@@ -369,6 +422,14 @@ impl Settings {
         }
         self.commands.voteskip_needed = self.commands.voteskip_needed.max(1);
         self.commands.min_reply_interval_ms = self.commands.min_reply_interval_ms.max(500);
+        let cp = &mut self.channel_points;
+        cp.title = cp.title.trim().chars().take(45).collect();
+        if cp.title.is_empty() {
+            cp.title = ChannelPointsSettings::default().title;
+        }
+        cp.prompt = cp.prompt.trim().chars().take(200).collect();
+        cp.cost = cp.cost.clamp(1, 1_000_000);
+        cp.global_cooldown_s = cp.global_cooldown_s.min(7 * 86_400);
         if self.commands.prefix.trim().is_empty() {
             self.commands.prefix = "!".into();
         }

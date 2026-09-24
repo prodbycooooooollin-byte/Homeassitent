@@ -316,6 +316,8 @@ async fn duplicate_twitch_event_creates_one_request_and_one_reply() {
         activity: rt.activity.clone(),
         bus: rt.bus.clone(),
         clock: h.clock.clone(),
+        cp_reward: tokio::sync::watch::channel(None).1,
+        redemptions_tx: tokio::sync::mpsc::unbounded_channel().0,
     });
     svc.set_identity_for_test(onair_core::twitch::auth::Identity { user_id: "100".into(), login: "streamer".into(), scopes: vec![] });
     svc.spawn_chat_sender_for_test();

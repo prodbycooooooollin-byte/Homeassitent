@@ -61,24 +61,27 @@ impl TokenEndpoint for TwitchTokenEndpoint {
 pub struct DeviceCode {
     #[serde(skip)]
     pub device_code: String,
+    #[serde(skip)]
+    pub scopes: String,
     pub user_code: String,
     pub verification_uri: String,
     pub expires_in_s: u64,
     pub interval_s: u64,
 }
 
-pub async fn start_device_flow(http: &SharedTransport, id_base: &str, client_id: &str) -> Result<DeviceCode, ApiError> {
+pub async fn start_device_flow(http: &SharedTransport, id_base: &str, client_id: &str, scopes: &str) -> Result<DeviceCode, ApiError> {
     if client_id.trim().is_empty() {
         return Err(ApiError::Config { message: "Keine Twitch Client-ID hinterlegt".into() });
     }
     let req = HttpRequest::new(Method::Post, format!("{id_base}/oauth2/device"))
-        .form(vec![("client_id", client_id.trim().to_string()), ("scopes", super::SCOPES.join(" "))]);
+        .form(vec![("client_id", client_id.trim().to_string()), ("scopes", scopes.to_string())]);
     let resp = http.send(req).await.map_err(transport_error)?;
     if resp.status != 200 {
         return Err(classify(&resp));
     }
     let v = resp.json_body().unwrap_or_default();
     Ok(DeviceCode {
+        scopes: scopes.to_string(),
         device_code: v["device_code"].as_str().unwrap_or("").into(),
         user_code: v["user_code"].as_str().unwrap_or("").into(),
         verification_uri: v["verification_uri"].as_str().unwrap_or("https://www.twitch.tv/activate").into(),
@@ -108,7 +111,7 @@ pub async fn poll_device_flow(
         }
         let req = HttpRequest::new(Method::Post, format!("{id_base}/oauth2/token")).form(vec![
             ("client_id", client_id.trim().to_string()),
-            ("scopes", super::SCOPES.join(" ")),
+            ("scopes", dc.scopes.clone()),
             ("device_code", dc.device_code.clone()),
             ("grant_type", "urn:ietf:params:oauth:grant-type:device_code".into()),
         ]);

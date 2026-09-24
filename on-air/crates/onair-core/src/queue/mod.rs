@@ -148,6 +148,54 @@ pub struct SongRequest {
     pub observed_at: Option<i64>,
     pub finished_at: Option<i64>,
     pub chat_message_id: Option<String>,
+    /// Nur bei Kanalpunkte-Requests.
+    pub redemption: Option<Redemption>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RedemptionStatus {
+    /// Auf Twitch offen – Punkte noch nicht verbucht/erstattet.
+    Unfulfilled,
+    /// Auf Twitch als erfüllt bestätigt.
+    Fulfilled,
+    /// Auf Twitch storniert (Punkte erstattet) – bestätigt.
+    Canceled,
+    /// Zuordnung unklar – Entscheidung nötig.
+    Review,
+    /// Twitch-Zustand widerspricht dem lokalen (z. B. extern storniert, Song schon übergeben).
+    Conflict,
+}
+
+impl RedemptionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unfulfilled => "unfulfilled",
+            Self::Fulfilled => "fulfilled",
+            Self::Canceled => "canceled",
+            Self::Review => "review",
+            Self::Conflict => "conflict",
+        }
+    }
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "fulfilled" => Self::Fulfilled,
+            "canceled" => Self::Canceled,
+            "review" => Self::Review,
+            "conflict" => Self::Conflict,
+            _ => Self::Unfulfilled,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Redemption {
+    pub reward_id: String,
+    pub redemption_id: String,
+    pub status: RedemptionStatus,
+    /// Vom Nutzer gewählte Abwicklung (bei Prüfung), noch nicht bestätigt.
+    pub target: Option<RedemptionStatus>,
+    pub last_error: Option<String>,
 }
 
 /// Ergebnis einer Request-Einreichung (Grundlage der Chatantwort).

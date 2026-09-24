@@ -11,6 +11,7 @@ pub enum Method {
     Get,
     Post,
     Put,
+    Patch,
     Delete,
 }
 
@@ -152,6 +153,7 @@ impl HttpTransport for ReqwestTransport {
             Method::Get => reqwest::Method::GET,
             Method::Post => reqwest::Method::POST,
             Method::Put => reqwest::Method::PUT,
+            Method::Patch => reqwest::Method::PATCH,
             Method::Delete => reqwest::Method::DELETE,
         };
         let mut rb = self.client.request(method, &req.url);

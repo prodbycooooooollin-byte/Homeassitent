@@ -75,6 +75,10 @@ pub struct TwitchDeps {
     pub activity: ActivityLog,
     pub bus: EventBus,
     pub clock: SharedClock,
+    /// Belohnung, deren Einlösungen abonniert werden sollen (`None` = keine).
+    pub cp_reward: watch::Receiver<Option<String>>,
+    /// Weiterleitung von Einlösungen an den Kanalpunkte-Dienst.
+    pub redemptions_tx: mpsc::UnboundedSender<(bool, super::helix::RedemptionInfo)>,
 }
 
 struct Shared {
@@ -236,8 +240,16 @@ impl TwitchService {
         let mut watchdog = Duration::from_secs(15);
         let mut last_validate = sh.deps.clock.now_ms();
         let mut auth_rx = sh.deps.tokens.subscribe();
+        let mut reward_rx = sh.deps.cp_reward.clone();
+        reward_rx.borrow_and_update();
         loop {
             let next = tokio::select! {
+                r = reward_rx.changed() => {
+                    // Andere Belohnung → frische Verbindung mit passenden Abos.
+                    let _ = ws.close(None).await;
+                    if r.is_err() { return Disconnect::Stop; }
+                    return Disconnect::Recover;
+                }
                 m = tokio::time::timeout(watchdog, ws.next()) => m,
                 c = self.cmd_rx.recv() => {
                     let _ = ws.close(None).await;
@@ -261,6 +273,7 @@ impl TwitchService {
                         watchdog = Duration::from_secs(keepalive_s + 5);
                         match sh.helix.subscribe_chat(&session_id, &identity.user_id, &identity.user_id).await {
                             Ok(_) => {
+                                sh.subscribe_redemptions(&session_id, identity).await;
                                 backoff.reset();
                                 let now = sh.deps.clock.now_ms();
                                 sh.update(|s| {
@@ -287,6 +300,9 @@ impl TwitchService {
                             }
                             Err(e) => return Disconnect::Transient(format!("Reconnect: {e}")),
                         }
+                    }
+                    WsAction::Redemption { update, event } => {
+                        let _ = sh.deps.redemptions_tx.send((update, event));
                     }
                     WsAction::Chat(ev) => {
                         let sh2 = sh.clone();
@@ -396,8 +412,28 @@ impl Shared {
         let _ = self.chat_tx.try_send((commands::sanitize_chat(&text), reply_to));
     }
 
+    /// Einlösungen der verwalteten Belohnung abonnieren (nur mit passender Berechtigung).
+    async fn subscribe_redemptions(&self, session_id: &str, identity: &Identity) {
+        let Some(reward_id) = self.deps.cp_reward.borrow().clone() else { return };
+        if !identity.scopes.iter().any(|s| s == super::CHANNEL_POINTS_SCOPE) {
+            return;
+        }
+        for kind in ["channel.channel_points_custom_reward_redemption.add", "channel.channel_points_custom_reward_redemption.update"] {
+            let cond = json!({ "broadcaster_user_id": identity.user_id, "reward_id": reward_id });
+            if let Err(e) = self.helix.subscribe(kind, cond, session_id).await {
+                tracing::warn!(target: "twitch", code = e.code(), kind, "Kanalpunkte-Abo fehlgeschlagen");
+                self.deps.activity.warn("channel_points.subscribe_failed", "Kanalpunkte-Einlösungen konnten nicht abonniert werden", json!({ "code": e.code() }));
+            }
+        }
+    }
+
     async fn handle_chat(self: Arc<Self>, ev: ChatEvent) {
         if self.sent_ids.lock().unwrap().contains(&ev.message_id) {
+            return;
+        }
+        // Chatnachrichten zu Kanalpunkte-Einlösungen werden ausschließlich über die
+        // Einlösung verarbeitet (sonst doppelter Wunsch).
+        if ev.reward_id.is_some() {
             return;
         }
         let settings = cfg::read(&self.deps.settings).commands.clone();

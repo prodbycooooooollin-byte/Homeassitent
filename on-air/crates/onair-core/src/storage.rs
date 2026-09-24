@@ -83,6 +83,17 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (kind, value)
     );
     "#,
+    // v2: Kanalpunkte-Abwicklung je Request
+    r#"
+    ALTER TABLE requests ADD COLUMN reward_id TEXT;
+    ALTER TABLE requests ADD COLUMN redemption_id TEXT;
+    -- unfulfilled | fulfilled | canceled | review | conflict
+    ALTER TABLE requests ADD COLUMN redemption_status TEXT;
+    -- vom Nutzer gewählte Abwicklung bei Prüfung: fulfilled | canceled
+    ALTER TABLE requests ADD COLUMN redemption_target TEXT;
+    ALTER TABLE requests ADD COLUMN redemption_error TEXT;
+    CREATE UNIQUE INDEX idx_requests_redemption ON requests(redemption_id) WHERE redemption_id IS NOT NULL;
+    "#,
 ];
 
 pub fn schema_version() -> i64 {
@@ -168,6 +179,11 @@ impl Db {
             )
             .map(|_| ())
             .map_err(|e| e.to_string())
+    }
+
+    /// Schreibt das WAL in die Hauptdatei (konsistenter Stand vor Update/Beenden).
+    pub fn checkpoint(&self) -> DbResult<()> {
+        self.conn().execute_batch("PRAGMA wal_checkpoint(TRUNCATE);").map_err(|e| e.to_string())
     }
 
     /// Alte Aktivitäten, verarbeitete Event-IDs und Verlauf begrenzen.

@@ -46,11 +46,24 @@ pub struct Actions {
     pub can_resume: bool,
 }
 
+/// Podcast-Episode (Spotify liefert dafür kein Track-Objekt).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EpisodeInfo {
+    pub title: String,
+    pub show: Option<String>,
+    pub image_url: Option<String>,
+    pub duration_ms: u64,
+    pub external_url: Option<String>,
+}
+
 /// Bestätigter Wiedergabezustand aus einer Spotify-Antwort.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Playback {
     pub is_playing: bool,
     pub track: Option<Track>,
+    /// Nur bei `item_type == "episode"`.
+    #[serde(default)]
+    pub episode: Option<EpisodeInfo>,
     /// z. B. „ad“, „episode“, „unknown“, wenn kein Track-Objekt geliefert wird.
     pub item_type: Option<String>,
     pub progress_ms: u64,

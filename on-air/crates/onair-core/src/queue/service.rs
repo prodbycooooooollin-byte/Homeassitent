@@ -17,6 +17,7 @@ use crate::clock::SharedClock;
 use crate::error::ApiError;
 use crate::events::{EventBus, Topic};
 use crate::model::{PlaybackView, Track};
+use crate::plan::{self, CurrentTrack, FitError, PlanConfig, PlanItem, PlanStatus};
 use crate::settings::{self as cfg, AcceptMode, SharedSettings};
 use crate::spotify::service::SpotifyState;
 use crate::spotify::{parse_track_link, SpotifyClient};
@@ -24,6 +25,11 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::watch;
+
+pub type SharedPlan = Arc<std::sync::RwLock<PlanConfig>>;
+
+/// Wirksames Annahme-Gate je Quelle (manuelle Pause, Quelle aus, Zeitplanung, Update …).
+pub type Gate = Arc<dyn Fn(Source) -> Result<(), Rejection> + Send + Sync>;
 
 /// Rückkanal für Chatantworten zu Requests, die verzögert entschieden werden.
 pub trait ChatNotifier: Send + Sync + 'static {
@@ -42,6 +48,8 @@ pub struct QueueService {
     decide_lock: tokio::sync::Mutex<()>,
     last_track_uri: Mutex<Option<String>>,
     notifier: OnceLock<Arc<dyn ChatNotifier>>,
+    gate: OnceLock<Gate>,
+    plan: SharedPlan,
     session_started_ms: i64,
 }
 
@@ -60,6 +68,7 @@ impl QueueService {
         activity: ActivityLog,
         bus: EventBus,
         clock: SharedClock,
+        plan: SharedPlan,
     ) -> Arc<Self> {
         let now = clock.now_ms();
         Arc::new(Self {
@@ -74,12 +83,99 @@ impl QueueService {
             decide_lock: tokio::sync::Mutex::new(()),
             last_track_uri: Mutex::new(None),
             notifier: OnceLock::new(),
+            gate: OnceLock::new(),
+            plan,
             session_started_ms: now,
         })
     }
 
     pub fn set_notifier(&self, n: Arc<dyn ChatNotifier>) {
         let _ = self.notifier.set(n);
+    }
+
+    pub fn set_gate(&self, g: Gate) {
+        let _ = self.gate.set(g);
+    }
+
+    pub fn plan_config(&self) -> PlanConfig {
+        self.plan.read().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// Aktueller Titel aus dem synchronisierten Zustand (keine zusätzliche Abfrage).
+    fn current_for_plan(&self) -> (Option<CurrentTrack>, bool) {
+        let st = self.sp_state.borrow().clone();
+        let now = self.now();
+        match &st.playback {
+            PlaybackView::Active(p) => {
+                let stale = !st.is_online() || now - p.fetched_at_ms > 20_000;
+                let dur = p.track.as_ref().map(|t| t.duration_ms).or(p.episode.as_ref().map(|e| e.duration_ms)).unwrap_or(0) as i64;
+                let progress = p.progress_ms as i64 + if p.is_playing { (now - p.fetched_at_ms).max(0) } else { 0 };
+                let cur = CurrentTrack {
+                    remaining_ms: if dur > 0 { (dur - progress).max(0) } else { 0 },
+                    is_playing: p.is_playing,
+                    repeat_track: p.repeat == "track",
+                    duration_known: dur > 0,
+                };
+                (Some(cur), stale)
+            }
+            PlaybackView::Idle { .. } => (None, !st.is_online()),
+            PlaybackView::Unknown => (None, true),
+        }
+    }
+
+    /// Planungsstatus; `exclude` = gerade geprüfter Request (wird nicht mitgezählt).
+    pub fn plan_status_excluding(&self, exclude: Option<&str>) -> PlanStatus {
+        let cfg = self.plan_config();
+        let now = self.now();
+        if !cfg.is_active() {
+            return PlanStatus::inactive(now);
+        }
+        let (current, unconfirmed) = self.current_for_plan();
+        let pending = self.store.pending();
+        let mut unresolved = false;
+        let items: Vec<PlanItem> = pending
+            .iter()
+            .filter(|r| Some(r.id.as_str()) != exclude)
+            .filter_map(|r| match r.status {
+                RequestStatus::Playing | RequestStatus::Received if r.track.is_none() => None,
+                RequestStatus::Playing => None,
+                RequestStatus::Uncertain => {
+                    unresolved = true;
+                    Some(PlanItem { id: r.id.clone(), duration_ms: r.track.as_ref().map(|t| t.duration_ms), reserved_only: false })
+                }
+                RequestStatus::PendingReview => Some(PlanItem { id: r.id.clone(), duration_ms: r.track.as_ref().map(|t| t.duration_ms), reserved_only: true }),
+                _ => Some(PlanItem { id: r.id.clone(), duration_ms: r.track.as_ref().map(|t| t.duration_ms), reserved_only: false }),
+            })
+            .collect();
+        plan::compute(&cfg, now, current.as_ref(), &items, &plan::Context { playback_unconfirmed: unconfirmed, unresolved_handoff: unresolved })
+    }
+
+    /// Wartet, bis keine Übergabe oder Entscheidung mehr läuft (vor einem Update).
+    pub async fn quiesce(&self) {
+        let _a = self.decide_lock.lock().await;
+        let _b = self.handoff_lock.lock().await;
+    }
+
+    pub fn plan_status(&self) -> PlanStatus {
+        self.plan_status_excluding(None)
+    }
+
+    fn check_plan_fit(&self, req: &SongRequest, track: &Track) -> Result<(), Rejection> {
+        if req.source == Source::App {
+            return Ok(());
+        }
+        let st = self.plan_status_excluding(Some(&req.id));
+        match plan::check_fit(&st, track.duration_ms) {
+            Ok(()) => Ok(()),
+            Err(FitError::Ended) => Err(Rejection::StreamEnded),
+            Err(FitError::TooLong { duration_ms, free_ms }) => {
+                if free_ms < plan::MIN_SLOT_MS {
+                    Err(Rejection::BudgetExhausted)
+                } else {
+                    Err(Rejection::TooLongForPlan { duration_ms, free_ms })
+                }
+            }
+        }
     }
 
     pub fn session_started_ms(&self) -> i64 {
@@ -131,7 +227,49 @@ impl QueueService {
             observed_at: None,
             finished_at: None,
             chat_message_id: chat_message_id.map(str::to_string),
+            redemption: None,
         };
+        self.submit_new(req).await
+    }
+
+    /// Request aus einer Kanalpunkte-Einlösung. Dedupliziert über die Redemption-ID.
+    pub async fn submit_redemption(&self, query: &str, requester: Requester, reward_id: &str, redemption_id: &str) -> SubmitOutcome {
+        if self.store.by_redemption(redemption_id).is_some() {
+            return SubmitOutcome::Duplicate;
+        }
+        let now = self.now();
+        let req = SongRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            track: None,
+            query: query.trim().chars().take(200).collect(),
+            requester,
+            source: Source::ChannelPoints,
+            source_event: Some(format!("cp:{redemption_id}")),
+            received_at: now,
+            status: RequestStatus::Received,
+            pending_reason: None,
+            reason: None,
+            reason_text: None,
+            position: 0.0,
+            priority: false,
+            updated_at: now,
+            handoff_at: None,
+            observed_at: None,
+            finished_at: None,
+            chat_message_id: None,
+            redemption: Some(super::Redemption {
+                reward_id: reward_id.into(),
+                redemption_id: redemption_id.into(),
+                status: super::RedemptionStatus::Unfulfilled,
+                target: None,
+                last_error: None,
+            }),
+        };
+        self.submit_new(req).await
+    }
+
+    async fn submit_new(&self, req: SongRequest) -> SubmitOutcome {
+        let now = req.received_at;
         // Ereignis-Deduplizierung und Anlage in einer Transaktion.
         match self.store.insert_with_event(&req, "twitch", now) {
             Ok(true) => {}
@@ -172,6 +310,7 @@ impl QueueService {
             observed_at: None,
             finished_at: None,
             chat_message_id: None,
+            redemption: None,
         };
         if let Err(e) = self.store.insert(&req) {
             return SubmitOutcome::Rejected { code: "storage".into(), text: e, request: None };
@@ -184,6 +323,14 @@ impl QueueService {
 
     fn check_requester(&self, req: &SongRequest) -> Result<(), Rejection> {
         let rules = cfg::read(&self.settings).requests.clone();
+        if req.source != Source::App {
+            match self.gate.get() {
+                Some(g) => g(req.source)?,
+                // Ohne Runtime (Tests): nur die manuelle Pause berücksichtigen.
+                None if !rules.open && req.requester.role != crate::settings::Role::Broadcaster => return Err(Rejection::Closed),
+                None => {}
+            }
+        }
         let stats = self.store.stats(&req.requester.id, None, &req.id);
         rules::check_requester(
             &rules,
@@ -193,6 +340,7 @@ impl QueueService {
             req.requester.role,
             &stats,
             req.received_at,
+            req.source == Source::ChannelPoints,
         )
     }
 
@@ -265,9 +413,15 @@ impl QueueService {
             let _ = self.store.set_track_and_status(&req.id, &track, from, from, None, now);
             return self.reject(&req, r);
         }
+        // Zeitbudget: unter derselben Sperre wie die Annahme → keine doppelte Reservierung.
+        if let Err(r) = self.check_plan_fit(&req, &track) {
+            let _ = self.store.set_track_and_status(&req.id, &track, from, from, None, now);
+            return self.reject(&req, r);
+        }
         let position = self.insertion_position(&req.requester.id, rules.fair_order);
         let _ = self.store.set_position(&req.id, position, now);
-        let moderated = rules.mode == AcceptMode::Moderation && req.requester.role != crate::settings::Role::Broadcaster;
+        let mode = if req.source == Source::ChannelPoints { cfg::read(&self.settings).channel_points.mode } else { rules.mode };
+        let moderated = mode == AcceptMode::Moderation && req.requester.role != crate::settings::Role::Broadcaster;
         let (to, pending) = if moderated {
             (RequestStatus::PendingReview, Some(PendingReason::Moderation))
         } else {
@@ -370,6 +524,11 @@ impl QueueService {
         if r.pending_reason == Some(PendingReason::Offline) || r.track.is_none() {
             return Err("Dieser Request wird erst geprüft, wenn Spotify erreichbar ist.".into());
         }
+        if let Some(t) = &r.track {
+            if let Err(rej) = self.check_plan_fit(&r, t) {
+                return Err(format!("Passt nicht mehr ins Zeitbudget: {}", rej.text()));
+            }
+        }
         if !self.store.transition(id, &[RequestStatus::PendingReview], RequestStatus::Accepted, self.now(), None)? {
             return Err("Request ist nicht mehr in Prüfung.".into());
         }
@@ -388,6 +547,7 @@ impl QueueService {
         let text = match code {
             "removed_by_streamer" => "vom Streamer entfernt",
             "removed_by_user" => "selbst entfernt",
+            "canceled_on_twitch" => "auf Twitch storniert",
             _ => "abgelehnt",
         };
         if !self.store.transition(

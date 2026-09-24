@@ -2,7 +2,13 @@
 //! Desktop-Hülle erzwingt zusätzlich eine Einzelinstanz). Fensterwechsel oder
 //! Neuladen der UI starten keine weiteren Worker.
 
+use crate::acceptance::{self, Acceptance, Block};
 use crate::activity::{Activity, ActivityLog};
+use crate::plan::{PlanConfig, PlanStatus};
+use crate::queue::rules::Rejection;
+use crate::queue::service::SharedPlan;
+use crate::twitch::helix::Helix;
+use crate::twitch::rewards::{ChannelPointsDeps, ChannelPointsService, ChannelPointsStatus};
 use crate::auth::loopback::LoginError;
 use crate::auth::TokenManager;
 use crate::clock::SharedClock;
@@ -93,6 +99,11 @@ pub struct AppSnapshot {
     pub session: HashMap<String, i64>,
     pub session_started_ms: i64,
     pub server_time_ms: i64,
+    pub acceptance: Acceptance,
+    pub plan: PlanStatus,
+    pub plan_config: PlanConfig,
+    pub channel_points: ChannelPointsStatus,
+    pub update_pause: bool,
 }
 
 pub struct Runtime {
@@ -114,6 +125,12 @@ pub struct Runtime {
     pub twitch_state: watch::Receiver<TwitchState>,
     pub twitch_cmd: mpsc::UnboundedSender<TwitchCmd>,
     pub queue: Arc<QueueService>,
+    pub plan: SharedPlan,
+    pub channel_points: Arc<ChannelPointsService>,
+    cp_status: watch::Receiver<ChannelPointsStatus>,
+    helix: Helix,
+    update_pause: AtomicBool,
+    last_acceptance: Mutex<Option<Acceptance>>,
     poll_tx: watch::Sender<PollConfig>,
     overlay_tx: watch::Sender<OverlayData>,
     overlay: tokio::sync::Mutex<Option<OverlayServer>>,
@@ -155,6 +172,8 @@ impl Runtime {
             cfg.clock.clone(),
         );
         let spotify = SpotifyClient::new(cfg.http.clone(), spotify_tokens.clone(), cfg.clock.clone(), &cfg.endpoints.spotify_api);
+        let plan_cfg: PlanConfig = cfg.db.get_setting(PlanConfig::KEY).and_then(|r| serde_json::from_str(&r).ok()).unwrap_or_default();
+        let plan = Arc::new(RwLock::new(plan_cfg));
         let poll_cfg = PollConfig { playing_ms: cfg::read(&settings).spotify.poll_playing_ms, ..Default::default() };
         let (poll_tx, poll_rx) = watch::channel(poll_cfg);
         let (sp_service, sp_handle) = SpotifyService::new(spotify.clone(), cfg.clock.clone(), poll_rx);
@@ -167,6 +186,7 @@ impl Runtime {
             activity.clone(),
             bus.clone(),
             cfg.clock.clone(),
+            plan.clone(),
         );
 
         let s2 = settings.clone();
@@ -181,10 +201,14 @@ impl Runtime {
             cfg.secrets.clone(),
             cfg.clock.clone(),
         );
+        let (reward_tx, reward_rx) = watch::channel(None);
+        let (redemptions_tx, redemptions_rx) = mpsc::unbounded_channel();
         let (tw_service, tw_handle) = TwitchService::new(TwitchDeps {
+            cp_reward: reward_rx,
+            redemptions_tx,
             http: cfg.http.clone(),
             tokens: twitch_tokens.clone(),
-            client_id: twitch_client_id,
+            client_id: twitch_client_id.clone(),
             id_base: cfg.endpoints.twitch_id.clone(),
             helix_base: cfg.endpoints.twitch_helix.clone(),
             ws_url: cfg.endpoints.twitch_ws.clone(),
@@ -198,6 +222,26 @@ impl Runtime {
             clock: cfg.clock.clone(),
         });
         queue.set_notifier(tw_handle.notifier());
+
+        let helix = Helix {
+            http: cfg.http.clone(),
+            tokens: twitch_tokens.clone(),
+            client_id: twitch_client_id,
+            base: cfg.endpoints.twitch_helix.clone(),
+        };
+        let (channel_points, cp_status) = ChannelPointsService::new(
+            ChannelPointsDeps {
+                helix: Helix { http: helix.http.clone(), tokens: helix.tokens.clone(), client_id: helix.client_id.clone(), base: helix.base.clone() },
+                queue: queue.clone(),
+                settings: settings.clone(),
+                twitch_state: tw_handle.state.clone(),
+                activity: activity.clone(),
+                bus: bus.clone(),
+                clock: cfg.clock.clone(),
+                db: cfg.db.clone(),
+            },
+            reward_tx,
+        );
 
         let control_token = match cfg.secrets.load(CONTROL_SECRET_KEY) {
             Ok(Some(t)) if t.len() >= 32 => t,
@@ -228,6 +272,12 @@ impl Runtime {
             twitch_state: tw_handle.state.clone(),
             twitch_cmd: tw_handle.cmd.clone(),
             queue,
+            plan,
+            channel_points,
+            cp_status,
+            helix,
+            update_pause: AtomicBool::new(false),
+            last_acceptance: Mutex::new(None),
             poll_tx,
             overlay_tx,
             overlay: tokio::sync::Mutex::new(None),
@@ -244,6 +294,27 @@ impl Runtime {
         });
         *rt.self_ref.lock().unwrap() = Arc::downgrade(&rt);
 
+        // Annahme-Gate: getrennte Sperrgründe, gemeinsam ausgewertet.
+        let weak = Arc::downgrade(&rt);
+        rt.queue.set_gate(Arc::new(move |source| {
+            let Some(rt) = weak.upgrade() else { return Err(Rejection::Technical { detail: "beendet".into() }) };
+            let a = rt.acceptance();
+            let gate = match source {
+                Source::ChannelPoints => &a.channel_points,
+                _ => &a.chat,
+            };
+            // „Abgleich läuft“ hält nur die Belohnung auf Twitch pausiert; bereits
+            // getätigte (verpasste) Einlösungen werden regulär verarbeitet.
+            match gate.blocks.iter().find(|b| !matches!(b, Block::Reconciling)) {
+                None => Ok(()),
+                Some(b) => Err(block_to_rejection(b)),
+            }
+        }));
+        let weak = Arc::downgrade(&rt);
+        rt.channel_points.set_desired_paused(Arc::new(move || {
+            weak.upgrade().map(|rt| !rt.acceptance_without_cp_state().channel_points.open).unwrap_or(true)
+        }));
+
         // Absturzreste auflösen, bevor Worker starten.
         rt.queue.recover_after_start().await;
         let _ = rt.db.prune(rt.clock.now_ms());
@@ -253,6 +324,8 @@ impl Runtime {
             tokio::spawn(tw_service.run()),
             tokio::spawn(observe_spotify(Arc::downgrade(&rt))),
             tokio::spawn(overlay_feeder(Arc::downgrade(&rt))),
+            tokio::spawn(rt.channel_points.clone().run(redemptions_rx)),
+            tokio::spawn(acceptance_watcher(Arc::downgrade(&rt))),
         ];
         let weak = Arc::downgrade(&rt);
         let clock = rt.clock.clone();
@@ -287,8 +360,12 @@ impl Runtime {
         rt
     }
 
-    /// Beendet alle Worker (App-Ende).
+    /// Beendet alle Worker (App-Ende). Pausiert vorher die Kanalpunkte-Belohnung (best effort).
     pub async fn shutdown(&self) {
+        self.update_pause.store(true, Ordering::SeqCst);
+        if cfg::read(&self.settings).channel_points.enabled {
+            let _ = self.channel_points.pause_before_exit(Duration::from_secs(4)).await;
+        }
         for t in self.tasks.lock().unwrap().drain(..) {
             t.abort();
         }
@@ -359,6 +436,11 @@ impl Runtime {
             session: self.queue.session_summary(),
             session_started_ms: self.queue.session_started_ms(),
             server_time_ms: self.clock.now_ms(),
+            acceptance: self.acceptance(),
+            plan: self.queue.plan_status(),
+            plan_config: self.queue.plan_config(),
+            channel_points: self.cp_status.borrow().clone(),
+            update_pause: self.update_pause.load(Ordering::SeqCst),
         }
     }
 
@@ -468,8 +550,13 @@ impl Runtime {
     // ------------------------------------------------------------------
 
     pub async fn twitch_login_start(&self) -> Result<DeviceCode, ApiError> {
-        let client_id = cfg::read(&self.settings).twitch.client_id.trim().to_string();
-        let dc = crate::twitch::auth::start_device_flow(&self.http, &self.endpoints.twitch_id, &client_id).await?;
+        let s = cfg::read(&self.settings).clone();
+        let client_id = s.twitch.client_id.trim().to_string();
+        // Kanalpunkte-Berechtigung nur anfordern, wenn die Funktion genutzt wird.
+        let with_cp = s.channel_points.enabled
+            || self.twitch_state.borrow().identity.as_ref().map(|i| i.scopes.iter().any(|x| x == crate::twitch::CHANNEL_POINTS_SCOPE)).unwrap_or(false);
+        let scopes = crate::twitch::scopes(with_cp);
+        let dc = crate::twitch::auth::start_device_flow(&self.http, &self.endpoints.twitch_id, &client_id, &scopes).await?;
         *self.twitch_device_code.lock().unwrap() = Some(dc.clone());
         let (tx, rx) = oneshot::channel();
         if let Some(old) = self.twitch_login_cancel.lock().unwrap().replace(tx) {
@@ -509,6 +596,130 @@ impl Runtime {
         self.twitch_tokens.sign_out();
         self.activity.info("twitch.signed_out", "Von Twitch abgemeldet", json!({}));
     }
+
+    // ------------------------------------------------------------------
+    // Annahme-Gate, Streamplanung, Kanalpunkte, Update-Pause
+    // ------------------------------------------------------------------
+
+    fn acceptance_inputs(&self, with_cp_state: bool) -> acceptance::Inputs {
+        let s = cfg::read(&self.settings).clone();
+        let sp_signed = matches!(self.spotify_state.borrow().auth, crate::auth::AuthStatus::SignedIn { .. });
+        let tw = self.twitch_state.borrow().clone();
+        acceptance::Inputs {
+            manual_open: s.requests.open,
+            chat_enabled: s.requests.chat_enabled,
+            cp_enabled: s.channel_points.enabled,
+            update_pause: self.update_pause.load(Ordering::SeqCst),
+            spotify_signed_in: sp_signed,
+            twitch_chat_connected: matches!(tw.link, crate::twitch::service::TwitchLink::Connected),
+            cp_technical: if with_cp_state { self.channel_points.technical_now() } else { None },
+            cp_reconciling: with_cp_state && s.channel_points.enabled && !self.channel_points.is_reconciled(),
+        }
+    }
+
+    /// Wirksamer Annahmestatus mit allen Sperrgründen.
+    pub fn acceptance(&self) -> Acceptance {
+        acceptance::compute(&self.acceptance_inputs(true), &self.queue.plan_status())
+    }
+
+    /// Ohne den Zustand der Belohnung selbst (verhindert Zirkelbezug bei der Synchronisation).
+    fn acceptance_without_cp_state(&self) -> Acceptance {
+        acceptance::compute(&self.acceptance_inputs(false), &self.queue.plan_status())
+    }
+
+    fn save_plan(&self, p: PlanConfig) -> Result<(), String> {
+        let raw = serde_json::to_string(&p).map_err(|e| e.to_string())?;
+        self.db.set_setting(PlanConfig::KEY, &raw)?;
+        *self.plan.write().unwrap_or_else(|x| x.into_inner()) = p;
+        self.bus.changed(Topic::Queue);
+        self.channel_points.kick();
+        Ok(())
+    }
+
+    /// Planung starten/ändern mit festem Endzeitpunkt (Unix-ms).
+    pub fn plan_set_end(&self, end_at_ms: i64, buffer_ms: Option<i64>) -> Result<(), String> {
+        let now = self.clock.now_ms();
+        if end_at_ms <= now {
+            return Err("Die Endzeit liegt in der Vergangenheit.".into());
+        }
+        if end_at_ms - now > 24 * 3_600_000 {
+            return Err("Maximal 24 Stunden im Voraus.".into());
+        }
+        let mut p = self.queue.plan_config();
+        let was_active = p.is_active();
+        p.enabled = true;
+        p.end_at_ms = Some(end_at_ms);
+        if let Some(b) = buffer_ms {
+            p.buffer_ms = b.clamp(0, 30 * 60_000);
+        }
+        self.save_plan(p)?;
+        self.activity.info(
+            if was_active { "plan.changed" } else { "plan.started" },
+            format!("Streamplanung: noch {} Minuten", (end_at_ms - now + 30_000) / 60_000),
+            json!({ "end_at_ms": end_at_ms }),
+        );
+        Ok(())
+    }
+
+    pub fn plan_extend(&self, minutes: i64) -> Result<(), String> {
+        let p = self.queue.plan_config();
+        let now = self.clock.now_ms();
+        let base = p.end_at_ms.filter(|_| p.enabled).unwrap_or(now).max(now);
+        self.plan_set_end(base + minutes * 60_000, None)
+    }
+
+    pub fn plan_set_buffer(&self, buffer_ms: i64) -> Result<(), String> {
+        let mut p = self.queue.plan_config();
+        p.buffer_ms = buffer_ms.clamp(0, 30 * 60_000);
+        self.save_plan(p)
+    }
+
+    pub fn plan_stop(&self) -> Result<(), String> {
+        let mut p = self.queue.plan_config();
+        if !p.enabled {
+            return Ok(());
+        }
+        p.enabled = false;
+        self.save_plan(p)?;
+        self.activity.info("plan.stopped", "Streamplanung beendet", json!({}));
+        Ok(())
+    }
+
+    /// Entscheidung zu einer Kanalpunkte-Einlösung (Prüfung/Konflikt).
+    pub fn redemption_decide(&self, request_id: &str, fulfill: bool) -> Result<(), String> {
+        self.channel_points.decide(request_id, fulfill)
+    }
+
+    /// Live-Status laut Twitch (`None` = unbekannt).
+    pub async fn twitch_is_live(&self) -> Option<bool> {
+        let id = self.twitch_state.borrow().identity.clone()?;
+        tokio::time::timeout(Duration::from_secs(5), self.helix.is_live(&id.user_id)).await.ok()?.ok()
+    }
+
+    /// Vor einer Update-Installation: Annahme pausieren, Belohnung pausieren, laufende
+    /// Übergaben abwarten, Datenbank sichern. Liefert einen ehrlichen Bericht.
+    pub async fn prepare_for_update(&self) -> UpdatePrep {
+        self.update_pause.store(true, Ordering::SeqCst);
+        self.bus.changed(Topic::Queue);
+        self.activity.info("update.preparing", "Update wird vorbereitet – neue Requests sind kurz pausiert", json!({}));
+        let reward_paused = if cfg::read(&self.settings).channel_points.enabled {
+            Some(self.channel_points.pause_before_exit(Duration::from_secs(6)).await)
+        } else {
+            None
+        };
+        let idle = tokio::time::timeout(Duration::from_secs(10), self.queue.quiesce()).await.is_ok();
+        let db_ok = self.db.checkpoint().is_ok();
+        UpdatePrep { reward_paused, queue_idle: idle, db_saved: db_ok }
+    }
+
+    /// Update abgebrochen: Pause wieder aufheben.
+    pub fn cancel_update_pause(&self) {
+        if self.update_pause.swap(false, Ordering::SeqCst) {
+            self.bus.changed(Topic::Queue);
+            self.channel_points.kick();
+        }
+    }
+
 
     // ------------------------------------------------------------------
     // Einstellungen, Profile, Sperrlisten, Verlauf
@@ -586,6 +797,7 @@ impl Runtime {
         s.requests = p.rules;
         s.overlay = p.overlay;
         s.overlay.port = port; // OBS-URLs bleiben stabil.
+        s.requests.open = cfg::read(&self.settings).requests.open; // manuelle Pause ist kein Profilwert
         s.active_profile = Some(p.id);
         self.activity.info("profile.applied", format!("Profil „{}“ aktiv", p.name), json!({ "name": p.name }));
         self.update_settings(s).await.map(|_| ())
@@ -717,6 +929,48 @@ impl Runtime {
             PlaybackView::Unknown => {}
         }
         data
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UpdatePrep {
+    /// `None` = Kanalpunkte nicht aktiv; `Some(false)` = Pause auf Twitch nicht bestätigt.
+    pub reward_paused: Option<bool>,
+    pub queue_idle: bool,
+    pub db_saved: bool,
+}
+
+pub(crate) fn block_to_rejection(b: &Block) -> Rejection {
+    match b {
+        Block::ManualPause => Rejection::Closed,
+        Block::SourceDisabled => Rejection::SourceDisabled,
+        Block::StreamEnded => Rejection::StreamEnded,
+        Block::BudgetExhausted { .. } => Rejection::BudgetExhausted,
+        Block::PlanUncertain { .. } => Rejection::PlanUncertain,
+        Block::UpdatePause | Block::Reconciling => Rejection::UpdatePause,
+        Block::Technical { detail } => Rejection::Technical { detail: detail.clone() },
+    }
+}
+
+/// Beobachtet den wirksamen Annahmestatus (z. B. Zeitbudget läuft ab) und
+/// synchronisiert Twitch sowie die UI bei Änderungen.
+async fn acceptance_watcher(weak: Weak<Runtime>) {
+    let mut iv = tokio::time::interval(Duration::from_secs(5));
+    loop {
+        iv.tick().await;
+        let Some(rt) = weak.upgrade() else { return };
+        let a = rt.acceptance();
+        let prev = rt.last_acceptance.lock().unwrap().replace(a.clone());
+        let Some(prev) = prev else { continue };
+        if prev != a {
+            if a.paused_by_plan && !prev.paused_by_plan {
+                rt.activity.warn("plan.auto_paused", "Requests automatisch pausiert: Zeitbudget bis Streamende ausgeschöpft", json!({}));
+            } else if !a.paused_by_plan && prev.paused_by_plan && a.any_open {
+                rt.activity.info("plan.auto_resumed", "Zeitplanung erlaubt wieder neue Requests", json!({}));
+            }
+            rt.channel_points.kick();
+            rt.bus.changed(Topic::Queue);
+        }
     }
 }
 

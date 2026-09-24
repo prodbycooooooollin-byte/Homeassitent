@@ -22,6 +22,22 @@ pub enum Rejection {
     NotFound,
     InvalidLink,
     NotPlayable,
+    /// Diese Request-Quelle ist ausgeschaltet.
+    SourceDisabled,
+    /// Geplantes Streamende erreicht.
+    StreamEnded,
+    /// Zeitbudget ausgeschöpft.
+    BudgetExhausted,
+    /// Song passt nicht mehr ins verbleibende Zeitbudget.
+    TooLongForPlan { duration_ms: u64, free_ms: i64 },
+    /// Prognose unsicher – kostenpflichtige Wünsche werden zurückgehalten.
+    PlanUncertain,
+    /// Kurz pausiert (Update/Beenden).
+    UpdatePause,
+    /// Technische Einschränkung.
+    Technical { detail: String },
+    /// Auf Twitch storniert.
+    CanceledOnTwitch,
 }
 
 impl Rejection {
@@ -42,6 +58,14 @@ impl Rejection {
             Rejection::NotFound => "not_found",
             Rejection::InvalidLink => "invalid_link",
             Rejection::NotPlayable => "not_playable",
+            Rejection::SourceDisabled => "source_disabled",
+            Rejection::StreamEnded => "stream_ended",
+            Rejection::BudgetExhausted => "budget_exhausted",
+            Rejection::TooLongForPlan { .. } => "too_long_for_plan",
+            Rejection::PlanUncertain => "plan_uncertain",
+            Rejection::UpdatePause => "update_pause",
+            Rejection::Technical { .. } => "technical",
+            Rejection::CanceledOnTwitch => "canceled_on_twitch",
         }
     }
 
@@ -63,6 +87,18 @@ impl Rejection {
             Rejection::NotFound => "kein passender Song gefunden".into(),
             Rejection::InvalidLink => "nur Spotify-Track-Links oder Suchbegriffe".into(),
             Rejection::NotPlayable => "dieser Song kann nicht abgespielt werden".into(),
+            Rejection::SourceDisabled => "dieser Request-Weg ist gerade ausgeschaltet".into(),
+            Rejection::StreamEnded => "der Stream endet gleich – keine neuen Wünsche mehr".into(),
+            Rejection::BudgetExhausted => "bis zum Streamende passt kein weiterer Song".into(),
+            Rejection::TooLongForPlan { duration_ms, free_ms } => format!(
+                "dein Song dauert {}; aktuell passen voraussichtlich noch {} hinein",
+                crate::plan::mmss(*duration_ms as i64),
+                crate::plan::mmss(*free_ms)
+            ),
+            Rejection::PlanUncertain => "die Restzeit lässt sich gerade nicht sicher berechnen – bitte gleich nochmal".into(),
+            Rejection::UpdatePause => "Requests sind kurz pausiert".into(),
+            Rejection::Technical { .. } => "Requests sind gerade technisch nicht möglich".into(),
+            Rejection::CanceledOnTwitch => "auf Twitch storniert".into(),
         }
     }
 }
@@ -85,6 +121,9 @@ pub struct QueueStats {
 }
 
 /// Regeln, die unabhängig vom konkreten Track gelten (vor der Suche prüfbar).
+/// Ob eine Quelle überhaupt annimmt (Pause, Zeitplanung …), prüft das Annahme-Gate.
+/// `paid` = Kanalpunkte: Rolle und Cooldowns regelt Twitch über die Belohnung.
+#[allow(clippy::too_many_arguments)]
 pub fn check_requester(
     rules: &RequestRules,
     block: &Blocklist,
@@ -93,12 +132,10 @@ pub fn check_requester(
     role: crate::settings::Role,
     stats: &QueueStats,
     now_ms: i64,
+    paid: bool,
 ) -> Result<(), Rejection> {
     let privileged = rules.privileged_bypass && role >= Role::Moderator;
-    if !rules.open && role != Role::Broadcaster {
-        return Err(Rejection::Closed);
-    }
-    if role < rules.min_role {
+    if !paid && role < rules.min_role {
         return Err(Rejection::RoleTooLow { needed: rules.min_role });
     }
     let lname = requester_name.to_lowercase();
@@ -113,6 +150,9 @@ pub fn check_requester(
     }
     if rules.per_user_limit > 0 && stats.pending_for_user >= rules.per_user_limit {
         return Err(Rejection::UserLimit { limit: rules.per_user_limit });
+    }
+    if paid {
+        return Ok(());
     }
     if let Some(last) = stats.last_by_user_ms {
         let rem = rules.user_cooldown_s as i64 * 1000 - (now_ms - last);
@@ -181,11 +221,13 @@ mod tests {
     }
 
     #[test]
-    fn closed_blocks_viewers_not_broadcaster() {
-        let r = RequestRules::default();
-        let s = QueueStats::default();
-        assert_eq!(check_requester(&r, &Blocklist::default(), "1", "a", Role::Everyone, &s, 0), Err(Rejection::Closed));
-        assert!(check_requester(&r, &Blocklist::default(), "1", "a", Role::Broadcaster, &s, 0).is_ok());
+    fn channel_points_skip_role_and_cooldown_but_not_limits() {
+        let r = RequestRules { min_role: Role::Subscriber, user_cooldown_s: 60, per_user_limit: 1, ..open_rules() };
+        let s = QueueStats { last_by_user_ms: Some(0), ..Default::default() };
+        assert!(check_requester(&r, &Blocklist::default(), "1", "a", Role::Everyone, &s, 1_000, true).is_ok());
+        assert!(check_requester(&r, &Blocklist::default(), "1", "a", Role::Everyone, &s, 1_000, false).is_err());
+        let full = QueueStats { pending_for_user: 1, ..Default::default() };
+        assert_eq!(check_requester(&r, &Blocklist::default(), "1", "a", Role::Everyone, &full, 0, true), Err(Rejection::UserLimit { limit: 1 }));
     }
 
     #[test]
@@ -193,15 +235,15 @@ mod tests {
         let r = RequestRules { user_cooldown_s: 60, per_user_limit: 1, ..open_rules() };
         let s = QueueStats { last_by_user_ms: Some(10_000), ..Default::default() };
         assert_eq!(
-            check_requester(&r, &Blocklist::default(), "1", "a", Role::Everyone, &s, 40_000),
+            check_requester(&r, &Blocklist::default(), "1", "a", Role::Everyone, &s, 40_000, false),
             Err(Rejection::UserCooldown { remaining_s: 30 })
         );
         let s = QueueStats { pending_for_user: 1, ..Default::default() };
         assert_eq!(
-            check_requester(&r, &Blocklist::default(), "1", "a", Role::Everyone, &s, 0),
+            check_requester(&r, &Blocklist::default(), "1", "a", Role::Everyone, &s, 0, false),
             Err(Rejection::UserLimit { limit: 1 })
         );
-        assert!(check_requester(&r, &Blocklist::default(), "1", "a", Role::Moderator, &s, 0).is_ok());
+        assert!(check_requester(&r, &Blocklist::default(), "1", "a", Role::Moderator, &s, 0, false).is_ok());
     }
 
     #[test]

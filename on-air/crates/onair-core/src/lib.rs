@@ -13,6 +13,7 @@
 //! - [`overlay`]: lokaler Overlay-Server (nur Loopback) für OBS Browser Sources
 //! - [`runtime`]: Orchestrierung – genau ein Worker pro Integration
 
+pub mod acceptance;
 pub mod activity;
 pub mod auth;
 pub mod backoff;
@@ -24,6 +25,7 @@ pub mod http;
 pub mod model;
 pub mod nowplaying_file;
 pub mod overlay;
+pub mod plan;
 pub mod queue;
 pub mod runtime;
 pub mod secrets;
