@@ -39,6 +39,16 @@ ON AIR liest und schreibt den Chat **deines** Kanals mit deinem Konto. Twitch-An
 öffentlicher Clients verfallen nach 30 Tagen ohne Nutzung; bei regelmäßigem Betrieb
 erneuert ON AIR sie automatisch.
 
+### Kanalpunkte (optional, nur Affiliates/Partner)
+
+1. *Einstellungen → Kanalpunkte* einschalten. ON AIR fordert dafür einmalig die zusätzliche
+   Berechtigung `channel:manage:redemptions` an (erneut den Code auf `twitch.tv/activate` eingeben).
+2. ON AIR legt die Belohnung „Song wünschen“ selbst an (Titel, Kosten, Eingabehinweis und
+   Limits sind einstellbar). Eine **von Hand** im Twitch-Dashboard angelegte Belohnung kann
+   ON AIR nicht verwalten – Twitch erlaubt Erfüllen/Stornieren nur für Belohnungen derselben Client-ID.
+3. Chat und Kanalpunkte sind unabhängig schaltbar; „Requests annehmen“ in der Übersicht
+   pausiert beide, ohne ihre Einstellungen zu ändern.
+
 ## 3. Wiedergabegerät
 
 Spotify auf dem Gerät öffnen, das im Stream laufen soll, und einen Song starten. ON AIR
@@ -55,6 +65,18 @@ verschoben; unter „Gerät wählen“ kannst du sie ausdrücklich übertragen.
 Die Widgets verbinden sich nach einem Neustart von ON AIR selbstständig wieder und
 blenden sich bei veralteten Daten aus. Die Anzeige von Metadaten erteilt keine Rechte
 zur Ausstrahlung der Musik.
+
+## Streamplanung
+
+In der Übersicht unter *Streamplanung* die verbleibende Streamzeit wählen (15/30/60/90 Min)
+oder eine Endzeit eintragen. ON AIR nimmt dann nur Requests an, die voraussichtlich noch
+vor dem Ende (abzüglich Puffer, Standard 2 Min) laufen. „+15 Minuten“ verlängert,
+„Planung beenden“ hebt die Begrenzung auf.
+
+## Updates
+
+Siehe [UPDATES.md](UPDATES.md) – einmalig die Version 0.2.0 manuell installieren, danach
+über *Einstellungen → Updates*.
 
 ## Stream Deck / Fernsteuerung (optional)
 

@@ -53,7 +53,7 @@ export function Pill({ tone, label, text, onClick, title }: { tone: Tone; label:
   );
 }
 
-export function Badge({ tone, children, title }: { tone?: "accent" | "warn" | "danger" | "info"; children: ReactNode; title?: string }) {
+export function Badge({ tone, children, title }: { tone?: "accent" | "warn" | "danger" | "info" | "positive" | "glass"; children: ReactNode; title?: string }) {
   return (
     <span className={`badge ${tone ?? ""}`} title={title}>
       {children}

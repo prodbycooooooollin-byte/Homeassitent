@@ -1,6 +1,9 @@
-import { Copy, Download, ExternalLink, FolderOpen, LogOut, Save, Stethoscope, Trash2, Upload } from "lucide-react";
+import { CalendarClock, Copy, Database, Download, ExternalLink, FolderOpen, Layers, ListChecks, LogOut, MessageSquare, Monitor, Music2, Palette, Plug, RefreshCw, Save, Sparkles, Stethoscope, Trash2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DiagnosticsDialog } from "../components/Dialogs";
+import { PlanPanel } from "../components/PlanPanel";
+import { UpdatePanel } from "../components/UpdatePanel";
+import { useUpdateInfo } from "../lib/updates";
 import { SpotifyLoginStatus, startSpotifyLogin, startTwitchLogin, useSpotifyLogin } from "../components/Login";
 import { Dialog, Field, Notice, Segmented, SettingRow, Toggle, toast, toastError } from "../components/ui";
 import { api, autostart, copyText, isTauri, openTextFile, saveTextFile } from "../lib/api";
@@ -10,7 +13,6 @@ import { refresh, useNow } from "../lib/store";
 import { useSettingsDraft } from "../lib/useSettings";
 import type { AppSnapshot, CommandCfg, Replies, Role, Settings } from "../lib/types";
 
-type Tab = "connections" | "requests" | "commands" | "profiles" | "app" | "data";
 type Update = (fn: (s: Settings) => Settings) => void;
 
 const ROLES: Role[] = ["everyone", "subscriber", "vip", "moderator", "broadcaster"];
@@ -29,28 +31,127 @@ function Num({ value, onChange, min, max, label, width = 110 }: { value: number;
   return <input className="input" style={{ width }} type="number" min={min} max={max} value={value} aria-label={label} onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || 0)))} />;
 }
 
-export function SettingsView({ snap, initialTab }: { snap: AppSnapshot; initialTab?: Tab }) {
-  const [tab, setTab] = useState<Tab>(initialTab ?? "connections");
+const SECTIONS = [
+  { id: "connections", icon: Plug, label: () => t("set.connections") },
+  { id: "playback", icon: Music2, label: () => t("set.playback") },
+  { id: "requests", icon: ListChecks, label: () => t("set.requests") },
+  { id: "channel_points", icon: Sparkles, label: () => t("set.channel_points") },
+  { id: "plan", icon: CalendarClock, label: () => t("set.plan") },
+  { id: "commands", icon: MessageSquare, label: () => t("set.commands") },
+  { id: "profiles", icon: Layers, label: () => t("set.profiles") },
+  { id: "appearance", icon: Palette, label: () => t("set.appearance") },
+  { id: "system", icon: Monitor, label: () => t("set.system") },
+  { id: "updates", icon: RefreshCw, label: () => t("set.updates") },
+  { id: "data", icon: Database, label: () => t("set.data") },
+] as const;
+export type SettingsSection = (typeof SECTIONS)[number]["id"];
+
+export function SettingsView({ snap, initial }: { snap: AppSnapshot; initial?: SettingsSection }) {
+  const [sec, setSec] = useState<SettingsSection>(initial ?? "connections");
   const { draft, update } = useSettingsDraft(snap);
-  const tabs: Tab[] = ["connections", "requests", "commands", "profiles", "app", "data"];
+  const upd = useUpdateInfo();
+  const updBadge = upd && (upd.state.state === "available" || upd.state.state === "ready");
+  const current = SECTIONS.find((x) => x.id === sec)!;
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>{t("s.title")}</h1>
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label={t("s.title")}>
+          {SECTIONS.map(({ id, icon: Icon, label }) => (
+            <button key={id} aria-current={sec === id} onClick={() => setSec(id)}>
+              <Icon size={16} /> <span className="grow">{label()}</span>
+              {id === "updates" && updBadge && <span className="badge accent">{t("up.badge")}</span>}
+              {id === "channel_points" && snap.channel_points.needs_review > 0 && <span className="badge warn">{snap.channel_points.needs_review}</span>}
+            </button>
+          ))}
+        </nav>
+        <div className="settings-section">
+          <h1>{sec === "updates" ? t("up.title") : current.label()}</h1>
+          {sec === "connections" && <Connections snap={snap} draft={draft} update={update} />}
+          {sec === "playback" && <Playback draft={draft} update={update} />}
+          {sec === "requests" && <Rules draft={draft} update={update} />}
+          {sec === "channel_points" && <ChannelPoints snap={snap} draft={draft} update={update} />}
+          {sec === "plan" && <PlanPanel snap={snap} full />}
+          {sec === "commands" && <Commands draft={draft} update={update} />}
+          {sec === "profiles" && <Profiles snap={snap} />}
+          {sec === "appearance" && <Appearance draft={draft} update={update} />}
+          {sec === "system" && <SystemTab draft={draft} update={update} />}
+          {sec === "updates" && <UpdatePanel snap={snap} />}
+          {sec === "data" && <DataTab snap={snap} />}
+        </div>
       </div>
-      <div className="tabs" role="tablist">
-        {tabs.map((x) => (
-          <button key={x} role="tab" aria-selected={tab === x} onClick={() => setTab(x)}>
-            {t(`s.tab.${x}` as const)}
-          </button>
-        ))}
-      </div>
-      {tab === "connections" && <Connections snap={snap} draft={draft} update={update} />}
-      {tab === "requests" && <Rules draft={draft} update={update} />}
-      {tab === "commands" && <Commands draft={draft} update={update} />}
-      {tab === "profiles" && <Profiles snap={snap} />}
-      {tab === "app" && <AppTab draft={draft} update={update} />}
-      {tab === "data" && <DataTab snap={snap} />}
+    </div>
+  );
+}
+
+function Playback({ draft, update }: { draft: Settings; update: Update }) {
+  return (
+    <section className="card card-pad">
+      <SettingRow title={t("s.poll")} desc={t("s.poll_hint")}>
+        <Segmented
+          label={t("s.poll")}
+          value={String(draft.spotify.poll_playing_ms)}
+          onChange={(v) => update((s) => ({ ...s, spotify: { ...s.spotify, poll_playing_ms: Number(v) } }))}
+          options={[2000, 3000, 5000, 8000].map((ms) => ({ value: String(ms), label: `${ms / 1000} s` }))}
+        />
+      </SettingRow>
+      <SettingRow title={t("s.rules.ahead")} desc={t("s.rules.ahead_hint")}>
+        <Num label={t("s.rules.ahead")} value={draft.requests.handoff_ahead} min={1} max={5} onChange={(v) => update((s) => ({ ...s, requests: { ...s.requests, handoff_ahead: v } }))} />
+      </SettingRow>
+      <SettingRow title={t("s.app.hotkey")} desc={t("s.app.hotkey_hint")}>
+        <input className="input" style={{ width: 180 }} placeholder="Ctrl+Alt+N" value={draft.hotkey_skip} onChange={(e) => update((s) => ({ ...s, hotkey_skip: e.target.value }))} aria-label={t("s.app.hotkey")} />
+      </SettingRow>
+    </section>
+  );
+}
+
+function ChannelPoints({ snap, draft, update }: { snap: AppSnapshot; draft: Settings; update: Update }) {
+  const cp = draft.channel_points;
+  const st = snap.channel_points;
+  const set = (patch: Partial<Settings["channel_points"]>) => update((s) => ({ ...s, channel_points: { ...s.channel_points, ...patch } }));
+  const twitchOk = snap.twitch.auth.state === "signed_in";
+  const state = (enabled: boolean | null, paused: boolean | null) =>
+    enabled === null ? t("cp.unknown") : !enabled ? t("cp.disabled") : paused ? t("cp.paused") : t("cp.active");
+  const err = st.last_error;
+  return (
+    <div className="col" style={{ gap: 16 }}>
+      <section className="card card-pad">
+        <SettingRow title={t("cp.enable")} desc={t("cp.enable_desc")}>
+          <Toggle checked={cp.enabled} disabled={!twitchOk && !cp.enabled} onChange={(v) => set({ enabled: v })} />
+        </SettingRow>
+        {!twitchOk && <p className="small" style={{ color: "var(--warn)" }}>{t("cp.twitch_required")}</p>}
+        {twitchOk && cp.enabled && !st.scope_ok && (
+          <Notice tone="warn" title={t("tech.missing_scope")} actions={<button className="btn btn-sm btn-primary" onClick={() => void startTwitchLogin()}>{t("rc.grant_scope")}</button>}>
+            {t("cp.scope_missing")}
+          </Notice>
+        )}
+      </section>
+      <section className="card card-pad col" style={{ gap: 14 }}>
+        <span className="eyebrow">{t("cp.reward")}</span>
+        <div className="form-grid">
+          <Field label={t("cp.reward_name")} hint="max. 45"><input className="input" maxLength={45} value={cp.title} onChange={(e) => set({ title: e.target.value })} /></Field>
+          <Field label={t("cp.cost")}><input className="input" type="number" min={1} value={cp.cost} onChange={(e) => set({ cost: Math.max(1, Number(e.target.value) || 1) })} /></Field>
+          <Field label={t("cp.mode")}>
+            <Segmented label={t("cp.mode")} value={cp.mode} onChange={(v) => set({ mode: v })} options={[{ value: "auto", label: t("s.rules.mode_auto") }, { value: "moderation", label: t("s.rules.mode_moderation") }]} />
+          </Field>
+        </div>
+        <Field label={t("cp.prompt")} hint="max. 200"><input className="input" maxLength={200} value={cp.prompt} onChange={(e) => set({ prompt: e.target.value })} /></Field>
+        <div className="form-grid">
+          <Field label={t("cp.cooldown")}><Num label={t("cp.cooldown")} value={cp.global_cooldown_s} min={0} max={604800} onChange={(v) => set({ global_cooldown_s: v })} /></Field>
+          <Field label={t("cp.max_stream")} hint={t("cp.zero_unlimited")}><Num label={t("cp.max_stream")} value={cp.max_per_stream} min={0} max={1000} onChange={(v) => set({ max_per_stream: v })} /></Field>
+          <Field label={t("cp.max_user")} hint={t("cp.zero_unlimited")}><Num label={t("cp.max_user")} value={cp.max_per_user_per_stream} min={0} max={1000} onChange={(v) => set({ max_per_user_per_stream: v })} /></Field>
+        </div>
+        <p className="subtle small">{t("cp.flow_note")}</p>
+      </section>
+      <section className="card card-pad col" style={{ gap: 10 }}>
+        <span className="eyebrow">{t("cp.sync")}</span>
+        <div className="kpis">
+          <div className="kpi"><div className="v" style={{ fontSize: 15 }}>{st.reward_id || st.desired_enabled ? state(st.desired_enabled, st.desired_paused) : t("cp.not_created")}</div><div className="l">{t("cp.desired")}</div></div>
+          <div className="kpi"><div className="v" style={{ fontSize: 15 }}>{st.reward_id ? state(st.confirmed_enabled, st.confirmed_paused) : t("cp.not_created")}</div><div className="l">{t("cp.confirmed")}</div></div>
+          <div className="kpi"><div className="v" style={{ fontSize: 15, color: st.in_sync ? "var(--positive)" : "var(--warn)" }}>{st.in_sync ? t("cp.in_sync") : t("cp.pending")}</div><div className="l">Sync</div></div>
+          <div className="kpi"><div className="v">{st.open}</div><div className="l">{t("cp.open_redemptions", { n: "" }).replace(":", "").trim()}</div></div>
+        </div>
+        {err && <Notice tone={st.reward_id ? "warn" : "error"} code={err.code === "reward_title_taken" ? undefined : err.code} title={err.code.startsWith("reward_title") || err.code === "not_affiliate" ? t(`tech.${err.code}` as never) : undefined} technical={err.details}>{err.code === "reward_title_taken" ? t("cp.foreign_note") : undefined}</Notice>}
+      </section>
     </div>
   );
 }
@@ -101,14 +202,6 @@ function Connections({ snap, draft, update }: { snap: AppSnapshot; draft: Settin
         <SpotifyLoginStatus />
         {signedIn && days > 150 && <Notice tone="warn" code="refresh_token_expiring" />}
         {signedIn && <p className="subtle small">{t("s.token_age", { days })}</p>}
-        <Field label={t("s.poll")} hint={t("s.poll_hint")}>
-          <Segmented
-            label={t("s.poll")}
-            value={String(draft.spotify.poll_playing_ms)}
-            onChange={(v) => update((s) => ({ ...s, spotify: { ...s.spotify, poll_playing_ms: Number(v) } }))}
-            options={[2000, 3000, 5000, 8000].map((ms) => ({ value: String(ms), label: `${ms / 1000} s` }))}
-          />
-        </Field>
       </section>
 
       <section className="card card-pad col" style={{ gap: 14, alignSelf: "start" }}>
@@ -142,7 +235,8 @@ function Rules({ draft, update }: { draft: Settings; update: Update }) {
   const set = (patch: Partial<Settings["requests"]>) => update((s) => ({ ...s, requests: { ...s.requests, ...patch } }));
   return (
     <section className="card card-pad">
-      <SettingRow title={t("s.rules.open")}><Toggle checked={r.open} onChange={(v) => set({ open: v })} /></SettingRow>
+      <SettingRow title={t("rc.accept")} desc={t("rc.accept_desc")}><Toggle checked={r.open} onChange={(v) => set({ open: v })} /></SettingRow>
+      <SettingRow title={t("rc.chat")} desc={t("rc.chat_desc", { cmd: "!sr" })}><Toggle checked={r.chat_enabled} onChange={(v) => set({ chat_enabled: v })} /></SettingRow>
       <SettingRow title={t("s.rules.mode")}>
         <Segmented label={t("s.rules.mode")} value={r.mode} onChange={(v) => set({ mode: v })} options={[{ value: "auto", label: t("s.rules.mode_auto") }, { value: "moderation", label: t("s.rules.mode_moderation") }]} />
       </SettingRow>
@@ -156,7 +250,6 @@ function Rules({ draft, update }: { draft: Settings; update: Update }) {
       <SettingRow title={t("s.rules.duplicates")}><Toggle checked={r.allow_duplicates} onChange={(v) => set({ allow_duplicates: v })} /></SettingRow>
       <SettingRow title={t("s.rules.fair")} desc={t("s.rules.fair_hint")}><Toggle checked={r.fair_order} onChange={(v) => set({ fair_order: v })} /></SettingRow>
       <SettingRow title={t("s.rules.bypass")}><Toggle checked={r.privileged_bypass} onChange={(v) => set({ privileged_bypass: v })} /></SettingRow>
-      <SettingRow title={t("s.rules.ahead")} desc={t("s.rules.ahead_hint")}><Num label={t("s.rules.ahead")} value={r.handoff_ahead} min={1} max={5} onChange={(v) => set({ handoff_ahead: v })} /></SettingRow>
     </section>
   );
 }
@@ -252,9 +345,7 @@ function Profiles({ snap }: { snap: AppSnapshot }) {
   );
 }
 
-function AppTab({ draft, update }: { draft: Settings; update: Update }) {
-  const [auto, setAuto] = useState<{ supported: boolean; enabled: boolean; set(v: boolean): Promise<void> } | null>(null);
-  useEffect(() => void autostart().then(setAuto, () => setAuto({ supported: false, enabled: false, set: async () => {} })), []);
+function Appearance({ draft, update }: { draft: Settings; update: Update }) {
   return (
     <section className="card card-pad">
       <SettingRow title={t("s.app.language")}>
@@ -264,6 +355,16 @@ function AppTab({ draft, update }: { draft: Settings; update: Update }) {
         <Segmented label={t("s.app.theme")} value={draft.theme} onChange={(v) => update((s) => ({ ...s, theme: v }))} options={[{ value: "dark", label: t("s.app.theme_dark") }, { value: "light", label: t("s.app.theme_light") }, { value: "system", label: t("s.app.theme_system") }]} />
       </SettingRow>
       <SettingRow title={t("s.app.motion")}><Toggle checked={draft.reduced_motion} onChange={(v) => update((s) => ({ ...s, reduced_motion: v }))} /></SettingRow>
+      <SettingRow title={t("s.app.compact_top")}><Toggle checked={draft.compact_on_top} onChange={(v) => update((s) => ({ ...s, compact_on_top: v }))} /></SettingRow>
+    </section>
+  );
+}
+
+function SystemTab({ draft, update }: { draft: Settings; update: Update }) {
+  const [auto, setAuto] = useState<{ supported: boolean; enabled: boolean; set(v: boolean): Promise<void> } | null>(null);
+  useEffect(() => void autostart().then(setAuto, () => setAuto({ supported: false, enabled: false, set: async () => {} })), []);
+  return (
+    <section className="card card-pad">
       <SettingRow title={t("s.app.close")}>
         <Segmented label={t("s.app.close")} value={draft.close_behavior} onChange={(v) => update((s) => ({ ...s, close_behavior: v }))} options={[{ value: "ask", label: t("s.app.close_ask") }, { value: "tray", label: t("s.app.close_tray") }, { value: "quit", label: t("s.app.close_quit") }]} />
       </SettingRow>
@@ -282,10 +383,6 @@ function AppTab({ draft, update }: { draft: Settings; update: Update }) {
           }}
         />
       </SettingRow>
-      <SettingRow title={t("s.app.hotkey")} desc={t("s.app.hotkey_hint")}>
-        <input className="input" style={{ width: 180 }} placeholder="Ctrl+Alt+N" value={draft.hotkey_skip} onChange={(e) => update((s) => ({ ...s, hotkey_skip: e.target.value }))} aria-label={t("s.app.hotkey")} />
-      </SettingRow>
-      <SettingRow title={t("s.app.compact_top")}><Toggle checked={draft.compact_on_top} onChange={(v) => update((s) => ({ ...s, compact_on_top: v }))} /></SettingRow>
     </section>
   );
 }

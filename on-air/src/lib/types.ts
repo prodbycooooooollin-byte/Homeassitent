@@ -24,9 +24,18 @@ export interface Device {
   volume_percent: number | null;
 }
 
+export interface EpisodeInfo {
+  title: string;
+  show: string | null;
+  image_url: string | null;
+  duration_ms: number;
+  external_url: string | null;
+}
+
 export interface Playback {
   is_playing: boolean;
   track: Track | null;
+  episode?: EpisodeInfo | null;
   item_type: string | null;
   progress_ms: number;
   device: Device | null;
@@ -120,6 +129,17 @@ export interface SongRequest {
   observed_at: number | null;
   finished_at: number | null;
   chat_message_id: string | null;
+  redemption: Redemption | null;
+}
+
+export type RedemptionStatus = "unfulfilled" | "fulfilled" | "canceled" | "review" | "conflict";
+
+export interface Redemption {
+  reward_id: string;
+  redemption_id: string;
+  status: RedemptionStatus;
+  target: RedemptionStatus | null;
+  last_error: string | null;
 }
 
 export interface Activity {
@@ -160,6 +180,7 @@ export interface WidgetStyle {
 
 export interface RequestRules {
   open: boolean;
+  chat_enabled: boolean;
   mode: "auto" | "moderation";
   min_role: Role;
   max_queue: number;
@@ -236,6 +257,106 @@ export interface Settings {
   active_profile: string | null;
   hotkey_skip: string;
   compact_on_top: boolean;
+  channel_points: ChannelPointsSettings;
+  updates: { check_on_start: boolean };
+}
+
+export interface ChannelPointsSettings {
+  enabled: boolean;
+  title: string;
+  cost: number;
+  prompt: string;
+  global_cooldown_s: number;
+  max_per_stream: number;
+  max_per_user_per_stream: number;
+  mode: "auto" | "moderation";
+}
+
+export type Block =
+  | { code: "manual_pause" }
+  | { code: "source_disabled" }
+  | { code: "stream_ended" }
+  | { code: "budget_exhausted"; free_ms: number }
+  | { code: "plan_uncertain"; reasons: string[] }
+  | { code: "update_pause" }
+  | { code: "reconciling" }
+  | { code: "technical"; detail: string };
+
+export interface SourceGate {
+  configured: boolean;
+  open: boolean;
+  blocks: Block[];
+}
+
+export interface Acceptance {
+  chat: SourceGate;
+  channel_points: SourceGate;
+  any_open: boolean;
+  paused_by_plan: boolean;
+}
+
+export interface PlanConfig {
+  enabled: boolean;
+  end_at_ms: number | null;
+  buffer_ms: number;
+}
+
+export interface PlanStatus {
+  active: boolean;
+  end_at_ms: number | null;
+  now_ms: number;
+  remaining_ms: number;
+  current_remaining_ms: number;
+  planned_ms: number;
+  reserved_ms: number;
+  buffer_ms: number;
+  free_ms: number;
+  ended: boolean;
+  exhausted: boolean;
+  overplanned_ms: number;
+  uncertain: string[];
+  etas: { id: string; start_ms: number | null; fits: boolean | null }[];
+}
+
+export interface ChannelPointsStatus {
+  configured: boolean;
+  scope_ok: boolean;
+  reward_id: string | null;
+  desired_enabled: boolean;
+  desired_paused: boolean;
+  confirmed_enabled: boolean | null;
+  confirmed_paused: boolean | null;
+  in_sync: boolean;
+  last_error: ErrorInfo | null;
+  reconciled: boolean;
+  open: number;
+  needs_review: number;
+}
+
+export type UpdateState =
+  | { state: "not_configured" }
+  | { state: "unchecked" }
+  | { state: "checking" }
+  | { state: "up_to_date"; checked_at_ms: number }
+  | { state: "available"; version: string; notes: string | null; date: string | null }
+  | { state: "downloading"; version: string; received: number; total: number | null }
+  | { state: "ready"; version: string; notes: string | null }
+  | { state: "installing"; version: string }
+  | { state: "failed"; stage: "check" | "download" | "install"; code: string; message: string; version: string | null };
+
+export interface UpdateInfo {
+  current_version: string;
+  state: UpdateState;
+  last_check_ms: number | null;
+  endpoint: string;
+  configured: boolean;
+}
+
+export interface UpdatePreflight {
+  live: boolean | null;
+  pending_requests: number;
+  open_redemptions: number;
+  plan_active: boolean;
 }
 
 export interface DeviceCode {
@@ -260,6 +381,11 @@ export interface AppSnapshot {
   session: Record<string, number>;
   session_started_ms: number;
   server_time_ms: number;
+  acceptance: Acceptance;
+  plan: PlanStatus;
+  plan_config: PlanConfig;
+  channel_points: ChannelPointsStatus;
+  update_pause: boolean;
 }
 
 export interface Check {

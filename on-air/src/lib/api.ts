@@ -12,6 +12,8 @@ import type {
   Settings,
   SubmitOutcome,
   Track,
+  UpdateInfo,
+  UpdatePreflight,
 } from "./types";
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -20,6 +22,7 @@ export interface Backend {
   invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T>;
   onSnapshot(cb: (s: AppSnapshot) => void): () => void;
   onCloseRequested(cb: () => void): () => void;
+  onUpdate(cb: (u: UpdateInfo) => void): () => void;
   isPreview: boolean;
 }
 
@@ -45,6 +48,7 @@ function load(): Promise<Backend> {
         invoke: <T,>(cmd: string, args?: Record<string, unknown>) => core.invoke<T>(cmd, args),
         onSnapshot: (cb) => listen("onair://snapshot", (p) => cb(p as AppSnapshot)),
         onCloseRequested: (cb) => listen("onair://close-requested", () => cb()),
+        onUpdate: (cb) => listen("onair://update", (p) => cb(p as UpdateInfo)),
       } satisfies Backend;
     }
     const mock = await import("./mock");
@@ -113,6 +117,20 @@ export const api = {
   openCompact: () => call<void>("open_compact"),
   closeAction: (action: "tray" | "quit", remember: boolean) => call<void>("close_action", { action, remember }),
   quit: () => call<void>("quit_app"),
+
+  planSetEnd: (endAtMs: number, bufferMs?: number) => call<void>("plan_set_end", { endAtMs, bufferMs }),
+  planExtend: (minutes: number) => call<void>("plan_extend", { minutes }),
+  planSetBuffer: (bufferMs: number) => call<void>("plan_set_buffer", { bufferMs }),
+  planStop: () => call<void>("plan_stop"),
+  redemptionDecide: (id: string, fulfill: boolean) => call<void>("redemption_decide", { id, fulfill }),
+
+  updateInfo: () => call<UpdateInfo>("update_info"),
+  updateCheck: () => call<UpdateInfo>("update_check"),
+  updateDownload: () => call<void>("update_download"),
+  updatePreflight: () => call<UpdatePreflight>("update_preflight"),
+  updateInstall: () => call<unknown>("update_install"),
+  updateLater: () => call<void>("update_later"),
+  onUpdate: async (cb: (u: UpdateInfo) => void) => (await load()).onUpdate(cb),
 };
 
 /** Speichern-Dialog (Tauri) bzw. Download (Browser-Vorschau). */

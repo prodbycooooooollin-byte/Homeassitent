@@ -6,7 +6,6 @@ import { setLang, t } from "./lib/i18n";
 import { refresh, useSnapshot } from "./lib/store";
 import type { AppSnapshot } from "./lib/types";
 import { CompactView } from "./views/Compact";
-import { HistoryView } from "./views/History";
 import { Onboarding } from "./views/Onboarding";
 import { Overview } from "./views/Overview";
 import { QueueView } from "./views/Queue";
@@ -14,11 +13,12 @@ import { SettingsView } from "./views/Settings";
 import { CloseDialog, Shell, type Route } from "./views/Shell";
 import { WidgetsView } from "./views/Widgets";
 
-const ROUTES: Route[] = ["overview", "queue", "widgets", "history", "settings"];
+const ROUTES: Route[] = ["overview", "queue", "widgets", "settings"];
 
-function readRoute(): Route | "compact" {
+function readRoute(): Route | "compact" | "history" {
   const h = window.location.hash.replace(/^#\/?/, "");
   if (h === "compact") return "compact";
+  if (h === "history") return "history";
   return (ROUTES as string[]).includes(h) ? (h as Route) : "overview";
 }
 
@@ -98,11 +98,10 @@ export function App() {
   return (
     <>
       {banner}
-      <Shell snap={snap} route={route} go={go}>
+      <Shell snap={snap} route={route === "history" ? "queue" : route} go={go}>
         {route === "overview" && <Overview snap={snap} go={(r) => go(r as Route)} onConnectSpotify={connectSpotify} />}
-        {route === "queue" && <QueueView snap={snap} />}
+        {(route === "queue" || route === "history") && <QueueView snap={snap} initialTab={route === "history" ? "history" : "queue"} />}
         {route === "widgets" && <WidgetsView snap={snap} />}
-        {route === "history" && <HistoryView snap={snap} />}
         {route === "settings" && <SettingsView snap={snap} />}
       </Shell>
       {!snap.settings.onboarding_done && !onbDismissed && <Onboarding snap={snap} onDone={() => setOnbDismissed(true)} />}

@@ -5,9 +5,15 @@ Twitch-Chat und OBS-Widgets** – ruhig gestaltet und auf stundenlangen Hintergr
 mit wackeligem Netz ausgelegt. Funktional orientiert an [Songify](https://songify.rocks/features),
 aber eine eigenständige Implementierung (kein übernommener Code, keine fremden App-IDs).
 
-> Status: Version 0.1 für den eigenen Rechner. Kern und UI sind vollständig implementiert
+> Status: Version 0.2 für den eigenen Rechner. Kern und UI sind vollständig implementiert
 > und gegen Fake-Provider getestet. **Noch nicht mit echten Konten live getestet**, kein
 > Dauertest durchgeführt – siehe [Einschränkungen](docs/EINSCHRAENKUNGEN.md).
+
+## Ansicht
+
+![Übersicht bei 1920×1080](docs/screenshots/uebersicht-1920x1080.png)
+
+Weitere Ansichten (Browser-Vorschau mit Beispieldaten): [docs/screenshots](docs/screenshots/).
 
 ## Funktionen
 
@@ -17,6 +23,10 @@ aber eine eigenständige Implementierung (kein übernommener Code, keine fremden
 - Eigene, dauerhafte Request-Warteschlange (SQLite) mit Moderation, fairer Reihenfolge,
   Limits, Cooldowns, Sperrlisten, Explicit-Filter und sparsamer Übergabe an Spotify
 - Twitch-Chatbefehle `!sr`, `!song`, `!queue`, `!remove`, `!skip`, `!voteskip` (konfigurierbar)
+- Optional **Kanalpunkte-Requests** über eine eigene, von ON AIR verwaltete Belohnung –
+  Erfüllen erst nach beobachtetem Start, Ablehnen erstattet die Punkte
+- **Streamplanung**: Requests nur annehmen, solange sie vor dem Streamende noch passen
+- **Integrierter Updater** mit signierten GitHub-Releases – nie ungefragte Installation
 - OBS-Widgets *Minimal*, *Glass*, *Queue* mit Live-Vorschau, plus Now-Playing-Textdatei
 - Tray-Betrieb, optionaler Autostart, Kompaktmodus für den zweiten Monitor, Stream-Profile,
   Verlauf mit erneutem Anfragen, Diagnose und anonymisierter Diagnosebericht
@@ -46,9 +56,9 @@ Installer auf `windows-latest` und lädt ihn als Artefakt `on-air-windows-instal
 ## Tests
 
 ```bash
-cargo test -p onair-core   # 39 Rust-Tests inkl. Abnahmekriterien (simuliert)
+cargo test -p onair-core   # 63 Rust-Tests inkl. Abnahmekriterien (simuliert)
 npm run typecheck
-npx playwright test        # 27 UI-Layouttests
+npx playwright test        # 38 UI-Tests (Layout, Zustände, Bedienung)
 ```
 
 Details und Abdeckung: [docs/TESTS.md](docs/TESTS.md)
@@ -67,6 +77,8 @@ on-air/
 - [Funktionsmatrix (APIs, Berechtigungen, Einschränkungen)](docs/FUNKTIONSMATRIX.md)
 - [Architektur und Fehlerbehandlung](docs/ARCHITEKTUR.md)
 - [Einrichtung Spotify, Twitch, OBS](docs/EINRICHTUNG.md)
+- [Updates und Releases](docs/UPDATES.md)
+- [Änderungen](CHANGELOG.md)
 
 ## Datenschutz
 

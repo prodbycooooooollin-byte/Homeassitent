@@ -482,7 +482,7 @@ impl QueueStore {
 
     pub fn history(&self, search: &str, limit: u32) -> Vec<HistoryEntry> {
         let c = self.db.conn();
-        let like = format!("%{}%", search.trim().replace('%', "").replace('_', ""));
+        let like = format!("%{}%", search.trim().replace(['%', '_'], ""));
         let mut st = match c.prepare(
             "SELECT id, track_uri, track_id, title, artists, album, image_url, duration_ms, played_at, requester_name \
              FROM history WHERE (?1 = '%%' OR title LIKE ?1 OR artists LIKE ?1) ORDER BY played_at DESC LIMIT ?2",

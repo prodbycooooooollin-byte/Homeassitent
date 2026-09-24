@@ -3,7 +3,7 @@
 // Zustände für Layout-Tests: ?state=offline|signedout|nodevice|ratelimit|reauth|onboarding|empty
 
 import type { Backend } from "./api";
-import type { Activity, AppSnapshot, BlockEntry, Settings, SongRequest, Track } from "./types";
+import type { Acceptance, Activity, AppSnapshot, Block, BlockEntry, PlanConfig, PlanStatus, Settings, SongRequest, Track, UpdateInfo } from "./types";
 
 function cover(a: string, b: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="64" height="64" fill="url(#g)"/><circle cx="46" cy="18" r="9" fill="rgba(255,255,255,.18)"/></svg>`;
@@ -44,7 +44,7 @@ function defaults(): Settings {
     language: "de", theme: "dark", reduced_motion: false, close_behavior: "ask", onboarding_done: true,
     spotify: { client_id: "beispiel-client-id", redirect_port: 43821, poll_playing_ms: 3000 },
     twitch: { client_id: "beispiel-twitch-id", enabled: true },
-    requests: { open: true, mode: "auto", min_role: "everyone", max_queue: 25, per_user_limit: 2, user_cooldown_s: 120, global_cooldown_s: 0, max_duration_s: 600, block_explicit: false, allow_duplicates: false, fair_order: true, privileged_bypass: true, handoff_ahead: 1 },
+    requests: { open: true, chat_enabled: true, mode: "auto", min_role: "everyone", max_queue: 25, per_user_limit: 2, user_cooldown_s: 120, global_cooldown_s: 0, max_duration_s: 600, block_explicit: false, allow_duplicates: false, fair_order: true, privileged_bypass: true, handoff_ahead: 1 },
     commands: {
       prefix: "!", reply_in_chat: true,
       sr: cmd("sr", "everyone", 0, ["songrequest"]), song: cmd("song", "everyone", 10), queue: cmd("queue", "everyone", 15),
@@ -61,6 +61,8 @@ function defaults(): Settings {
     overlay: { port: 43822, stale_after_s: 20, minimal: style({}), glass: style({ background_opacity: 0.55, show_progress: true }), queue: style({ background_opacity: 0.7, width: 420, queue_count: 4 }), control_enabled: false },
     nowplaying_file: { enabled: false, path: "", template: "{artist} – {title}" },
     profiles: [], active_profile: null, hotkey_skip: "", compact_on_top: true,
+    channel_points: { enabled: false, title: "Song wünschen", cost: 500, prompt: "Spotify-Link oder Titel und Interpret", global_cooldown_s: 0, max_per_stream: 0, max_per_user_per_stream: 0, mode: "auto" },
+    updates: { check_on_start: true },
   };
 }
 
@@ -74,11 +76,14 @@ export function createMockBackend(): Backend {
     settings.spotify.client_id = "";
     settings.twitch.client_id = "";
   }
+  const cpOn = ["cp", "plan", "overplanned", "full", "ended"].includes(scenario);
+  settings.channel_points.enabled = cpOn;
+  const red = (id: string, status: "unfulfilled" | "fulfilled" | "canceled" | "review" | "conflict" = "unfulfilled") => ({ reward_id: "rw-1", redemption_id: id, status, target: null, last_error: null });
   let reqN = 0;
   const mkReq = (track: Track, name: string, status: SongRequest["status"], extra: Partial<SongRequest> = {}): SongRequest => ({
     id: `r${++reqN}`, track, query: track.title, requester: { id: `twitch:${name}`, name, role: "everyone" }, source: "chat", source_event: null,
     received_at: now() - reqN * 60_000, status, pending_reason: null, reason: null, reason_text: null, position: reqN, priority: false,
-    updated_at: now(), handoff_at: null, observed_at: null, finished_at: null, chat_message_id: null, ...extra,
+    updated_at: now(), handoff_at: null, observed_at: null, finished_at: null, chat_message_id: null, redemption: null, ...extra,
   });
   let queue: SongRequest[] = scenario === "empty" ? [] : [
     mkReq(TRACKS[0], "nachteule_92", "playing"),
@@ -88,7 +93,27 @@ export function createMockBackend(): Backend {
     mkReq(TRACKS[4], "Mara", "pending_review", { pending_reason: "moderation" }),
     mkReq(TRACKS[5], "jonas", "uncertain", { reason: "not_in_spotify_queue" }),
   ];
+  if (cpOn) {
+    queue[2] = { ...queue[2], source: "channel_points", redemption: red("r-a") };
+    queue[3] = { ...queue[3], source: "channel_points", redemption: red("r-b") };
+  }
+  if (scenario === "overplanned" || scenario === "full") {
+    for (let i = 0; i < 5; i++) queue.push(mkReq(TRACKS[i], `viewer_${i + 7}`, "accepted"));
+  }
+  const planCfg: PlanConfig = {
+    enabled: ["plan", "overplanned", "ended"].includes(scenario),
+    end_at_ms: scenario === "ended" ? now() - 60_000 : now() + (scenario === "overplanned" ? 14 : 30) * 60_000,
+    buffer_ms: 120_000,
+  };
+  let updatePhase: UpdateInfo["state"] = scenario === "update" ? { state: "available", version: "0.2.1", notes: "- Beispiel-Neuerung für die Vorschau\n- Weitere Verbesserung", date: null } : { state: "not_configured" };
+  const updateListeners = new Set<(u: UpdateInfo) => void>();
+  const updateInfo = (): UpdateInfo => ({ current_version: "0.2.0", state: updatePhase, last_check_ms: scenario === "update" ? now() - 3_600_000 : null, endpoint: "(Vorschau)", configured: scenario === "update" });
+  const setUpdate = (st: UpdateInfo["state"]) => {
+    updatePhase = st;
+    updateListeners.forEach((l) => l(updateInfo()));
+  };
   let recent: SongRequest[] = [mkReq(TRACKS[5], "alex", "completed"), mkReq(TRACKS[3], "spam_bot", "rejected", { reason: "user_cooldown", reason_text: "bitte warte noch 40 s" })];
+  if (cpOn) recent = [mkReq(TRACKS[1], "Kira", "completed", { source: "channel_points", reason: "not_observed", redemption: red("r-c", "review") }), mkReq(TRACKS[4], "Tom", "rejected", { source: "channel_points", redemption: red("r-d", "canceled") }), ...recent];
   let activity: Activity[] = [
     { id: 5, ts: now() - 20_000, level: "success", kind: "request.accepted", message: "Request angenommen: „Low Tide“ von Kairo Beach (für kalle)", params: null, corr: null },
     { id: 4, ts: now() - 95_000, level: "success", kind: "spotify.recovered", message: "Spotify-Verbindung wiederhergestellt", params: null, corr: null },
@@ -97,10 +122,44 @@ export function createMockBackend(): Backend {
     { id: 1, ts: now() - 600_000, level: "info", kind: "requests.opened", message: "Requests geöffnet", params: null, corr: null },
   ];
   let blocks: BlockEntry[] = [];
-  let isPlaying = true;
+  let isPlaying = scenario !== "paused";
   let progressBase = 72_000;
   let fetchedAt = now();
   const listeners = new Set<(s: AppSnapshot) => void>();
+
+  const computePlan = (): PlanStatus => {
+    const n = now();
+    if (!planCfg.enabled || !planCfg.end_at_ms) return { active: false, end_at_ms: null, now_ms: n, remaining_ms: 0, current_remaining_ms: 0, planned_ms: 0, reserved_ms: 0, buffer_ms: 0, free_ms: 0, ended: false, exhausted: false, overplanned_ms: 0, uncertain: [], etas: [] };
+    const cur = queue.find((r) => r.status === "playing")?.track ?? TRACKS[0];
+    const prog = progressBase + (isPlaying ? n - fetchedAt : 0);
+    const curRem = Math.max(0, cur.duration_ms - prog);
+    const items = queue.filter((r) => r.status !== "playing");
+    const planned = items.filter((r) => r.status !== "pending_review").reduce((a, r) => a + (r.track?.duration_ms ?? 0), 0);
+    const reserved = items.filter((r) => r.status === "pending_review").reduce((a, r) => a + (r.track?.duration_ms ?? 0), 0);
+    const remaining = planCfg.end_at_ms - n;
+    const free = remaining - curRem - planned - reserved - planCfg.buffer_ms;
+    let t0 = n + curRem;
+    const etas = items.map((r) => {
+      const start = t0;
+      t0 += r.track?.duration_ms ?? 0;
+      return { id: r.id, start_ms: start, fits: start + (r.track?.duration_ms ?? 0) <= planCfg.end_at_ms! - planCfg.buffer_ms };
+    });
+    return { active: true, end_at_ms: planCfg.end_at_ms, now_ms: n, remaining_ms: remaining, current_remaining_ms: curRem, planned_ms: planned, reserved_ms: reserved, buffer_ms: planCfg.buffer_ms, free_ms: free, ended: remaining <= 0, exhausted: remaining <= 0 || free < 60_000, overplanned_ms: free < 0 ? Math.min(-free, planned + reserved) : 0, uncertain: isPlaying ? [] : ["paused"], etas };
+  };
+  const computeAcceptance = (plan: PlanStatus): Acceptance => {
+    const common: Block[] = [];
+    if (!settings.requests.open) common.push({ code: "manual_pause" });
+    const planBlocks: Block[] = !plan.active ? [] : plan.ended ? [{ code: "stream_ended" }] : plan.exhausted ? [{ code: "budget_exhausted", free_ms: Math.max(0, plan.free_ms) }] : [];
+    const chat: Block[] = [...(settings.requests.chat_enabled ? [] : [{ code: "source_disabled" } as Block]), ...common, ...planBlocks];
+    const cp: Block[] = [...(settings.channel_points.enabled ? [] : [{ code: "source_disabled" } as Block]), ...common, ...planBlocks];
+    const onlyPlan = (b: Block[]) => b.length > 0 && b.every((x) => x.code === "stream_ended" || x.code === "budget_exhausted");
+    return {
+      chat: { configured: settings.requests.chat_enabled, open: chat.length === 0, blocks: chat },
+      channel_points: { configured: settings.channel_points.enabled, open: cp.length === 0, blocks: cp },
+      any_open: chat.length === 0 || cp.length === 0,
+      paused_by_plan: (settings.requests.chat_enabled && onlyPlan(chat)) || (settings.channel_points.enabled && onlyPlan(cp)),
+    };
+  };
 
   const snapshot = (): AppSnapshot => {
     const signedIn = scenario !== "signedout" && scenario !== "onboarding" && scenario !== "reauth";
@@ -111,14 +170,20 @@ export function createMockBackend(): Backend {
     const noDevice = scenario === "nodevice";
     const device = { id: "d1", name: "Streaming-PC", kind: "Computer", is_active: true, is_restricted: false, volume_percent: 64 };
     const current = queue.find((r) => r.status === "playing")?.track ?? TRACKS[0];
+    const plan = computePlan();
+    const acceptance = computeAcceptance(plan);
+    const isAd = scenario === "ad";
+    const isEpisode = scenario === "episode";
     return {
-      app_version: "0.1.0 (Vorschau)",
+      app_version: "0.2.0 (Vorschau)",
       spotify: {
         auth: scenario === "reauth" ? { state: "reauth_required", reason: "invalid_grant: Refresh token revoked" } : signedIn ? { state: "signed_in", scope: "user-read-playback-state user-modify-playback-state user-read-currently-playing", authorized_at_ms: now() - 12 * 86_400_000 } : { state: "signed_out" },
         link,
         device: noDevice ? { state: "no_active_device" } : signedIn ? { state: "active", device } : { state: "unknown" },
         playback: !signedIn ? { state: "unknown" } : noDevice ? { state: "idle", fetched_at_ms: now() } : {
-          state: "active", is_playing: isPlaying, track: current, item_type: "track", progress_ms: progressBase, device, shuffle: false, repeat: "off",
+          state: "active", is_playing: isPlaying, track: isAd || isEpisode ? null : current, item_type: isAd ? "ad" : isEpisode ? "episode" : "track",
+          episode: isEpisode ? { title: "Folge 142: Warum wir Musik anders hören", show: "Beispiel-Podcast", image_url: cover("#3B2A5A", "#B9A7FF"), duration_ms: 2_640_000, external_url: null } : null,
+          progress_ms: isEpisode ? 1_210_000 : progressBase, device, shuffle: false, repeat: "off",
           actions: { can_skip_next: true, can_skip_prev: true, can_pause: true, can_resume: true },
           fetched_at_ms: scenario === "offline" ? now() - 95_000 : fetchedAt,
         },
@@ -140,6 +205,16 @@ export function createMockBackend(): Backend {
       session: { accepted: queue.filter((r) => r.status === "accepted").length, handed_off: 1, playing: 1, completed: 4, rejected: 2 },
       session_started_ms: start,
       server_time_ms: now(),
+      acceptance,
+      plan,
+      plan_config: { ...planCfg },
+      channel_points: {
+        configured: settings.channel_points.enabled, scope_ok: true, reward_id: cpOn || settings.channel_points.enabled ? "rw-1" : null,
+        desired_enabled: settings.channel_points.enabled, desired_paused: !acceptance.channel_points.open, confirmed_enabled: cpOn ? true : null,
+        confirmed_paused: cpOn ? !acceptance.channel_points.open : null, in_sync: true, last_error: null, reconciled: true,
+        open: queue.filter((r) => r.redemption).length, needs_review: recent.filter((r) => r.redemption?.status === "review").length,
+      },
+      update_pause: false,
     };
   };
   const push = () => {
@@ -234,6 +309,28 @@ export function createMockBackend(): Backend {
     open_compact: () => { window.open(`${window.location.pathname}${window.location.search}#/compact`, "onair-compact", "width=380,height=560"); },
     close_action: () => undefined,
     quit_app: () => undefined,
+    plan_set_end: (a) => { planCfg.enabled = true; planCfg.end_at_ms = Number(a.endAtMs); if (a.bufferMs != null) planCfg.buffer_ms = Number(a.bufferMs); log("Streamplanung gestartet"); },
+    plan_extend: (a) => { planCfg.end_at_ms = Math.max(now(), planCfg.end_at_ms ?? now()) + Number(a.minutes) * 60_000; planCfg.enabled = true; },
+    plan_set_buffer: (a) => { planCfg.buffer_ms = Number(a.bufferMs); },
+    plan_stop: () => { planCfg.enabled = false; log("Streamplanung beendet"); },
+    redemption_decide: (a) => {
+      const r = [...queue, ...recent].find((x) => x.id === a.id);
+      if (r?.redemption) r.redemption = { ...r.redemption, status: a.fulfill ? "fulfilled" : "canceled" };
+    },
+    update_info: () => updateInfo(),
+    update_check: async () => { setUpdate({ state: "checking" }); await sleep(700); setUpdate(scenario === "update" ? { state: "available", version: "0.2.1", notes: "- Beispiel-Neuerung für die Vorschau", date: null } : { state: "up_to_date", checked_at_ms: now() }); return updateInfo(); },
+    update_download: () => {
+      let received = 0;
+      const total = 12_400_000;
+      const id = setInterval(() => {
+        received = Math.min(total, received + 1_300_000);
+        setUpdate(received >= total ? { state: "ready", version: "0.2.1", notes: "- Beispiel-Neuerung für die Vorschau" } : { state: "downloading", version: "0.2.1", received, total });
+        if (received >= total) clearInterval(id);
+      }, 250);
+    },
+    update_preflight: () => ({ live: null, pending_requests: queue.length, open_redemptions: queue.filter((r) => r.redemption).length, plan_active: planCfg.enabled }),
+    update_install: () => { throw { code: "error", message: "Vorschau: keine Installation möglich" }; },
+    update_later: () => undefined,
   };
 
   return {
@@ -251,6 +348,10 @@ export function createMockBackend(): Backend {
     },
     onCloseRequested() {
       return () => undefined;
+    },
+    onUpdate(cb) {
+      updateListeners.add(cb);
+      return () => updateListeners.delete(cb);
     },
   };
 }

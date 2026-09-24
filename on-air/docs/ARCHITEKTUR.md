@@ -5,11 +5,14 @@
 │  React-UI (Hauptfenster, Kompaktfenster)      ← Snapshots (gebündelt, 120 ms)        │
 │        │ invoke (Tauri-Befehle, dünne Schicht)                                        │
 │  src-tauri: Tray · Schließen/Beenden · Autostart · Credential Manager · Logs · Hotkey │
+│             Updater (tauri-plugin-updater, signierte GitHub-Releases)                 │
 │        │                                                                              │
 │  onair-core::runtime (einmal erzeugt)                                                 │
 │   ├─ spotify::service  ── genau 1 Polling-Worker ──► SpotifyState (watch)             │
 │   │     └─ spotify::client ── auth::TokenManager (Single-Flight-Refresh, Epoche)      │
 │   ├─ twitch::service   ── genau 1 EventSub-Verbindung + 1 Chat-Sender                 │
+│   ├─ twitch::rewards   ── eigene Kanalpunkte-Belohnung, Einlösungen abwickeln         │
+│   ├─ acceptance + plan ── Sperrgründe je Weg, Zeitbudget bis Streamende               │
 │   ├─ queue::service    ── Regeln, Moderation, Übergabe, Beobachtung, Abgleich         │
 │   ├─ storage (SQLite, WAL, Migrationen + Sicherung)                                   │
 │   ├─ overlay (axum, nur 127.0.0.1) ◄── OverlayData (watch) ◄── overlay_feeder         │
@@ -97,3 +100,58 @@ received ─► pending_review ─(Freigabe / Spotify wieder erreichbar)─► a
 | Logs | `%LOCALAPPDATA%\app.onair.desktop\logs\onair.*.log` (täglich, max. 7 Dateien) |
 
 Aufbewahrung: Aktivität max. 2000 Einträge, verarbeitete Event-IDs 7 Tage, Verlauf 180 Tage.
+
+## Annahme: Sperrgründe statt Schalter (`acceptance.rs`)
+
+Ob ein Weg (Chat, Kanalpunkte) Requests annimmt, wird **abgeleitet**, nicht gespeichert.
+Jeder Weg hat eine Liste von Sperrgründen:
+
+| Grund | Quelle | Aufgehoben durch |
+|---|---|---|
+| `manual_pause` | globaler Schalter „Requests annehmen“ | nur den Schalter |
+| `source_disabled` | Weg in den Einstellungen aus | Einstellung |
+| `stream_ended` | Streamplanung: Endzeit erreicht | neue Endzeit / Planung beenden |
+| `budget_exhausted` | Streamplanung: kein Mindestslot (60 s) mehr frei | Verlängern, Requests entfernen |
+| `plan_uncertain` | Prognose unsicher (nur **Kanalpunkte**) | Wiedergabe bestätigt |
+| `update_pause` | Update-Vorbereitung | Installation abgebrochen |
+| `reconciling` | Kanalpunkte: Abgleich nach Start | Abgleich fertig |
+| `technical` | fehlende Berechtigung, kein Affiliate … | Ursache behoben |
+
+Weil die Gründe getrennt sind, hebt z. B. „+15 Minuten“ eine manuelle Pause **nicht** auf.
+Chat- und Kanalpunkte-Requests laufen durch **dieselbe** Pipeline (`QueueService::submit…`,
+Regeln, Moderation, Übergabe); die Kanalpunkte-Quelle überspringt nur Rollen- und Cooldown-Regeln
+des Chats und nutzt eigene Limits.
+
+## Streamplanung (`plan.rs`)
+
+```
+frei = verbleibend − Rest des aktuellen Titels − geplante Requests − reservierte − Puffer
+```
+
+- Prüfung und Reservierung passieren unter derselben Sperre wie die Annahmeentscheidung →
+  zwei gleichzeitige Requests können nicht dasselbe Restbudget belegen.
+- Zu lange Songs werden mit konkreter Begründung abgelehnt („dein Song dauert 5:12; aktuell
+  passen voraussichtlich noch 3:40 hinein“).
+- Unsicherheit (pausiert, Titel wiederholen, unbekannte Dauer, unbestätigte Wiedergabe,
+  unklare Übergabe) wird benannt; bezahlte Requests werden dann zurückgehalten.
+- Endzeit wird in SQLite gespeichert; ein abgelaufenes Streamende bleibt nach Neustart geschlossen.
+- Überplanung (z. B. nach manuellem Verlängern des aktuellen Titels) wird angezeigt, mit Angeboten:
+  verlängern, Requests auswählen, weiterlaufen lassen.
+
+## Kanalpunkte (`twitch/rewards.rs`)
+
+- ON AIR legt eine **eigene** Belohnung an (nur so darf dieselbe Client-ID Einlösungen erfüllen/stornieren).
+  Die ID wird gespeichert; nach einem Absturz wird eine Belohnung gleichen Titels übernommen statt dupliziert.
+- Ausschalten → Belohnung wird deaktiviert (nicht gelöscht). Die UI zeigt „ausstehend“, bis Twitch bestätigt.
+- Einlösung → Request mit `redemption_id` (eindeutiger Index = Deduplizierung).
+- Zielzustand: Titel läuft (beobachtet) → `FULFILLED`; abgelehnt/fehlgeschlagen → `CANCELED`
+  (Twitch erstattet); abgeschlossen ohne Beobachtung → **Prüfung** durch dich.
+  „Erstattet“ erscheint erst nach Bestätigung durch Twitch.
+- Start: erst Abgleich offener Einlösungen (`GET …/redemptions?status=UNFULFILLED`), dann Annahme.
+- Beim geordneten Beenden wird die Belohnung pausiert.
+
+## Updater
+
+Siehe [UPDATES.md](UPDATES.md). Zustände liegen in `update_state.rs` (Kern, getestet);
+`src-tauri/src/updater.rs` verbindet sie mit dem Plugin. Vor der Installation:
+Update-Sperre setzen, Belohnung pausieren, auf ruhende Queue warten, SQLite-Checkpoint.

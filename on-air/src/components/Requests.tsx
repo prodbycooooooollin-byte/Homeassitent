@@ -1,12 +1,39 @@
-import { ArrowDown, ArrowUp, Ban, Check, GripVertical, Lock, MoreHorizontal, RotateCcw, Star, Trash2, X, CheckCheck } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, Check, CheckCheck, GripVertical, Lock, MessageSquare, MoreHorizontal, RotateCcw, Sparkles, Star, Trash2, User, X } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { api } from "../lib/api";
-import { duration } from "../lib/format";
-import { t } from "../lib/i18n";
-import type { SongRequest } from "../lib/types";
+import { clockTime, duration } from "../lib/format";
+import { getLang, t } from "../lib/i18n";
+import type { PlanStatus, SongRequest } from "../lib/types";
 import { Badge, Cover, toast, toastError } from "./ui";
 
-export function statusBadge(r: SongRequest): { label: string; tone?: "accent" | "warn" | "danger" | "info" } {
+export type Eta = PlanStatus["etas"][number];
+
+export function sourceIcon(r: SongRequest) {
+  if (r.source === "channel_points") return <span className="src points" title={t("q.src_points")}><Sparkles size={12} /></span>;
+  if (r.source === "chat") return <span className="src" title={t("q.src_chat")}><MessageSquare size={12} /></span>;
+  return <span className="src" title={t("q.src_app")}><User size={12} /></span>;
+}
+
+function RedemptionBadge({ r }: { r: SongRequest }) {
+  const red = r.redemption;
+  if (!red) return null;
+  const pending = red.target !== null && red.status !== "fulfilled" && red.status !== "canceled";
+  const tone = red.status === "fulfilled" ? "positive" : red.status === "canceled" ? undefined : red.status === "unfulfilled" ? "accent" : "warn";
+  return (
+    <span title={red.last_error ?? undefined}>
+      <Badge tone={tone}><Sparkles size={11} /> {pending ? t("red.pending") : t(`red.${red.status}` as const)}</Badge>
+    </span>
+  );
+}
+
+/** Kurze Statusbezeichnung für schmale Listen. */
+function shortLabel(r: SongRequest): string | null {
+  if (r.status === "pending_review") return r.pending_reason === "offline" ? t("st.pending_offline") : t("q.short_review");
+  if (r.status === "uncertain") return t("q.short_uncertain");
+  return null;
+}
+
+export function statusBadge(r: SongRequest): { label: string; tone?: "accent" | "warn" | "danger" | "info" | "positive" } {
   switch (r.status) {
     case "pending_review":
       return r.pending_reason === "offline" ? { label: t("st.pending_offline"), tone: "warn" } : { label: t("st.pending_review"), tone: "info" };
@@ -15,7 +42,7 @@ export function statusBadge(r: SongRequest): { label: string; tone?: "accent" | 
     case "handing_off":
       return { label: t("st.handing_off"), tone: "info" };
     case "handed_off":
-      return { label: t("q.in_spotify"), tone: "accent" };
+      return { label: t("q.in_spotify"), tone: "positive" };
     case "playing":
       return { label: t("st.playing"), tone: "accent" };
     case "uncertain":
@@ -95,8 +122,10 @@ export function RequestRow({
   canUp,
   canDown,
   dnd,
+  eta,
 }: {
   r: SongRequest;
+  eta?: Eta;
   compact?: boolean;
   movable?: boolean;
   onMove?: (dir: -1 | 1) => void;
@@ -107,10 +136,12 @@ export function RequestRow({
   const b = statusBadge(r);
   const title = r.track?.title ?? r.query;
   const artist = r.track?.artists.join(", ") ?? "";
+  // In schmalen Zeilen hat die voraussichtliche Startzeit Vorrang vor dem Interpreten (steht im Tooltip).
+  const hideArtist = !!compact && !!eta && eta.start_ms !== null && r.status !== "playing";
   const locked = r.status === "handed_off" || r.status === "handing_off" || r.status === "playing";
   return (
     <div
-      className={`item ${dnd?.dragging ? "dragging" : ""} ${dnd?.dropBefore ? "drop-before" : ""}`}
+      className={`item state-${r.status} ${compact ? "compact-row" : ""} ${dnd?.dragging ? "dragging" : ""} ${dnd?.dropBefore ? "drop-before" : ""}`}
       draggable={!!dnd && movable}
       onDragStart={dnd?.onDragStart}
       onDragOver={dnd?.onDragOver}
@@ -128,14 +159,21 @@ export function RequestRow({
       </div>
       <div className="col" style={{ gap: 1 }}>
         <div className="row" style={{ gap: 6 }}>
-          <span className="t ellipsis" title={title}>{title}</span>
+          <span className="t ellipsis" title={compact && artist ? `${title} – ${artist}` : title}>{title}</span>
           {r.track?.explicit && <Badge title={t("q.explicit_label")}>{t("q.explicit")}</Badge>}
           {r.priority && <Badge tone="warn"><Star size={11} /> {t("q.priority")}</Badge>}
         </div>
-        <div className="s ellipsis" title={`${artist} · ${r.requester.name}`}>
-          {artist && <>{artist} · </>}
-          <span style={{ color: "var(--text)" }}>{r.requester.name}</span>
-          {r.track && !compact ? <span className="subtle"> · {duration(r.track.duration_ms)}</span> : null}
+        <div className="s row" style={{ gap: 5 }} title={`${artist} · ${r.requester.name}`}>
+          {!hideArtist && <span className="ellipsis">{artist}</span>}
+          {!hideArtist && artist && <span className="subtle">·</span>}
+          {sourceIcon(r)}
+          <span className="ellipsis" style={{ color: "var(--text)", flexShrink: 1 }}>{r.requester.name}</span>
+          {r.track && !compact ? <span className="subtle num" style={{ flex: "none" }}>· {duration(r.track.duration_ms)}</span> : null}
+          {eta && eta.start_ms !== null && r.status !== "playing" && (
+            <span className={`eta ${eta.fits === false ? "late" : ""}`} style={{ flex: "none" }} title={eta.fits === false ? t("plan.eta_late") : undefined}>
+              · {t("plan.eta", { time: clockTime(eta.start_ms, getLang()) })}{eta.fits === false ? " ⚠" : ""}
+            </span>
+          )}
         </div>
         {r.status === "uncertain" && !compact && (
           <div className="small" style={{ color: "var(--warn)", marginTop: 2 }}>
@@ -144,9 +182,18 @@ export function RequestRow({
         )}
       </div>
       <div className="actions">
-        <span title={locked ? t("q.in_spotify_hint") : movable ? t("q.local_hint") : undefined}>
-          <Badge tone={b.tone}>{locked && r.status !== "playing" ? <Lock size={11} /> : null}{b.label}</Badge>
-        </span>
+        {!compact && <RedemptionBadge r={r} />}
+        {!compact && r.redemption && (r.redemption.status === "review" || r.redemption.status === "conflict") && r.redemption.target === null && (
+          <>
+            <button className="btn btn-sm" onClick={() => api.redemptionDecide(r.id, true).catch(toastError)}>{t("red.fulfill")}</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => api.redemptionDecide(r.id, false).catch(toastError)}>{t("red.refund")}</button>
+          </>
+        )}
+        {(!compact || r.status !== "accepted") && (
+          <span title={locked ? t("q.in_spotify_hint") : movable ? t("q.local_hint") : undefined}>
+            <Badge tone={b.tone}>{locked && r.status !== "playing" ? <Lock size={11} /> : null}{compact ? shortLabel(r) ?? b.label : b.label}</Badge>
+          </span>
+        )}
         {r.status === "pending_review" && r.pending_reason !== "offline" && (
           <>
             <button className="icon-btn sm" aria-label={t("q.approve")} title={t("q.approve")} onClick={() => act("approve", r.id)}><Check size={16} /></button>
@@ -174,7 +221,7 @@ export function RequestRow({
           </>
         )}
         {movable && (
-          <button className="icon-btn sm" aria-label={t("q.remove")} title={t("q.remove")} onClick={() => act("remove", r.id)}><Trash2 size={15} /></button>
+          <button className={`icon-btn sm ${compact ? "hover-only" : ""}`} aria-label={t("q.remove")} title={t("q.remove")} onClick={() => act("remove", r.id)}><Trash2 size={15} /></button>
         )}
         {!compact && (r.status === "accepted" || r.status === "pending_review") && <RowMenu r={r} />}
       </div>
@@ -183,7 +230,7 @@ export function RequestRow({
 }
 
 /** Liste mit Drag-and-drop für lokal umsortierbare Einträge. */
-export function RequestList({ items, compact }: { items: SongRequest[]; compact?: boolean }) {
+export function RequestList({ items, compact, etas }: { items: SongRequest[]; compact?: boolean; etas?: Eta[] }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const movableOf = (prio: boolean) => items.filter((r) => (r.status === "accepted" || r.status === "pending_review") && r.priority === prio);
@@ -211,6 +258,7 @@ export function RequestList({ items, compact }: { items: SongRequest[]; compact?
           <div role="listitem" key={r.id}>
             <RequestRow
               r={r}
+              eta={etas?.find((e) => e.id === r.id)}
               compact={compact}
               movable={movable}
               canUp={gi > 0}

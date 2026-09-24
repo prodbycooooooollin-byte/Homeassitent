@@ -233,7 +233,7 @@ pub fn run() {
             }
             let data_dir = handle.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
-            let db = Db::open(&data_dir.join("onair.db")).map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+            let db = Db::open(&data_dir.join("onair.db")).map_err(Box::<dyn std::error::Error>::from)?;
             let rt = tauri::async_runtime::block_on(Runtime::start(RuntimeConfig {
                 db,
                 data_dir: Some(data_dir),

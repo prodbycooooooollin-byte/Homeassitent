@@ -38,7 +38,36 @@ oder „600 s Sperre“ in Sekundenbruchteilen – die Zeitlogik ist dieselbe wi
 | Sparsame Übergabe + Beobachtung | `handoff_is_sparse_and_playback_is_observed` | ✅ |
 | Limits bei gleichzeitigen Requests | `concurrent_requests_respect_user_limit` | ✅ |
 | Overlay: Loopback, Host-Prüfung, Token, keine Secrets | `tests/overlay.rs` | ✅ |
-| UI: kleines Fenster, lange Namen, 100/125/150/200 % | `tests-ui/layout.spec.ts` (27 Tests) | ✅ in Chromium, **nicht** in WebView2 geprüft |
+| UI: kleines Fenster, lange Namen, 100/125/150/200 %, 1280×720, 1920×1080 | `tests-ui/layout.spec.ts` (38 Tests) | ✅ in Chromium, **nicht** in WebView2 geprüft |
+
+## Erweiterung 0.2 – simuliert
+
+| Anforderung | Test (`crates/onair-core/tests/extensions.rs`, Fake-Spotify + Fake-Twitch) | Status |
+|---|---|---|
+| Chat/Kanalpunkte unabhängig (4 Kombinationen), globale Pause überlagert beide | `four_source_combinations_and_global_pause` | ✅ |
+| Belohnung wird einmal angelegt, ID gespeichert, nach Absturz übernommen statt dupliziert | `reward_is_created_once_and_adopted_after_crash` | ✅ |
+| Ausschalten deaktiviert (nicht löschen), „ausstehend“ bis Twitch bestätigt | `disabling_shows_pending_until_twitch_confirms` | ✅ |
+| Doppelte Einlösung → ein Request; Erfüllen erst nach beobachtetem Start; Ablehnen storniert | `redemptions_are_deduplicated_and_settled` | ✅ |
+| Neustart: offene Einlösungen werden vor neuer Annahme abgeglichen | `restart_recovers_pending_redemptions` | ✅ |
+| Gleichzeitige Requests teilen sich kein Restbudget (atomare Reservierung) | `concurrent_requests_cannot_share_the_same_budget` | ✅ |
+| Zu langer Song: konkrete Begründung mit Dauer und Restzeit | `too_long_request_gets_concrete_reason` | ✅ |
+| +15 Min hebt manuelle Pause nicht auf; Endzeit übersteht Neustart; abgelaufenes Ende bleibt zu | `extension_keeps_manual_pause_and_restart_keeps_end` | ✅ |
+| Prognose folgt Pause, Skip und Spulen; Pause wird als Unsicherheit benannt | `plan_follows_pause_skip_and_seek` (+ Unit-Test `paid_requests_held_back_when_plan_uncertain`) | ✅ |
+| Update-Vorbereitung pausiert Requests/Belohnung, sichert DB; Abbruch stellt Annahme wieder her | `update_preparation_pauses_and_can_be_cancelled` | ✅ |
+
+Unit-Tests dazu: Budgetformel und Unsicherheitscodes (`plan.rs`), Sperrgründe inkl.
+„+15 hält manuelle Pause“ (`acceptance.rs`), Update-Zustände und Fehlerklassifizierung – ein
+fehlgeschlagener Check ist nie „aktuell“ (`update_state.rs`), EventSub-Einlösungsnachrichten.
+
+UI (Playwright, Browser-Vorschau): Übersicht bei 1280×720/1920×1080 ohne abgeschnittene
+Kopfzeilen, globale Pause lässt Wege-Einstellungen unverändert, nur Kanalpunkte aktiv,
+Schnellwahl/+15/Planung beenden, abgelaufenes Streamende, Überplanungs-Angebot, Update
+„nicht eingerichtet“ ≠ „aktuell“, Download → bereit → Bestätigungsdialog, Tastatur in den
+Einstellungen, Werbung/veraltete Daten ohne widersprüchliche Zeiten.
+
+OBS-Overlays: Quelltext (`overlay/`, `widget.rs`) und Aufbau der Overlay-Daten seit 0.1
+unverändert; die App-Styles werden vom Overlay-Server nicht ausgeliefert. Ein Pixelvergleich
+war wegen Einblend-Animationen nicht deterministisch und wurde nicht als Nachweis gewertet.
 
 Zusätzlich 21 Unit-Tests (PKCE nach RFC 7636, Backoff/Circuit Breaker, Regeln, Chatbefehle,
 EventSub-Protokoll inkl. Reconnect ohne Neuabo, Migrationen, atomare Textdatei, Anonymisierung).
@@ -48,6 +77,8 @@ EventSub-Protokoll inkl. Reconnect ohne Neuabo, Migrationen, atomare Textdatei, 
 - Live-Smoke-Test mit echtem Spotify-Premium-Konto und Twitch-Kanal.
 - Manueller Test der Windows-Build-Artefakte (Tray, Autostart, Credential Manager, echtes Standby).
 - **Achtstündiger realer Dauertest** – noch nicht durchgeführt, keine Messwerte vorhanden.
+- Echter Kanalpunkte-Durchlauf mit Affiliate-Konto.
+- Echter Update-Durchlauf auf Windows (0.2.0 → 0.2.x) – setzt hinterlegte Signatur-Secrets voraus.
 
 ## Plan: achtstündiger Dauertest
 

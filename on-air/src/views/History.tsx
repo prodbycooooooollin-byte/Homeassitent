@@ -7,7 +7,7 @@ import { getLang, t } from "../lib/i18n";
 import { isSpotifyUsable } from "../lib/status";
 import type { AppSnapshot, HistoryEntry } from "../lib/types";
 
-export function HistoryView({ snap }: { snap: AppSnapshot }) {
+export function HistoryView({ snap, embedded }: { snap: AppSnapshot; embedded?: boolean }) {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<HistoryEntry[] | null>(null);
   const seq = useRef(0);
@@ -22,9 +22,9 @@ export function HistoryView({ snap }: { snap: AppSnapshot }) {
   const accepted = played + (s.accepted ?? 0) + (s.handed_off ?? 0) + (s.handing_off ?? 0);
   const usable = isSpotifyUsable(snap);
   return (
-    <div className="page">
+    <div className={embedded ? "col" : "page"} style={embedded ? { gap: 16 } : undefined}>
       <div className="page-head">
-        <h1>{t("h.title")}</h1>
+        {!embedded && <h1>{t("h.title")}</h1>}
         <div className="muted small">
           {t("h.session")} ({t("h.session_since", { time: clockTime(snap.session_started_ms, getLang()) })}): {t("q.stats.accepted")} {accepted} · {t("q.stats.rejected")} {s.rejected ?? 0} · {t("q.stats.played")} {played}
         </div>

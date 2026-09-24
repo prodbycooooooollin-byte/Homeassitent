@@ -24,7 +24,10 @@ Suchergebnissen zu den offiziellen Seiten, dem Spotify-Developer-Blog, der
 | Token-Validierung | `GET /oauth2/validate` | – | Twitch verlangt Validierung beim Start und stündlich. | – |
 | Chat lesen | EventSub WebSocket `channel.chat.message` v1 | `user:read:chat` | Abo innerhalb von 10 s nach Welcome (sonst 4003). Keepalive 10–600 s; ON AIR nutzt 30 s. Doppelte Zustellung möglich. | – |
 | Chat schreiben | `POST /helix/chat/messages` | `user:write:chat` | 500 Zeichen; Twitch-Ratelimits. ON AIR drosselt selbst (Standard 1,2 s Abstand, max. 5 in Warteschlange). | Antworten abschaltbar |
-| Kanalpunkte | EventSub `channel.channel_points_custom_reward_redemption.add`, Helix Redemptions | `channel:read:redemptions` / `channel:manage:redemptions` | Rückerstattung nur für Rewards, die **dieselbe Client-ID** angelegt hat. | **Noch nicht umgesetzt** (nach stabilem Kern) |
+| Kanalpunkte: Belohnung | Helix `POST/PATCH/GET /channel_points/custom_rewards` (`only_manageable_rewards`) | `channel:manage:redemptions` (inkrementell angefordert) | Nur Affiliates/Partner (sonst 403). Verwalten nur für Belohnungen, die **dieselbe Client-ID** angelegt hat; Titel pro Kanal eindeutig. | Deaktivieren statt Löschen |
+| Kanalpunkte: Einlösungen | EventSub `channel.channel_points_custom_reward_redemption.add` / `.update`, Helix `GET/PATCH …/redemptions` | `channel:manage:redemptions` | Erfüllen/Stornieren nur bei Status `UNFULFILLED`; Stornieren erstattet die Punkte. | Prüfung durch Streamer, wenn Wiedergabe nicht beobachtet |
+| Live-Status (Update-Hinweis) | Helix `GET /streams?user_id=` | – | Nur Hinweis; unbekannt, wenn Twitch nicht verbunden. | – |
+| App-Updates | GitHub Releases, `tauri-plugin-updater` | – | Download ohne Anmeldung nur aus öffentlichem Repository. Signatur Pflicht. | eigener Release-Server |
 | OBS-Anzeige | lokaler HTTP-Server (Browser Source), SSE | – | Nur `127.0.0.1`. Metadaten ≠ Senderechte an der Musik. | Now-Playing-Textdatei |
 
 ## Quellen
@@ -37,4 +40,6 @@ Suchergebnissen zu den offiziellen Seiten, dem Spotify-Developer-Blog, der
 - Spotify Add to Queue: https://developer.spotify.com/documentation/web-api/reference/add-to-queue
 - Änderungsliste (Feb. 2026) aus `rspotify`: https://github.com/ramsayleung/rspotify/issues/550
 - Twitch EventSub WebSocket: https://dev.twitch.tv/docs/eventsub/handling-websocket-events/
+- Twitch Kanalpunkte (Custom Rewards, Redemptions): https://dev.twitch.tv/docs/api/reference/#create-custom-rewards, https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/
+- Tauri Updater: https://v2.tauri.app/plugin/updater/
 - Twitch Tokens/DCF: https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/, https://dev.twitch.tv/docs/authentication/refresh-tokens/
