@@ -1,0 +1,30 @@
+[package]
+name = "onair-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Integrationen, Verbindungsverwaltung, Request-Queue, Speicherung und Overlay-Server von ON AIR"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+axum = { version = "0.8", features = ["tokio", "http1", "json", "query"] }
+tokio-tungstenite = { version = "0.27", features = ["rustls-tls-webpki-roots"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.9"
+url = "2"
+urlencoding = "2"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = "3"
