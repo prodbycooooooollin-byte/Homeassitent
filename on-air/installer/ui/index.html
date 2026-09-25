@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ON AIR Setup</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body data-step="welcome">
+    <div class="aurora" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="titlebar" data-tauri-drag-region>
+      <div class="tb-brand" data-tauri-drag-region>
+        <span class="tb-dot"></span>
+        <span data-tauri-drag-region>ON AIR Setup</span>
+      </div>
+      <div class="tb-actions">
+        <button class="tb-btn" id="btn-min" aria-label="Minimieren" title="Minimieren">
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" /></svg>
+        </button>
+        <button class="tb-btn close" id="btn-close" aria-label="Schließen" title="Schließen">
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" /></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <section class="hero" aria-hidden="true">
+        <div class="lamp" id="lamp">
+          <div class="lamp-glow"></div>
+          <div class="lamp-body">
+            <span class="lamp-dot"></span>
+            <span class="lamp-text">ON AIR</span>
+          </div>
+        </div>
+        <h1 class="wordmark">Dein Stream.<br /><span>Deine Musik.</span></h1>
+        <p class="tagline">Now Playing aus Spotify, Songrequests aus Chat und Kanalpunkten und OBS-Widgets, die einfach laufen.</p>
+        <ul class="features">
+          <li>
+            <span class="f-icon"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg></span>
+            <span><b>Now Playing</b> stabil, auch bei wackeligem Netz</span>
+          </li>
+          <li>
+            <span class="f-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></span>
+            <span><b>Songrequests</b> per <code>!sr</code> und Kanalpunkten</span>
+          </li>
+          <li>
+            <span class="f-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M8 21h8" /></svg></span>
+            <span><b>OBS-Widgets</b> mit Live-Vorschau</span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="panel" aria-live="polite">
+        <!-- Willkommen -->
+        <div class="step" data-show="welcome">
+          <div class="chip" id="version-chip">Version …</div>
+          <h2 id="welcome-title">Bereit für deinen Stream</h2>
+          <p class="muted" id="welcome-sub">ON AIR wird für dein Windows-Benutzerkonto eingerichtet.</p>
+
+          <div class="options">
+            <label class="opt">
+              <span class="opt-text"><b>Desktop-Verknüpfung</b><small>Symbol auf dem Desktop anlegen</small></span>
+              <input type="checkbox" id="opt-desktop" checked />
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+            <label class="opt">
+              <span class="opt-text"><b>ON AIR danach starten</b><small>Direkt loslegen</small></span>
+              <input type="checkbox" id="opt-launch" checked />
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+          </div>
+
+          <div class="note warn" id="running-note" hidden>ON AIR läuft gerade und wird für die Installation kurz beendet.</div>
+          <div class="note error" id="payload-note" hidden>Diesem Build fehlt das Installationspaket. Bitte den Installer aus dem Release verwenden.</div>
+
+          <button class="primary" id="btn-install">
+            <span id="install-label">Installieren</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+          </button>
+          <p class="fine">Keine Administratorrechte nötig · Updates kommen automatisch · jederzeit über Windows deinstallierbar</p>
+        </div>
+
+        <!-- Installation -->
+        <div class="step" data-show="installing">
+          <div class="ring" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="ring">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-bg" cx="60" cy="60" r="52" />
+              <circle class="ring-fg" id="ring-fg" cx="60" cy="60" r="52" />
+            </svg>
+            <div class="ring-center">
+              <div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+              <span id="ring-pct">0 %</span>
+            </div>
+          </div>
+          <h2 id="phase-title">Wird vorbereitet …</h2>
+          <p class="muted">Dauert nur einen Moment. Deine Einstellungen und Anmeldungen bleiben erhalten.</p>
+        </div>
+
+        <!-- Fertig -->
+        <div class="step" data-show="done">
+          <div class="check" aria-hidden="true">
+            <svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" /><path d="M15 27l7 7 15-16" /></svg>
+          </div>
+          <h2>ON AIR ist bereit</h2>
+          <p class="muted" id="done-sub">Viel Spaß beim Streamen.</p>
+          <div class="row">
+            <button class="primary" id="btn-launch">ON AIR starten</button>
+            <button class="ghost" id="btn-finish">Schließen</button>
+          </div>
+        </div>
+
+        <!-- Fehler -->
+        <div class="step" data-show="error">
+          <div class="err-icon" aria-hidden="true">!</div>
+          <h2>Das hat nicht geklappt</h2>
+          <p class="muted" id="error-text">Unbekannter Fehler.</p>
+          <div class="row stack">
+            <button class="primary" id="btn-retry">Erneut versuchen</button>
+            <button class="ghost" id="btn-classic">Klassischen Installer öffnen</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

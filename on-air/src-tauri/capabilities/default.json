@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Rechte der ON AIR-Fenster. Externe Links, Dateien und Anmeldung laufen über geprüfte Rust-Befehle.",
+  "windows": ["main", "compact"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-start-dragging",
+    "dialog:allow-save",
+    "dialog:allow-open",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
+  ]
+}
