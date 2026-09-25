@@ -1,0 +1,155 @@
+name: Clearspace Release
+
+# Erzeugt eine fertige Clearspace.exe und haengt sie an ein GitHub-Release,
+# damit sie ohne Anmeldung direkt heruntergeladen werden kann.
+# Ausgeloest wird ein Release, indem clearspace/release-version.txt geaendert wird.
+# Dort steht die Versionsbezeichnung, die das Release und sein Tag bekommen.
+on:
+  push:
+    paths:
+      - 'clearspace/release-version.txt'
+      - '.github/workflows/clearspace-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Windows-Paket bauen und veroeffentlichen
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: clearspace
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .NET 8 einrichten
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Version aus release-version.txt lesen
+        id: version
+        shell: bash
+        run: |
+          TAG=$(tr -d ' \r\n' < release-version.txt)
+          if [ -z "$TAG" ]; then
+            echo "release-version.txt ist leer." >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Release-Bezeichnung: $TAG"
+
+      - name: Tests ausfuehren
+        run: dotnet test tests/Clearspace.Core.Tests/Clearspace.Core.Tests.csproj -c Release
+
+      # Eigenstaendig: laeuft ohne vorher installierte .NET-Laufzeit.
+      - name: Eigenstaendige Clearspace.exe bauen
+        run: >
+          dotnet publish src/Clearspace.App/Clearspace.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none
+          -o artifacts/eigenstaendig
+
+      # Schlank: benoetigt das .NET 8 Desktop Runtime auf dem Rechner.
+      - name: Schlanke Clearspace.exe bauen
+        run: >
+          dotnet publish src/Clearspace.App/Clearspace.App.csproj
+          -c Release -r win-x64 --self-contained false
+          -p:PublishSingleFile=true
+          -p:DebugType=none
+          -o artifacts/schlank
+
+      # Entscheidend: die fertige Datei wirklich starten. Ein Paket, das sich nicht oeffnet,
+      # darf nicht veroeffentlicht werden.
+      - name: Startversuch der fertigen Clearspace.exe
+        shell: pwsh
+        env:
+          CLEARSPACE_OHNE_DIALOG: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $protokoll = Join-Path $env:LOCALAPPDATA 'Clearspace\start-protokoll.txt'
+          if (Test-Path $protokoll) { Remove-Item $protokoll -Force }
+
+          $fehler = $false
+          foreach ($variante in @('eigenstaendig', 'schlank')) {
+            $exe = Resolve-Path "artifacts/$variante/Clearspace.exe"
+            Write-Host "== Starte $variante =="
+            if (Test-Path $protokoll) { Remove-Item $protokoll -Force }
+
+            $p = Start-Process -FilePath $exe -PassThru
+            Start-Sleep -Seconds 25
+
+            if (Test-Path $protokoll) {
+              Write-Host "--- Startprotokoll ---"
+              Get-Content $protokoll | ForEach-Object { Write-Host $_ }
+              Write-Host "----------------------"
+            } else {
+              Write-Host "Kein Startprotokoll gefunden."
+            }
+
+            if ($p.HasExited) {
+              Write-Host "::error::$variante hat sich sofort beendet (Code $($p.ExitCode))."
+              $fehler = $true
+            } else {
+              $inhalt = if (Test-Path $protokoll) { Get-Content $protokoll -Raw } else { '' }
+              if ($inhalt -notmatch 'Start abgeschlossen') {
+                Write-Host "::error::$variante laeuft, hat den Start aber nicht abgeschlossen."
+                $fehler = $true
+              } else {
+                Write-Host "$variante startet sauber."
+              }
+              Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+          if ($fehler) { exit 1 }
+
+      - name: Dateien fuer das Release benennen
+        shell: pwsh
+        run: |
+          Copy-Item artifacts/eigenstaendig/Clearspace.exe artifacts/Clearspace.exe
+          Copy-Item artifacts/schlank/Clearspace.exe artifacts/Clearspace-klein.exe
+          Get-ChildItem artifacts/*.exe | ForEach-Object {
+            "{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB)
+          }
+
+      - name: Release veroeffentlichen
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          NOTES=$(cat <<'MARKDOWN'
+          ## Clearspace herunterladen
+
+          | Datei | Wann nehmen? | Voraussetzung |
+          |---|---|---|
+          | **Clearspace.exe** | Einfach herunterladen und doppelklicken. | Keine |
+          | Clearspace-klein.exe | Deutlich kleinere Datei. | .NET 8 Desktop Runtime muss installiert sein |
+
+          Beim ersten Start meldet sich der Windows-SmartScreen-Filter, weil die Datei nicht
+          signiert ist: **Weitere Informationen → Trotzdem ausführen**.
+
+          Clearspace braucht keine Administratorrechte und verändert beim Start nichts.
+          Es wird erst etwas verschoben, nachdem du eine konkrete Vorschau bestätigt hast.
+
+          Alle Einzelheiten, Grenzen und der geprüfte Stand stehen in `clearspace/README.md`.
+          MARKDOWN
+          )
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" artifacts/Clearspace.exe artifacts/Clearspace-klein.exe \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" artifacts/Clearspace.exe artifacts/Clearspace-klein.exe \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Clearspace $TAG" \
+              --notes "$NOTES" \
+              --prerelease
+          fi

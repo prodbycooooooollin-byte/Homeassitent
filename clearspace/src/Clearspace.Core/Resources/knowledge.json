@@ -1,0 +1,79 @@
+{
+  "products": [
+    { "match": ["fl studio", "fruityloops", "image-line fl"], "categories": ["music.daw"], "confidence": "High", "reason": "Bekannte Digital Audio Workstation" },
+    { "match": ["ableton live", "ableton"], "categories": ["music.daw"], "confidence": "High", "reason": "Bekannte Digital Audio Workstation" },
+    { "match": ["cubase", "nuendo"], "categories": ["music.daw"], "confidence": "High", "reason": "Bekannte Digital Audio Workstation" },
+    { "match": ["studio one"], "categories": ["music.daw"], "confidence": "High", "reason": "Bekannte Digital Audio Workstation" },
+    { "match": ["reaper"], "categories": ["music.daw"], "confidence": "High", "reason": "Bekannte Digital Audio Workstation" },
+    { "match": ["pro tools"], "categories": ["music.daw"], "confidence": "High", "reason": "Bekannte Digital Audio Workstation" },
+    { "match": ["bitwig"], "categories": ["music.daw"], "confidence": "High", "reason": "Bekannte Digital Audio Workstation" },
+    { "match": ["logic pro", "garageband"], "categories": ["music.daw"], "confidence": "High", "reason": "Bekannte Digital Audio Workstation" },
+    { "match": ["reason studios", "propellerhead reason"], "categories": ["music.daw"], "confidence": "High", "reason": "Bekannte Digital Audio Workstation" },
+    { "match": ["audacity"], "categories": ["music.audiotools"], "confidence": "High", "reason": "Audiobearbeitung" },
+    { "match": ["adobe audition"], "categories": ["music.audiotools"], "confidence": "High", "reason": "Audiobearbeitung" },
+    { "match": ["rx 10", "izotope rx"], "categories": ["music.audiotools"], "confidence": "High", "reason": "Audiorestauration und Stems" },
+    { "match": ["serum", "massive", "sylenth", "vital", "omnisphere", "kontakt", "nexus", "spire", "pigments"], "categories": ["music.instruments"], "confidence": "High", "reason": "Bekanntes Software-Instrument" },
+    { "match": ["ozone", "neutron", "fabfilter", "waves central", "soothe", "valhalla"], "categories": ["music.effects"], "confidence": "High", "reason": "Bekanntes Mixing-/Mastering-Werkzeug" },
+    { "match": ["native access", "native instruments"], "categories": ["music.management"], "confidence": "High", "reason": "Verwaltung von Plugins und Bibliotheken" },
+    { "match": ["ilok", "pace license", "splice", "waves central", "plugin alliance installation manager", "arturia software center", "steinberg download assistant", "connect by spitfire"], "categories": ["music.management"], "confidence": "High", "reason": "Lizenz- oder Inhaltsverwaltung fuer Musiksoftware" },
+    { "match": ["asio4all", "focusrite control", "voicemeeter", "realtek audio console", "universal audio", "rme totalmix", "steinberg ur", "behringer usb audio", "presonus universal control"], "categories": ["music.devices", "system.devices"], "confidence": "High", "reason": "Audiointerface- oder Treibersoftware" },
+    { "match": ["midi-ox", "loopmidi", "midiberry"], "categories": ["music.devices"], "confidence": "High", "reason": "MIDI-Werkzeug" },
+
+    { "match": ["steam"], "categories": ["gaming.launchers"], "confidence": "High", "reason": "Spielebibliothek und Launcher" },
+    { "match": ["epic games", "epic games launcher"], "categories": ["gaming.launchers"], "confidence": "High", "reason": "Spielebibliothek und Launcher" },
+    { "match": ["battle.net", "gog galaxy", "ubisoft connect", "uplay", "ea app", "origin", "rockstar games launcher", "riot client", "xbox"], "categories": ["gaming.launchers"], "confidence": "High", "reason": "Spielebibliothek und Launcher" },
+    { "match": ["minecraft", "fortnite", "valorant", "league of legends", "counter-strike", "dota", "gta v", "grand theft auto", "cyberpunk 2077", "elden ring", "rocket league", "apex legends", "call of duty", "world of warcraft", "the sims", "fifa", "ea sports fc", "roblox"], "categories": ["gaming.games"], "confidence": "High", "reason": "Bekannter Spieltitel" },
+    { "match": ["vortex", "mod organizer", "nexus mods", "forge", "fabric installer", "curseforge", "prism launcher", "multimc"], "categories": ["gaming.mods"], "confidence": "High", "reason": "Mod- oder Modmanager" },
+    { "match": ["msi afterburner", "rivatuner", "geforce experience", "nvidia app", "amd software", "razer synapse", "logitech g hub", "steelseries gg", "corsair icue"], "categories": ["gaming.tools", "system.devices"], "confidence": "Medium", "reason": "Gaming-Hilfsprogramm bzw. Geraetesoftware" },
+
+    { "match": ["obs studio", "obs", "streamlabs", "twitch studio", "xsplit"], "categories": ["content.streaming", "gaming.tools"], "confidence": "High", "reason": "Streaming- und Aufnahmesoftware, auch im Gaming-Einsatz" },
+    { "match": ["premiere pro", "davinci resolve", "vegas pro", "after effects", "capcut", "shotcut", "kdenlive", "blender"], "categories": ["content.video"], "confidence": "High", "reason": "Videoschnitt oder Animation" },
+    { "match": ["photoshop", "illustrator", "affinity photo", "affinity designer", "gimp", "krita", "figma", "canva", "inkscape", "cinema 4d", "maya", "3ds max", "zbrush"], "categories": ["content.graphics"], "confidence": "High", "reason": "Bildbearbeitung, Design oder 3D" },
+    { "match": ["elgato stream deck", "elgato camera hub", "nvidia broadcast", "voicemod"], "categories": ["content.streaming"], "confidence": "High", "reason": "Streaming-Zubehoer" },
+
+    { "match": ["discord", "teamspeak", "telegram", "whatsapp", "signal", "slack", "microsoft teams", "zoom", "skype"], "categories": ["communication"], "confidence": "High", "reason": "Kommunikationsprogramm" },
+    { "match": ["chrome", "firefox", "microsoft edge", "opera", "brave", "vivaldi", "tor browser"], "categories": ["browser"], "confidence": "High", "reason": "Webbrowser" },
+    { "match": ["word", "excel", "powerpoint", "outlook", "onenote", "notion", "obsidian", "todoist", "acrobat", "libreoffice", "thunderbird"], "categories": ["work"], "confidence": "High", "reason": "Arbeits- und Organisationsprogramm" },
+    { "match": ["visual studio", "vs code", "visual studio code", "rider", "intellij", "pycharm", "android studio", "git", "github desktop", "docker", "unity hub", "unreal engine", "blender", "notepad++", "putty", "windows terminal"], "categories": ["dev"], "confidence": "High", "reason": "Entwicklungswerkzeug" },
+    { "match": ["control panel", "systemsteuerung", "task manager", "7-zip", "winrar", "ccleaner", "hwinfo", "cpu-z", "crystaldiskinfo", "rufus", "device manager"], "categories": ["system"], "confidence": "Medium", "reason": "System- oder Geraetewerkzeug" }
+  ],
+
+  "publishers": [
+    { "match": ["image-line"], "categories": ["music.daw"], "confidence": "Medium", "reason": "Herausgeber ist ein DAW-Hersteller" },
+    { "match": ["ableton"], "categories": ["music.daw"], "confidence": "Medium", "reason": "Herausgeber ist ein DAW-Hersteller" },
+    { "match": ["steinberg"], "categories": ["music.daw"], "confidence": "Medium", "reason": "Herausgeber ist ein Audiosoftware-Hersteller" },
+    { "match": ["native instruments", "arturia", "spectrasonics", "xfer records", "u-he", "lennardigital"], "categories": ["music.instruments"], "confidence": "Medium", "reason": "Herausgeber stellt Software-Instrumente her" },
+    { "match": ["izotope", "fabfilter", "waves audio", "plugin alliance", "brainworx"], "categories": ["music.effects"], "confidence": "Medium", "reason": "Herausgeber stellt Audioeffekte her" },
+    { "match": ["focusrite", "rme", "presonus", "universal audio", "motu", "behringer", "audient"], "categories": ["music.devices", "system.devices"], "confidence": "Medium", "reason": "Herausgeber stellt Audiohardware her" },
+    { "match": ["valve", "epic games", "blizzard", "ubisoft", "electronic arts", "rockstar games", "riot games", "bethesda", "cd projekt"], "categories": ["gaming.games"], "confidence": "Medium", "reason": "Herausgeber ist ein Spieleanbieter" },
+    { "match": ["adobe", "blackmagic design", "maxon"], "categories": ["content"], "confidence": "Low", "reason": "Herausgeber ist im Kreativbereich taetig" },
+    { "match": ["jetbrains", "microsoft corporation", "github"], "categories": ["dev"], "confidence": "Low", "reason": "Herausgeber ist im Entwicklungsbereich taetig" }
+  ],
+
+  "keywords": [
+    { "match": ["audio interface", "audiointerface", "asio", "soundkarte", "audio driver", "audiotreiber"], "categories": ["music.devices", "system.devices"], "confidence": "Medium", "reason": "Produktbeschreibung nennt Audiointerface" },
+    { "match": ["synthesizer", "virtual instrument", "sampler", "software instrument"], "categories": ["music.instruments"], "confidence": "Medium", "reason": "Produktbeschreibung nennt ein Software-Instrument" },
+    { "match": ["mastering", "mixing", "equalizer", "compressor", "reverb"], "categories": ["music.effects"], "confidence": "Medium", "reason": "Produktbeschreibung nennt Mixing oder Mastering" },
+    { "match": ["daw", "digital audio workstation"], "categories": ["music.daw"], "confidence": "Medium", "reason": "Produktbeschreibung nennt eine Digital Audio Workstation" },
+    { "match": ["game", "spiel", "launcher for games"], "categories": ["gaming.games"], "confidence": "Low", "reason": "Produktbeschreibung deutet auf ein Spiel hin" },
+    { "match": ["screen recorder", "streaming", "broadcast"], "categories": ["content.streaming"], "confidence": "Medium", "reason": "Produktbeschreibung nennt Aufnahme oder Streaming" },
+    { "match": ["video editor", "videoschnitt"], "categories": ["content.video"], "confidence": "Medium", "reason": "Produktbeschreibung nennt Videoschnitt" },
+    { "match": ["image editor", "bildbearbeitung", "grafik"], "categories": ["content.graphics"], "confidence": "Medium", "reason": "Produktbeschreibung nennt Bildbearbeitung" }
+  ],
+
+  "pathHints": [
+    { "match": ["\\steamapps\\", "/steamapps/", "steam\\steam.exe"], "categories": ["gaming.games"], "confidence": "High", "reason": "Verknuepfungsziel liegt in der Steam-Bibliothek" },
+    { "match": ["\\epic games\\", "\\gog galaxy\\games\\", "\\riot games\\"], "categories": ["gaming.games"], "confidence": "High", "reason": "Verknuepfungsziel liegt in einem Spieleverzeichnis" },
+    { "match": ["\\image-line\\", "\\fl studio"], "categories": ["music.daw"], "confidence": "High", "reason": "Verknuepfungsziel liegt im FL-Studio-Verzeichnis" },
+    { "match": ["\\vstplugins\\", "\\vst3\\", "\\common files\\vst", "\\steinberg\\vstplugins"], "categories": ["music.plugins"], "confidence": "High", "reason": "Datei liegt in einem Plugin-Verzeichnis" },
+    { "match": ["\\samples\\", "\\drumkits\\", "\\loops\\", "\\one shots\\", "\\oneshots\\"], "categories": ["music.samples"], "confidence": "Medium", "reason": "Datei liegt in einem Sample-Verzeichnis" },
+    { "match": ["\\presets\\", "\\soundbanks\\", "\\patches\\"], "categories": ["music.presets"], "confidence": "Medium", "reason": "Datei liegt in einem Preset-Verzeichnis" }
+  ],
+
+  "protocols": [
+    { "match": ["steam://"], "categories": ["gaming.games"], "confidence": "High", "reason": "Startet ueber das Steam-Protokoll" },
+    { "match": ["com.epicgames.launcher://"], "categories": ["gaming.games"], "confidence": "High", "reason": "Startet ueber das Epic-Games-Protokoll" },
+    { "match": ["battlenet://"], "categories": ["gaming.games"], "confidence": "High", "reason": "Startet ueber das Battle.net-Protokoll" },
+    { "match": ["discord://"], "categories": ["communication"], "confidence": "High", "reason": "Startet ueber das Discord-Protokoll" }
+  ]
+}
