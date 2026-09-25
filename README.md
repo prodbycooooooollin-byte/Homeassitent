@@ -70,3 +70,10 @@ jeweiligen Haushalts gemappt werden (Kommentare markieren die Stellen).
 - Die Next.js-Version (14.2.35) hat laut `npm audit` noch offene Advisories,
   die erst mit einem Major-Upgrade auf Next 16 vollständig behoben sind.
 - Icon-Set für `public/manifest.json` (PWA-Icons) ergänzen.
+
+---
+
+## Weiteres Projekt in diesem Repository
+
+- [`lol-build-assistant/`](lol-build-assistant/README.md) – Windows-Desktop-App mit Ingame-Overlay für dynamische, erklärbare Item-Empfehlungen in League of Legends (Electron + TypeScript, eigenständiges npm-Projekt).
+

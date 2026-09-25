@@ -1,0 +1,100 @@
+{
+  "id": "jinx-base",
+  "name": "Jinx Bot, 2. Item, gemischtes Gegnerteam ohne Rüstungsfokus",
+  "gameVersion": null,
+  "gameTime": 900,
+  "goldRate": 6.4,
+  "me": {
+    "champion": "Jinx",
+    "role": "BOTTOM",
+    "level": 11,
+    "gold": 1200,
+    "items": [
+      3006,
+      3031
+    ]
+  },
+  "allies": [
+    {
+      "champion": "Ornn",
+      "role": "TOP",
+      "level": 11,
+      "items": [
+        3047,
+        3068
+      ]
+    },
+    {
+      "champion": "LeeSin",
+      "role": "JUNGLE",
+      "level": 10,
+      "items": [
+        3047,
+        3071
+      ]
+    },
+    {
+      "champion": "Orianna",
+      "role": "MIDDLE",
+      "level": 11,
+      "items": [
+        3020,
+        6655
+      ]
+    },
+    {
+      "champion": "Thresh",
+      "role": "UTILITY",
+      "level": 9,
+      "items": [
+        3111
+      ]
+    }
+  ],
+  "enemies": [
+    {
+      "champion": "Garen",
+      "role": "TOP",
+      "level": 11,
+      "items": [
+        3047,
+        1011
+      ]
+    },
+    {
+      "champion": "Viego",
+      "role": "JUNGLE",
+      "level": 10,
+      "items": [
+        3047,
+        3153
+      ]
+    },
+    {
+      "champion": "Ahri",
+      "role": "MIDDLE",
+      "level": 11,
+      "items": [
+        3020,
+        6655
+      ]
+    },
+    {
+      "champion": "Kaisa",
+      "role": "BOTTOM",
+      "level": 11,
+      "items": [
+        3006,
+        6672
+      ]
+    },
+    {
+      "champion": "Nautilus",
+      "role": "UTILITY",
+      "level": 9,
+      "items": [
+        3047
+      ]
+    }
+  ]
+}
