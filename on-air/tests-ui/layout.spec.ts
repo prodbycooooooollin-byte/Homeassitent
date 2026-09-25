@@ -216,3 +216,22 @@ test("Werbung und veraltete Daten zeigen keine widersprüchlichen Zeiten", async
   await expect(page.locator(".hero")).toContainText("aktuelle Position unbekannt");
   await expect(page.locator(".hero .progress")).toHaveCount(0);
 });
+
+test("Verbindungs-Popover liegt über dem Player (Stapelreihenfolge)", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/?state=full#/overview");
+  await page.locator(".conn-sum").click();
+  const pop = page.locator(".popover");
+  await expect(pop).toBeVisible();
+  const box = (await pop.boundingBox())!;
+  // Der oberste Punkt an mehreren Stellen des Popovers muss zum Popover gehören – nicht zum Player.
+  for (const [fx, fy] of [[0.2, 0.3], [0.5, 0.5], [0.8, 0.8]]) {
+    const inside = await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest(".popover"), [box.x + box.width * fx, box.y + box.height * fy]);
+    expect(inside).toBe(true);
+  }
+});
+
+test("Zusammenfassung sagt nie „Alles verbunden“, wenn Spotify fehlt", async ({ page }) => {
+  await page.goto("/?state=reauth#/overview");
+  await expect(page.locator(".conn-sum")).not.toContainText("Alles verbunden");
+});

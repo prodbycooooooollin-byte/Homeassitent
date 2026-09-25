@@ -15,20 +15,26 @@ export function ActivePaths({ snap }: { snap: AppSnapshot }) {
   const a = snap.acceptance;
   const cmd = `${snap.settings.commands.prefix}${snap.settings.commands.sr.name}`;
   const chips = [];
-  if (a.chat.configured)
-    chips.push(
-      <span key="c" className="path-chip" title={gateText(a.chat)}>
-        <MessageSquare size={12} /> <b>{cmd} &lt;Song&gt;</b> {!a.chat.open && <span className="subtle">· {gateText(a.chat)}</span>}
-      </span>,
-    );
+  // Chip = der Weg (nie umbrechen), Grund darunter als eigene Zeile – so bleibt beides lesbar.
+  const path = (key: string, icon: React.ReactNode, label: React.ReactNode, open: boolean, why: string) => (
+    <div key={key} className="col" style={{ gap: 3, minWidth: 0 }}>
+      <span className="path-chip" title={why}>{icon} {label}</span>
+      {!open && <span className="subtle small">{why}</span>}
+    </div>
+  );
+  if (a.chat.configured) chips.push(path("c", <MessageSquare size={12} />, <b>{cmd} &lt;Song&gt;</b>, a.chat.open, gateText(a.chat)));
   if (a.channel_points.configured)
     chips.push(
-      <span key="p" className="path-chip" title={gateText(a.channel_points)}>
-        <Sparkles size={12} /> <b>„{snap.settings.channel_points.title}“</b> · {snap.settings.channel_points.cost.toLocaleString()} {!a.channel_points.open && <span className="subtle">· {gateText(a.channel_points)}</span>}
-      </span>,
+      path(
+        "p",
+        <Sparkles size={12} />,
+        <><b>„{snap.settings.channel_points.title}“</b> · {snap.settings.channel_points.cost.toLocaleString()}</>,
+        a.channel_points.open,
+        gateText(a.channel_points),
+      ),
     );
   if (!chips.length) return <span className="subtle small">{t("q.no_path")}</span>;
-  return <div className="row wrap" style={{ gap: 6 }}>{chips}</div>;
+  return <div className="row wrap" style={{ gap: 10, alignItems: "flex-start" }}>{chips}</div>;
 }
 
 function Section({ label, hint, items, etas }: { label: string; hint?: string; items: SongRequest[]; etas: AppSnapshot["plan"]["etas"] }) {

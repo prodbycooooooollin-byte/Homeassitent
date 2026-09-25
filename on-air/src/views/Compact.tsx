@@ -24,7 +24,10 @@ export function CompactView({ snap }: { snap: AppSnapshot }) {
   const ep = info?.pb.episode;
   const kind = info?.kind;
   const pct = info && info.dur ? (100 * info.progress) / info.dur : 0;
-  const title = kind === "track" ? track!.title : kind === "episode" ? ep!.title : kind === "ad" ? t("np.ad") : kind === "unknown" ? t("np.unknown_title") : snap.spotify.playback.state === "idle" ? t("np.nothing") : t("np.unknown");
+  const title = kind === "track" ? track!.title : kind === "episode" ? ep!.title : kind === "ad" ? t("np.ad") : kind === "unknown" ? t("np.unknown_title")
+    : snap.spotify.auth.state === "signed_out" ? t("sp.signed_out")
+    : snap.spotify.auth.state === "reauth_required" ? t("sp.reauth")
+    : snap.spotify.playback.state === "idle" ? t("np.nothing") : t("np.unknown");
   const sub = kind === "track" ? track!.artists.join(", ") : kind === "episode" ? ep?.show ?? t("np.podcast") : kind === "ad" ? t("np.ad_hint") : "";
   const acc = snap.acceptance;
   return (

@@ -58,7 +58,7 @@ Installer auf `windows-latest` und lädt ihn als Artefakt `on-air-windows-instal
 ```bash
 cargo test -p onair-core   # 63 Rust-Tests inkl. Abnahmekriterien (simuliert)
 npm run typecheck
-npx playwright test        # 38 UI-Tests (Layout, Zustände, Bedienung)
+npx playwright test        # 40 UI-Tests (Layout, Zustände, Bedienung)
 ```
 
 Details und Abdeckung: [docs/TESTS.md](docs/TESTS.md)

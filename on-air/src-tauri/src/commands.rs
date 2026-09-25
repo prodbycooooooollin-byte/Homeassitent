@@ -258,8 +258,11 @@ pub fn set_ui_visible(state: State<'_, AppState>, visible: bool) {
     state.rt.set_ui_visible(visible);
 }
 
+/// Muss `async` sein: Unter Windows blockiert das Erzeugen eines Fensters aus einem
+/// synchronen Befehl (Haupt-Thread) dauerhaft – graues, nicht schließbares Fenster,
+/// danach hängen alle weiteren Befehle (WebView2-Einschränkung, siehe Tauri-Doku).
 #[tauri::command]
-pub fn open_compact(app: AppHandle) -> R<()> {
+pub async fn open_compact(app: AppHandle) -> R<()> {
     crate::open_compact(&app).map_err(|e| CmdError::from(e.to_string()))
 }
 

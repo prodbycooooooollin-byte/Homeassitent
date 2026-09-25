@@ -20,7 +20,10 @@
 - **Streamplanung** rechnet mit den Titeldauern aus Spotify. Crossfade, Werbung und manuelles
   Springen machen die Prognose ungenau; ON AIR zeigt das als „unsicher“ an, misst es aber nicht.
 - Das neue Design wurde in Chromium bei 1280×720 und 1920×1080 sowie simulierten
-  Skalierungen geprüft, nicht in WebView2 auf einem echten Windows-Rechner.
+  Skalierungen geprüft, nicht in WebView2 auf einem echten Windows-Rechner. Die echte
+  Desktop-App (Tauri + Rust-Backend) wurde zusätzlich unter Linux (WebKitGTK, virtuelles
+  Display) bedient: Kompaktfenster, Verbindungsübersicht, Request-Pause, Widget-Vorschau.
+  Windows-spezifisches Verhalten (WebView2-Threading) lässt sich dort nicht nachstellen.
 
 ## Durch die Anbieter bedingt
 - Spotify Development Mode: Premium-Pflicht, max. 5 Nutzer, eingeschränkte Endpunkte. Eine

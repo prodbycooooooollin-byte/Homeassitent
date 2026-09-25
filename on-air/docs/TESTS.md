@@ -38,7 +38,7 @@ oder „600 s Sperre“ in Sekundenbruchteilen – die Zeitlogik ist dieselbe wi
 | Sparsame Übergabe + Beobachtung | `handoff_is_sparse_and_playback_is_observed` | ✅ |
 | Limits bei gleichzeitigen Requests | `concurrent_requests_respect_user_limit` | ✅ |
 | Overlay: Loopback, Host-Prüfung, Token, keine Secrets | `tests/overlay.rs` | ✅ |
-| UI: kleines Fenster, lange Namen, 100/125/150/200 %, 1280×720, 1920×1080 | `tests-ui/layout.spec.ts` (38 Tests) | ✅ in Chromium, **nicht** in WebView2 geprüft |
+| UI: kleines Fenster, lange Namen, 100/125/150/200 %, 1280×720, 1920×1080 | `tests-ui/layout.spec.ts` (40 Tests) | ✅ in Chromium, **nicht** in WebView2 geprüft |
 
 ## Erweiterung 0.2 – simuliert
 

@@ -364,6 +364,7 @@ export const de = {
   "shell.tagline": "Musik & Requests",
   "ov.title": "Übersicht",
   "conn.title": "Verbindungen",
+  "conn.partial": "Teilweise eingerichtet",
   "conn.all_ok": "Alles verbunden",
   "conn.issues_one": "1 Hinweis",
   "conn.issues": "{n} Hinweise",

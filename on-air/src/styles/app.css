@@ -149,6 +149,9 @@ a { color: var(--accent); }
   height: var(--top-h); flex: none; display: flex; align-items: center; gap: var(--s3);
   padding: 0 var(--s7); border-bottom: 1px solid var(--border);
   background: var(--glass); backdrop-filter: blur(18px) saturate(1.15);
+  /* backdrop-filter erzeugt einen eigenen Stapelkontext – ohne z-index lägen
+     Popover der Kopfzeile hinter später gezeichneten Karten (z. B. Player mit isolation). */
+  position: relative; z-index: 20;
 }
 .topbar-title { font-size: 15px; font-weight: 640; letter-spacing: -0.01em; }
 .content { flex: 1; overflow: auto; padding: var(--s7); min-height: 0; }
@@ -358,7 +361,7 @@ details.tech pre { white-space: pre-wrap; word-break: break-word; margin: 6px 0 
 .empty .e-title { color: var(--text); font-weight: 620; font-size: 15px; }
 .empty-inline { display: flex; align-items: center; gap: 16px; padding: 18px var(--s5); flex-wrap: wrap; }
 .empty-inline .e-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }
-.path-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-2); }
+.path-chip { align-self: flex-start; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-2); }
 .path-chip b { color: var(--text); font-weight: 600; }
 .skeleton { background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; border-radius: 6px; }
 @keyframes shimmer { to { background-position: -200% 0; } }

@@ -135,12 +135,15 @@ function ConnectionSummary({ snap, onDiag, go }: { snap: AppSnapshot; onDiag: (k
       action: <button className="btn btn-sm" onClick={() => go("settings")}>{t("nav.settings")}</button>,
     });
   }
-  const issues = rows.filter((r) => r.st.tone === "warn" || r.st.tone === "error").length;
+  // Spotify ist Pflicht: „nicht verbunden“ zählt als Hinweis. Optionale Dienste (Twitch) ohne
+  // Anmeldung machen die Zusammenfassung nur „teilweise“, nie „alles verbunden“.
+  const issues = rows.filter((r) => r.st.tone === "warn" || r.st.tone === "error" || (r.key === "spotify" && r.st.tone === "neutral")).length;
+  const partial = rows.some((r) => r.st.tone === "neutral" || r.st.tone === "busy");
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button className="conn-sum" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <span className="conn-dots" aria-hidden="true">{rows.map((r) => <span key={r.key} className={`sdot ${r.st.tone}`} />)}</span>
-        <span>{issues === 0 ? t("conn.all_ok") : issues === 1 ? t("conn.issues_one") : t("conn.issues", { n: issues })}</span>
+        <span>{issues === 0 ? (partial ? t("conn.partial") : t("conn.all_ok")) : issues === 1 ? t("conn.issues_one") : t("conn.issues", { n: issues })}</span>
       </button>
       {open && (
         <div className="popover" role="dialog" aria-label={t("conn.title")} style={{ right: 0, top: 44 }}>

@@ -64,6 +64,8 @@ pub(crate) fn show_main(app: &AppHandle) {
     }
 }
 
+/// Nie direkt aus dem Haupt-Thread aufrufen (synchrone Befehle, Menü-/Fenster-Ereignisse):
+/// unter Windows blockiert `WebviewWindowBuilder::build` dort dauerhaft.
 pub(crate) fn open_compact(app: &AppHandle) -> tauri::Result<()> {
     if let Some(w) = app.get_webview_window("compact") {
         let _ = w.show();
@@ -128,7 +130,11 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             match event.id.as_ref() {
                 "open" => show_main(&app),
                 "compact" => {
-                    let _ = open_compact(&app);
+                    // Menü-Ereignisse laufen auf dem Haupt-Thread; Fenster dort zu erzeugen
+                    // blockiert unter Windows. Deshalb auf einem Worker-Thread.
+                    tauri::async_runtime::spawn(async move {
+                        let _ = open_compact(&app);
+                    });
                 }
                 "quit" => quit(&app),
                 "skip" => {

@@ -366,6 +366,7 @@ export const en: Record<DictKey, string> = {
   "shell.tagline": "Music & requests",
   "ov.title": "Overview",
   "conn.title": "Connections",
+  "conn.partial": "Partly set up",
   "conn.all_ok": "All connected",
   "conn.issues_one": "1 notice",
   "conn.issues": "{n} notices",
