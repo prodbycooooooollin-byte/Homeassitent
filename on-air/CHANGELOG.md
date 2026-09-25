@@ -8,7 +8,8 @@
 - Integrierter Updater mit signierten Updates über GitHub Releases.
 - Erste Version mit Updater: einmalig manuell installieren, danach Updates direkt aus der App.
 - Automatische Updates (Standard: an): im Hintergrund prüfen und laden, in einem sicheren Moment mit 30-Sekunden-Countdown installieren – nie während eines Livestreams oder einer Streamplanung.
-- `scripts/setup-updater.mjs`: einmalige Einrichtung der Update-Signatur mit einem Befehl.
+- Automatische Releases bei jedem Push; Updates funktionieren ohne Einrichtung (Herkunft + SHA-256), optional zusätzlich signiert (`scripts/setup-updater.mjs`).
+- Immersiver Installer `ON-AIR-Setup_<version>.exe` mit eigener Oberfläche; gebrandeter klassischer Installer.
 - Behoben: Kompaktmodus öffnete unter Windows ein graues, nicht schließbares Fenster und legte danach die App lahm (Pause-Knopf ohne Wirkung, leere Widget-Vorschau).
 - Behoben: Verbindungsübersicht lag hinter dem Player und meldete „Alles verbunden“, obwohl Spotify nicht verbunden war.
 

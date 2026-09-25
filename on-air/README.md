@@ -26,7 +26,8 @@ Weitere Ansichten (Browser-Vorschau mit Beispieldaten): [docs/screenshots](docs/
 - Optional **Kanalpunkte-Requests** über eine eigene, von ON AIR verwaltete Belohnung –
   Erfüllen erst nach beobachtetem Start, Ablehnen erstattet die Punkte
 - **Streamplanung**: Requests nur annehmen, solange sie vor dem Streamende noch passen
-- **Automatische Updates** über signierte GitHub-Releases – installiert nur in einem ruhigen
+- **Immersiver Installer** (`ON-AIR-Setup_<version>.exe`) im ON-AIR-Design
+- **Automatische Updates ohne Einrichtung** – jeder Push erzeugt ein Release; die App installiert nur in einem ruhigen
   Moment (nie während eines Livestreams), mit Countdown und „Nicht jetzt“
 - OBS-Widgets *Minimal*, *Glass*, *Queue* mit Live-Vorschau, plus Now-Playing-Textdatei
 - Tray-Betrieb, optionaler Autostart, Kompaktmodus für den zweiten Monitor, Stream-Profile,

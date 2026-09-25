@@ -38,6 +38,7 @@ export function UpdatePanel({ snap }: { snap: AppSnapshot }) {
             <span className="eyebrow">{t("up.installed")}</span>
             <span style={{ fontSize: 22, fontWeight: 700 }} className="num">ON AIR {info.current_version}</span>
             <span className="subtle small">{t("up.last_check")}: {info.last_check_ms ? dateTime(info.last_check_ms, getLang()) : t("up.never")}</span>
+            {info.mode !== "off" && <span className="subtle small">{t(`up.mode.${info.mode}` as const)}</span>}
           </div>
           <button className="btn" disabled={busy || st.state === "not_configured"} onClick={() => api.updateCheck().catch(toastError)}>
             <RefreshCw size={15} className={st.state === "checking" ? "spin" : ""} /> {st.state === "checking" ? t("up.checking") : t("up.check")}

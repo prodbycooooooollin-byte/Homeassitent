@@ -350,6 +350,8 @@ export interface UpdateInfo {
   last_check_ms: number | null;
   endpoint: string;
   configured: boolean;
+  /** signature = eigener Signaturschlüssel, checksum = HTTPS + Herkunft + SHA-256, off = Entwicklungsbuild */
+  mode: "signature" | "checksum" | "off";
   auto: AutoUpdateStatus;
 }
 

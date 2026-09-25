@@ -54,7 +54,10 @@
           "German",
           "English"
         ],
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "headerImage": "installer-assets/header.bmp",
+        "sidebarImage": "installer-assets/sidebar.bmp",
+        "installerIcon": "icons/icon.ico"
       },
       "wix": {
         "language": [

@@ -5,7 +5,7 @@
 │  React-UI (Hauptfenster, Kompaktfenster)      ← Snapshots (gebündelt, 120 ms)        │
 │        │ invoke (Tauri-Befehle, dünne Schicht)                                        │
 │  src-tauri: Tray · Schließen/Beenden · Autostart · Credential Manager · Logs · Hotkey │
-│             Updater (tauri-plugin-updater, signierte GitHub-Releases)                 │
+│             Updater (GitHub-Releases; SHA-256 bzw. optional Tauri-Signatur)            │
 │        │                                                                              │
 │  onair-core::runtime (einmal erzeugt)                                                 │
 │   ├─ spotify::service  ── genau 1 Polling-Worker ──► SpotifyState (watch)             │
@@ -152,7 +152,8 @@ frei = verbleibend − Rest des aktuellen Titels − geplante Requests − reser
 
 ## Updater
 
-Siehe [UPDATES.md](UPDATES.md). Zustände liegen in `update_state.rs` (Kern, getestet);
+Siehe [UPDATES.md](UPDATES.md). Zustände liegen in `update_state.rs`, der Prüfsummen-Pfad in
+`update_direct.rs` (Kern, getestet); der immersive Installer ist das Crate `installer/`;
 `src-tauri/src/updater.rs` verbindet sie mit dem Plugin. Vor der Installation:
 Update-Sperre setzen, Belohnung pausieren, auf ruhende Queue warten, SQLite-Checkpoint.
 `UpdateManager::run_auto` ist die Hintergrund-Automatik (prüfen → laden → sicherer Moment →

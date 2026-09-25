@@ -1,4 +1,5 @@
-// Setzt die Version in package.json, package-lock.json, tauri.conf.json und Cargo.toml.
+// Setzt die Version in package.json, package-lock.json, beiden tauri.conf.json und Cargo.toml.
+// Im CI setzt der Release-Workflow die Version automatisch (Laufnummer) – lokal selten nötig.
 // Aufruf: node scripts/set-version.mjs 0.2.1
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -18,6 +19,7 @@ json("package-lock.json", (o) => {
   if (o.packages?.[""]) o.packages[""].version = v;
 });
 json("src-tauri/tauri.conf.json", (o) => (o.version = v));
+json("installer/tauri.conf.json", (o) => (o.version = v));
 const cargo = readFileSync("Cargo.toml", "utf8").replace(/(\[workspace\.package\][^[]*?version\s*=\s*")[^"]+(")/s, `$1${v}$2`);
 writeFileSync("Cargo.toml", cargo);
-console.log(`Version auf ${v} gesetzt. Danach: cargo update -w, CHANGELOG ergänzen, committen, Tag on-air-v${v} pushen.`);
+console.log(`Version auf ${v} gesetzt.`);

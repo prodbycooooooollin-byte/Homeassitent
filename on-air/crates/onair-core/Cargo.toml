@@ -24,6 +24,7 @@ base64 = "0.22"
 rand = "0.9"
 url = "2"
 urlencoding = "2"
+semver = "1"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }

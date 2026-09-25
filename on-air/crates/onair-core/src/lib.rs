@@ -33,5 +33,6 @@ pub mod settings;
 pub mod spotify;
 pub mod storage;
 pub mod twitch;
+pub mod update_direct;
 pub mod update_state;
 pub mod wake;

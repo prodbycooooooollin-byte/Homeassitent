@@ -78,13 +78,17 @@ EventSub-Protokoll inkl. Reconnect ohne Neuabo, Migrationen, atomare Textdatei, 
 - Manueller Test der Windows-Build-Artefakte (Tray, Autostart, Credential Manager, echtes Standby).
 - **Achtstündiger realer Dauertest** – noch nicht durchgeführt, keine Messwerte vorhanden.
 - Echter Kanalpunkte-Durchlauf mit Affiliate-Konto.
-- Echter Update-Durchlauf auf Windows (0.2.0 → 0.2.x) – setzt hinterlegte Signatur-Secrets voraus.
+- Echter Update-Durchlauf und immersiver Installer auf Windows (kein Windows-Rechner verfügbar).
   Durchgeführt wurde ein **lokaler End-to-End-Lauf unter Linux** mit der echten Desktop-App:
   Wegwerf-Schlüssel, lokaler Update-Server, signiertes Testpaket. Geprüft: automatische Suche
   → Download → Signaturprüfung (ohne Versionsbindung korrekt abgewiesen, mit Versionsbindung
   angenommen) → Countdown → „Nicht jetzt“ → nach Neustart automatische Installation mit
   Update-Vorbereitung (Requests pausiert, DB gesichert) → Paket installiert, App beendet sich
   zum Neustart. Dabei gefunden und behoben: Überlauf in der Live-Status-Zwischenspeicherung.
+  Zusätzlich der **Prüfsummen-Modus ohne Schlüssel** (lokaler Server, SHA-256, Countdown,
+  Installationsversuch mit sauberem Fehlerpfad unter Linux) und die **Installer-App** unter Linux.
+  Unit-Tests `update_direct`: nur neuere Versionen, Herkunftsprüfung (fremde Hosts, andere Repos,
+  Klartext, `..`), Pflicht von SHA-256/Größe, Manipulation erkannt.
 
 ## Plan: achtstündiger Dauertest
 

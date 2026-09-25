@@ -110,7 +110,7 @@ export function createMockBackend(): Backend {
   let autoAt: number | null = scenario === "autoupdate" ? now() + 30_000 : null;
   let postponed = false;
   const updateInfo = (): UpdateInfo => ({
-    current_version: "0.2.0", state: updatePhase, last_check_ms: scenario.includes("update") ? now() - 3_600_000 : null, endpoint: "(Vorschau)", configured: scenario.includes("update"),
+    current_version: "0.2.0", state: updatePhase, last_check_ms: scenario.includes("update") ? now() - 3_600_000 : null, endpoint: "(Vorschau)", configured: scenario.includes("update"), mode: scenario.includes("update") ? "checksum" : "off",
     auto: { enabled: settings.updates.auto_install, waiting: postponed ? "postponed" : updatePhase.state === "ready" && !autoAt ? "live" : null, install_at_ms: autoAt, postponed },
   });
   const setUpdate = (st: UpdateInfo["state"]) => {

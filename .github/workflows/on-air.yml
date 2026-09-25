@@ -49,6 +49,7 @@ jobs:
         run: |
           npm run build
           cargo build -p onair-desktop
+          cargo build -p onair-setup
       - name: UI-Layouttests
         run: |
           npx playwright install --with-deps chromium
@@ -74,11 +75,19 @@ jobs:
         run: cargo test -p onair-core
       - name: Installer bauen (NSIS + MSI)
         run: npx tauri build
+      - name: Immersiven Installer bauen
+        shell: bash
+        run: |
+          set -euo pipefail
+          nsis=$(ls target/release/bundle/nsis/*-setup.exe | head -1)
+          ONAIR_SETUP_PAYLOAD="$(pwd)/$nsis" cargo build --release -p onair-setup
+          cp target/release/onair-setup.exe "target/release/ON-AIR-Setup.exe"
       - name: Installer hochladen
         uses: actions/upload-artifact@v4
         with:
           name: on-air-windows-installer
           path: |
+            on-air/target/release/ON-AIR-Setup.exe
             on-air/target/release/bundle/nsis/*.exe
             on-air/target/release/bundle/msi/*.msi
           if-no-files-found: error

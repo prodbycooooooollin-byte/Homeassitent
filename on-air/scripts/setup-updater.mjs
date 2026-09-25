@@ -1,4 +1,5 @@
-// Einmalige Einrichtung der signierten Updates – auf DEINEM Rechner ausführen:
+// OPTIONAL: zusätzliche Signaturprüfung für Updates einrichten (Updates funktionieren auch ohne,
+// dann prüft die App Herkunft und SHA-256). Auf DEINEM Rechner ausführen:
 //
 //   cd on-air
 //   node scripts/setup-updater.mjs
@@ -122,8 +123,6 @@ console.log(`
 WICHTIG: ${keyPath} und das Passwort sicher aufbewahren (z. B. Passwortmanager).
 Ohne diesen Schlüssel können installierte Versionen keine Updates mehr annehmen.
 
-Nächster Schritt – erstes Release bauen lassen:
-  git tag on-air-v0.2.0 && git push origin on-air-v0.2.0
-Danach den Installer aus dem Release „ON AIR 0.2.0“ einmal installieren.
-Ab dann aktualisiert sich ON AIR selbst.
+Ab dem nächsten Push werden Releases automatisch signiert.
+Apps aus diesen Releases verlangen danach Signaturen – den Schlüssel also nicht verlieren.
 `);

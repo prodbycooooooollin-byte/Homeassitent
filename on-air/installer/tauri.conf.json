@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ON AIR Setup",
+  "version": "0.2.0",
+  "identifier": "app.onair.setup",
+  "build": {
+    "frontendDist": "ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "ON AIR Setup",
+        "width": 940,
+        "height": 600,
+        "resizable": false,
+        "maximizable": false,
+        "decorations": false,
+        "center": true,
+        "visible": false,
+        "backgroundColor": "#0d0c11"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["../src-tauri/icons/icon.ico", "../src-tauri/icons/icon.png"]
+  }
+}

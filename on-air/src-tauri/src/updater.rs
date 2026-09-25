@@ -14,6 +14,7 @@
 
 use onair_core::runtime::{Runtime, UpdatePrep};
 use onair_core::settings as cfg;
+use onair_core::update_direct::{self, DirectRelease};
 use onair_core::update_state::{
     classify_error, decide_auto_install, AutoDecision, AutoInputs, AutoWait, Refused, Stage, UpdateState, AUTO_COUNTDOWN_MS, CHECK_INTERVAL_MS,
     RETRY_INTERVAL_MS,
@@ -37,9 +38,37 @@ pub fn endpoint() -> &'static str {
     option_env!("ONAIR_UPDATER_ENDPOINT").filter(|e| !e.trim().is_empty()).unwrap_or(DEFAULT_ENDPOINT)
 }
 
+/// Wie Updates geprüft werden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mode {
+    /// Tauri-Updater mit eigener Signatur (öffentlicher Schlüssel eingebettet).
+    Signature,
+    /// Ohne eigenen Schlüssel: HTTPS von den GitHub-Releases + Herkunft + SHA-256
+    /// (siehe `onair_core::update_direct`). Funktioniert ohne jede Einrichtung.
+    Checksum,
+    /// Entwicklungsbuild: keine Updates.
+    Off,
+}
+
+pub fn mode() -> Mode {
+    if pubkey().is_some() {
+        Mode::Signature
+    } else if !cfg!(debug_assertions) || option_env!("ONAIR_UPDATER_ENDPOINT").is_some() {
+        Mode::Checksum
+    } else {
+        Mode::Off
+    }
+}
+
+/// Gefundenes Update: (Version, Notizen, Datum).
+type Found = (String, Option<String>, Option<String>);
+
 pub struct UpdateManager {
     state: Mutex<UpdateState>,
     update: Mutex<Option<Update>>,
+    /// Direkter Pfad (ohne eigenen Schlüssel): gefundenes Release.
+    direct: Mutex<Option<DirectRelease>>,
     bytes: Mutex<Option<Vec<u8>>>,
     last_check_ms: Mutex<Option<i64>>,
     auto: Mutex<AutoStatus>,
@@ -64,6 +93,7 @@ pub struct UpdateInfo {
     pub last_check_ms: Option<i64>,
     pub endpoint: String,
     pub configured: bool,
+    pub mode: Mode,
     pub auto: AutoStatus,
 }
 
@@ -82,10 +112,11 @@ fn now_ms() -> i64 {
 
 impl UpdateManager {
     pub fn new() -> Arc<Self> {
-        let initial = if pubkey().is_some() { UpdateState::Unchecked } else { UpdateState::NotConfigured };
+        let initial = if mode() == Mode::Off { UpdateState::NotConfigured } else { UpdateState::Unchecked };
         Arc::new(Self {
             state: Mutex::new(initial),
             update: Mutex::new(None),
+            direct: Mutex::new(None),
             bytes: Mutex::new(None),
             last_check_ms: Mutex::new(None),
             auto: Mutex::new(AutoStatus::default()),
@@ -99,7 +130,8 @@ impl UpdateManager {
             state: self.state.lock().unwrap().clone(),
             last_check_ms: *self.last_check_ms.lock().unwrap(),
             endpoint: endpoint().to_string(),
-            configured: pubkey().is_some(),
+            configured: mode() != Mode::Off,
+            mode: mode(),
             auto: self.auto.lock().unwrap().clone(),
         }
     }
@@ -130,7 +162,7 @@ impl UpdateManager {
     /// Hintergrund-Automatik: prüfen → laden → im sicheren Moment mit Countdown installieren.
     /// Läuft für die gesamte App-Lebensdauer; ohne eingebetteten Schlüssel sofort beendet.
     pub async fn run_auto(self: Arc<Self>, app: AppHandle, rt: Arc<Runtime>) {
-        if pubkey().is_none() {
+        if mode() == Mode::Off {
             return;
         }
         let started = now_ms();
@@ -241,20 +273,36 @@ impl UpdateManager {
 
     pub async fn check(&self, app: &AppHandle) -> Result<UpdateInfo, String> {
         self.begin(app, |s| s.can_check().map(|_| String::new()), |_| UpdateState::Checking).map_err(|e| e.to_string())?;
-        let result = async {
-            let key = pubkey().ok_or("kein Schlüssel")?;
-            let url = endpoint().parse().map_err(|e| format!("{e}"))?;
-            let updater = app.updater_builder().pubkey(key).endpoints(vec![url]).map_err(|e| e.to_string())?.build().map_err(|e| e.to_string())?;
-            updater.check().await.map_err(|e| e.to_string())
-        }
-        .await;
+        let result: Result<Option<Found>, String> = match mode() {
+            Mode::Signature => async {
+                let key = pubkey().ok_or("kein Schlüssel")?;
+                let url = endpoint().parse().map_err(|e| format!("{e}"))?;
+                let updater = app.updater_builder().pubkey(key).endpoints(vec![url]).map_err(|e| e.to_string())?.build().map_err(|e| e.to_string())?;
+                let found = updater.check().await.map_err(|e| e.to_string())?;
+                Ok(found.map(|u| {
+                    let v = (u.version.clone(), u.body.clone(), u.date.map(|d| d.to_string()));
+                    *self.update.lock().unwrap() = Some(u);
+                    v
+                }))
+            }
+            .await,
+            Mode::Checksum => {
+                let current = app.package_info().version.to_string();
+                update_direct::fetch_manifest(&http_client(), endpoint(), &current).await.map(|found| {
+                    found.map(|r| {
+                        let v = (r.version.clone(), r.notes.clone(), r.date.clone());
+                        *self.direct.lock().unwrap() = Some(r);
+                        v
+                    })
+                })
+            }
+            Mode::Off => Err("nicht eingerichtet".into()),
+        };
         *self.last_check_ms.lock().unwrap() = Some(now_ms());
         match result {
-            Ok(Some(u)) => {
-                let s = UpdateState::Available { version: u.version.clone(), notes: u.body.clone(), date: u.date.map(|d| d.to_string()) };
-                *self.update.lock().unwrap() = Some(u);
+            Ok(Some((version, notes, date))) => {
                 *self.bytes.lock().unwrap() = None;
-                self.set(app, s);
+                self.set(app, UpdateState::Available { version, notes, date });
             }
             Ok(None) => self.set(app, UpdateState::UpToDate { checked_at_ms: now_ms() }),
             Err(e) => {
@@ -265,46 +313,71 @@ impl UpdateManager {
         Ok(self.info(app))
     }
 
+    fn notes(&self) -> Option<String> {
+        match mode() {
+            Mode::Signature => self.update.lock().unwrap().as_ref().and_then(|u| u.body.clone()),
+            _ => self.direct.lock().unwrap().as_ref().and_then(|r| r.notes.clone()),
+        }
+    }
+
     /// Lädt und prüft das Paket im Hintergrund; installiert nicht.
     pub async fn download(self: &Arc<Self>, app: &AppHandle) -> Result<(), String> {
         let version = self
             .begin(app, |s| s.can_download(), |v| UpdateState::Downloading { version: v, received: 0, total: None })
             .map_err(|e| e.to_string())?;
-        let Some(update) = self.update.lock().unwrap().clone() else {
-            self.set(app, UpdateState::Failed { stage: Stage::Download, code: "missing_artifact".into(), message: "Keine Update-Information".into(), version: None });
-            return Err("Keine Update-Information".into());
-        };
         let me = self.clone();
         let app2 = app.clone();
         let v2 = version.clone();
-        let mut received: u64 = 0;
         let mut last_emit = std::time::Instant::now();
-        let res = update
-            .download(
-                move |chunk, total| {
-                    received += chunk as u64;
-                    if last_emit.elapsed().as_millis() > 150 {
-                        last_emit = std::time::Instant::now();
-                        me.set(&app2, UpdateState::Downloading { version: v2.clone(), received, total });
-                    }
-                },
-                || {},
-            )
-            .await;
+        let mut on_progress = move |received: u64, total: Option<u64>| {
+            if last_emit.elapsed().as_millis() > 150 {
+                last_emit = std::time::Instant::now();
+                me.set(&app2, UpdateState::Downloading { version: v2.clone(), received, total });
+            }
+        };
+        let res: Result<Vec<u8>, String> = match mode() {
+            Mode::Signature => {
+                let Some(update) = self.update.lock().unwrap().clone() else {
+                    return self.fail_missing(app);
+                };
+                let mut received: u64 = 0;
+                // Signatur wird vom Plugin beim Download geprüft.
+                update
+                    .download(
+                        move |chunk, total| {
+                            received += chunk as u64;
+                            on_progress(received, total);
+                        },
+                        || {},
+                    )
+                    .await
+                    .map_err(|e| e.to_string())
+            }
+            _ => {
+                let Some(rel) = self.direct.lock().unwrap().clone() else {
+                    return self.fail_missing(app);
+                };
+                // Größe, SHA-256 und Herkunft werden vor der Rückgabe geprüft.
+                update_direct::download(&http_client(), &rel, on_progress).await
+            }
+        };
         match res {
             Ok(bytes) => {
-                // Signatur wurde vom Plugin beim Download geprüft.
                 *self.bytes.lock().unwrap() = Some(bytes);
-                self.set(app, UpdateState::Ready { version, notes: update.body.clone() });
+                self.set(app, UpdateState::Ready { version, notes: self.notes() });
                 Ok(())
             }
-            Err(e) => {
-                let msg = e.to_string();
+            Err(msg) => {
                 *self.bytes.lock().unwrap() = None;
                 self.set(app, UpdateState::Failed { stage: Stage::Download, code: classify_error(Stage::Download, &msg), message: msg.clone(), version: Some(version) });
                 Err(msg)
             }
         }
+    }
+
+    fn fail_missing(&self, app: &AppHandle) -> Result<(), String> {
+        self.set(app, UpdateState::Failed { stage: Stage::Download, code: "missing_artifact".into(), message: "Keine Update-Information".into(), version: None });
+        Err("Keine Update-Information".into())
     }
 
     pub async fn preflight(&self, rt: &Runtime) -> Preflight {
@@ -321,23 +394,29 @@ impl UpdateManager {
     /// Das Plugin beendet die App; der Installer startet sie danach neu.
     pub async fn install(&self, app: &AppHandle, rt: Arc<Runtime>) -> Result<UpdatePrep, String> {
         let version = self.begin(app, |s| s.can_install(), |v| UpdateState::Installing { version: v }).map_err(|e| e.to_string())?;
-        let (update, bytes) = (self.update.lock().unwrap().clone(), self.bytes.lock().unwrap().clone());
-        let (Some(update), Some(bytes)) = (update, bytes) else {
+        let Some(bytes) = self.bytes.lock().unwrap().clone() else {
             self.set(app, UpdateState::Failed { stage: Stage::Install, code: "not_ready".into(), message: "Paket fehlt".into(), version: Some(version) });
             return Err("Paket fehlt".into());
         };
+        let update = self.update.lock().unwrap().clone();
         // Worker laufen weiter, falls die Installation scheitert; der Zustand ist gesichert
         // (Transaktionen + WAL-Checkpoint), die Annahme pausiert.
         let prep = rt.prepare_for_update().await;
         tracing::info!(target: "updater", ?prep, version = %version, "Update wird installiert");
         crate::QUITTING.store(true, std::sync::atomic::Ordering::SeqCst);
-        // Unter Windows startet `install` den Installer und beendet den Prozess.
-        match update.install(bytes) {
+        let result = match (mode(), update) {
+            // Unter Windows startet `install` den Installer und beendet den Prozess.
+            (Mode::Signature, Some(update)) => update.install(bytes).map_err(|e| e.to_string()),
+            (Mode::Signature, None) => Err("Paket fehlt".into()),
+            _ => launch_installer(&version, &bytes),
+        };
+        match result {
             Ok(()) => {
-                app.restart();
+                // Der Installer ersetzt die Dateien, sobald ON AIR beendet ist, und startet es neu.
+                app.exit(0);
+                Ok(prep)
             }
-            Err(e) => {
-                let msg = e.to_string();
+            Err(msg) => {
                 // Installation gescheitert: App läuft weiter, Pause aufheben.
                 crate::QUITTING.store(false, std::sync::atomic::Ordering::SeqCst);
                 rt.cancel_update_pause();
@@ -359,4 +438,27 @@ impl UpdateManager {
             self.set(app, next);
         }
     }
+}
+
+fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .user_agent(concat!("ON-AIR/", env!("CARGO_PKG_VERSION"), " (updater)"))
+        .connect_timeout(Duration::from_secs(15))
+        .build()
+        .unwrap_or_default()
+}
+
+/// Direkter Pfad: geprüftes Paket als Datei ablegen und den NSIS-Installer passiv starten –
+/// dieselben Argumente wie der Tauri-Updater (`/P /UPDATE /R`: passiv, Update, danach neu starten).
+fn launch_installer(version: &str, bytes: &[u8]) -> Result<(), String> {
+    if !cfg!(target_os = "windows") {
+        return Err("install_failed: automatische Installation gibt es nur unter Windows".into());
+    }
+    let safe: String = version.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-').collect();
+    let dir = std::env::temp_dir().join("ON-AIR-Update");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("install_failed: {e}"))?;
+    let path = dir.join(format!("ON-AIR_{safe}_x64-setup.exe"));
+    std::fs::write(&path, bytes).map_err(|e| format!("install_failed: {e}"))?;
+    std::process::Command::new(&path).args(["/P", "/UPDATE", "/R"]).spawn().map_err(|e| format!("install_failed: {e}"))?;
+    Ok(())
 }

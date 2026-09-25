@@ -75,7 +75,7 @@ vor dem Ende (abzüglich Puffer, Standard 2 Min) laufen. „+15 Minuten“ verl�
 
 ## Updates
 
-Siehe [UPDATES.md](UPDATES.md) – einmalig die Version 0.2.0 manuell installieren, danach
+Siehe [UPDATES.md](UPDATES.md) – einmal `ON-AIR-Setup_<version>.exe` aus dem neuesten Release installieren, danach
 über *Einstellungen → Updates*.
 
 ## Stream Deck / Fernsteuerung (optional)

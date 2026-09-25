@@ -1,171 +1,110 @@
-# Updates und Releases
+# Installer, Releases und automatische Updates
 
-ON AIR nutzt das offizielle [Tauri-Updater-Plugin](https://v2.tauri.app/plugin/updater/)
-mit signierten Paketen aus **GitHub Releases** dieses Repositorys. Jedes Update wird vor der
-Installation gegen einen öffentlichen Schlüssel geprüft, der beim Build in die App eingebaut
-wird. Der private Schlüssel existiert nur auf deinem Rechner (Sicherung) und als
-GitHub-Actions-Secret – nie im Repository, in der App, in Logs oder in Release-Dateien.
+Kurz: **Jeder Push auf den Hauptzweig oder den Entwicklungszweig (Änderungen unter `on-air/`)
+erzeugt automatisch eine neue Version.** Installierte Apps finden sie, laden sie im Hintergrund,
+prüfen sie und installieren sie in einem ruhigen Moment. Es ist **keine Einrichtung nötig**.
 
-## Überblick
+## Installieren
 
-```
-Tag on-air-vX.Y.Z ──► Workflow „ON AIR Release“ (windows-latest)
-                        1. Version in allen Dateien = Tag?     (scripts/check-version.mjs)
-                        2. cargo test + Typecheck
-                        3. tauri build, signiert               (Secrets)
-                        4. Assets umbenennen, latest.json      (scripts/make-latest-json.mjs)
-                        5. Release-Entwurf → Assets prüfen → veröffentlichen
-                        6. nur Stable: latest.json → Release „on-air-stable“
-App ──► https://github.com/<repo>/releases/download/on-air-stable/latest.json
-        └─► Signatur prüfen ─► herunterladen ─► auf Bestätigung installieren
-```
+Aus dem neuesten Release `ON AIR 0.2.x` die Datei **`ON-AIR-Setup_<version>.exe`** herunterladen
+und starten. Das ist der immersive Installer:
 
-Warum ein eigenes Kanal-Release `on-air-stable` statt `/releases/latest`? Das Repository
-enthält auch Releases anderer Projekte (z. B. `clearspace-v…`). `latest` würde auf diese
-zeigen. `on-air-stable` enthält ausschließlich `latest.json` und wird nur von
-Stable-Releases (`on-air-vX.Y.Z` ohne Suffix) aktualisiert. Vorabversionen
-(`on-air-vX.Y.Z-beta.N`) erscheinen als GitHub-Prerelease und werden **nicht** automatisch
-angeboten.
+- eigene Oberfläche im ON-AIR-Design (rahmenloses Fenster, animierter Fortschritt, „Studio-Lampe“,
+  die beim Abschluss angeht);
+- Optionen: Desktop-Verknüpfung, danach starten;
+- erkennt eine vorhandene Installation und bietet „Jetzt aktualisieren“ bzw. „Reparieren“ an;
+- weist darauf hin, wenn ON AIR gerade läuft (wird für die Installation kurz beendet);
+- keine Administratorrechte (Installation im Benutzerkonto).
 
-## Einmalige Einrichtung
+Technisch installiert er das eingebettete NSIS-Paket still (`/S`). Deinstallation, Startmenü,
+Registrierung und Updates sind dadurch identisch mit dem klassischen Installer. Fehlt WebView2
+(nur sehr alte Windows-Versionen), öffnet sich direkt der klassische Installer, der WebView2 selbst
+nachlädt. Bei Problemen gibt es im Installer „Klassischen Installer öffnen“. Der klassische
+Installer (auch das kurze Fortschrittsfenster bei Updates) trägt gebrandete Bilder
+(`src-tauri/installer-assets/`).
 
-**Kurzweg (empfohlen):** auf deinem Rechner, mit angemeldeter [GitHub-CLI](https://cli.github.com/) (`gh auth login`):
+Windows SmartScreen kann warnen, weil die Dateien nicht code-signiert sind
+(*Weitere Informationen → Trotzdem ausführen*). Code-Signing erfordert ein kostenpflichtiges
+Zertifikat und ist unabhängig vom Update-Mechanismus.
 
-```bash
-cd on-air
-node scripts/setup-updater.mjs
-```
+**Einmalig:** Versionen, die vor dieser Update-Funktion installiert wurden (ältere Test-Artefakte),
+können sich nicht selbst ersetzen. Einmal `ON-AIR-Setup_<version>.exe` ausführen – Einstellungen,
+Warteschlange und Anmeldungen bleiben erhalten. Danach geht alles automatisch.
 
-Das Skript erzeugt das Schlüsselpaar (ein vorhandenes wird wiederverwendet, nie überschrieben),
-hinterlegt Secrets und Variable im Repository (Geheimnisse per Standardeingabe an `gh`) und
-nennt den nächsten Schritt. Ohne `gh` zeigt es, was du auf github.com eintragen musst.
-Die Schritte 1–2 unten beschreiben dasselbe von Hand.
+## Wie Releases entstehen
 
-### 1. Schlüsselpaar erzeugen (lokal)
+Workflow [`.github/workflows/on-air-release.yml`](../../.github/workflows/on-air-release.yml):
 
-```bash
-cd on-air
-npx tauri signer generate -w ~/.tauri/onair.key
-```
+1. Auslöser: Push auf `claude/home-assistant-dashboard-59c5bs` oder `claude/clever-gates-l5gp7q`
+   mit Änderungen unter `on-air/` (oder ein Tag `on-air-vX.Y.Z`, oder manuell).
+2. Version: `<major>.<minor>` aus `tauri.conf.json` + Laufnummer, z. B. `0.2.14`
+   (`scripts/ci-version.mjs`). Tag-Builds behalten die Tag-Version.
+3. Tests (TypeScript, Rust-Kern), dann Build der App (NSIS + MSI) und des immersiven Installers
+   (mit eingebettetem NSIS-Paket).
+4. `latest.json` mit URL, **SHA-256** und Größe je Paket (`scripts/make-latest-json.mjs`).
+5. Release `on-air-v<version>` als Entwurf → Vollständigkeit prüfen → veröffentlichen → öffentliche
+   Erreichbarkeit prüfen.
+6. Update-Kanal: `latest.json` in das Release **`on-air-stable`** – nur wenn die Version neuer ist
+   als die dort stehende (sich überholende Läufe stellen nie zurück).
 
-Das erzeugt `~/.tauri/onair.key` (privat, mit Passwort) und `~/.tauri/onair.key.pub` (öffentlich).
+Der Kanal ist ein eigenes Release, weil das Repository auch Releases anderer Projekte enthält
+(`/releases/latest` zeigte sonst auf diese).
 
-**Sichern:** Den privaten Schlüssel und das Passwort in einem Passwortmanager ablegen.
-Geht der Schlüssel verloren, können bestehende Installationen **keine Updates mehr
-annehmen** – sie müssen einmal manuell mit einem Installer neu installiert werden, der den
-neuen öffentlichen Schlüssel enthält.
+## Wie die App Updates prüft
 
-### 2. GitHub konfigurieren
-
-Unter *Settings → Secrets and variables → Actions*:
-
-| Art | Name | Inhalt |
+| Modus | Wann | Prüfung |
 |---|---|---|
-| Secret | `TAURI_SIGNING_PRIVATE_KEY` | Inhalt von `~/.tauri/onair.key` |
-| Secret | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Passwort des Schlüssels |
-| Variable | `ONAIR_UPDATER_PUBKEY` | Inhalt von `~/.tauri/onair.key.pub` |
+| **Prüfsumme** (Standard) | kein eigener Schlüssel hinterlegt | HTTPS von den GitHub-Releases dieses Repositorys; Paket-URL muss unter demselben Release-Pfad liegen wie das Manifest; Größe und **SHA-256** müssen stimmen; nur echt neuere Versionen; Windows-Programmkopf |
+| **Signatur** (optional) | Secret `TAURI_SIGNING_PRIVATE_KEY` + Variable `ONAIR_UPDATER_PUBKEY` hinterlegt | zusätzlich minisign-Signatur mit Versionsbindung (offizieller Tauri-Updater) |
+| aus | Entwicklungsbuilds (`tauri dev`) | – |
 
-Der öffentliche Schlüssel ist bewusst eine *Variable* (kein Geheimnis). Fehlt eines davon,
-bricht der Release-Workflow vor dem Build mit einer klaren Meldung ab.
+**Ehrliche Einordnung des Standardmodus:** Er schützt vor manipulierten Downloads unterwegs
+(HTTPS), vor fremden Download-Adressen und vor beschädigten Paketen. Er schützt **nicht** davor,
+dass jemand mit Schreibrechten am Repository eine eigene Version veröffentlicht – das kann bei
+einem im CI hinterlegten Schlüssel allerdings ebenfalls, wer Workflows ändern darf.
+Wer die zusätzliche Signaturprüfung möchte: `node scripts/setup-updater.mjs` (legt Schlüssel und
+Secrets an). Ab dem nächsten Release sind neue Versionen signiert; Apps, die mit Schlüssel gebaut
+wurden, verlangen dann Signaturen.
 
-Die App erhält öffentlichen Schlüssel und Kanal-URL beim Build über die Umgebungsvariablen
-`ONAIR_UPDATER_PUBKEY` und optional `ONAIR_UPDATER_ENDPOINT`. Lokale Builds ohne diese
-Variablen zeigen „Updates nicht eingerichtet“ – sie suchen nie ungeprüft nach Updates.
+## Automatisches Installieren
 
-### 3. Repository-Sichtbarkeit
+*Einstellungen → Updates → „Updates automatisch installieren“* (Standard: an).
 
-Der Updater lädt ohne Anmeldung. Das funktioniert nur, wenn Release-Dateien öffentlich
-abrufbar sind (öffentliches Repository). ON AIR bettet **kein GitHub-Token** ein. Soll der
-Quellcode privat bleiben, braucht es einen separaten öffentlichen Release-Ort (eigenes
-öffentliches Repository nur für Releases oder ein eigener Server) – dann
-`ONAIR_UPDATER_ENDPOINT` im Workflow darauf setzen. Der Workflow prüft nach dem
-Veröffentlichen, dass `latest.json` und der Installer ohne Anmeldung erreichbar sind.
-
-### 4. Erste Version einmalig manuell installieren
-
-Version 0.1.0 enthält noch keinen Updater. Deshalb:
-
-1. Release `on-air-v0.2.0` erzeugen (siehe unten).
-2. `ON-AIR_0.2.0_x64-setup.exe` aus dem Release herunterladen und installieren
-   (SmartScreen: *Weitere Informationen → Trotzdem ausführen*, da der Installer nicht
-   code-signiert ist). Einstellungen, Queue und Anmeldungen bleiben erhalten.
-3. Ab jetzt kommen Updates über *Einstellungen → Updates*.
-
-## Release erstellen
-
-```bash
-cd on-air
-node scripts/set-version.mjs 0.2.1     # package.json, package-lock.json, tauri.conf.json, Cargo.toml
-# CHANGELOG.md ergänzen – der Abschnitt „## 0.2.1“ wird als Release-Text übernommen
-git commit -am "ON AIR 0.2.1"
-git tag on-air-v0.2.1
-git push origin HEAD on-air-v0.2.1
-```
-
-Der Workflow bricht ab, wenn Tag und Dateiversionen nicht übereinstimmen, ein Test fehlschlägt,
-die Signatur fehlt oder ein Asset nach dem Upload nicht abrufbar ist. Ein fehlgeschlagener Lauf
-hinterlässt höchstens einen **Entwurf** – Nutzer sehen nichts davon.
-
-`latest.json` enthält die Plattformschlüssel `windows-x86_64-nsis`, `windows-x86_64-msi` und
-`windows-x86_64`. So aktualisiert eine per `.exe` installierte App mit dem `.exe`-Paket und
-eine per `.msi` installierte mit dem `.msi`-Paket – der Installationsbereich wechselt nicht.
-
-## Verhalten in der App
-
-| Zustand | Bedeutung |
-|---|---|
-| Nicht eingerichtet | Build ohne öffentlichen Schlüssel – keine Suche. |
-| Nicht geprüft / Suche läuft | – |
-| Aktuell | Nur nach **erfolgreicher** Prüfung. Ein Fehler wird nie als „aktuell“ angezeigt. |
-| Verfügbar | Version und Änderungen werden gezeigt; mit Automatik startet der Download sofort, sonst auf Klick. |
-| Lädt | Fortschritt; es läuft höchstens ein Download. |
-| Bereit | Signatur geprüft; mit Automatik Installation im sicheren Moment (s. u.), sonst auf Bestätigung. |
-| Installiert | Requests werden pausiert, Belohnung auf Twitch pausiert, Datenbank gesichert, dann Installer (passiv) und Neustart. |
-| Fehlgeschlagen | Mit Grund: offline, Signatur ungültig, Datei fehlt, Manifest ungültig … |
-
-### Automatische Updates (Standard: an)
-
-*Einstellungen → Updates → „Updates automatisch installieren“.* Dann gilt:
-
-1. **Prüfen:** 20 s nach dem Start, danach alle 4 Stunden; nach einem Fehler erneut nach 30 min.
-2. **Laden:** ein gefundenes Update wird sofort im Hintergrund geladen und seine Signatur geprüft.
-3. **Installieren – nur in einem sicheren Moment** (Regeln in `update_state::decide_auto_install`, unit-getestet):
-   - **nie**, solange du laut Twitch live bist, eine Streamplanung läuft oder eine Übergabe an
-     Spotify läuft bzw. ungeklärt ist;
-   - in den ersten 5 Minuten nach dem App-Start sofort (Spotify spielt während des kurzen
-     Neustarts unabhängig weiter);
+1. **Prüfen:** 20 s nach dem Start, danach alle 4 Stunden; nach Fehlern erneut nach 30 min.
+2. **Laden:** sofort im Hintergrund, mit Prüfung (s. o.) vor der Freigabe.
+3. **Installieren – nur in einem sicheren Moment** (`update_state::decide_auto_install`, unit-getestet):
+   - nie, solange du laut Twitch live bist, eine Streamplanung läuft oder eine Übergabe an Spotify
+     läuft bzw. ungeklärt ist;
+   - in den ersten 5 Minuten nach dem App-Start sofort;
    - später erst, wenn die Musik mindestens 10 Minuten pausiert.
-   Ist Twitch nicht verbunden, ist der Live-Status unbekannt; dann entscheiden die übrigen Regeln.
-4. **Countdown:** vor jeder automatischen Installation erscheint in Haupt- und Kompaktfenster
-   30 Sekunden lang ein Hinweis mit **„Nicht jetzt“** (bis zum nächsten App-Start keine
-   automatische Installation) und **„Jetzt installieren“**. Wird der Moment während des
-   Countdowns unsicher (z. B. Stream startet), wird abgebrochen.
-5. Scheitert eine automatische Installation, versucht ON AIR es in dieser Sitzung nicht erneut.
+4. **Countdown:** 30 Sekunden Hinweis in Haupt- und Kompaktfenster mit **„Nicht jetzt“** (bis zum
+   nächsten Start keine automatische Installation) und **„Jetzt installieren“**. Wird der Moment
+   unsicher, bricht der Countdown ab.
+5. **Installation:** Requests pausieren, Kanalpunkte-Belohnung pausieren, Datenbank sichern, dann
+   das NSIS-Paket passiv (`/P /UPDATE /R`) – kleines Fortschrittsfenster, danach startet ON AIR neu.
+6. Scheitert eine automatische Installation, wird sie in dieser Sitzung nicht wiederholt.
 
-Ohne Automatik (Schalter aus): nur Hintergrundprüfung (abschaltbar); Download und Installation
-auf Klick. „Später“ blendet den Hinweis aus und startet keinen Timer. Vor einer manuellen
-Installation zeigt ein Dialog den Live-Status, wartende Requests/Einlösungen und eine laufende
-Streamplanung.
+Ohne Automatik: nur Hintergrundprüfung (abschaltbar); Laden und Installieren per Klick. Vor einer
+manuellen Installation zeigt ein Dialog den Live-Status, wartende Requests/Einlösungen und eine
+laufende Streamplanung.
 
 ## Wiederherstellung
 
-- **Update defekt:** älteren Installer aus einem früheren `on-air-v*`-Release installieren.
-  Achtung: Hat die neue Version das Datenbankschema erhöht, verweigert die ältere Version den
-  Start mit dieser Datenbank (Schutz vor Datenverlust). Vor jeder Migration legt ON AIR eine
-  Sicherung `backups/onair-v<alt>-<zeitstempel>.db` im Datenverzeichnis an; sie kann bei
-  beendeter App als `onair.db` zurückkopiert werden.
-- **Kanal zeigt falsche Version:** `latest.json` im Release `on-air-stable` durch die Datei
-  aus dem gewünschten `on-air-v*`-Release ersetzen (oder den Workflow für dieses Tag per
-  *Run workflow* erneut starten).
-- **Privater Schlüssel kompromittiert:** neues Schlüsselpaar erzeugen, Secrets/Variable
-  ersetzen, neue Version veröffentlichen. Bestehende Installationen müssen diese Version
-  einmal manuell installieren.
+- **Update defekt:** älteres `ON-AIR-Setup_<version>.exe` aus einem früheren Release ausführen.
+  Hat die neue Version das Datenbankschema erhöht, verweigert die ältere den Start mit dieser
+  Datenbank (Schutz vor Datenverlust). Vor jeder Migration liegt eine Sicherung unter
+  `backups/onair-v<alt>-<zeitstempel>.db` im Datenverzeichnis; sie kann bei beendeter App als
+  `onair.db` zurückkopiert werden.
+- **Kanal zurückstellen:** `latest.json` im Release `on-air-stable` durch die Datei aus dem
+  gewünschten `on-air-v*`-Release ersetzen (Apps installieren nur *neuere* Versionen als ihre eigene).
+- **Automatik stoppen:** in der App abschalten; für alle Nutzer den Workflow deaktivieren.
 
 ## Nicht geprüft
 
-- Ein echter Update-Durchlauf auf Windows (0.2.0 → 0.2.1) wurde **nicht** durchgeführt: In der
-  Entwicklungsumgebung gab es keinen Windows-Rechner und keine hinterlegten Secrets.
-  Getestet sind die Zustandslogik (Unit-Tests), die Signatur mit einem Wegwerf-Schlüssel und
-  das Erzeugen von `latest.json`.
-- Der Installer ist nicht code-signiert (SmartScreen-Warnung). Code-Signing ist von der
-  Updater-Signatur unabhängig und erfordert ein kostenpflichtiges Zertifikat.
+- Ein echter Durchlauf auf Windows (Installer-Oberfläche in WebView2, stilles NSIS, passives Update
+  mit Neustart) – in der Entwicklungsumgebung gab es keinen Windows-Rechner. Der CI-Build unter
+  Windows kompiliert und paketiert alles.
+- Durchgeführt: echte App unter Linux mit lokalem Update-Server im Prüfsummen- und im
+  Signaturmodus (Suche → Laden → Prüfung → Countdown → Installation bzw. sauberer Fehlerpfad);
+  Installer-App unter Linux (Fenster, Oberfläche, Backend-Aufrufe, Schließen); alle
+  Installer-Schritte im Browser.

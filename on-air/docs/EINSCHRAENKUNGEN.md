@@ -15,8 +15,8 @@
 - **Kanalpunkte** wurden nur gegen einen Fake-Twitch getestet. Feldnamen und Fehlercodes der
   Helix-Endpunkte stammen aus der recherchierten Dokumentation, nicht aus einem echten Aufruf.
   Nicht geprüft: Verhalten mit echtem Affiliate-Konto, Twitch-Ratelimits bei vielen Einlösungen.
-- **Updater**: kein echter Update-Durchlauf auf Windows; Secrets sind im Repository noch nicht
-  hinterlegt – bis dahin baut der Release-Workflow nicht (bewusst). Siehe [UPDATES.md](UPDATES.md).
+- **Updater/Installer**: kein echter Durchlauf auf Windows (siehe [UPDATES.md](UPDATES.md)).
+  Ohne eigenen Signaturschlüssel prüft die App Herkunft und SHA-256 – schwächer als eine Signatur.
 - **Streamplanung** rechnet mit den Titeldauern aus Spotify. Crossfade, Werbung und manuelles
   Springen machen die Prognose ungenau; ON AIR zeigt das als „unsicher“ an, misst es aber nicht.
 - Das neue Design wurde in Chromium bei 1280×720 und 1920×1080 sowie simulierten

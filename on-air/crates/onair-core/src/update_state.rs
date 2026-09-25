@@ -83,6 +83,10 @@ pub fn classify_error(stage: Stage, msg: &str) -> String {
     let m = msg.to_lowercase();
     let code = if m.contains("signature") || m.contains("minisign") || m.contains("signed version") {
         "invalid_signature"
+    } else if m.contains("checksum") || m.contains("size mismatch") || m.contains("larger than announced") || m.contains("not a windows executable") {
+        "invalid_package"
+    } else if m.contains("outside release origin") || m.contains("endpoint not allowed") {
+        "invalid_manifest"
     } else if m.contains("404") || m.contains("not found") || m.contains("release not found") || m.contains("target") && m.contains("not found") {
         "missing_artifact"
     } else if m.contains("dns") || m.contains("connect") || m.contains("network") || m.contains("timed out") || m.contains("timeout") || m.contains("reqwest") || m.contains("error sending request") {
@@ -225,6 +229,8 @@ mod tests {
         assert_eq!(classify_error(Stage::Check, "Could not fetch a valid release JSON from the remote: 404 Not Found"), "missing_artifact");
         assert_eq!(classify_error(Stage::Check, "expected value at line 1 (json)"), "invalid_manifest");
         assert_eq!(classify_error(Stage::Install, "boom"), "install_failed");
+        assert_eq!(classify_error(Stage::Download, "package checksum mismatch (sha256)"), "invalid_package");
+        assert_eq!(classify_error(Stage::Check, "package url outside release origin: https://x"), "invalid_manifest");
     }
 
     fn base() -> AutoInputs {

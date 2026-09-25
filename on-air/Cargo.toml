@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/onair-core", "src-tauri"]
+members = ["crates/onair-core", "src-tauri", "installer"]
 
 [workspace.package]
 version = "0.2.0"

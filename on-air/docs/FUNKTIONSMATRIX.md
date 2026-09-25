@@ -27,7 +27,7 @@ Suchergebnissen zu den offiziellen Seiten, dem Spotify-Developer-Blog, der
 | Kanalpunkte: Belohnung | Helix `POST/PATCH/GET /channel_points/custom_rewards` (`only_manageable_rewards`) | `channel:manage:redemptions` (inkrementell angefordert) | Nur Affiliates/Partner (sonst 403). Verwalten nur für Belohnungen, die **dieselbe Client-ID** angelegt hat; Titel pro Kanal eindeutig. | Deaktivieren statt Löschen |
 | Kanalpunkte: Einlösungen | EventSub `channel.channel_points_custom_reward_redemption.add` / `.update`, Helix `GET/PATCH …/redemptions` | `channel:manage:redemptions` | Erfüllen/Stornieren nur bei Status `UNFULFILLED`; Stornieren erstattet die Punkte. | Prüfung durch Streamer, wenn Wiedergabe nicht beobachtet |
 | Live-Status (Update-Hinweis) | Helix `GET /streams?user_id=` | – | Nur Hinweis; unbekannt, wenn Twitch nicht verbunden. | – |
-| App-Updates | GitHub Releases, `tauri-plugin-updater` | – | Download ohne Anmeldung nur aus öffentlichem Repository. Signatur Pflicht. | eigener Release-Server |
+| App-Updates | GitHub Releases (`latest.json` im Release `on-air-stable`), optional `tauri-plugin-updater` | – | Download ohne Anmeldung nur aus öffentlichem Repository. Standard: Herkunft + SHA-256; mit hinterlegtem Schlüssel zusätzlich Signatur. | eigener Release-Server |
 | OBS-Anzeige | lokaler HTTP-Server (Browser Source), SSE | – | Nur `127.0.0.1`. Metadaten ≠ Senderechte an der Musik. | Now-Playing-Textdatei |
 
 ## Quellen
