@@ -1,0 +1,21 @@
+{
+  "id": "syndra-base",
+  "name": "Syndra Mid, 2. Item, gleiche Gegner wie jinx-base",
+  "gameVersion": null,
+  "gameTime": 900,
+  "goldRate": 6.2,
+  "me": { "champion": "Syndra", "role": "MIDDLE", "level": 11, "gold": 1200, "items": [3020, 6655] },
+  "allies": [
+    { "champion": "Ornn", "role": "TOP", "level": 11, "items": [3047, 3068] },
+    { "champion": "LeeSin", "role": "JUNGLE", "level": 10, "items": [3047, 3071] },
+    { "champion": "Jinx", "role": "BOTTOM", "level": 11, "items": [3006, 3031] },
+    { "champion": "Thresh", "role": "UTILITY", "level": 9, "items": [3111] }
+  ],
+  "enemies": [
+    { "champion": "Malphite", "role": "TOP", "level": 11, "items": [3111, 1011] },
+    { "champion": "Sejuani", "role": "JUNGLE", "level": 10, "items": [3047, 3068] },
+    { "champion": "Ahri", "role": "MIDDLE", "level": 11, "items": [3020, 6655] },
+    { "champion": "Kaisa", "role": "BOTTOM", "level": 11, "items": [3006, 6672] },
+    { "champion": "Nautilus", "role": "UTILITY", "level": 9, "items": [3047] }
+  ]
+}
