@@ -67,7 +67,7 @@ export interface StoredProfile extends Profile {
   set: boolean;
 }
 
-export const profileStore = createStore<StoredProfile>('impostor.profile', {
+export const profileStore = createStore<StoredProfile>(`impostor.profile${slotSuffix()}`, {
   name: '',
   avatar: Math.floor(Math.random() * AVATAR_COUNT),
   set: false,
@@ -81,18 +81,32 @@ export function cleanName(raw: string): string {
   return raw.replace(/\s+/g, ' ').trim().slice(0, LIMITS.nameMax);
 }
 
-/** Sitzungstoken des Gastzugangs (kein Konto). */
+/**
+ * Sitzungstoken des Gastzugangs (kein Konto).
+ * Für lokale Tests mehrerer Spieler in einem Browser: `?slot=2` usw. trennt Token
+ * und Profil je Tab (sonst übernimmt ein zweiter Tab dieselbe Sitzung).
+ */
+function slotSuffix(): string {
+  try {
+    const slot = new URLSearchParams(location.search).get('slot');
+    return slot && /^[a-z0-9]{1,8}$/i.test(slot) ? `.${slot}` : '';
+  } catch {
+    return '';
+  }
+}
+const SLOT = slotSuffix();
+
 export const tokenStorage = {
   get(): string | null {
     try {
-      return localStorage.getItem('impostor.token');
+      return localStorage.getItem(`impostor.token${SLOT}`);
     } catch {
       return null;
     }
   },
   set(token: string) {
     try {
-      localStorage.setItem('impostor.token', token);
+      localStorage.setItem(`impostor.token${SLOT}`, token);
     } catch {
       /* ignorieren */
     }

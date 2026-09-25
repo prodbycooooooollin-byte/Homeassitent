@@ -321,13 +321,14 @@ await shot(E, '19-spaeteinsteiger');
     }
     await wait(60);
   }
-  await H.page.waitForSelector('.phase-name:has-text("Diskussion")', { timeout: 10000 }).catch(async (e) => {
+  await H.page.waitForSelector('.phase-name:has-text("Diskussion"), .phase-name:has-text("Geheime Wahl")', { timeout: 10000 }).catch(async (e) => {
     await shot(H, 'fehler-10');
     console.error('Stand:', n, 'Hinweise;', await H.page.textContent('.instruction'));
     throw e;
   });
   await wait(500);
   check((await H.page.$$eval('.clue-mini', (e) => e.length)) === 120, '120 Hinweise in der Historie (10 Personen × 12 Durchgänge)');
+  check((await H.page.textContent('.phase-pill')).includes('Schlussabstimmung'), 'Nach dem 12. Durchgang beginnt automatisch die Schlussabstimmung');
   await shot(H, '21-historie-120');
   await H.page.click('.history .segmented button:has-text("Personen")');
   await wait(300);

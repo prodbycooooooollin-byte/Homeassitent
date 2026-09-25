@@ -1,0 +1,106 @@
+name: Impostor (Tests + Windows-Build)
+
+# Testet Server/Spiellogik und baut die Windows-App (NSIS-Installer + portable EXE).
+# Die Serveradresse, die in die Desktop-App eingebaut wird, kommt aus der
+# Repository-Variable IMPOSTOR_SERVER_URL (Settings → Variables). Ist sie leer,
+# tragen Spieler die Adresse in der App unter „Einstellungen → Spielserver" ein.
+
+on:
+  push:
+    tags:
+      - 'impostor-v*'
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'impostor/**'
+      - '.github/workflows/impostor.yml'
+  pull_request:
+    paths:
+      - 'impostor/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: impostor
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: impostor/package-lock.json
+      - run: npm ci
+      - name: Typprüfung
+        run: npm run typecheck
+      - name: Regel-, Geheimhaltungs- und Multiplayer-Tests
+        run: npm test
+      - name: Build (Client + Server)
+        run: npm run build:client && npm run build:server
+
+  build-windows:
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: impostor
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Release-Tag bestimmen
+        shell: bash
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then TAG="${{ github.ref_name }}";
+          else TAG="impostor-v$(node -p "require('./package.json').version")"; fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: impostor/package-lock.json
+
+      - run: npm ci
+
+      - name: EXE bauen (NSIS-Installer + portable)
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          IMPOSTOR_SERVER_URL: ${{ vars.IMPOSTOR_SERVER_URL }}
+
+      - name: Artefakte hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: impostor-windows
+          path: |
+            impostor/release/*.exe
+            impostor/release/*.blockmap
+          if-no-files-found: error
+
+      - name: GitHub-Release erstellen
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Impostor ${{ env.RELEASE_TAG }}
+          prerelease: true
+          body: |
+            Windows-Build von Impostor.
+
+            - `Impostor-Setup-*.exe`: Installer
+            - `Impostor-*-portable.exe`: ohne Installation lauffähig
+
+            Die App enthält keinen Spielserver. Sie verbindet sich mit dem Server aus
+            IMPOSTOR_SERVER_URL bzw. der in der App eingetragenen Adresse (siehe impostor/README.md).
+            Die EXE ist nicht signiert – Windows SmartScreen kann warnen.
+          files: impostor/release/*.exe
+          overwrite_files: true

@@ -27,6 +27,12 @@ export interface GameServerOptions {
   staticDir?: string | null;
   now?: () => number;
   log?: (msg: string) => void;
+  /** Maximale gleichzeitige Verbindungen pro IP (Schutz vor Missbrauch) */
+  maxConnectionsPerIp?: number;
+  /** Maximale Anzahl gleichzeitiger Lobbys */
+  maxLobbies?: number;
+  /** X-Forwarded-For auswerten (nur hinter einem vertrauenswürdigen Reverse Proxy) */
+  trustProxy?: boolean;
 }
 
 interface Session {
@@ -101,6 +107,10 @@ export class GameServer {
   private readonly staticDir: string | null;
   private readonly env: LobbyEnv;
   private readonly alive = new WeakMap<WebSocket, boolean>();
+  private readonly perIp = new Map<string, number>();
+  private readonly maxPerIp: number;
+  private readonly maxLobbies: number;
+  private readonly trustProxy: boolean;
   private heartbeat: NodeJS.Timeout | null = null;
   private stopping = false;
   private gc: NodeJS.Timeout | null = null;
@@ -112,13 +122,31 @@ export class GameServer {
     this.env = { now: this.now, randomInt: (n) => randomInt(n), newId: () => randomUUID() };
     this.http = createServer((req, res) => this.handleHttp(req, res));
     this.wss = new WebSocketServer({ noServer: true, maxPayload: LIMITS.maxMessageBytes });
+    this.maxPerIp = opts.maxConnectionsPerIp ?? 40;
+    this.maxLobbies = opts.maxLobbies ?? 2000;
+    this.trustProxy = opts.trustProxy ?? false;
     this.http.on('upgrade', (req, socket, head) => {
       const url = new URL(req.url ?? '/', 'http://x');
       if (url.pathname !== '/ws') {
         socket.destroy();
         return;
       }
-      this.wss.handleUpgrade(req, socket, head, (ws) => this.onConnection(ws));
+      const ip = this.clientIp(req);
+      const count = this.perIp.get(ip) ?? 0;
+      if (count >= this.maxPerIp) {
+        socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      this.wss.handleUpgrade(req, socket, head, (ws) => {
+        this.perIp.set(ip, (this.perIp.get(ip) ?? 0) + 1);
+        ws.once('close', () => {
+          const n = (this.perIp.get(ip) ?? 1) - 1;
+          if (n <= 0) this.perIp.delete(ip);
+          else this.perIp.set(ip, n);
+        });
+        this.onConnection(ws);
+      });
     });
   }
 
@@ -158,6 +186,15 @@ export class GameServer {
     this.wss.close();
     this.http.closeAllConnections();
     await new Promise<void>((res) => this.http.close(() => res()));
+  }
+
+  private clientIp(req: IncomingMessage): string {
+    if (this.trustProxy) {
+      const fwd = req.headers['x-forwarded-for'];
+      const first = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0]?.trim();
+      if (first) return first;
+    }
+    return req.socket.remoteAddress ?? 'unknown';
   }
 
   // -------------------------------------------------------------------------
@@ -374,6 +411,7 @@ export class GameServer {
     const current = session.lobbyCode ? this.lobbies.get(session.lobbyCode) : undefined;
     switch (cmd.t) {
       case 'createLobby': {
+        if (this.lobbies.size >= this.maxLobbies) return { ok: false, code: 'rate_limited' };
         if (current) this.leaveLobby(session, current);
         const lobby = new Lobby(this.newCode(), this.env);
         this.lobbies.set(lobby.code, lobby);
