@@ -1,0 +1,1752 @@
+{
+ "version": "knowledge-1",
+ "authoredAgainst": "Wissensstand Patch 25.x",
+ "reviewStatus": "fachlich nicht validiert",
+ "note": "Grobe Kit-Einordnung für Gegner- und Mitspielerbewertung. Kein Ersatz für ein vollständiges Championprofil.",
+ "champions": [
+  {
+   "key": "Aatrox",
+   "name": "Aatrox",
+   "cls": "juggernaut",
+   "line": 0.8,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.2,
+   "burst": 0.4,
+   "dive": 0.5,
+   "heal": 3,
+   "shield": 0,
+   "cc": [
+    "knockup",
+    "pull",
+    "slow"
+   ],
+   "notes": "Starke Eigenheilung (Passiv, R)."
+  },
+  {
+   "key": "Ahri",
+   "name": "Ahri",
+   "cls": "burstMage",
+   "line": 0.1,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 0.85,
+    "true": 0.15
+   },
+   "autoShare": 0.1,
+   "burst": 0.8,
+   "dive": 0.5,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "charm"
+   ]
+  },
+  {
+   "key": "Akali",
+   "name": "Akali",
+   "cls": "assassin",
+   "line": 0.2,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.1,
+    "magic": 0.9,
+    "true": 0
+   },
+   "autoShare": 0.15,
+   "burst": 0.8,
+   "dive": 0.8,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ]
+  },
+  {
+   "key": "Alistar",
+   "name": "Alistar",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.3,
+   "dive": 0.6,
+   "heal": 2,
+   "shield": 0,
+   "cc": [
+    "knockup",
+    "knockback",
+    "stun"
+   ]
+  },
+  {
+   "key": "Amumu",
+   "name": "Amumu",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 0.85,
+    "true": 0.15
+   },
+   "autoShare": 0.1,
+   "burst": 0.5,
+   "dive": 0.6,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "stun",
+    "root"
+   ]
+  },
+  {
+   "key": "Ashe",
+   "name": "Ashe",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0.95,
+    "magic": 0.05,
+    "true": 0
+   },
+   "autoShare": 0.8,
+   "burst": 0.3,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "stun",
+    "slow"
+   ]
+  },
+  {
+   "key": "Brand",
+   "name": "Brand",
+   "cls": "artillery",
+   "line": 0.1,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.05,
+   "burst": 0.6,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "stun"
+   ],
+   "notes": "Brennschaden nach maximalem Leben."
+  },
+  {
+   "key": "Braum",
+   "name": "Braum",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.3,
+    "magic": 0.7,
+    "true": 0
+   },
+   "autoShare": 0.2,
+   "burst": 0.1,
+   "dive": 0.4,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "stun",
+    "knockup",
+    "slow"
+   ]
+  },
+  {
+   "key": "Caitlyn",
+   "name": "Caitlyn",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.85,
+   "burst": 0.4,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "root",
+    "slow"
+   ]
+  },
+  {
+   "key": "Camille",
+   "name": "Camille",
+   "cls": "diver",
+   "line": 0.6,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.85,
+    "magic": 0,
+    "true": 0.15
+   },
+   "autoShare": 0.4,
+   "burst": 0.6,
+   "dive": 0.9,
+   "heal": 0,
+   "shield": 1,
+   "cc": [
+    "stun"
+   ]
+  },
+  {
+   "key": "Darius",
+   "name": "Darius",
+   "cls": "juggernaut",
+   "line": 0.8,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.8,
+    "magic": 0,
+    "true": 0.2
+   },
+   "autoShare": 0.35,
+   "burst": 0.5,
+   "dive": 0.4,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "pull",
+    "slow"
+   ]
+  },
+  {
+   "key": "Diana",
+   "name": "Diana",
+   "cls": "diver",
+   "line": 0.5,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.3,
+   "burst": 0.7,
+   "dive": 0.7,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "pull",
+    "knockup"
+   ]
+  },
+  {
+   "key": "DrMundo",
+   "name": "Dr. Mundo",
+   "cls": "juggernaut",
+   "line": 0.9,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.6,
+    "magic": 0.4,
+    "true": 0
+   },
+   "autoShare": 0.3,
+   "burst": 0.2,
+   "dive": 0.4,
+   "heal": 3,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ],
+   "notes": "Sehr hohe Regeneration; Leben-Stacking."
+  },
+  {
+   "key": "Draven",
+   "name": "Draven",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.85,
+   "burst": 0.5,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "knockback",
+    "slow"
+   ]
+  },
+  {
+   "key": "Ekko",
+   "name": "Ekko",
+   "cls": "assassin",
+   "line": 0.3,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.3,
+   "burst": 0.7,
+   "dive": 0.7,
+   "heal": 1,
+   "shield": 1,
+   "cc": [
+    "stun",
+    "slow"
+   ]
+  },
+  {
+   "key": "Evelynn",
+   "name": "Evelynn",
+   "cls": "assassin",
+   "line": 0.1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.2,
+   "burst": 0.9,
+   "dive": 0.8,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "charm",
+    "slow"
+   ]
+  },
+  {
+   "key": "Ezreal",
+   "name": "Ezreal",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0.7,
+    "magic": 0.3,
+    "true": 0
+   },
+   "autoShare": 0.4,
+   "burst": 0.5,
+   "dive": 0.3,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ]
+  },
+  {
+   "key": "Fiora",
+   "name": "Fiora",
+   "cls": "skirmisher",
+   "line": 0.5,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.6,
+    "magic": 0,
+    "true": 0.4
+   },
+   "autoShare": 0.4,
+   "burst": 0.4,
+   "dive": 0.6,
+   "heal": 2,
+   "shield": 0,
+   "cc": [
+    "stun"
+   ],
+   "notes": "Hoher absoluter Schaden (Schwachstellen)."
+  },
+  {
+   "key": "Garen",
+   "name": "Garen",
+   "cls": "juggernaut",
+   "line": 0.8,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.7,
+    "magic": 0,
+    "true": 0.3
+   },
+   "autoShare": 0.3,
+   "burst": 0.6,
+   "dive": 0.4,
+   "heal": 1,
+   "shield": 2,
+   "cc": [
+    "silence"
+   ]
+  },
+  {
+   "key": "Gragas",
+   "name": "Gragas",
+   "cls": "tank",
+   "line": 0.9,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.15,
+   "burst": 0.5,
+   "dive": 0.6,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "knockback",
+    "stun",
+    "slow"
+   ]
+  },
+  {
+   "key": "Graves",
+   "name": "Graves",
+   "cls": "marksman",
+   "line": 0.3,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.75,
+   "burst": 0.5,
+   "dive": 0.5,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ]
+  },
+  {
+   "key": "Hecarim",
+   "name": "Hecarim",
+   "cls": "diver",
+   "line": 0.8,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.35,
+   "burst": 0.5,
+   "dive": 0.9,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "fear",
+    "knockback"
+   ]
+  },
+  {
+   "key": "Irelia",
+   "name": "Irelia",
+   "cls": "diver",
+   "line": 0.6,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.8,
+    "magic": 0.2,
+    "true": 0
+   },
+   "autoShare": 0.5,
+   "burst": 0.5,
+   "dive": 0.7,
+   "heal": 2,
+   "shield": 0,
+   "cc": [
+    "stun"
+   ]
+  },
+  {
+   "key": "Jax",
+   "name": "Jax",
+   "cls": "skirmisher",
+   "line": 0.6,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.6,
+    "magic": 0.4,
+    "true": 0
+   },
+   "autoShare": 0.55,
+   "burst": 0.4,
+   "dive": 0.7,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "stun"
+   ]
+  },
+  {
+   "key": "Jhin",
+   "name": "Jhin",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.6,
+   "burst": 0.7,
+   "dive": 0.2,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "root",
+    "slow"
+   ]
+  },
+  {
+   "key": "Jinx",
+   "name": "Jinx",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0.95,
+    "magic": 0.05,
+    "true": 0
+   },
+   "autoShare": 0.85,
+   "burst": 0.3,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "root",
+    "slow"
+   ]
+  },
+  {
+   "key": "Kaisa",
+   "name": "Kai'Sa",
+   "cls": "marksman",
+   "line": 0.1,
+   "ranged": true,
+   "dmg": {
+    "physical": 0.55,
+    "magic": 0.45,
+    "true": 0
+   },
+   "autoShare": 0.6,
+   "burst": 0.6,
+   "dive": 0.6,
+   "heal": 0,
+   "shield": 1,
+   "cc": [],
+   "notes": "Hybridschaden je nach Items."
+  },
+  {
+   "key": "Karma",
+   "name": "Karma",
+   "cls": "enchanter",
+   "line": 0.1,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.3,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 3,
+   "cc": [
+    "root",
+    "slow"
+   ]
+  },
+  {
+   "key": "Katarina",
+   "name": "Katarina",
+   "cls": "assassin",
+   "line": 0.1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.1,
+    "magic": 0.9,
+    "true": 0
+   },
+   "autoShare": 0.2,
+   "burst": 0.8,
+   "dive": 0.8,
+   "heal": 0,
+   "shield": 0,
+   "cc": []
+  },
+  {
+   "key": "Kayn",
+   "name": "Kayn",
+   "cls": "skirmisher",
+   "line": 0.4,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.9,
+    "magic": 0,
+    "true": 0.1
+   },
+   "autoShare": 0.3,
+   "burst": 0.7,
+   "dive": 0.8,
+   "heal": 2,
+   "shield": 0,
+   "cc": [
+    "knockup",
+    "slow"
+   ]
+  },
+  {
+   "key": "Khazix",
+   "name": "Kha'Zix",
+   "cls": "assassin",
+   "line": 0.1,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.25,
+   "burst": 0.9,
+   "dive": 0.8,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ]
+  },
+  {
+   "key": "Leblanc",
+   "name": "LeBlanc",
+   "cls": "assassin",
+   "line": 0.1,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.05,
+   "burst": 0.9,
+   "dive": 0.8,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "root"
+   ]
+  },
+  {
+   "key": "LeeSin",
+   "name": "Lee Sin",
+   "cls": "diver",
+   "line": 0.5,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.3,
+   "burst": 0.6,
+   "dive": 0.8,
+   "heal": 1,
+   "shield": 1,
+   "cc": [
+    "knockback",
+    "slow"
+   ]
+  },
+  {
+   "key": "Leona",
+   "name": "Leona",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.15,
+   "burst": 0.4,
+   "dive": 0.8,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "stun",
+    "root"
+   ]
+  },
+  {
+   "key": "Lucian",
+   "name": "Lucian",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.65,
+   "burst": 0.5,
+   "dive": 0.4,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ]
+  },
+  {
+   "key": "Lulu",
+   "name": "Lulu",
+   "cls": "enchanter",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.2,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 3,
+   "cc": [
+    "polymorph",
+    "knockup",
+    "slow"
+   ]
+  },
+  {
+   "key": "Lux",
+   "name": "Lux",
+   "cls": "artillery",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.05,
+   "burst": 0.8,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "root",
+    "slow"
+   ]
+  },
+  {
+   "key": "Malphite",
+   "name": "Malphite",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.1,
+    "magic": 0.9,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.7,
+   "dive": 0.8,
+   "heal": 0,
+   "shield": 1,
+   "cc": [
+    "knockup",
+    "slow"
+   ],
+   "notes": "Passiv-Schild und prozentuale Rüstungserhöhung (W)."
+  },
+  {
+   "key": "Malzahar",
+   "name": "Malzahar",
+   "cls": "battleMage",
+   "line": 0.1,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.05,
+   "burst": 0.4,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 1,
+   "cc": [
+    "suppression",
+    "silence"
+   ],
+   "notes": "Unterdrückung (R) ist reinigbar."
+  },
+  {
+   "key": "MissFortune",
+   "name": "Miss Fortune",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0.9,
+    "magic": 0.1,
+    "true": 0
+   },
+   "autoShare": 0.6,
+   "burst": 0.7,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ]
+  },
+  {
+   "key": "Mordekaiser",
+   "name": "Mordekaiser",
+   "cls": "juggernaut",
+   "line": 0.8,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.2,
+   "burst": 0.3,
+   "dive": 0.4,
+   "heal": 1,
+   "shield": 3,
+   "cc": [
+    "pull",
+    "slow"
+   ],
+   "notes": "R-Totenreich: Reinigung unklar – als nicht reinigbar behandelt."
+  },
+  {
+   "key": "Morgana",
+   "name": "Morgana",
+   "cls": "catcher",
+   "line": 0.2,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.05,
+   "burst": 0.4,
+   "dive": 0.1,
+   "heal": 1,
+   "shield": 2,
+   "cc": [
+    "root",
+    "stun"
+   ]
+  },
+  {
+   "key": "Nami",
+   "name": "Nami",
+   "cls": "enchanter",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.2,
+   "dive": 0.1,
+   "heal": 2,
+   "shield": 0,
+   "cc": [
+    "knockup",
+    "slow"
+   ]
+  },
+  {
+   "key": "Nautilus",
+   "name": "Nautilus",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.1,
+    "magic": 0.9,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.4,
+   "dive": 0.7,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "root",
+    "knockup",
+    "stun",
+    "pull"
+   ]
+  },
+  {
+   "key": "Olaf",
+   "name": "Olaf",
+   "cls": "diver",
+   "line": 0.7,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.6,
+    "magic": 0,
+    "true": 0.4
+   },
+   "autoShare": 0.5,
+   "burst": 0.4,
+   "dive": 0.7,
+   "heal": 2,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ],
+   "notes": "R: CC-Immunität."
+  },
+  {
+   "key": "Orianna",
+   "name": "Orianna",
+   "cls": "battleMage",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.6,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "knockup",
+    "slow"
+   ]
+  },
+  {
+   "key": "Ornn",
+   "name": "Ornn",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.3,
+    "magic": 0.7,
+    "true": 0
+   },
+   "autoShare": 0.2,
+   "burst": 0.3,
+   "dive": 0.5,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "knockup",
+    "knockback",
+    "slow"
+   ],
+   "notes": "Passiv: zusätzliche Resistenzen/Leben aus Items."
+  },
+  {
+   "key": "Pyke",
+   "name": "Pyke",
+   "cls": "catcher",
+   "line": 0.3,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.8,
+   "dive": 0.8,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "pull",
+    "stun"
+   ]
+  },
+  {
+   "key": "Rakan",
+   "name": "Rakan",
+   "cls": "catcher",
+   "line": 0.6,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.3,
+   "dive": 0.8,
+   "heal": 1,
+   "shield": 1,
+   "cc": [
+    "knockup",
+    "charm"
+   ]
+  },
+  {
+   "key": "Renekton",
+   "name": "Renekton",
+   "cls": "diver",
+   "line": 0.7,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.35,
+   "burst": 0.6,
+   "dive": 0.7,
+   "heal": 2,
+   "shield": 0,
+   "cc": [
+    "stun"
+   ]
+  },
+  {
+   "key": "Riven",
+   "name": "Riven",
+   "cls": "skirmisher",
+   "line": 0.5,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.45,
+   "burst": 0.7,
+   "dive": 0.7,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "stun",
+    "knockup"
+   ]
+  },
+  {
+   "key": "Samira",
+   "name": "Samira",
+   "cls": "marksman",
+   "line": 0.2,
+   "ranged": true,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.5,
+   "burst": 0.7,
+   "dive": 0.7,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "knockup"
+   ]
+  },
+  {
+   "key": "Sejuani",
+   "name": "Sejuani",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.1,
+    "magic": 0.9,
+    "true": 0
+   },
+   "autoShare": 0.2,
+   "burst": 0.3,
+   "dive": 0.7,
+   "heal": 0,
+   "shield": 1,
+   "cc": [
+    "stun",
+    "knockup"
+   ]
+  },
+  {
+   "key": "Sett",
+   "name": "Sett",
+   "cls": "juggernaut",
+   "line": 0.8,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.7,
+    "magic": 0,
+    "true": 0.3
+   },
+   "autoShare": 0.4,
+   "burst": 0.5,
+   "dive": 0.5,
+   "heal": 1,
+   "shield": 2,
+   "cc": [
+    "stun",
+    "slow"
+   ]
+  },
+  {
+   "key": "Soraka",
+   "name": "Soraka",
+   "cls": "enchanter",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.05,
+   "burst": 0.1,
+   "dive": 0.1,
+   "heal": 3,
+   "shield": 0,
+   "cc": [
+    "root",
+    "silence",
+    "slow"
+   ],
+   "notes": "Sehr hohe Teamheilung."
+  },
+  {
+   "key": "Swain",
+   "name": "Swain",
+   "cls": "battleMage",
+   "line": 0.6,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.05,
+   "burst": 0.3,
+   "dive": 0.4,
+   "heal": 3,
+   "shield": 0,
+   "cc": [
+    "root",
+    "pull"
+   ],
+   "notes": "R: starker Entzug."
+  },
+  {
+   "key": "Sylas",
+   "name": "Sylas",
+   "cls": "skirmisher",
+   "line": 0.5,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.2,
+   "burst": 0.6,
+   "dive": 0.7,
+   "heal": 2,
+   "shield": 0,
+   "cc": [
+    "stun",
+    "knockup"
+   ]
+  },
+  {
+   "key": "Syndra",
+   "name": "Syndra",
+   "cls": "burstMage",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 0.9,
+    "true": 0.1
+   },
+   "autoShare": 0.05,
+   "burst": 0.9,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "stun",
+    "knockback",
+    "slow"
+   ]
+  },
+  {
+   "key": "Talon",
+   "name": "Talon",
+   "cls": "assassin",
+   "line": 0.1,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.25,
+   "burst": 0.9,
+   "dive": 0.8,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ]
+  },
+  {
+   "key": "Thresh",
+   "name": "Thresh",
+   "cls": "catcher",
+   "line": 0.6,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.2,
+   "burst": 0.2,
+   "dive": 0.5,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "pull",
+    "knockback",
+    "slow"
+   ],
+   "notes": "Rüstung wächst über Seelen statt Level."
+  },
+  {
+   "key": "Tristana",
+   "name": "Tristana",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0.8,
+    "magic": 0.2,
+    "true": 0
+   },
+   "autoShare": 0.7,
+   "burst": 0.6,
+   "dive": 0.4,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "knockback"
+   ]
+  },
+  {
+   "key": "Vayne",
+   "name": "Vayne",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0.6,
+    "magic": 0,
+    "true": 0.4
+   },
+   "autoShare": 0.85,
+   "burst": 0.4,
+   "dive": 0.3,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "stun",
+    "knockback"
+   ],
+   "notes": "Absoluter Schaden nach maximalem Leben (W)."
+  },
+  {
+   "key": "Vi",
+   "name": "Vi",
+   "cls": "diver",
+   "line": 0.6,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.4,
+   "burst": 0.6,
+   "dive": 0.9,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "knockup",
+    "knockback",
+    "suppression"
+   ],
+   "notes": "R: Unterdrückung/Hochschleudern – nicht reinigbar."
+  },
+  {
+   "key": "Viego",
+   "name": "Viego",
+   "cls": "skirmisher",
+   "line": 0.4,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.9,
+    "magic": 0.1,
+    "true": 0
+   },
+   "autoShare": 0.6,
+   "burst": 0.5,
+   "dive": 0.6,
+   "heal": 2,
+   "shield": 0,
+   "cc": [
+    "stun"
+   ]
+  },
+  {
+   "key": "Vladimir",
+   "name": "Vladimir",
+   "cls": "battleMage",
+   "line": 0.3,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.05,
+   "burst": 0.6,
+   "dive": 0.4,
+   "heal": 3,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ],
+   "notes": "Sehr hohe Eigenheilung."
+  },
+  {
+   "key": "Volibear",
+   "name": "Volibear",
+   "cls": "juggernaut",
+   "line": 0.8,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.5,
+    "magic": 0.5,
+    "true": 0
+   },
+   "autoShare": 0.4,
+   "burst": 0.4,
+   "dive": 0.6,
+   "heal": 1,
+   "shield": 1,
+   "cc": [
+    "stun",
+    "slow"
+   ]
+  },
+  {
+   "key": "Warwick",
+   "name": "Warwick",
+   "cls": "diver",
+   "line": 0.7,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.6,
+    "magic": 0.4,
+    "true": 0
+   },
+   "autoShare": 0.5,
+   "burst": 0.4,
+   "dive": 0.7,
+   "heal": 3,
+   "shield": 0,
+   "cc": [
+    "suppression",
+    "fear"
+   ],
+   "notes": "Hohe Heilung; R-Unterdrückung reinigbar."
+  },
+  {
+   "key": "Xayah",
+   "name": "Xayah",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.75,
+   "burst": 0.4,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "root",
+    "slow"
+   ]
+  },
+  {
+   "key": "Yasuo",
+   "name": "Yasuo",
+   "cls": "skirmisher",
+   "line": 0.4,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.6,
+   "burst": 0.5,
+   "dive": 0.7,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "knockup"
+   ]
+  },
+  {
+   "key": "Yone",
+   "name": "Yone",
+   "cls": "skirmisher",
+   "line": 0.4,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.5,
+    "magic": 0.5,
+    "true": 0
+   },
+   "autoShare": 0.6,
+   "burst": 0.6,
+   "dive": 0.7,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "knockup"
+   ]
+  },
+  {
+   "key": "Zac",
+   "name": "Zac",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.4,
+   "dive": 0.9,
+   "heal": 2,
+   "shield": 0,
+   "cc": [
+    "knockup",
+    "knockback",
+    "slow"
+   ]
+  },
+  {
+   "key": "Zed",
+   "name": "Zed",
+   "cls": "assassin",
+   "line": 0.1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.9,
+    "magic": 0.1,
+    "true": 0
+   },
+   "autoShare": 0.3,
+   "burst": 0.9,
+   "dive": 0.8,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ]
+  },
+  {
+   "key": "Ziggs",
+   "name": "Ziggs",
+   "cls": "artillery",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.05,
+   "burst": 0.6,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "knockback",
+    "slow"
+   ]
+  },
+  {
+   "key": "Zyra",
+   "name": "Zyra",
+   "cls": "artillery",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.05,
+   "burst": 0.6,
+   "dive": 0.1,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "root",
+    "knockup"
+   ]
+  },
+  {
+   "key": "Shen",
+   "name": "Shen",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.3,
+    "magic": 0.5,
+    "true": 0.2
+   },
+   "autoShare": 0.3,
+   "burst": 0.2,
+   "dive": 0.6,
+   "heal": 0,
+   "shield": 3,
+   "cc": [
+    "taunt"
+   ]
+  },
+  {
+   "key": "Sion",
+   "name": "Sion",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.7,
+    "magic": 0.3,
+    "true": 0
+   },
+   "autoShare": 0.2,
+   "burst": 0.4,
+   "dive": 0.6,
+   "heal": 0,
+   "shield": 2,
+   "cc": [
+    "knockup",
+    "stun",
+    "slow"
+   ],
+   "notes": "Leben-Stacking (Passiv E-Stapel unbekannt)."
+  },
+  {
+   "key": "Maokai",
+   "name": "Maokai",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.15,
+   "burst": 0.3,
+   "dive": 0.6,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "root",
+    "knockback"
+   ]
+  },
+  {
+   "key": "Senna",
+   "name": "Senna",
+   "cls": "marksman",
+   "line": 0,
+   "ranged": true,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.7,
+   "burst": 0.4,
+   "dive": 0.1,
+   "heal": 1,
+   "shield": 1,
+   "cc": [
+    "root"
+   ],
+   "notes": "Werte wachsen über Seelen."
+  },
+  {
+   "key": "Kindred",
+   "name": "Kindred",
+   "cls": "marksman",
+   "line": 0.1,
+   "ranged": true,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.7,
+   "burst": 0.4,
+   "dive": 0.3,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ]
+  },
+  {
+   "key": "Nasus",
+   "name": "Nasus",
+   "cls": "juggernaut",
+   "line": 0.8,
+   "ranged": false,
+   "dmg": {
+    "physical": 0.8,
+    "magic": 0.2,
+    "true": 0
+   },
+   "autoShare": 0.4,
+   "burst": 0.4,
+   "dive": 0.4,
+   "heal": 1,
+   "shield": 0,
+   "cc": [
+    "slow"
+   ],
+   "notes": "Q-Stapel unbekannt."
+  },
+  {
+   "key": "Kennen",
+   "name": "Kennen",
+   "cls": "battleMage",
+   "line": 0.2,
+   "ranged": true,
+   "dmg": {
+    "physical": 0.1,
+    "magic": 0.9,
+    "true": 0
+   },
+   "autoShare": 0.15,
+   "burst": 0.6,
+   "dive": 0.5,
+   "heal": 0,
+   "shield": 0,
+   "cc": [
+    "stun"
+   ]
+  },
+  {
+   "key": "Ksante",
+   "name": "K'Sante",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 1,
+    "magic": 0,
+    "true": 0
+   },
+   "autoShare": 0.3,
+   "burst": 0.4,
+   "dive": 0.6,
+   "heal": 0,
+   "shield": 1,
+   "cc": [
+    "knockup",
+    "knockback",
+    "pull"
+   ],
+   "notes": "Resistenzen skalieren im Kit mit eigenen Resistenzen."
+  },
+  {
+   "key": "Rell",
+   "name": "Rell",
+   "cls": "tank",
+   "line": 1,
+   "ranged": false,
+   "dmg": {
+    "physical": 0,
+    "magic": 1,
+    "true": 0
+   },
+   "autoShare": 0.1,
+   "burst": 0.3,
+   "dive": 0.7,
+   "heal": 0,
+   "shield": 1,
+   "cc": [
+    "stun",
+    "knockup",
+    "pull"
+   ]
+  }
+ ]
+}

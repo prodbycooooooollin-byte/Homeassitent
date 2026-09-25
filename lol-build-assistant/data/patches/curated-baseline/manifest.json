@@ -1,0 +1,15 @@
+{
+  "id": "curated-baseline",
+  "validatedGameVersions": [],
+  "authoredAgainst": "Wissensstand Patch 25.x (Saison 2025)",
+  "statsSource": "manuell kuratiert aus Wissensstand – Preise, Rezepte und Werte UNVERIFIZIERT",
+  "mechanicsSource": "manuell kuratierte Effektmodelle (data/patches/curated-baseline/items.json), keine Tooltip-Interpretation",
+  "reviewStatus": "fachlich nicht validiert",
+  "createdAt": "2026-09-25",
+  "notes": [
+    "Das laufende Spiel (Stand Recherche: Patch 26.19) kann abweichende Preise, Werte, Rezepte oder entfernte/neue Items haben.",
+    "Mit `npm run patch:sync -- <version>` werden Preise, Rezepte, Grundwerte und Championwerte aus Data Dragon übernommen und Abweichungen berichtet.",
+    "Effekte (Durchdringung, Lethalität, Fähigkeitstempo, On-Hit, Schilde) liefert Data Dragon nicht strukturiert – sie bleiben kuratiert und müssen manuell geprüft werden.",
+    "Neuere Items (z. B. Stufe-3-Stiefel) fehlen und werden live als 'unbekannt' behandelt."
+  ]
+}
