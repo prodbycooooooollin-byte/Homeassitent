@@ -102,6 +102,7 @@ export class GameServer {
   private readonly env: LobbyEnv;
   private readonly alive = new WeakMap<WebSocket, boolean>();
   private heartbeat: NodeJS.Timeout | null = null;
+  private stopping = false;
   private gc: NodeJS.Timeout | null = null;
 
   constructor(opts: GameServerOptions = {}) {
@@ -134,6 +135,7 @@ export class GameServer {
 
   /** Beendet laufende Partien nachvollziehbar ohne Wertung und schließt alle Verbindungen. */
   async shutdown(): Promise<void> {
+    this.stopping = true;
     for (const lobby of this.lobbies.values()) {
       lobby.abortForShutdown();
       this.afterChange(lobby);
@@ -482,7 +484,7 @@ export class GameServer {
     if (existing) clearTimeout(existing);
     this.timers.delete(lobby.code);
     const at = lobby.nextWakeAt();
-    if (at === null) return;
+    if (at === null || this.stopping) return;
     const delay = Math.max(0, at - this.now()) + 5;
     this.timers.set(
       lobby.code,
