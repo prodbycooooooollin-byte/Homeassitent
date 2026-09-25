@@ -691,6 +691,16 @@ impl Runtime {
     }
 
     /// Live-Status laut Twitch (`None` = unbekannt).
+    /// Zustand für die Entscheidung über automatische Updates (ohne Netzwerkzugriff):
+    /// (Streamplanung aktiv, Übergabe läuft/ungeklärt, Spotify spielt gerade).
+    pub fn update_safety(&self) -> (bool, bool, bool) {
+        use crate::queue::RequestStatus;
+        let plan_active = self.queue.plan_status().active;
+        let handoff_busy = self.queue.store.pending().iter().any(|r| matches!(r.status, RequestStatus::HandingOff | RequestStatus::Uncertain));
+        let playing = matches!(&self.spotify_state.borrow().playback, crate::model::PlaybackView::Active(p) if p.is_playing);
+        (plan_active, handoff_busy, playing)
+    }
+
     pub async fn twitch_is_live(&self) -> Option<bool> {
         let id = self.twitch_state.borrow().identity.clone()?;
         tokio::time::timeout(Duration::from_secs(5), self.helix.is_live(&id.user_id)).await.ok()?.ok()

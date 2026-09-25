@@ -155,3 +155,6 @@ frei = verbleibend − Rest des aktuellen Titels − geplante Requests − reser
 Siehe [UPDATES.md](UPDATES.md). Zustände liegen in `update_state.rs` (Kern, getestet);
 `src-tauri/src/updater.rs` verbindet sie mit dem Plugin. Vor der Installation:
 Update-Sperre setzen, Belohnung pausieren, auf ruhende Queue warten, SQLite-Checkpoint.
+`UpdateManager::run_auto` ist die Hintergrund-Automatik (prüfen → laden → sicherer Moment →
+30-s-Countdown → installieren); die Entscheidung trifft die reine Funktion
+`update_state::decide_auto_install`.

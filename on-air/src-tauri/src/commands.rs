@@ -357,3 +357,9 @@ pub async fn update_install(app: AppHandle, state: State<'_, AppState>, updates:
 pub fn update_later(app: AppHandle, updates: Updates<'_>) {
     updates.later(&app);
 }
+
+/// „Nicht jetzt“ im Countdown der automatischen Installation.
+#[tauri::command]
+pub fn update_postpone(app: AppHandle, updates: Updates<'_>) {
+    updates.postpone(&app);
+}

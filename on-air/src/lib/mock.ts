@@ -62,7 +62,7 @@ function defaults(): Settings {
     nowplaying_file: { enabled: false, path: "", template: "{artist} – {title}" },
     profiles: [], active_profile: null, hotkey_skip: "", compact_on_top: true,
     channel_points: { enabled: false, title: "Song wünschen", cost: 500, prompt: "Spotify-Link oder Titel und Interpret", global_cooldown_s: 0, max_per_stream: 0, max_per_user_per_stream: 0, mode: "auto" },
-    updates: { check_on_start: true },
+    updates: { check_on_start: true, auto_install: true },
   };
 }
 
@@ -105,9 +105,14 @@ export function createMockBackend(): Backend {
     end_at_ms: scenario === "ended" ? now() - 60_000 : now() + (scenario === "overplanned" ? 14 : 30) * 60_000,
     buffer_ms: 120_000,
   };
-  let updatePhase: UpdateInfo["state"] = scenario === "update" ? { state: "available", version: "0.2.1", notes: "- Beispiel-Neuerung für die Vorschau\n- Weitere Verbesserung", date: null } : { state: "not_configured" };
+  let updatePhase: UpdateInfo["state"] = scenario === "autoupdate" ? { state: "ready", version: "0.2.1", notes: "- Beispiel-Neuerung für die Vorschau" } : scenario === "update" ? { state: "available", version: "0.2.1", notes: "- Beispiel-Neuerung für die Vorschau\n- Weitere Verbesserung", date: null } : { state: "not_configured" };
   const updateListeners = new Set<(u: UpdateInfo) => void>();
-  const updateInfo = (): UpdateInfo => ({ current_version: "0.2.0", state: updatePhase, last_check_ms: scenario === "update" ? now() - 3_600_000 : null, endpoint: "(Vorschau)", configured: scenario === "update" });
+  let autoAt: number | null = scenario === "autoupdate" ? now() + 30_000 : null;
+  let postponed = false;
+  const updateInfo = (): UpdateInfo => ({
+    current_version: "0.2.0", state: updatePhase, last_check_ms: scenario.includes("update") ? now() - 3_600_000 : null, endpoint: "(Vorschau)", configured: scenario.includes("update"),
+    auto: { enabled: settings.updates.auto_install, waiting: postponed ? "postponed" : updatePhase.state === "ready" && !autoAt ? "live" : null, install_at_ms: autoAt, postponed },
+  });
   const setUpdate = (st: UpdateInfo["state"]) => {
     updatePhase = st;
     updateListeners.forEach((l) => l(updateInfo()));
@@ -331,6 +336,7 @@ export function createMockBackend(): Backend {
     update_preflight: () => ({ live: null, pending_requests: queue.length, open_redemptions: queue.filter((r) => r.redemption).length, plan_active: planCfg.enabled }),
     update_install: () => { throw { code: "error", message: "Vorschau: keine Installation möglich" }; },
     update_later: () => undefined,
+    update_postpone: () => { autoAt = null; postponed = true; setUpdate(updatePhase); },
   };
 
   return {

@@ -139,6 +139,7 @@ a { color: var(--accent); }
 .nav-item[aria-current="page"] svg { color: var(--accent); }
 .nav-item[aria-current="page"]::before { content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 .nav-item .badge { margin-left: auto; }
+.nav-item > svg { flex: none; }
 .nav-sep { height: 1px; background: var(--border); margin: 10px 8px; }
 .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
 .version-line { padding: 10px 12px 0; font-size: 11.5px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
@@ -442,6 +443,10 @@ details.tech pre { white-space: pre-wrap; word-break: break-word; margin: 6px 0 
 .dialog-foot { padding: var(--s4) var(--s6) var(--s5); display: flex; justify-content: flex-end; gap: var(--s2); flex-wrap: wrap; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.985); } }
+/* Countdown vor automatischer Installation: unten mittig, über allem außer Dialogen. */
+.auto-update-banner { position: fixed; left: 16px; right: 16px; bottom: 20px; margin-inline: auto; max-width: 640px; z-index: 55; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px 16px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border-strong)); box-shadow: var(--shadow-2); animation: pop var(--dur-slow) var(--ease); }
+.auto-update-banner .n-icon { color: var(--accent); flex: none; }
+.auto-update-banner > .col { flex: 1 1 260px; }
 .toast-wrap { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 60; max-width: min(420px, calc(100vw - 40px)); }
 .toast { padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-3); border: 1px solid var(--border-strong); box-shadow: var(--shadow-2); display: flex; gap: 10px; align-items: flex-start; animation: pop var(--dur-slow) var(--ease); }
 .toast.error { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }

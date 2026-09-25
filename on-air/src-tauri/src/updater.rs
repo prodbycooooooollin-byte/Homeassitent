@@ -5,13 +5,23 @@
 //!   Updater als „nicht eingerichtet“ gekennzeichnet – kein dekorativer Button.
 //! - Das Plugin prüft die Signatur beim Download; installiert wird nur ein vollständig
 //!   geladenes, geprüftes Paket.
-//! - Installation nur auf ausdrücklichen Klick. Vorher wird die Annahme pausiert, die
-//!   Kanalpunkte-Belohnung pausiert und der Zustand gesichert.
+//! - Automatisch (Standard, abschaltbar): im Hintergrund prüfen, laden und in einem
+//!   sicheren Moment installieren – nie während eines erkannten Livestreams, einer
+//!   Streamplanung oder einer ungeklärten Übergabe, immer mit 30-s-Countdown, der sich mit
+//!   „Nicht jetzt“ für diese Sitzung abbrechen lässt (Regeln: `update_state::decide_auto_install`).
+//! - Vor jeder Installation wird die Annahme pausiert, die Kanalpunkte-Belohnung pausiert
+//!   und der Zustand gesichert.
 
 use onair_core::runtime::{Runtime, UpdatePrep};
-use onair_core::update_state::{classify_error, Refused, Stage, UpdateState};
+use onair_core::settings as cfg;
+use onair_core::update_state::{
+    classify_error, decide_auto_install, AutoDecision, AutoInputs, AutoWait, Refused, Stage, UpdateState, AUTO_COUNTDOWN_MS, CHECK_INTERVAL_MS,
+    RETRY_INTERVAL_MS,
+};
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
@@ -32,6 +42,19 @@ pub struct UpdateManager {
     update: Mutex<Option<Update>>,
     bytes: Mutex<Option<Vec<u8>>>,
     last_check_ms: Mutex<Option<i64>>,
+    auto: Mutex<AutoStatus>,
+    /// „Nicht jetzt“: automatische Installation für diese App-Sitzung ausgesetzt.
+    postponed: AtomicBool,
+}
+
+/// Anzeige der Automatik: worauf gewartet wird bzw. wann installiert wird.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct AutoStatus {
+    pub enabled: bool,
+    pub waiting: Option<AutoWait>,
+    /// Gesetzt, solange der Countdown vor einer automatischen Installation läuft.
+    pub install_at_ms: Option<i64>,
+    pub postponed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -41,6 +64,7 @@ pub struct UpdateInfo {
     pub last_check_ms: Option<i64>,
     pub endpoint: String,
     pub configured: bool,
+    pub auto: AutoStatus,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -59,7 +83,14 @@ fn now_ms() -> i64 {
 impl UpdateManager {
     pub fn new() -> Arc<Self> {
         let initial = if pubkey().is_some() { UpdateState::Unchecked } else { UpdateState::NotConfigured };
-        Arc::new(Self { state: Mutex::new(initial), update: Mutex::new(None), bytes: Mutex::new(None), last_check_ms: Mutex::new(None) })
+        Arc::new(Self {
+            state: Mutex::new(initial),
+            update: Mutex::new(None),
+            bytes: Mutex::new(None),
+            last_check_ms: Mutex::new(None),
+            auto: Mutex::new(AutoStatus::default()),
+            postponed: AtomicBool::new(false),
+        })
     }
 
     pub fn info(&self, app: &AppHandle) -> UpdateInfo {
@@ -69,6 +100,127 @@ impl UpdateManager {
             last_check_ms: *self.last_check_ms.lock().unwrap(),
             endpoint: endpoint().to_string(),
             configured: pubkey().is_some(),
+            auto: self.auto.lock().unwrap().clone(),
+        }
+    }
+
+    fn set_auto(&self, app: &AppHandle, a: AutoStatus) {
+        let changed = {
+            let mut cur = self.auto.lock().unwrap();
+            let changed = *cur != a;
+            *cur = a;
+            changed
+        };
+        if changed {
+            let _ = app.emit("onair://update", self.info(app));
+        }
+    }
+
+    /// „Nicht jetzt“: laufenden Countdown abbrechen, bis zum nächsten App-Start nicht
+    /// automatisch installieren. Manuelle Installation bleibt jederzeit möglich.
+    pub fn postpone(&self, app: &AppHandle) {
+        self.postponed.store(true, Ordering::SeqCst);
+        let mut a = self.auto.lock().unwrap().clone();
+        a.install_at_ms = None;
+        a.postponed = true;
+        a.waiting = Some(AutoWait::Postponed);
+        self.set_auto(app, a);
+    }
+
+    /// Hintergrund-Automatik: prüfen → laden → im sicheren Moment mit Countdown installieren.
+    /// Läuft für die gesamte App-Lebensdauer; ohne eingebetteten Schlüssel sofort beendet.
+    pub async fn run_auto(self: Arc<Self>, app: AppHandle, rt: Arc<Runtime>) {
+        if pubkey().is_none() {
+            return;
+        }
+        let started = now_ms();
+        tokio::time::sleep(Duration::from_secs(20)).await;
+        let mut next_check = 0i64;
+        let mut next_download = 0i64;
+        let mut last_playing: Option<i64> = None;
+        // (Zeitpunkt der letzten Abfrage, Ergebnis); `None` = noch nie bzw. neu abfragen.
+        let mut live_cache: (Option<i64>, Option<bool>) = (None, None);
+        loop {
+            let now = now_ms();
+            let s = cfg::read(&rt.settings).updates.clone();
+            let (plan_active, handoff_busy, playing) = rt.update_safety();
+            if playing {
+                last_playing = Some(now);
+            }
+            let state = self.state.lock().unwrap().clone();
+
+            // 1. Prüfen (Automatik schließt die Hintergrundprüfung ein).
+            let may_check = matches!(state, UpdateState::Unchecked | UpdateState::UpToDate { .. } | UpdateState::Failed { stage: Stage::Check, .. });
+            if (s.check_on_start || s.auto_install) && may_check && now >= next_check {
+                let _ = self.check(&app).await;
+                let failed = matches!(*self.state.lock().unwrap(), UpdateState::Failed { .. });
+                next_check = now_ms() + if failed { RETRY_INTERVAL_MS } else { CHECK_INTERVAL_MS };
+                continue;
+            }
+
+            // 2. Laden (nur mit Automatik; höchstens ein Download, Wiederholung nach Pause).
+            let may_download = matches!(state, UpdateState::Available { .. } | UpdateState::Failed { stage: Stage::Download, version: Some(_), .. });
+            if s.auto_install && may_download && now >= next_download {
+                if self.download(&app).await.is_err() {
+                    next_download = now_ms() + RETRY_INTERVAL_MS;
+                }
+                continue;
+            }
+
+            // 3. Installieren – nur aus „bereit“ und nur im sicheren Moment.
+            let mut auto = AutoStatus { enabled: s.auto_install, postponed: self.postponed.load(Ordering::SeqCst), ..Default::default() };
+            if s.auto_install && matches!(state, UpdateState::Ready { .. }) {
+                let mut inputs = AutoInputs {
+                    auto_enabled: true,
+                    postponed: auto.postponed,
+                    live: None,
+                    plan_active,
+                    handoff_busy,
+                    spotify_playing: playing,
+                    last_playing_ms: last_playing,
+                    app_started_ms: started,
+                    now_ms: now,
+                };
+                let mut decision = decide_auto_install(&inputs);
+                if decision == AutoDecision::Install {
+                    // Live-Status nur abfragen, wenn alles andere passt (höchstens alle 2 min).
+                    if live_cache.0.is_none_or(|t| now - t > 120_000) {
+                        live_cache = (Some(now), rt.twitch_is_live().await);
+                    }
+                    inputs.live = live_cache.1;
+                    decision = decide_auto_install(&inputs);
+                }
+                let prev_at = self.auto.lock().unwrap().install_at_ms;
+                match decision {
+                    AutoDecision::Install => {
+                        let at = prev_at.unwrap_or(now + AUTO_COUNTDOWN_MS);
+                        auto.install_at_ms = Some(at);
+                        self.set_auto(&app, auto.clone());
+                        if now >= at {
+                            tracing::info!(target: "updater", "Automatische Installation");
+                            if self.install(&app, rt.clone()).await.is_err() {
+                                // Kein Dauerversuch: bis zum nächsten Start nur noch manuell.
+                                self.postponed.store(true, Ordering::SeqCst);
+                                auto.install_at_ms = None;
+                                auto.postponed = true;
+                                auto.waiting = Some(AutoWait::Postponed);
+                                self.set_auto(&app, auto);
+                            }
+                        }
+                    }
+                    AutoDecision::Wait(w) => {
+                        if w == AutoWait::Live {
+                            live_cache.0 = None; // bei Streamende zügig neu prüfen
+                        }
+                        auto.waiting = Some(w);
+                        self.set_auto(&app, auto);
+                    }
+                }
+            } else {
+                self.set_auto(&app, auto);
+            }
+            let countdown = self.auto.lock().unwrap().install_at_ms.is_some();
+            tokio::time::sleep(Duration::from_secs(if countdown { 1 } else { 15 })).await;
         }
     }
 

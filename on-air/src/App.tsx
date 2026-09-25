@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AutoUpdateBanner } from "./components/UpdatePanel";
 import { TwitchCodeDialog, startSpotifyLogin } from "./components/Login";
 import { EmptyState, ToastHost } from "./components/ui";
 import { api, isPreviewBackend } from "./lib/api";
@@ -89,6 +90,7 @@ export function App() {
       <>
         {banner}
         <CompactView snap={snap} />
+        <AutoUpdateBanner />
         <ToastHost />
       </>
     );
@@ -107,6 +109,7 @@ export function App() {
       {!snap.settings.onboarding_done && !onbDismissed && <Onboarding snap={snap} onDone={() => setOnbDismissed(true)} />}
       <TwitchCodeDialog snap={snap} />
       {closeAsk && <CloseDialog onClose={() => setCloseAsk(false)} />}
+      <AutoUpdateBanner />
       <ToastHost />
     </>
   );

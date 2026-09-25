@@ -258,7 +258,7 @@ export interface Settings {
   hotkey_skip: string;
   compact_on_top: boolean;
   channel_points: ChannelPointsSettings;
-  updates: { check_on_start: boolean };
+  updates: { check_on_start: boolean; auto_install: boolean };
 }
 
 export interface ChannelPointsSettings {
@@ -350,6 +350,17 @@ export interface UpdateInfo {
   last_check_ms: number | null;
   endpoint: string;
   configured: boolean;
+  auto: AutoUpdateStatus;
+}
+
+export type AutoWait = "disabled" | "postponed" | "live" | "plan" | "handoff" | "playing" | "recently_playing";
+
+export interface AutoUpdateStatus {
+  enabled: boolean;
+  waiting: AutoWait | null;
+  /** Countdown bis zur automatischen Installation läuft. */
+  install_at_ms: number | null;
+  postponed: boolean;
 }
 
 export interface UpdatePreflight {

@@ -130,6 +130,7 @@ export const api = {
   updatePreflight: () => call<UpdatePreflight>("update_preflight"),
   updateInstall: () => call<unknown>("update_install"),
   updateLater: () => call<void>("update_later"),
+  updatePostpone: () => call<void>("update_postpone"),
   onUpdate: async (cb: (u: UpdateInfo) => void) => (await load()).onUpdate(cb),
 };
 

@@ -41,5 +41,6 @@
 - Favoriten/Playlist-Aktionen.
 - Aktivitätsprotokoll-Texte kommen aus dem Kern und sind derzeit nur Deutsch
   (UI-Texte sind vollständig auf Englisch vorbereitet).
-- Updates werden gesucht und heruntergeladen, aber nie automatisch installiert (gewollt).
+- Automatische Updates erkennen einen Livestream nur über Twitch. Ohne Twitch-Verbindung
+  schützen nur die übrigen Regeln (Streamplanung, Wiedergabepause, Countdown mit „Nicht jetzt“).
 - Standby-Erkennung erfolgt über Sprünge der Wanduhr (portabel, aber keine Windows-Power-Events).

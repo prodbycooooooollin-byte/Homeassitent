@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { dateTime } from "../lib/format";
 import { getLang, hasKey, t } from "../lib/i18n";
 import { useUpdateInfo } from "../lib/updates";
+import { useNow } from "../lib/store";
 import { useSettingsDraft } from "../lib/useSettings";
 import type { AppSnapshot, UpdatePreflight } from "../lib/types";
 import { Dialog, Notice, SettingRow, Toggle, toastError } from "./ui";
@@ -82,14 +83,23 @@ export function UpdatePanel({ snap }: { snap: AppSnapshot }) {
                 {st.state === "ready" && <button className="btn btn-primary" onClick={() => void openConfirm()}><Rocket size={15} /> {t("up.install")}</button>}
                 {(st.state === "available" || st.state === "ready") && <button className="btn btn-ghost" onClick={() => api.updateLater().catch(toastError)}>{t("up.later")}</button>}
               </div>
+              {st.state === "ready" && info.auto.enabled && !info.auto.install_at_ms && (
+                <span className="small" style={{ color: "var(--text-2)" }}>
+                  {info.auto.postponed ? t("up.auto_postponed") : info.auto.waiting && info.auto.waiting !== "disabled" && info.auto.waiting !== "postponed" ? t("up.auto_waiting", { why: t(`up.wait.${info.auto.waiting}` as const) }) : null}
+                </span>
+              )}
               <span className="subtle small">{t("up.scope_note")}</span>
             </div>
           </div>
         )}
       </section>
-      <section className="card card-pad">
+      <section className="card card-pad col" style={{ gap: 0 }}>
+        <SettingRow title={t("up.auto_install")} desc={t("up.auto_install_desc")}>
+          <Toggle checked={draft.updates.auto_install} disabled={st.state === "not_configured"} onChange={(v) => update((s) => ({ ...s, updates: { ...s.updates, auto_install: v } }))} />
+        </SettingRow>
         <SettingRow title={t("up.auto")} desc={t("up.auto_desc")}>
-          <Toggle checked={draft.updates.check_on_start} disabled={st.state === "not_configured"} onChange={(v) => update((s) => ({ ...s, updates: { ...s.updates, check_on_start: v } }))} />
+          {/* Automatisches Installieren schließt die Hintergrundprüfung ein. */}
+          <Toggle checked={draft.updates.check_on_start || draft.updates.auto_install} disabled={st.state === "not_configured" || draft.updates.auto_install} onChange={(v) => update((s) => ({ ...s, updates: { ...s.updates, check_on_start: v } }))} />
         </SettingRow>
       </section>
       {confirm && (
@@ -120,6 +130,28 @@ export function UpdatePanel({ snap }: { snap: AppSnapshot }) {
           )}
         </Dialog>
       )}
+    </div>
+  );
+}
+
+/** Countdown vor einer automatischen Installation – in jedem Fenster sichtbar. */
+export function AutoUpdateBanner() {
+  const info = useUpdateInfo();
+  const now = useNow(250);
+  const at = info?.auto.install_at_ms;
+  if (!info || !at || info.state.state !== "ready") return null;
+  const secs = Math.max(0, Math.ceil((at - now) / 1000));
+  return (
+    <div className="auto-update-banner" role="alertdialog" aria-live="assertive" aria-label={t("up.install")}>
+      <Rocket size={18} className="n-icon" aria-hidden="true" />
+      <div className="col" style={{ gap: 2, minWidth: 0 }}>
+        <span style={{ fontWeight: 640 }}>{t("up.countdown", { v: info.state.version, s: secs })}</span>
+        <span className="small muted">{t("up.countdown_hint")}</span>
+      </div>
+      <div className="row" style={{ gap: 8, marginLeft: "auto" }}>
+        <button className="btn btn-sm" autoFocus onClick={() => api.updatePostpone().catch(toastError)}>{t("up.postpone")}</button>
+        <button className="btn btn-sm btn-primary" onClick={() => api.updateInstall().catch(toastError)}>{t("up.install_now")}</button>
+      </div>
     </div>
   );
 }

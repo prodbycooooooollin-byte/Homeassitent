@@ -29,6 +29,18 @@ angeboten.
 
 ## Einmalige Einrichtung
 
+**Kurzweg (empfohlen):** auf deinem Rechner, mit angemeldeter [GitHub-CLI](https://cli.github.com/) (`gh auth login`):
+
+```bash
+cd on-air
+node scripts/setup-updater.mjs
+```
+
+Das Skript erzeugt das Schlüsselpaar (ein vorhandenes wird wiederverwendet, nie überschrieben),
+hinterlegt Secrets und Variable im Repository (Geheimnisse per Standardeingabe an `gh`) und
+nennt den nächsten Schritt. Ohne `gh` zeigt es, was du auf github.com eintragen musst.
+Die Schritte 1–2 unten beschreiben dasselbe von Hand.
+
 ### 1. Schlüsselpaar erzeugen (lokal)
 
 ```bash
@@ -105,18 +117,35 @@ eine per `.msi` installierte mit dem `.msi`-Paket – der Installationsbereich w
 | Nicht eingerichtet | Build ohne öffentlichen Schlüssel – keine Suche. |
 | Nicht geprüft / Suche läuft | – |
 | Aktuell | Nur nach **erfolgreicher** Prüfung. Ein Fehler wird nie als „aktuell“ angezeigt. |
-| Verfügbar | Version und Änderungen werden gezeigt; Download nur auf Klick. |
+| Verfügbar | Version und Änderungen werden gezeigt; mit Automatik startet der Download sofort, sonst auf Klick. |
 | Lädt | Fortschritt; es läuft höchstens ein Download. |
-| Bereit | Signatur geprüft; Installation nur auf Bestätigung. |
+| Bereit | Signatur geprüft; mit Automatik Installation im sicheren Moment (s. u.), sonst auf Bestätigung. |
 | Installiert | Requests werden pausiert, Belohnung auf Twitch pausiert, Datenbank gesichert, dann Installer (passiv) und Neustart. |
 | Fehlgeschlagen | Mit Grund: offline, Signatur ungültig, Datei fehlt, Manifest ungültig … |
 
-- Automatische Suche 20 s nach dem Start (abschaltbar), **kein** automatischer Download.
-- „Später“ blendet den Hinweis aus und startet **keinen** Timer.
-- Vor der Installation zeigt ein Dialog, ob der Kanal gerade live ist (Twitch), wie viele
-  Requests und offene Einlösungen warten und ob eine Streamplanung läuft. Ist der Kanal live,
-  heißt die Schaltfläche „Trotzdem installieren“; ist der Live-Status unbekannt, wird das
-  angezeigt. ON AIR installiert nie ungefragt.
+### Automatische Updates (Standard: an)
+
+*Einstellungen → Updates → „Updates automatisch installieren“.* Dann gilt:
+
+1. **Prüfen:** 20 s nach dem Start, danach alle 4 Stunden; nach einem Fehler erneut nach 30 min.
+2. **Laden:** ein gefundenes Update wird sofort im Hintergrund geladen und seine Signatur geprüft.
+3. **Installieren – nur in einem sicheren Moment** (Regeln in `update_state::decide_auto_install`, unit-getestet):
+   - **nie**, solange du laut Twitch live bist, eine Streamplanung läuft oder eine Übergabe an
+     Spotify läuft bzw. ungeklärt ist;
+   - in den ersten 5 Minuten nach dem App-Start sofort (Spotify spielt während des kurzen
+     Neustarts unabhängig weiter);
+   - später erst, wenn die Musik mindestens 10 Minuten pausiert.
+   Ist Twitch nicht verbunden, ist der Live-Status unbekannt; dann entscheiden die übrigen Regeln.
+4. **Countdown:** vor jeder automatischen Installation erscheint in Haupt- und Kompaktfenster
+   30 Sekunden lang ein Hinweis mit **„Nicht jetzt“** (bis zum nächsten App-Start keine
+   automatische Installation) und **„Jetzt installieren“**. Wird der Moment während des
+   Countdowns unsicher (z. B. Stream startet), wird abgebrochen.
+5. Scheitert eine automatische Installation, versucht ON AIR es in dieser Sitzung nicht erneut.
+
+Ohne Automatik (Schalter aus): nur Hintergrundprüfung (abschaltbar); Download und Installation
+auf Klick. „Später“ blendet den Hinweis aus und startet keinen Timer. Vor einer manuellen
+Installation zeigt ein Dialog den Live-Status, wartende Requests/Einlösungen und eine laufende
+Streamplanung.
 
 ## Wiederherstellung
 

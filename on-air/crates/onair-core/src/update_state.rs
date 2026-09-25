@@ -5,6 +5,8 @@
 //! - Es läuft höchstens ein Vorgang gleichzeitig (Mehrfachklicks werden abgewiesen).
 //! - Installiert wird nur aus „Update bereit“ (vollständig geladen und signaturgeprüft).
 //! - „Später“ setzt nur zurück auf „Update verfügbar/bereit“ – kein versteckter Timer.
+//! - Automatische Installation nur in einem sicheren Moment (siehe [`decide_auto_install`])
+//!   und immer mit sichtbarem Countdown, den man abbrechen kann.
 
 use serde::Serialize;
 
@@ -97,6 +99,91 @@ pub fn classify_error(stage: Stage, msg: &str) -> String {
     code.to_string()
 }
 
+// ---------------- Automatische Updates ----------------
+
+/// Nach dem App-Start: in diesem Fenster darf ein fertiges Update auch bei laufender
+/// Musik installiert werden (Neustart dauert Sekunden, Spotify spielt unabhängig weiter).
+pub const STARTUP_WINDOW_MS: i64 = 5 * 60_000;
+/// Später im Betrieb: so lange muss Spotify ruhen, bevor automatisch installiert wird.
+pub const IDLE_BEFORE_INSTALL_MS: i64 = 10 * 60_000;
+/// Sichtbarer Countdown vor einer automatischen Installation.
+pub const AUTO_COUNTDOWN_MS: i64 = 30_000;
+/// Regelmäßige Prüfung im Hintergrund.
+pub const CHECK_INTERVAL_MS: i64 = 4 * 3_600_000;
+/// Erneuter Versuch nach fehlgeschlagener Prüfung bzw. fehlgeschlagenem Download.
+pub const RETRY_INTERVAL_MS: i64 = 30 * 60_000;
+
+/// Momentaufnahme für die Entscheidung „jetzt automatisch installieren?“.
+#[derive(Debug, Clone, Default)]
+pub struct AutoInputs {
+    pub auto_enabled: bool,
+    /// Für diese App-Sitzung mit „Nicht jetzt“ verschoben.
+    pub postponed: bool,
+    /// Twitch-Live-Status; `None` = unbekannt (nicht verbunden / nicht abrufbar).
+    pub live: Option<bool>,
+    pub plan_active: bool,
+    /// Eine Übergabe an Spotify läuft oder ist ungeklärt – nicht mittendrin neu starten.
+    pub handoff_busy: bool,
+    pub spotify_playing: bool,
+    /// Zeitpunkt, zu dem zuletzt Wiedergabe beobachtet wurde.
+    pub last_playing_ms: Option<i64>,
+    pub app_started_ms: i64,
+    pub now_ms: i64,
+}
+
+/// Warum (noch) nicht automatisch installiert wird – für die Anzeige.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutoWait {
+    Disabled,
+    Postponed,
+    Live,
+    Plan,
+    Handoff,
+    Playing,
+    RecentlyPlaying,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AutoDecision {
+    Install,
+    Wait(AutoWait),
+}
+
+/// Sicherer Moment für eine automatische Installation?
+///
+/// Nie während eines erkannten Livestreams, einer laufenden Streamplanung oder einer
+/// ungeklärten Übergabe. Direkt nach dem Start sofort; später erst, wenn Spotify
+/// mindestens [`IDLE_BEFORE_INSTALL_MS`] ruht.
+pub fn decide_auto_install(i: &AutoInputs) -> AutoDecision {
+    use AutoDecision::*;
+    if !i.auto_enabled {
+        return Wait(AutoWait::Disabled);
+    }
+    if i.postponed {
+        return Wait(AutoWait::Postponed);
+    }
+    if i.live == Some(true) {
+        return Wait(AutoWait::Live);
+    }
+    if i.plan_active {
+        return Wait(AutoWait::Plan);
+    }
+    if i.handoff_busy {
+        return Wait(AutoWait::Handoff);
+    }
+    if i.now_ms - i.app_started_ms <= STARTUP_WINDOW_MS {
+        return Install;
+    }
+    if i.spotify_playing {
+        return Wait(AutoWait::Playing);
+    }
+    match i.last_playing_ms {
+        Some(t) if i.now_ms - t < IDLE_BEFORE_INSTALL_MS => Wait(AutoWait::RecentlyPlaying),
+        _ => Install,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,5 +225,57 @@ mod tests {
         assert_eq!(classify_error(Stage::Check, "Could not fetch a valid release JSON from the remote: 404 Not Found"), "missing_artifact");
         assert_eq!(classify_error(Stage::Check, "expected value at line 1 (json)"), "invalid_manifest");
         assert_eq!(classify_error(Stage::Install, "boom"), "install_failed");
+    }
+
+    fn base() -> AutoInputs {
+        AutoInputs { auto_enabled: true, app_started_ms: 0, now_ms: 60 * 60_000, ..Default::default() }
+    }
+
+    #[test]
+    fn auto_install_never_during_live_plan_or_handoff() {
+        let mut i = base();
+        assert_eq!(decide_auto_install(&i), AutoDecision::Install);
+        i.live = Some(true);
+        assert_eq!(decide_auto_install(&i), AutoDecision::Wait(AutoWait::Live));
+        // Auch direkt nach dem Start nicht, wenn live.
+        i.now_ms = 1_000;
+        assert_eq!(decide_auto_install(&i), AutoDecision::Wait(AutoWait::Live));
+        let mut i = base();
+        i.plan_active = true;
+        assert_eq!(decide_auto_install(&i), AutoDecision::Wait(AutoWait::Plan));
+        let mut i = base();
+        i.handoff_busy = true;
+        assert_eq!(decide_auto_install(&i), AutoDecision::Wait(AutoWait::Handoff));
+    }
+
+    #[test]
+    fn auto_install_respects_setting_and_postpone() {
+        let mut i = base();
+        i.auto_enabled = false;
+        assert_eq!(decide_auto_install(&i), AutoDecision::Wait(AutoWait::Disabled));
+        let mut i = base();
+        i.postponed = true;
+        assert_eq!(decide_auto_install(&i), AutoDecision::Wait(AutoWait::Postponed));
+    }
+
+    #[test]
+    fn auto_install_waits_for_quiet_playback_after_startup() {
+        // Direkt nach dem Start: Musik läuft → trotzdem installieren (kurzer Neustart).
+        let mut i = base();
+        i.now_ms = 2 * 60_000;
+        i.spotify_playing = true;
+        assert_eq!(decide_auto_install(&i), AutoDecision::Install);
+        // Später: Musik läuft → warten.
+        i.now_ms = 60 * 60_000;
+        assert_eq!(decide_auto_install(&i), AutoDecision::Wait(AutoWait::Playing));
+        // Gerade erst gestoppt → noch warten; nach 10 min Ruhe → installieren.
+        i.spotify_playing = false;
+        i.last_playing_ms = Some(i.now_ms - 3 * 60_000);
+        assert_eq!(decide_auto_install(&i), AutoDecision::Wait(AutoWait::RecentlyPlaying));
+        i.last_playing_ms = Some(i.now_ms - IDLE_BEFORE_INSTALL_MS);
+        assert_eq!(decide_auto_install(&i), AutoDecision::Install);
+        // Live-Status unbekannt blockiert nicht allein (Twitch ist optional).
+        i.live = None;
+        assert_eq!(decide_auto_install(&i), AutoDecision::Install);
     }
 }

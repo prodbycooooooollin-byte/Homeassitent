@@ -38,7 +38,7 @@ oder „600 s Sperre“ in Sekundenbruchteilen – die Zeitlogik ist dieselbe wi
 | Sparsame Übergabe + Beobachtung | `handoff_is_sparse_and_playback_is_observed` | ✅ |
 | Limits bei gleichzeitigen Requests | `concurrent_requests_respect_user_limit` | ✅ |
 | Overlay: Loopback, Host-Prüfung, Token, keine Secrets | `tests/overlay.rs` | ✅ |
-| UI: kleines Fenster, lange Namen, 100/125/150/200 %, 1280×720, 1920×1080 | `tests-ui/layout.spec.ts` (40 Tests) | ✅ in Chromium, **nicht** in WebView2 geprüft |
+| UI: kleines Fenster, lange Namen, 100/125/150/200 %, 1280×720, 1920×1080 | `tests-ui/layout.spec.ts` (42 Tests) | ✅ in Chromium, **nicht** in WebView2 geprüft |
 
 ## Erweiterung 0.2 – simuliert
 
@@ -57,7 +57,7 @@ oder „600 s Sperre“ in Sekundenbruchteilen – die Zeitlogik ist dieselbe wi
 
 Unit-Tests dazu: Budgetformel und Unsicherheitscodes (`plan.rs`), Sperrgründe inkl.
 „+15 hält manuelle Pause“ (`acceptance.rs`), Update-Zustände und Fehlerklassifizierung – ein
-fehlgeschlagener Check ist nie „aktuell“ (`update_state.rs`), EventSub-Einlösungsnachrichten.
+fehlgeschlagener Check ist nie „aktuell“; automatische Installation nie während Live/Planung/Übergabe, sofort nach Start, sonst erst nach 10 min Wiedergabepause (`update_state.rs`), EventSub-Einlösungsnachrichten.
 
 UI (Playwright, Browser-Vorschau): Übersicht bei 1280×720/1920×1080 ohne abgeschnittene
 Kopfzeilen, globale Pause lässt Wege-Einstellungen unverändert, nur Kanalpunkte aktiv,
@@ -79,6 +79,12 @@ EventSub-Protokoll inkl. Reconnect ohne Neuabo, Migrationen, atomare Textdatei, 
 - **Achtstündiger realer Dauertest** – noch nicht durchgeführt, keine Messwerte vorhanden.
 - Echter Kanalpunkte-Durchlauf mit Affiliate-Konto.
 - Echter Update-Durchlauf auf Windows (0.2.0 → 0.2.x) – setzt hinterlegte Signatur-Secrets voraus.
+  Durchgeführt wurde ein **lokaler End-to-End-Lauf unter Linux** mit der echten Desktop-App:
+  Wegwerf-Schlüssel, lokaler Update-Server, signiertes Testpaket. Geprüft: automatische Suche
+  → Download → Signaturprüfung (ohne Versionsbindung korrekt abgewiesen, mit Versionsbindung
+  angenommen) → Countdown → „Nicht jetzt“ → nach Neustart automatische Installation mit
+  Update-Vorbereitung (Requests pausiert, DB gesichert) → Paket installiert, App beendet sich
+  zum Neustart. Dabei gefunden und behoben: Überlauf in der Live-Status-Zwischenspeicherung.
 
 ## Plan: achtstündiger Dauertest
 

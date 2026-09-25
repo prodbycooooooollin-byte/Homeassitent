@@ -255,14 +255,8 @@ pub fn run() {
             app.manage(AppState { rt: rt.clone() });
             let updates = updater::UpdateManager::new();
             app.manage(updates.clone());
-            // Optionale Prüfung beim Start: blockiert nichts, installiert nie automatisch.
-            if cfg::read(&rt.settings).updates.check_on_start && updater::pubkey().is_some() {
-                let h = handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(Duration::from_secs(20)).await;
-                    let _ = updates.check(&h).await;
-                });
-            }
+            // Hintergrund-Automatik: prüfen, laden, im sicheren Moment mit Countdown installieren.
+            tauri::async_runtime::spawn(updates.clone().run_auto(handle.clone(), rt.clone()));
             build_tray(&handle)?;
             apply_hotkey(&handle, &hotkey);
             spawn_emitter(handle.clone(), rt.clone());
@@ -360,6 +354,7 @@ pub fn run() {
             commands::update_preflight,
             commands::update_install,
             commands::update_later,
+            commands::update_postpone,
         ]);
 
     let app = builder.build(tauri::generate_context!()).expect("ON AIR konnte nicht starten");

@@ -235,3 +235,25 @@ test("Zusammenfassung sagt nie „Alles verbunden“, wenn Spotify fehlt", async
   await page.goto("/?state=reauth#/overview");
   await expect(page.locator(".conn-sum")).not.toContainText("Alles verbunden");
 });
+
+test("Automatisches Update: Countdown sichtbar, „Nicht jetzt“ setzt für die Sitzung aus", async ({ page }) => {
+  await page.goto("/?state=autoupdate#/overview");
+  const banner = page.locator(".auto-update-banner");
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText("installiert Version 0.2.1 in");
+  await expect(banner.getByRole("button", { name: "Jetzt installieren" })).toBeVisible();
+  await banner.getByRole("button", { name: "Nicht jetzt" }).click();
+  await expect(banner).toHaveCount(0);
+  await page.locator(".nav-item", { hasText: "Einstellungen" }).click();
+  await page.locator(".settings-nav").getByRole("button", { name: "Updates" }).click();
+  await expect(page.locator(".content")).toContainText("bis zum nächsten Start ausgesetzt");
+  // Automatik bleibt eingeschaltet – nur diese Sitzung ist ausgesetzt.
+  await expect(page.locator(".setting-row", { hasText: "Updates automatisch installieren" }).locator("input[role=switch]")).toBeChecked();
+});
+
+test("Automatisches Update: Countdown auch im Kompaktfenster", async ({ page }) => {
+  await page.setViewportSize({ width: 380, height: 560 });
+  await page.goto("/?state=autoupdate#/compact");
+  await inViewport(page, ".auto-update-banner button:has-text('Nicht jetzt')");
+  await noHorizontalOverflow(page);
+});

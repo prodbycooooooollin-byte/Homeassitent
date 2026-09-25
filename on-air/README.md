@@ -26,7 +26,8 @@ Weitere Ansichten (Browser-Vorschau mit Beispieldaten): [docs/screenshots](docs/
 - Optional **Kanalpunkte-Requests** über eine eigene, von ON AIR verwaltete Belohnung –
   Erfüllen erst nach beobachtetem Start, Ablehnen erstattet die Punkte
 - **Streamplanung**: Requests nur annehmen, solange sie vor dem Streamende noch passen
-- **Integrierter Updater** mit signierten GitHub-Releases – nie ungefragte Installation
+- **Automatische Updates** über signierte GitHub-Releases – installiert nur in einem ruhigen
+  Moment (nie während eines Livestreams), mit Countdown und „Nicht jetzt“
 - OBS-Widgets *Minimal*, *Glass*, *Queue* mit Live-Vorschau, plus Now-Playing-Textdatei
 - Tray-Betrieb, optionaler Autostart, Kompaktmodus für den zweiten Monitor, Stream-Profile,
   Verlauf mit erneutem Anfragen, Diagnose und anonymisierter Diagnosebericht
@@ -56,9 +57,9 @@ Installer auf `windows-latest` und lädt ihn als Artefakt `on-air-windows-instal
 ## Tests
 
 ```bash
-cargo test -p onair-core   # 63 Rust-Tests inkl. Abnahmekriterien (simuliert)
+cargo test -p onair-core   # 66 Rust-Tests inkl. Abnahmekriterien (simuliert)
 npm run typecheck
-npx playwright test        # 40 UI-Tests (Layout, Zustände, Bedienung)
+npx playwright test        # 42 UI-Tests (Layout, Zustände, Bedienung)
 ```
 
 Details und Abdeckung: [docs/TESTS.md](docs/TESTS.md)

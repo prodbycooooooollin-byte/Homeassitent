@@ -329,13 +329,16 @@ impl Default for ChannelPointsSettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UpdateSettings {
-    /// Beim App-Start im Hintergrund nach Updates suchen (nie automatisch installieren).
+    /// Im Hintergrund nach Updates suchen (beim Start und alle paar Stunden).
     pub check_on_start: bool,
+    /// Updates automatisch laden und in einem sicheren Moment installieren
+    /// (nie während eines erkannten Livestreams oder einer Streamplanung; mit Countdown).
+    pub auto_install: bool,
 }
 
 impl Default for UpdateSettings {
     fn default() -> Self {
-        Self { check_on_start: true }
+        Self { check_on_start: true, auto_install: true }
     }
 }
 
