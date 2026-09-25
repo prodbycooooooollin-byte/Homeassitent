@@ -26,8 +26,12 @@ npm run start:sim    # direkt im getrennten Simulationsmodus
 npm run demo -- jinx-armor-stack --details   # Partie-Simulation im Terminal
 npm test             # 51 Tests: fachliche Szenarien, Adapter, Patch-Sync
 npm run typecheck
-npm run dist:win     # Windows-Installer/Portable (electron-builder)
+npm run dist:win     # Windows-Installer/Portable (electron-builder) → release/
 ```
+
+### Release (GitHub Actions)
+
+Der Workflow `.github/workflows/release-lol-build-assistant.yml` baut auf `windows-latest` den Installer und die portable EXE, führt vorher Typprüfung und Tests aus und veröffentlicht beides als GitHub-Release (Vorabversion). Auslöser ist ein Tag `lol-v<version>`, z. B. `git tag lol-v0.1.0 && git push origin lol-v0.1.0`, oder „Run workflow“ mit Tag-Eingabe. Die EXE ist nicht signiert, deshalb kann Windows SmartScreen warnen.
 
 ### Bedienung
 
