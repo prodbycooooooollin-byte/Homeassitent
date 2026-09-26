@@ -21,15 +21,17 @@ export interface HandlerDeps {
   now: () => number;
   /** Nur hinter einem vertrauenswürdigen Reverse Proxy: Client-IP aus X-Forwarded-For. */
   trustProxy?: boolean;
+  rateLimits?: { perSocket: [number, number]; perEvent: [number, number]; joinPerIp: [number, number] };
 }
 
-export function attachSocketHandlers({ io, rooms, log, now, trustProxy = false }: HandlerDeps): { limiters: RateLimiter[] } {
+export function attachSocketHandlers({ io, rooms, log, now, trustProxy = false, rateLimits }: HandlerDeps): { limiters: RateLimiter[] } {
   // Gesamtbudget je Socket und zusätzlich je Ereignistyp, damit z. B. Reaktionen
   // niemals Stimmen oder Wiedergabemeldungen verdrängen.
-  const perSocket = new RateLimiter(80, 15, now);
-  const perEvent = new RateLimiter(20, 4, now);
+  const rl = rateLimits ?? { perSocket: [80, 15], perEvent: [20, 4], joinPerIp: [10, 1 / 6] };
+  const perSocket = new RateLimiter(rl.perSocket[0], rl.perSocket[1], now);
+  const perEvent = new RateLimiter(rl.perEvent[0], rl.perEvent[1], now);
   // Raumbeitritt/-erstellung: 10 Versuche, 1 alle 6 s je IP (Schutz gegen Code-Raten).
-  const joinPerIp = new RateLimiter(10, 1 / 6, now);
+  const joinPerIp = new RateLimiter(rl.joinPerIp[0], rl.joinPerIp[1], now);
   const sweep = setInterval(() => {
     perSocket.sweep();
     perEvent.sweep();

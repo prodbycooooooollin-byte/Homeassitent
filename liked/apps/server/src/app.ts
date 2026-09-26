@@ -121,7 +121,7 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
     }
   });
 
-  attachSocketHandlers({ io, rooms, log, now, trustProxy: config.trustProxy });
+  attachSocketHandlers({ io, rooms, log, now, trustProxy: config.trustProxy, rateLimits: config.rateLimits });
 
   return {
     http,

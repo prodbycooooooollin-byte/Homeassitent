@@ -24,6 +24,8 @@ export interface ServerConfig {
   /** 32-Byte-Schlüssel (base64) zur Verschlüsselung gespeicherter TikTok-Tokens. */
   tokenEncryptionKey: Buffer | null;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
+  /** Token-Buckets für Socket-Ereignisse (Kapazität, Nachfüllung pro Sekunde). */
+  rateLimits: { perSocket: [number, number]; perEvent: [number, number]; joinPerIp: [number, number] };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -53,7 +55,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
         }
       : null,
     tokenEncryptionKey: key,
-    logLevel: (env.LOG_LEVEL as ServerConfig['logLevel']) ?? 'info'
+    logLevel: (env.LOG_LEVEL as ServerConfig['logLevel']) ?? 'info',
+    // Eine echte Runde dauert ≥ 15 s; diese Limits bremsen nur Missbrauch.
+    rateLimits: { perSocket: [80, 15], perEvent: [20, 4], joinPerIp: [10, 1 / 6] }
   };
 }
 

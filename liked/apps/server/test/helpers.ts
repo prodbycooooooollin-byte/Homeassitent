@@ -10,6 +10,9 @@ export function testConfig(over: Partial<ServerConfig> = {}): ServerConfig {
   return {
     ...base,
     reconnectWindowMs: 600,
+    // Testrunden laufen ~100-mal schneller als echte; Ereignislimits entsprechend großzügig.
+    // Das Beitrittslimit je IP bleibt wie im Betrieb (eigener Test).
+    rateLimits: { ...base.rateLimits, perSocket: [5000, 1000], perEvent: [2000, 500] },
     timings: {
       ...base.timings,
       // Großzügig genug für langsame CI-Runner, aber deutlich kürzer als im Spiel.
