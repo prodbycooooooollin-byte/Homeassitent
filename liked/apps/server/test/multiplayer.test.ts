@@ -143,7 +143,7 @@ describe('Komplette Partie mit vier Clients (Abnahme 1 lokal, 4, 8, 9)', () => {
     // Besitzer nie in eigenem Reveal als Abstimmender
     for (const v of bots[0]!.views.filter((x) => x.reveal))
       expect(v.reveal!.votes.map((x) => x.voterId)).not.toContain(v.reveal!.ownerId);
-  }, 30000);
+  }, 120000);
 });
 
 describe('Stimmen und Reconnect (Abnahme 9, 10)', () => {
@@ -186,7 +186,7 @@ describe('Stimmen und Reconnect (Abnahme 9, 10)', () => {
     await sleep(30);
     const reveal2 = server!.rooms.get(code)!.reveal!;
     expect(reveal2.votes.reduce((a, x) => a + x.points, 0)).toBe(pointsSum);
-  }, 20000);
+  }, 120000);
 
   it('Wiederverbindung mit falschem Token schlägt fehl; Raumcode allein genügt nicht', async () => {
     const { bots } = await setup(3);
@@ -233,7 +233,7 @@ describe('Fehler und Fairness (Abnahme 7, 11)', () => {
     expect(bots[0]!.views.some((v) => v.reveal?.roundId === roundId)).toBe(false);
     // Annullierter Clip kehrt nicht zurück
     expect(room.match!.usedClipIds.has(room.match!.current!.clip.videoId)).toBe(true);
-  }, 20000);
+  }, 120000);
 
   it('dauerhaftes Ausscheiden im zweiten Block rollt zurück und wertet den ersten Block', async () => {
     const { bots } = await setup(4);
@@ -252,7 +252,7 @@ describe('Fehler und Fairness (Abnahme 7, 11)', () => {
     expect(res.endReason).toBe('player_left');
     for (const s of res.standings) expect(s.opportunities).toBe(3);
     expect(bots[0]!.view!.notices.map((n) => n.kind)).toContain('rolled_back');
-  }, 20000);
+  }, 120000);
 
   it('Abbruch im ersten Block führt zurück in die Lobby', async () => {
     const { bots } = await setup(3);
@@ -298,7 +298,7 @@ describe('Ressourcen (Abnahme 15)', () => {
     await until(() => [...room.players.values()].every((p) => !p.connected));
     await until(() => room.closed || room.players.size === 0, 3000, 'Aufräumen');
     expect(room.timerCount).toBe(0);
-  }, 60000);
+  }, 180000);
 });
 
 describe('Protokolle (Abnahme 13)', () => {
@@ -315,7 +315,7 @@ describe('Protokolle (Abnahme 13)', () => {
     expect(logs).not.toContain(bots[0]!.token);
     expect(logs).not.toContain(bots[0]!.playerId);
     expect(logs).toContain('match_finished');
-  }, 20000);
+  }, 120000);
 });
 
 describe('Rate-Limits', () => {

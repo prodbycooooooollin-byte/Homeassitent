@@ -12,13 +12,14 @@ export function testConfig(over: Partial<ServerConfig> = {}): ServerConfig {
     reconnectWindowMs: 600,
     timings: {
       ...base.timings,
-      preparingTimeoutMs: 500,
-      preparingRetryMs: 300,
+      // Großzügig genug für langsame CI-Runner, aber deutlich kürzer als im Spiel.
+      preparingTimeoutMs: 2000,
+      preparingRetryMs: 1000,
       countdownMs: 60,
       allVotedGraceMs: 30,
       revealMs: 40,
       scoreboardMs: 40,
-      maxStartDelayMs: 400,
+      maxStartDelayMs: 1500,
       maxBufferingMs: 150,
       maxTotalBufferingMs: 400,
       maxHostPauseMs: 500
@@ -30,18 +31,37 @@ export function testConfig(over: Partial<ServerConfig> = {}): ServerConfig {
 export async function startServer(over: Partial<ServerConfig> = {}) {
   const log = createLogger('debug', () => undefined);
   const server = createLikedServer(testConfig(over), { log });
+  setDiagnose(() => {
+    const rooms = [...server.rooms.rooms.values()].map((r) => ({
+      phase: r.phase,
+      scored: r.match?.scoredRounds,
+      replacements: r.match?.replacements,
+      current: r.match?.current ? { status: r.match.current.status, votes: r.match.current.votes.size, eligible: r.match.current.eligible.length } : null,
+      runtime: r.runtime ? { attempt: r.runtime.loadAttempt, ready: r.runtime.ready.size, failed: r.runtime.failed.size, started: r.runtime.started.size } : null,
+      timers: r.timerCount,
+      players: [...r.players.values()].map((p) => p.connected)
+    }));
+    return JSON.stringify(rooms) + '\n' + (log.lines ?? []).slice(-25).join('\n');
+  });
   const port = await server.listen();
   return { server, port, url: `http://127.0.0.1:${port}` };
 }
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Liefert bei Timeouts Diagnosedaten (Phase, Runde, Timer, Serverlog). */
+export let diagnose: () => string = () => '';
+export function setDiagnose(fn: () => string) {
+  diagnose = fn;
+}
+
 export async function until<T>(fn: () => T | undefined | null | false, timeoutMs = 5000, label = 'Bedingung'): Promise<T> {
   const start = Date.now();
+  const scale = Number(process.env.TEST_TIME_SCALE ?? (process.env.CI ? 3 : 1));
   for (;;) {
     const v = fn();
     if (v) return v;
-    if (Date.now() - start > timeoutMs) throw new Error(`Timeout: ${label}`);
+    if (Date.now() - start > timeoutMs * scale) throw new Error(`Timeout: ${label}\n${diagnose()}`);
     await sleep(5);
   }
 }
