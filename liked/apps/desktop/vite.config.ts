@@ -5,6 +5,8 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   publicDir: 'public',
+  // Keine PostCSS-Konfiguration aus übergeordneten Verzeichnissen (anderes Projekt im Repo-Root) übernehmen.
+  css: { postcss: { plugins: [] } },
   build: {
     outDir: 'dist/renderer',
     emptyOutDir: true,
