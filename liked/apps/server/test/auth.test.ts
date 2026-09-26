@@ -196,6 +196,16 @@ describe('Server ohne TikTok-Konfiguration', () => {
 });
 
 describe('TikTok-URL-Verifizierung', () => {
+  it('liest Dateinamen tolerant ein und meldet fehlende Werte', async () => {
+    const { parseTikTokVerification } = await import('../src/config.js');
+    expect(parseTikTokVerification({ TIKTOK_VERIFY_FILE: ' "https://x.onrender.com/auth/tiktok/callback/tiktokAbC123.txt" ', TIKTOK_VERIFY_CONTENT: 'sig=1\n' } as never))
+      .toEqual({ tiktokVerification: { file: 'tiktokAbC123.txt', content: 'sig=1' }, tiktokVerificationStatus: 'ok' });
+    expect(parseTikTokVerification({ TIKTOK_VERIFY_FILE: 'tiktokAbC123.txt' } as never).tiktokVerificationStatus).toBe('missing_content');
+    expect(parseTikTokVerification({ TIKTOK_VERIFY_CONTENT: 'x' } as never).tiktokVerificationStatus).toBe('missing_file');
+    expect(parseTikTokVerification({} as never).tiktokVerificationStatus).toBe('not_set');
+    expect(parseTikTokVerification({ TIKTOK_VERIFY_FILE: 'bad name.txt', TIKTOK_VERIFY_CONTENT: 'x' } as never).tiktokVerificationStatus).toBe('invalid_file');
+  });
+
   it('liefert die Verifizierungsdatei unter dem Callback-Präfix und im Root aus', async () => {
     const s = await startServer({ tiktokVerification: { file: 'tiktokAbCdEf123456.txt', content: 'tiktok-developers-site-verification=XYZ' } });
     server = s.server;

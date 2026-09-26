@@ -28,6 +28,8 @@ export interface ServerConfig {
   rateLimits: { perSocket: [number, number]; perEvent: [number, number]; joinPerIp: [number, number] };
   /** TikTok-Domain-/URL-Prefix-Verifizierung: Dateiname → Inhalt (öffentlich, kein Secret). */
   tiktokVerification: { file: string; content: string } | null;
+  /** Warum keine Verifizierung aktiv ist (für /healthz, ohne Inhalte). */
+  tiktokVerificationStatus: 'ok' | 'not_set' | 'missing_file' | 'missing_content' | 'invalid_file';
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -60,10 +62,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     logLevel: (env.LOG_LEVEL as ServerConfig['logLevel']) ?? 'info',
     // Eine echte Runde dauert ≥ 15 s; diese Limits bremsen nur Missbrauch.
     rateLimits: { perSocket: [80, 15], perEvent: [20, 4], joinPerIp: [10, 1 / 6] },
-    tiktokVerification:
-      env.TIKTOK_VERIFY_FILE && env.TIKTOK_VERIFY_CONTENT && /^tiktok[A-Za-z0-9]{8,64}\.txt$/.test(env.TIKTOK_VERIFY_FILE.trim())
-        ? { file: env.TIKTOK_VERIFY_FILE.trim(), content: env.TIKTOK_VERIFY_CONTENT.trim() }
-        : null
+    ...parseTikTokVerification(env)
   };
 }
 
@@ -75,4 +74,20 @@ function scaleTimings(scale: number): Timings {
   t.scoreboardMs = Math.round(t.scoreboardMs * f);
   t.countdownMs = Math.max(1000, Math.round(t.countdownMs * f));
   return t;
+}
+
+/**
+ * Tolerantes Einlesen der TikTok-Verifizierung: akzeptiert auch eine eingefügte URL oder einen Pfad
+ * als Dateinamen sowie Anführungszeichen/Leerzeichen um die Werte.
+ */
+export function parseTikTokVerification(env: NodeJS.ProcessEnv): Pick<ServerConfig, 'tiktokVerification' | 'tiktokVerificationStatus'> {
+  const clean = (v?: string) => (v ?? '').trim().replace(/^["']|["']$/g, '').trim();
+  const rawFile = clean(env.TIKTOK_VERIFY_FILE);
+  const content = clean(env.TIKTOK_VERIFY_CONTENT);
+  if (!rawFile && !content) return { tiktokVerification: null, tiktokVerificationStatus: 'not_set' };
+  if (!rawFile) return { tiktokVerification: null, tiktokVerificationStatus: 'missing_file' };
+  if (!content) return { tiktokVerification: null, tiktokVerificationStatus: 'missing_content' };
+  const file = rawFile.split(/[\\/]/).pop()!.split('?')[0]!.trim();
+  if (!/^[A-Za-z0-9_-]{4,100}\.txt$/.test(file)) return { tiktokVerification: null, tiktokVerificationStatus: 'invalid_file' };
+  return { tiktokVerification: { file, content }, tiktokVerificationStatus: 'ok' };
 }
