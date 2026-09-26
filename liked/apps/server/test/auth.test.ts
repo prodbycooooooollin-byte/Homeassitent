@@ -194,3 +194,16 @@ describe('Server ohne TikTok-Konfiguration', () => {
     expect(await r.json()).toEqual({ error: 'not_configured', configured: false });
   });
 });
+
+describe('TikTok-URL-Verifizierung', () => {
+  it('liefert die Verifizierungsdatei unter dem Callback-Präfix und im Root aus', async () => {
+    const s = await startServer({ tiktokVerification: { file: 'tiktokAbCdEf123456.txt', content: 'tiktok-developers-site-verification=XYZ' } });
+    server = s.server;
+    for (const path of ['/auth/tiktok/callback/tiktokAbCdEf123456.txt', '/tiktokAbCdEf123456.txt']) {
+      const r = await fetch(`${s.url}${path}`);
+      expect(r.status).toBe(200);
+      expect(await r.text()).toBe('tiktok-developers-site-verification=XYZ');
+    }
+    expect((await fetch(`${s.url}/auth/tiktok/callback/andere.txt`)).status).toBe(404);
+  });
+});

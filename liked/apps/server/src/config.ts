@@ -26,6 +26,8 @@ export interface ServerConfig {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   /** Token-Buckets für Socket-Ereignisse (Kapazität, Nachfüllung pro Sekunde). */
   rateLimits: { perSocket: [number, number]; perEvent: [number, number]; joinPerIp: [number, number] };
+  /** TikTok-Domain-/URL-Prefix-Verifizierung: Dateiname → Inhalt (öffentlich, kein Secret). */
+  tiktokVerification: { file: string; content: string } | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -57,7 +59,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     tokenEncryptionKey: key,
     logLevel: (env.LOG_LEVEL as ServerConfig['logLevel']) ?? 'info',
     // Eine echte Runde dauert ≥ 15 s; diese Limits bremsen nur Missbrauch.
-    rateLimits: { perSocket: [80, 15], perEvent: [20, 4], joinPerIp: [10, 1 / 6] }
+    rateLimits: { perSocket: [80, 15], perEvent: [20, 4], joinPerIp: [10, 1 / 6] },
+    tiktokVerification:
+      env.TIKTOK_VERIFY_FILE && env.TIKTOK_VERIFY_CONTENT && /^tiktok[A-Za-z0-9]{8,64}\.txt$/.test(env.TIKTOK_VERIFY_FILE.trim())
+        ? { file: env.TIKTOK_VERIFY_FILE.trim(), content: env.TIKTOK_VERIFY_CONTENT.trim() }
+        : null
   };
 }
 

@@ -50,6 +50,13 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
     void (async () => {
       const url = new URL(req.url ?? '/', 'http://localhost');
       const ip = clientIp(req);
+      // TikTok-Verifizierung: Datei unter jedem Pfad-Präfix ausliefern (z. B. /auth/tiktok/callback/<datei>).
+      const verify = config.tiktokVerification;
+      if (verify && req.method === 'GET' && url.pathname.endsWith(`/${verify.file}`)) {
+        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(verify.content);
+        return;
+      }
       if (url.pathname === '/healthz') {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(
