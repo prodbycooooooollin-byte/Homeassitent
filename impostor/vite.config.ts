@@ -7,6 +7,9 @@ export default defineConfig({
   root: 'client',
   base: './',
   plugins: [react()],
+  // Eigene (leere) PostCSS-Konfiguration: verhindert, dass Vite die Tailwind-Konfiguration
+  // des übergeordneten Repos (../postcss.config.js) lädt.
+  css: { postcss: {} },
   define: {
     __DEFAULT_SERVER__: JSON.stringify(process.env.IMPOSTOR_SERVER_URL ?? ''),
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? 'dev'),

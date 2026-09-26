@@ -185,10 +185,13 @@ Tastaturbeitritt; 1366 × 768 und 1920 × 1080.
 
 ## Windows-App bauen
 
-**Automatisch (empfohlen):** Der Workflow `.github/workflows/impostor.yml` testet und baut bei jedem Push auf `main` bzw.
-`claude/**` (Änderungen unter `impostor/`) auf `windows-latest` den NSIS-Installer und die portable EXE und lädt sie als
-Artefakt und Pre-Release `impostor-v<version>` hoch. Die eingebaute Serveradresse kommt aus der Repository-Variable
-`IMPOSTOR_SERVER_URL` (*Settings → Secrets and variables → Actions → Variables*).
+**Automatisch (empfohlen):** Der Workflow `.github/workflows/release-impostor.yml` („Release Impostor (Windows-EXE)")
+baut auf `windows-latest` den NSIS-Installer und die portable EXE und lädt sie als Artefakt und Pre-Release
+`impostor-v<version>` hoch. Er läuft bei jedem Push auf `main` bzw. `claude/**` mit Änderungen unter `impostor/`, bei
+Tags `impostor-v*` und manuell über *Actions → Release Impostor (Windows-EXE) → Run workflow* (optional mit Tag und
+Serveradresse). Die eingebaute Serveradresse kommt aus diesem Eingabefeld oder der Repository-Variable
+`IMPOSTOR_SERVER_URL` (*Settings → Secrets and variables → Actions → Variables*). Tests laufen separat in
+`.github/workflows/impostor.yml`.
 
 **Lokal unter Windows:**
 
@@ -271,5 +274,5 @@ außerhalb von Docker.
   Server. Anleitung siehe oben.
 - Das Docker-Image selbst konnte in dieser Umgebung nicht gebaut werden (Docker-Hub-Limit, kein Proxy im Container).
 - Die App wurde nicht auf einem echten Windows-Rechner gestartet; NSIS-Installer mit eingebettetem Icon entsteht im
-  Windows-CI-Job, dessen erster Lauf noch aussteht.
+  Windows-Release-Workflow.
 - Keine Code-Signatur, keine eigenen Wortpakete, keine Wiederaufnahme nach Serverabsturz, keine horizontale Skalierung.
