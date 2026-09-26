@@ -1007,3 +1007,16 @@
 .score-list li.me .score-delta {
   color: #062520;
 }
+.rs-front {
+  gap: 3px;
+  padding: 6px;
+}
+.rs-front .avatar {
+  width: 34%;
+}
+.rs-front .pc-name {
+  font-size: 12.5px;
+}
+.rs-front .rs-role {
+  font-size: 10px;
+}
