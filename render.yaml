@@ -3,8 +3,8 @@
 # Details: liked/docs/SERVER.md, Abschnitt „Render“.
 services:
   - type: web
-    # Der Name bestimmt die Adresse https://liked-partyspiel-server.onrender.com, die fest in der App steht.
-    name: liked-partyspiel-server
+    # Der Name bestimmt die Adresse https://liked-partyspiel.onrender.com, die fest in der App steht.
+    name: liked-partyspiel
     runtime: node
     region: frankfurt
     plan: free

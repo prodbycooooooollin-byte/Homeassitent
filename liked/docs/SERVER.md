@@ -40,10 +40,10 @@ Healthcheck `/healthz`, `TRUST_PROXY=1`. Render stellt HTTPS/WSS automatisch ber
 
 1. Auf [render.com](https://render.com) anmelden und GitHub verbinden (Zugriff auf dieses Repository erlauben).
 2. **New → Blueprint** → Repository `Homeassitent` wählen → Branch wählen (nach dem Merge `main`) → **Apply**.
-3. Der Dienst heißt `liked-partyspiel-server`. Dadurch lautet die Adresse
-   **`https://liked-partyspiel-server.onrender.com`**, und genau diese Adresse ist fest in der App eingebaut
+3. Der Dienst heißt `liked-partyspiel`. Dadurch lautet die Adresse
+   **`https://liked-partyspiel.onrender.com`**, und genau diese Adresse ist fest in der App eingebaut
    (`apps/desktop/scripts/build-main.mjs`). Spieler müssen nichts eintragen.
-   Prüfen: `https://liked-partyspiel-server.onrender.com/healthz` liefert `{"ok":true,…}`.
+   Prüfen: `https://liked-partyspiel.onrender.com/healthz` liefert `{"ok":true,…}`.
 4. **Wichtig:** Zeigt Render nach dem Anlegen eine andere Adresse an (z. B. mit angehängtem Zufallskürzel, weil der
    Name vergeben war), die Konstante `DEFAULT_SERVER_URL` in `build-main.mjs` anpassen oder in GitHub die
    Actions-Variable `LIKED_SERVER_URL` setzen. Danach baut die CI einen neuen Installer.
