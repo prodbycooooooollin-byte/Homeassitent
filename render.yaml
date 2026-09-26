@@ -6,12 +6,11 @@ services:
     # Der Name bestimmt die Adresse https://liked-partyspiel-server.onrender.com, die fest in der App steht.
     name: liked-partyspiel-server
     runtime: node
-    rootDir: liked
     region: frankfurt
     plan: free
-    # Installiert nur den Server-Workspace (keine Electron-/Desktop-Pakete).
-    buildCommand: npm ci --workspace @liked/server --include-workspace-root=false --ignore-scripts && npm run build -w @liked/server
-    startCommand: node apps/server/dist/index.js
+    # Befehle laufen im Repo-Root (Root Directory leer lassen). Gebaut wird nur der LIKED-Server.
+    buildCommand: bash liked/scripts/render-build.sh
+    startCommand: node liked/apps/server/dist/index.js
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:

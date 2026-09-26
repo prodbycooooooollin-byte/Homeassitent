@@ -52,6 +52,18 @@ Die App verwendet immer den Standard-Server des installierten Builds. Nur wer un
 eine andere Adresse einträgt (z. B. den lokalen Hostmodus), weicht davon ab; „Standard-Server verwenden“ stellt
 das zurück. Ältere Installationen mit gespeicherter Adresse `localhost` werden beim Start automatisch umgestellt.
 
+**Dienst manuell angelegt (ohne Blueprint)?** Unter *Settings* genau so eintragen:
+
+| Feld | Wert |
+|---|---|
+| Root Directory | *leer lassen* |
+| Build Command | `bash liked/scripts/render-build.sh` |
+| Start Command | `node liked/apps/server/dist/index.js` |
+| Health Check Path | `/healthz` |
+
+Unter *Environment*: `NODE_VERSION=22`, `TRUST_PROXY=1`. Taucht im Log „Next.js“ auf, steht noch der alte
+Build-Befehl des Smart-Home-Projekts drin.
+
 **Grenzen des Gratis-Tarifs** (laut [Render-Doku](https://render.com/docs/free)):
 - Nach 15 Minuten ohne eingehenden Verkehr schläft der Dienst ein, das Aufwachen dauert etwa eine Minute. Die App
   weckt ihn beim Verbinden automatisch und zeigt „Server wird gestartet …“. Laufende Partien halten ihn wach,
