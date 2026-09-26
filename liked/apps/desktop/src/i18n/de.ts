@@ -209,6 +209,7 @@ export const de = {
   },
   connection: {
     lost: 'Verbindung verloren',
+    waking: 'Server wird gestartet – das kann beim ersten Verbinden bis zu einer Minute dauern …',
     reconnecting: (s: number) => `Verbinde neu … (${s} s)`,
     failed: 'Wiederverbindung fehlgeschlagen. Der Raum ist nicht mehr verfügbar.',
     serverUnreachable: 'Server nicht erreichbar. Prüfe die Server-Adresse in den Einstellungen.',

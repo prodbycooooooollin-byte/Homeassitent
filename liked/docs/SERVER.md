@@ -32,6 +32,32 @@ cp apps/server/.env.example apps/server/.env   # PUBLIC_URL, TRUST_PROXY=1, ggf.
 docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
+### Render (empfohlen für den Start: ein zentraler Server für alle)
+
+Im Repository liegt ein Blueprint (`render.yaml` im Repo-Root): Node 22, Region Frankfurt, Gratis-Tarif,
+Healthcheck `/healthz`, `TRUST_PROXY=1`. Render stellt HTTPS/WSS automatisch bereit, und `PUBLIC_URL` wird aus
+`RENDER_EXTERNAL_URL` übernommen.
+
+1. Auf [render.com](https://render.com) anmelden und GitHub verbinden (Zugriff auf dieses Repository erlauben).
+2. **New → Blueprint** → Repository `Homeassitent` wählen → Branch wählen (nach dem Merge `main`) → **Apply**.
+3. Nach dem ersten Deploy die Adresse kopieren, z. B. `https://liked-server-xxxx.onrender.com`.
+   Prüfen: `https://…onrender.com/healthz` liefert `{"ok":true,…}`.
+4. Adresse in die App bringen:
+   - sofort: jeder Spieler trägt sie unter *Einstellungen → Server* ein, **oder**
+   - dauerhaft: in GitHub unter *Settings → Secrets and variables → Actions → Variables* die Variable
+     `LIKED_SERVER_URL` anlegen. Der nächste Windows-Build nutzt sie als Standardadresse.
+
+**Grenzen des Gratis-Tarifs** (laut [Render-Doku](https://render.com/docs/free)):
+- Nach 15 Minuten ohne eingehenden Verkehr schläft der Dienst ein, das Aufwachen dauert etwa eine Minute. Die App
+  weckt ihn beim Verbinden automatisch und zeigt „Server wird gestartet …“. Laufende Partien halten ihn wach,
+  weil die Clients regelmäßig WebSocket-Nachrichten senden.
+- Das Dateisystem ist flüchtig. Räume liegen ohnehin nur im Speicher. Für den **offiziellen TikTok-Import** ist
+  aber ein dauerhafter Token-Speicher sinnvoll: dann einen bezahlten Tarif mit *Persistent Disk* wählen (z. B.
+  Mount `/data`, `DATA_DIR=/data`). Sonst müssen Spieler TikTok nach jedem Neustart neu verbinden.
+- Die TikTok-Variablen `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` und `TOKEN_ENCRYPTION_KEY` werden erst nach der
+  TikTok-Freigabe im Dashboard unter *Environment* eingetragen. Als Redirect-URL bei TikTok
+  `https://…onrender.com/auth/tiktok/callback` hinterlegen.
+
 Healthcheck: `GET /healthz` liefert `{ ok, version, protocol, uptimeSec, rooms, tiktokOfficialAdapter }`.
 Beitrittslink: `https://<domain>/join/<CODE>` öffnet eine Seite mit dem Code und einem `liked://join/<CODE>`-Link.
 

@@ -141,21 +141,26 @@ function profile() {
   return { name: s.profile.name, avatar: s.profile.avatar, deviceId: s.profile.deviceId };
 }
 
+/** Gratis-Hoster (z. B. Render Free) schlafen bei Inaktivität und brauchen bis zu ~1 min zum Aufwachen. */
+const WAKE_TIMEOUT_MS = 75_000;
+
 async function connectTo(serverUrl: string): Promise<boolean> {
   const s = ensureSocket(serverUrl);
   if (s.connected) return true;
+  // HTTP-Anfrage weckt einen schlafenden Server; der Socket versucht es parallel weiter.
+  void fetch(`${serverUrl.replace(/\/$/, '')}/healthz`, { signal: AbortSignal.timeout(WAKE_TIMEOUT_MS) }).catch(() => undefined);
   return new Promise((resolve) => {
+    const hint = window.setTimeout(() => toast(t.connection.waking, 'info', 12_000), 3000);
     const done = (ok: boolean) => {
       s.off('connect', onOk);
-      s.off('connect_error', onErr);
       window.clearTimeout(timer);
+      window.clearTimeout(hint);
       resolve(ok);
     };
     const onOk = () => done(true);
-    const onErr = () => done(false);
-    const timer = window.setTimeout(() => done(false), 8000);
+    // Einzelne Verbindungsfehler während des Aufwachens nicht als endgültig werten.
+    const timer = window.setTimeout(() => done(false), WAKE_TIMEOUT_MS);
     s.once('connect', onOk);
-    s.once('connect_error', onErr);
   });
 }
 

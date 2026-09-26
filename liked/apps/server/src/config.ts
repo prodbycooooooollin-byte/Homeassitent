@@ -28,7 +28,8 @@ export interface ServerConfig {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const port = Number(env.PORT ?? 8787);
-  const publicUrl = (env.PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/$/, '');
+  // Render setzt RENDER_EXTERNAL_URL automatisch (https://<name>.onrender.com).
+  const publicUrl = (env.PUBLIC_URL ?? env.RENDER_EXTERNAL_URL ?? `http://localhost:${port}`).replace(/\/$/, '');
   const hasTikTok = !!(env.TIKTOK_CLIENT_KEY && env.TIKTOK_CLIENT_SECRET);
   const key = env.TOKEN_ENCRYPTION_KEY ? Buffer.from(env.TOKEN_ENCRYPTION_KEY, 'base64') : null;
   if (key && key.length !== 32) throw new Error('TOKEN_ENCRYPTION_KEY muss 32 Byte (base64) lang sein');

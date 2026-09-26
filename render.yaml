@@ -1,0 +1,27 @@
+# Render-Blueprint für den LIKED-Spielserver (zentraler Server für alle Spieler).
+# Einrichten: render.com → New → Blueprint → dieses Repository wählen.
+# Details: liked/docs/SERVER.md, Abschnitt „Render“.
+services:
+  - type: web
+    name: liked-server
+    runtime: node
+    rootDir: liked
+    region: frankfurt
+    plan: free
+    # Installiert nur den Server-Workspace (keine Electron-/Desktop-Pakete).
+    buildCommand: npm ci --workspace @liked/server --include-workspace-root=false --ignore-scripts && npm run build -w @liked/server
+    startCommand: node apps/server/dist/index.js
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      # Render sitzt als Proxy davor: Client-IP für Rate-Limits aus X-Forwarded-For.
+      - key: TRUST_PROXY
+        value: '1'
+      - key: LOG_LEVEL
+        value: info
+      - key: MAX_ROOMS
+        value: '200'
+      # TikTok-Werte (TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TOKEN_ENCRYPTION_KEY) erst nach der
+      # TikTok-Freigabe im Render-Dashboard unter „Environment“ ergänzen – nie ins Repository.
