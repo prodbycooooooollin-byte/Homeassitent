@@ -146,6 +146,9 @@ export class Lobby {
     m.connected = connected;
     m.disconnectedAt = connected ? null : this.env.now();
     if (this.hasRunningMatch) this.match!.setConnected(playerId, connected);
+    // Außerhalb einer Partie soll die Lobby nicht an einem getrennten Host hängen:
+    // Hostrolle geht sofort an die am längsten anwesende verbundene Person.
+    else if (!connected && playerId === this.hostId) this.reassignHost();
     this.bump();
   }
 
@@ -272,6 +275,10 @@ export class Lobby {
   }
 
   private onMatchFinished(result: MatchResult): void {
+    result.players = result.seatOrder.map((id) => {
+      const m = this.members.get(id);
+      return { id, name: m?.name ?? 'Unbekannt', avatar: m?.avatar ?? 0 };
+    });
     if (result.outcome === 'win') {
       for (const id of result.winners) {
         const m = this.members.get(id);

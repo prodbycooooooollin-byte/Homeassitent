@@ -1,29 +1,26 @@
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import { LIMITS, isValidLobbyCode, normalizeLobbyCode } from '../../../shared/protocol.ts';
+import { DEFAULT_SETTINGS, LIMITS } from '../../../shared/protocol.ts';
+import { estimateDuration } from '../../../shared/duration.ts';
 import { useCmd, useUI } from '../App.tsx';
 import { play } from '../audio/sound.ts';
-import { useConnection } from '../net/connection.ts';
-import { useProfile } from '../state/storage.ts';
+import { connection, useConnection } from '../net/connection.ts';
+import { hostPrefs, useProfile } from '../state/storage.ts';
 import { Avatar } from '../ui/Avatar.tsx';
 import { CardBack, Dialog, Logo } from '../ui/common.tsx';
-import { IconArrowRight, IconBook, IconGear, IconUsers } from '../ui/Icons.tsx';
+import { ConnectionLine } from '../ui/ConnectionStatus.tsx';
+import { IconArrowRight, IconBook, IconChat, IconClock, IconEye, IconGear, IconUsers, IconVote } from '../ui/Icons.tsx';
+import { clearInviteFromUrl, codeProblem, extractLobbyCode, invitedCode } from './invite.ts';
 import { ProfileEditor } from './ProfileSetup.tsx';
 
-function lobbyFromUrl(): string {
-  try {
-    return normalizeLobbyCode(new URLSearchParams(location.search).get('lobby') ?? '');
-  } catch {
-    return '';
-  }
-}
+const typical = estimateDuration(5, DEFAULT_SETTINGS.maxRounds, DEFAULT_SETTINGS.turnSeconds);
 
 export function Home() {
   const conn = useConnection();
   const profile = useProfile();
   const ui = useUI();
   const cmd = useCmd();
-  const [code, setCode] = useState(lobbyFromUrl);
+  const [code, setCode] = useState(() => invitedCode() ?? '');
   const [busy, setBusy] = useState<'create' | 'join' | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [editProfile, setEditProfile] = useState(false);
@@ -32,8 +29,11 @@ export function Home() {
   const autoJoined = useRef(false);
 
   const join = async (c = code) => {
-    if (!isValidLobbyCode(c)) {
-      setJoinError('Der Code hat fünf Zeichen, z. B. „K7QXM".');
+    const problem = codeProblem(c);
+    if (problem) {
+      setJoinError(problem);
+      play('error');
+      inputRef.current?.focus();
       return;
     }
     setBusy('join');
@@ -43,17 +43,19 @@ export function Home() {
     if (!r.ok) {
       setJoinError(r.message);
       play('error');
+      inputRef.current?.focus();
     } else {
       play('join');
-      if (location.search) history.replaceState(null, '', location.pathname);
+      clearInviteFromUrl();
     }
   };
 
   // Einladungslink (?lobby=CODE): nach dem Verbinden automatisch beitreten.
   useEffect(() => {
-    if (online && !autoJoined.current && isValidLobbyCode(code) && lobbyFromUrl() === code) {
+    const invite = invitedCode();
+    if (online && !autoJoined.current && invite) {
       autoJoined.current = true;
-      void join(code);
+      void join(invite);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online]);
@@ -61,22 +63,32 @@ export function Home() {
   const create = async () => {
     setBusy('create');
     const r = await cmd({ t: 'createLobby' });
+    if (r.ok) {
+      play('join');
+      // Bewusst gespeicherte Host-Präferenzen übernehmen.
+      const prefs = hostPrefs.get();
+      if (prefs) void connection.send({ t: 'updateSettings', settings: prefs });
+    }
     setBusy(null);
-    if (r.ok) play('join');
   };
+
+  const offlineReason = !online ? 'Warte auf Verbindung zum Spielserver …' : null;
 
   return (
     <div className="home">
       <header className="home-top">
         <button className="profile-chip" onClick={() => setEditProfile(true)} aria-label={`Profil bearbeiten: ${profile.name}`}>
           <Avatar id={profile.avatar} size={36} />
-          <span>{profile.name}</span>
+          <span className="profile-chip-name">{profile.name}</span>
+          <span className="profile-chip-edit" aria-hidden="true">
+            ändern
+          </span>
         </button>
         <div className="top-actions">
-          <button className="icon-btn" onClick={ui.openRules} aria-label="Spielregeln">
-            <IconBook />
+          <button className="btn btn-ghost btn-small" onClick={ui.openRules}>
+            <IconBook size={18} /> So funktioniert’s
           </button>
-          <button className="icon-btn" onClick={ui.openSettings} aria-label="Einstellungen">
+          <button className="icon-btn" onClick={ui.openSettings} aria-label="Einstellungen" title="Einstellungen">
             <IconGear />
           </button>
         </div>
@@ -105,35 +117,49 @@ export function Home() {
           </div>
           <Logo />
           <p className="tagline">Alle kennen das Wort. Eine Person nicht. Findet sie – oder bluff dich durch.</p>
+          <ul className="facts" aria-label="Auf einen Blick">
+            <li>
+              <IconUsers size={18} /> {LIMITS.minPlayers}–{LIMITS.maxPlayers} Personen
+            </li>
+            <li>
+              <IconClock size={18} /> {typical.label} pro Partie*
+            </li>
+            <li>
+              <IconChat size={18} /> Hinweise tippt ihr in der App – reden gern parallel über Discord o. Ä.
+            </li>
+          </ul>
         </div>
 
         <div className="home-actions">
-          <motion.button
-            className="action-card paper action-create"
-            onClick={create}
-            disabled={!online || busy !== null}
-            whileHover={{ y: -6, rotate: -1 }}
-            whileTap={{ scale: 0.97 }}
-            onMouseEnter={() => play('hover')}
-          >
-            <span className="action-icon">
+          <section className="action-card paper action-create" aria-labelledby="create-title">
+            <span className="action-icon" aria-hidden="true">
               <IconUsers size={30} />
             </span>
-            <span className="action-title">Lobby erstellen</span>
-            <span className="action-sub">Du bist Host und lädst per Code ein.</span>
-          </motion.button>
+            <h2 className="action-title" id="create-title">
+              Neue Lobby
+            </h2>
+            <p className="action-sub">Du bist Host, legst die Regeln fest und lädst per Code, Link oder QR-Code ein.</p>
+            <button className="btn btn-primary btn-lg btn-block" onClick={create} disabled={!online || busy !== null} title={offlineReason ?? undefined}>
+              {busy === 'create' ? 'Erstelle …' : 'Lobby erstellen'} <IconArrowRight />
+            </button>
+          </section>
 
-          <motion.form
+          <form
             className="action-card paper action-join"
+            aria-labelledby="join-title"
             onSubmit={(e) => {
               e.preventDefault();
               void join();
             }}
-            whileHover={{ y: -6, rotate: 1 }}
           >
-            <span className="action-title">Lobby beitreten</span>
-            <label className="sr-only" htmlFor="join-code">
-              Lobby-Code
+            <span className="action-icon" aria-hidden="true">
+              <IconArrowRight size={30} />
+            </span>
+            <h2 className="action-title" id="join-title">
+              Lobby beitreten
+            </h2>
+            <label className="action-sub" htmlFor="join-code">
+              Code eingeben oder Einladungslink einfügen
             </label>
             <div className="code-input-wrap" onClick={() => inputRef.current?.focus()}>
               <input
@@ -142,15 +168,15 @@ export function Home() {
                 className="code-input"
                 value={code}
                 onChange={(e) => {
-                  setCode(normalizeLobbyCode(e.target.value));
+                  setCode(extractLobbyCode(e.target.value));
                   setJoinError(null);
                 }}
-                maxLength={LIMITS.lobbyCodeLength}
                 autoComplete="off"
+                autoCapitalize="characters"
                 spellCheck={false}
+                inputMode="text"
                 aria-invalid={!!joinError}
                 aria-describedby="join-error"
-                placeholder="CODE"
               />
               <div className="code-slots" aria-hidden="true">
                 {Array.from({ length: LIMITS.lobbyCodeLength }, (_, i) => (
@@ -163,19 +189,47 @@ export function Home() {
             <span id="join-error" className="join-error" role="alert">
               {joinError}
             </span>
-            <button className="btn btn-primary" type="submit" disabled={!online || busy !== null || code.length < LIMITS.lobbyCodeLength}>
-              Beitreten <IconArrowRight />
+            <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={!online || busy !== null || code.length === 0} title={offlineReason ?? undefined}>
+              {busy === 'join' ? 'Trete bei …' : 'Beitreten'} <IconArrowRight />
             </button>
-          </motion.form>
+          </form>
         </div>
-        <p className={`server-status ${online ? 'ok' : ''}`}>
-          <span className="dot" aria-hidden="true" />
-          {online ? 'Mit dem Spielserver verbunden' : conn.failures > 2 ? 'Server nicht erreichbar – Adresse in den Einstellungen prüfen' : 'Verbinde mit dem Spielserver …'}
-        </p>
+
+        <section className="how" aria-labelledby="how-title">
+          <h2 id="how-title" className="how-title">
+            So funktioniert’s
+          </h2>
+          <ol className="how-steps">
+            <li>
+              <IconEye size={22} />
+              <span>
+                <strong>Rolle ansehen</strong>Alle außer dem Impostor sehen das geheime Wort.
+              </span>
+            </li>
+            <li>
+              <IconChat size={22} />
+              <span>
+                <strong>Hinweise geben</strong>Reihum ein kurzer Hinweis – ohne das Wort zu verraten.
+              </span>
+            </li>
+            <li>
+              <IconVote size={22} />
+              <span>
+                <strong>Diskutieren & abstimmen</strong>Findet den Impostor. Er darf bis zur Wahl einmal das Wort raten.
+              </span>
+            </li>
+          </ol>
+          <button className="btn btn-ghost btn-small" onClick={ui.openRules}>
+            Alle Regeln lesen
+          </button>
+        </section>
+
+        <ConnectionLine />
+        <p className="footnote">* Schätzung für 5 Personen mit Standardregeln. Abstimmungen und Rateversuche können eine Partie früher beenden.</p>
       </main>
 
-      <Dialog open={editProfile} onClose={() => setEditProfile(false)} title="Profil">
-        <ProfileEditor submitLabel="Speichern" onDone={() => setEditProfile(false)} />
+      <Dialog open={editProfile} onClose={() => setEditProfile(false)} title="Profil bearbeiten">
+        <ProfileEditor submitLabel="Speichern" onDone={() => setEditProfile(false)} onCancel={() => setEditProfile(false)} />
       </Dialog>
     </div>
   );

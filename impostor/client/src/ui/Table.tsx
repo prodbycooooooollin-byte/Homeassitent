@@ -92,10 +92,10 @@ export function SeatCard({
         </span>
       )}
       <Avatar id={player.avatar} size={52} title={player.name} />
-      <span className="pc-name">
+      <span className="pc-name" title={player.name}>
         {player.name}
-        {flags.isMe && <span className="me-tag">du</span>}
       </span>
+      {flags.isMe && <span className="me-tag">du</span>}
       <span className="seat-status" aria-hidden="true">
         {!player.connected && (
           <span className="chip chip-warn">

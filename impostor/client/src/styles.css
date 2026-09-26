@@ -111,8 +111,7 @@ p {
 .app {
   position: relative;
   height: 100%;
-  min-height: 640px;
-  min-width: 1024px;
+  min-height: 100%;
   background:
     var(--room-noise),
     radial-gradient(1200px 700px at 50% 45%, #1b2544 0%, #111830 45%, var(--bg-0) 100%);
@@ -757,7 +756,6 @@ p {
   text-align: left;
   min-height: 230px;
   border: 1px solid var(--paper-edge);
-  cursor: pointer;
 }
 .action-card:disabled {
   opacity: 0.6;
@@ -2507,9 +2505,9 @@ button.reveal-card:hover .flip-inner {
   text-align: right;
 }
 .rules {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 .rules section {
   display: flex;

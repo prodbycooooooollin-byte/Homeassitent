@@ -1,13 +1,22 @@
 import { useSyncExternalStore } from 'react';
-import { AVATAR_COUNT, LIMITS, type Profile } from '../../../shared/protocol.ts';
+import { AVATAR_COUNT, type LobbySettings } from '../../../shared/protocol.ts';
+import {
+  sanitizeHostPrefs,
+  sanitizeProfile,
+  sanitizeSettings,
+  type LocalSettings,
+  type StoredProfile,
+} from './sanitize.ts';
 
-/** Kleiner, lokal gespeicherter Store (localStorage), robust gegen gesperrten Speicher. */
-function read<T>(key: string, fallback: T): T {
+export { cleanName, nameProblem, type LocalSettings, type StoredProfile } from './sanitize.ts';
+
+/** Liest JSON aus localStorage; robust gegen gesperrten Speicher und kaputte Einträge. */
+function readJson(key: string): unknown {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
+    return raw ? JSON.parse(raw) : null;
   } catch {
-    return fallback;
+    return null;
   }
 }
 
@@ -19,70 +28,28 @@ function write(key: string, value: unknown): void {
   }
 }
 
-function createStore<T extends object>(key: string, fallback: T) {
-  let value = read(key, fallback);
+function createStore<T extends object>(key: string, load: (raw: unknown) => T) {
+  let value = load(readJson(key));
+  // Bereinigte/migrierte Werte sofort zurückschreiben (z. B. alte Serveradressen entfernen).
+  write(key, value);
   const listeners = new Set<() => void>();
   return {
     get: () => value,
     set(patch: Partial<T>) {
-      value = { ...value, ...patch };
+      value = load({ ...value, ...patch });
       write(key, value);
       listeners.forEach((l) => l());
     },
     subscribe(l: () => void) {
       listeners.add(l);
-      return () => listeners.delete(l);
+      return () => {
+        listeners.delete(l);
+      };
     },
   };
 }
 
-export interface LocalSettings {
-  sfxVolume: number;
-  musicVolume: number;
-  muted: boolean;
-  /** 'system' folgt der Betriebssystem-Einstellung */
-  reducedMotion: 'system' | 'on' | 'off';
-  privacyMode: boolean;
-  onboardingDone: boolean;
-  serverUrl: string;
-  historyView: 'rounds' | 'players';
-}
-
-export const settingsStore = createStore<LocalSettings>('impostor.settings', {
-  sfxVolume: 0.7,
-  musicVolume: 0.25,
-  muted: false,
-  reducedMotion: 'system',
-  privacyMode: false,
-  onboardingDone: false,
-  serverUrl: '',
-  historyView: 'rounds',
-});
-
-export function useSettings(): LocalSettings {
-  return useSyncExternalStore(settingsStore.subscribe, settingsStore.get);
-}
-
-export interface StoredProfile extends Profile {
-  set: boolean;
-}
-
-export const profileStore = createStore<StoredProfile>(`impostor.profile${slotSuffix()}`, {
-  name: '',
-  avatar: Math.floor(Math.random() * AVATAR_COUNT),
-  set: false,
-});
-
-export function useProfile(): StoredProfile {
-  return useSyncExternalStore(profileStore.subscribe, profileStore.get);
-}
-
-export function cleanName(raw: string): string {
-  return raw.replace(/\s+/g, ' ').trim().slice(0, LIMITS.nameMax);
-}
-
 /**
- * Sitzungstoken des Gastzugangs (kein Konto).
  * Für lokale Tests mehrerer Spieler in einem Browser: `?slot=2` usw. trennt Token
  * und Profil je Tab (sonst übernimmt ein zweiter Tab dieselbe Sitzung).
  */
@@ -96,10 +63,41 @@ function slotSuffix(): string {
 }
 const SLOT = slotSuffix();
 
+export const settingsStore = createStore<LocalSettings>('impostor.settings', sanitizeSettings);
+
+export function useSettings(): LocalSettings {
+  return useSyncExternalStore(settingsStore.subscribe, settingsStore.get);
+}
+
+const randomAvatar = Math.floor(Math.random() * AVATAR_COUNT);
+export const profileStore = createStore<StoredProfile>(`impostor.profile${SLOT}`, (raw) => sanitizeProfile(raw, randomAvatar));
+
+export function useProfile(): StoredProfile {
+  return useSyncExternalStore(profileStore.subscribe, profileStore.get);
+}
+
+/** Zuletzt als Host verwendete Lobby-Regeln – werden beim Erstellen einer Lobby übernommen. */
+export const hostPrefs = {
+  get(): Partial<LobbySettings> | null {
+    return sanitizeHostPrefs(readJson('impostor.hostPrefs'));
+  },
+  set(settings: LobbySettings) {
+    write('impostor.hostPrefs', {
+      maxRounds: settings.maxRounds,
+      turnSeconds: settings.turnSeconds,
+      categories: settings.categories,
+      categoryHint: settings.categoryHint,
+      scoreboard: settings.scoreboard,
+    });
+  },
+};
+
+/** Sitzungstoken des Gastzugangs (kein Konto). */
 export const tokenStorage = {
   get(): string | null {
     try {
-      return localStorage.getItem(`impostor.token${SLOT}`);
+      const t = localStorage.getItem(`impostor.token${SLOT}`);
+      return t && t.length <= 64 ? t : null;
     } catch {
       return null;
     }

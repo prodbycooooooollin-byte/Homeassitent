@@ -13,7 +13,7 @@ import { SettingsDialog } from './screens/SettingsDialog.tsx';
 import { MatchScreen } from './match/MatchScreen.tsx';
 import { useProfile, useSettings } from './state/storage.ts';
 import { Toasts, toast, useReducedMotionPref } from './ui/common.tsx';
-import { IconWifiOff } from './ui/Icons.tsx';
+import { ConnectionBanner } from './ui/ConnectionStatus.tsx';
 
 interface UI {
   openRules(): void;
@@ -97,8 +97,6 @@ export function App() {
   } else if (view.match) screen = { key: `match-${view.match.id}`, node: <MatchScreen view={view} /> };
   else screen = { key: `lobby-${view.lobby.code}`, node: <LobbyScreen view={view} /> };
 
-  const offline = profile.set && conn.status === 'reconnecting';
-
   return (
     <MotionConfig reducedMotion={reduced ? 'always' : 'never'}>
       <UIContext.Provider value={ui}>
@@ -116,22 +114,7 @@ export function App() {
               {screen.node}
             </motion.div>
           </AnimatePresence>
-          <AnimatePresence>
-            {offline && (
-              <motion.div
-                className="conn-banner"
-                role="alert"
-                initial={{ y: -40, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -40, opacity: 0 }}
-              >
-                <IconWifiOff size={18} />
-                {conn.failures > 3 && !view
-                  ? `Server nicht erreichbar (${conn.serverUrl}). Neuer Versuch läuft …`
-                  : 'Verbindung wird wiederhergestellt …'}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <ConnectionBanner show={profile.set && conn.everOnline} />
           <Toasts />
           <RulesDialog open={rulesOpen} onClose={() => setRulesOpen(false)} />
           <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />

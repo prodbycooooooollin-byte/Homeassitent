@@ -20,8 +20,9 @@
     "test": "node --import tsx --test test/*.test.ts",
     "test:ui": "node scripts/ui-check.mjs",
     "dist:win": "npm run build && electron-builder --win --publish never",
-    "test:desktop": "node scripts/desktop-check.mjs",
-    "icon": "node scripts/render-icon.mjs"
+    "icon": "node scripts/render-icon.mjs",
+    "test:multiplayer": "node scripts/multiplayer-check.mjs",
+    "test:visual": "node scripts/visual-check.mjs"
   },
   "build": {
     "appId": "local.impostor.cardgame",
@@ -67,6 +68,7 @@
     "esbuild": "^0.28.2",
     "motion": "^13.4.4",
     "playwright-core": "^1.63.0",
+    "qrcode-generator": "^2.0.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tsx": "^4.23.15",

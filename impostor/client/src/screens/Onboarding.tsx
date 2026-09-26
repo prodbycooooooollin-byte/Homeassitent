@@ -10,19 +10,19 @@ const STEPS = [
     icon: <IconEye size={34} />,
     kicker: '1',
     title: 'Wort ansehen',
-    text: 'Alle bekommen eine verdeckte Karte. Dreh nur deine eigene um: Entweder steht dort das geheime Wort – oder du bist der Impostor und kennst es nicht.',
+    text: 'Alle bekommen eine verdeckte Karte. Dreh deine eigene um: Entweder steht dort das geheime Wort – oder du bist der Impostor und kennst es nicht. Niemand sieht die Karten der anderen.',
   },
   {
     icon: <IconChat size={34} />,
     kicker: '2',
     title: 'Hinweise geben',
-    text: 'Reihum schreibt jede Person einen kurzen Hinweis zum Wort (max. 40 Zeichen). Ihr könnt parallel über Discord reden und den Hinweis dann als Karte eintragen. Das Wort selbst ist tabu.',
+    text: 'Reihum tippt jede Person in ihrem Zug einen kurzen Hinweis (max. 40 Zeichen) in die App. Das Wort selbst, seine Formen und Buchstabieren sind tabu. Reden könnt ihr zusätzlich über Discord o. Ä. – die App hat keinen Sprachchat.',
   },
   {
     icon: <IconVote size={34} />,
     kicker: '3',
     title: 'Impostor finden oder Wort erraten',
-    text: 'Ihr stimmt ab, wer blufft. Der Impostor kann stattdessen jederzeit einmal verbindlich raten: richtig = Sieg, falsch = sofortige Niederlage.',
+    text: 'Nach der Diskussion wählt ihr geheim, wer blufft – eine Mehrheit überführt. Der Impostor darf während Hinweisphase und Diskussion einmal verbindlich raten: richtig = Sieg, falsch = sofortige Niederlage. Ab Beginn der Wahl ist Raten gesperrt.',
   },
 ];
 

@@ -6,7 +6,7 @@ import { play } from '../audio/sound.ts';
 import { connection } from '../net/connection.ts';
 import { settingsStore, useSettings } from '../state/storage.ts';
 import { Avatar } from '../ui/Avatar.tsx';
-import { CardBack, Dialog, TimerRing, remainingMs, useServerNow } from '../ui/common.tsx';
+import { CardBack, Dialog, TimerRing, remainingMs, toast, useMediaQuery, useServerNow } from '../ui/common.tsx';
 import {
   IconBook,
   IconDoor,
@@ -49,6 +49,34 @@ function useTableSize() {
   return { ref, size };
 }
 
+const STEPS: { key: string; label: string }[] = [
+  { key: 'roleReveal', label: 'Rolle' },
+  { key: 'clues', label: 'Hinweise' },
+  { key: 'discussion', label: 'Diskussion' },
+  { key: 'voting', label: 'Wahl' },
+];
+
+/** Phasenleiste: aktuelle Phase durch Nummer, Text und Unterstreichung – nicht nur Farbe. */
+function PhaseSteps({ phase, final }: { phase: string; final: boolean }) {
+  const idx = STEPS.findIndex((s) => s.key === phase);
+  return (
+    <nav className="phase-steps" aria-label="Phase der Partie">
+      <ol>
+        {STEPS.map((s, i) => (
+          <li key={s.key} className={i === idx ? 'current' : i < idx ? 'done' : ''} aria-current={i === idx ? 'step' : undefined}>
+            <span className="ps-num" aria-hidden="true">
+              {i < idx ? '✓' : i + 1}
+            </span>
+            <span className="ps-label">{s.label}</span>
+          </li>
+        ))}
+      </ol>
+      <span className="sr-only">Aktuelle Phase: {PHASE_LABEL[phase]}</span>
+      {final && (phase === 'discussion' || phase === 'voting') && <span className="chip chip-coral">Schlussabstimmung</span>}
+    </nav>
+  );
+}
+
 export function MatchScreen({ view }: { view: ClientView }) {
   const match = view.match!;
   const priv = view.private!;
@@ -58,6 +86,7 @@ export function MatchScreen({ view }: { view: ClientView }) {
   const settings = useSettings();
   const now = useServerNow(200);
   const { ref: tableRef, size } = useTableSize();
+  const narrow = useMediaQuery('(max-width: 820px)');
 
   const players = view.lobby.players;
   const byId = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
@@ -155,7 +184,10 @@ export function MatchScreen({ view }: { view: ClientView }) {
     setSending(true);
     const r = await cmd({ t: 'submitClue', text: clue });
     setSending(false);
-    if (r.ok) setClue('');
+    if (r.ok) {
+      setClue('');
+      toast('Hinweis abgelegt ✓', 'success', 1600);
+    }
   };
 
   // Wahl
@@ -164,7 +196,9 @@ export function MatchScreen({ view }: { view: ClientView }) {
     if (phase !== 'voting') setSelected(null);
   }, [phase]);
   const myVote = priv.myVote;
-  const canVote = phase === 'voting' && !myVote && !paused;
+  const [voteBusy, setVoteBusy] = useState(false);
+  const canVote = phase === 'voting' && !myVote && !paused && !voteBusy;
+  const [readyBusy, setReadyBusy] = useState(false);
 
   // Vorschlag
   const proposal = match.proposal;
@@ -186,20 +220,32 @@ export function MatchScreen({ view }: { view: ClientView }) {
   let instruction = '';
   if (paused) instruction = `Pausiert – warte auf ${match.paused!.playerIds.map(nameOf).join(', ')}`;
   else if (phase === 'roleReveal') instruction = acked ? `Warte auf die anderen (${match.acknowledged.length}/${match.seatOrder.length})` : 'Dreh deine Karte um';
-  else if (phase === 'clues') instruction = myTurn ? 'Du bist dran – schreib deinen Hinweis' : `${activeName} ist dran`;
-  else if (phase === 'discussion') instruction = match.voteKind === 'final' ? 'Letzte Diskussion vor der Schlussabstimmung' : 'Diskutiert – wer blufft?';
-  else if (phase === 'voting') instruction = myVote ? 'Stimme abgegeben – warte auf die anderen' : 'Wähle am Tisch, wer der Impostor ist';
+  else if (phase === 'clues')
+    instruction = myTurn ? 'Schreib deinen Hinweis und lege ihn mit Enter ab' : `Warte – ${activeName} schreibt gerade einen Hinweis`;
+  else if (phase === 'discussion')
+    instruction = match.readyToVote.includes(me)
+      ? `Warte auf die anderen (${match.readyToVote.length}/${match.seatOrder.length} bereit zur Wahl)`
+      : match.voteKind === 'final'
+        ? 'Letzte Diskussion – wer blufft? Dann „Bereit zur Wahl“'
+        : 'Diskutiert im Chat – wer blufft?';
+  else if (phase === 'voting')
+    instruction = myVote
+      ? `Stimme abgegeben – warte auf die anderen (${match.voted.length}/${match.seatOrder.length})`
+      : 'Wähle am Tisch, wer der Impostor ist, und gib deine Stimme ab';
 
   const timerTotal = match.deadlineTotalMs;
+  // Hat der Spieler gerade selbst etwas zu tun?
+  const nextActionMine =
+    !paused &&
+    ((phase === 'roleReveal' && !acked) ||
+      myTurn ||
+      (phase === 'discussion' && !match.readyToVote.includes(me)) ||
+      (phase === 'voting' && !myVote));
 
   return (
-    <div className={`match phase-${phase} ${paused ? 'is-paused' : ''}`}>
+    <div className={`match phase-${phase} ${paused ? 'is-paused' : ''} ${narrow ? 'is-narrow' : ''}`}>
       <header className="topbar match-top">
-        <div className="phase-pill" aria-live="polite">
-          <span className={`phase-dot phase-${phase}`} aria-hidden="true" />
-          <span className="phase-name">{PHASE_LABEL[phase]}</span>
-          {match.voteKind === 'final' && (phase === 'discussion' || phase === 'voting') && <span className="chip chip-coral">Schlussabstimmung</span>}
-        </div>
+        <PhaseSteps phase={phase} final={match.voteKind === 'final'} />
         <div className="round-counter" aria-label={`Durchgang ${match.round} von ${match.maxRounds}`}>
           <span className="rc-label">Durchgang</span>
           <span className="rc-num">
@@ -267,7 +313,16 @@ export function MatchScreen({ view }: { view: ClientView }) {
                         supporter: phase === 'clues' && !!proposal?.supporters.includes(id),
                         selectable,
                         selected: phase === 'voting' && (selected === id || myVote === id),
-                        caption: phase === 'discussion' && match.readyToVote.includes(id) ? 'bereit zur Wahl' : undefined,
+                        caption:
+                          phase === 'clues' && match.activePlayerId === id && !paused
+                            ? 'am Zug'
+                            : phase === 'discussion' && match.readyToVote.includes(id)
+                              ? 'bereit zur Wahl'
+                              : phase === 'voting' && match.voted.includes(id)
+                                ? 'hat gewählt'
+                                : phase === 'roleReveal' && match.acknowledged.includes(id)
+                                  ? 'bereit'
+                                  : undefined,
                         showScore: false,
                       }}
                       onSelect={
@@ -495,7 +550,8 @@ export function MatchScreen({ view }: { view: ClientView }) {
         </div>
 
         <div className="dock-main">
-          <p className={`instruction ${myTurn ? 'mine' : ''}`} aria-live="polite">
+          <p className={`instruction ${nextActionMine ? 'mine' : ''}`} aria-live="polite">
+            {nextActionMine && <span className="next-badge">Du bist dran</span>}
             {instruction}
           </p>
           {phase === 'clues' && (
@@ -507,7 +563,7 @@ export function MatchScreen({ view }: { view: ClientView }) {
                 onChange={(e) => setClue(e.target.value)}
                 maxLength={LIMITS.clueMax}
                 disabled={!myTurn || paused}
-                placeholder={myTurn ? 'Dein Hinweis – Wort oder kurzer Begriff' : `${activeName} schreibt …`}
+                placeholder={myTurn ? (narrow ? 'Dein Hinweis' : 'Dein Hinweis – Wort oder kurzer Begriff') : `${activeName} schreibt …`}
                 aria-label="Dein Hinweis"
                 autoComplete="off"
                 spellCheck={false}
@@ -524,10 +580,12 @@ export function MatchScreen({ view }: { view: ClientView }) {
             <div className="dock-row">
               <button
                 className="btn btn-primary"
-                disabled={match.readyToVote.includes(me) || paused}
-                onClick={() => {
+                disabled={match.readyToVote.includes(me) || paused || readyBusy}
+                onClick={async () => {
                   play('ready');
-                  void cmd({ t: 'readyToVote' });
+                  setReadyBusy(true);
+                  await cmd({ t: 'readyToVote' });
+                  setReadyBusy(false);
                 }}
               >
                 <IconVote size={18} /> {match.readyToVote.includes(me) ? 'Bereit zur Wahl ✓' : 'Bereit zur Wahl'}
@@ -549,8 +607,14 @@ export function MatchScreen({ view }: { view: ClientView }) {
                     className="btn btn-coral"
                     disabled={!canVote}
                     onClick={async () => {
+                      if (voteBusy) return;
+                      setVoteBusy(true);
                       const r = await cmd({ t: 'castVote', targetId: selected });
-                      if (r.ok) play('vote');
+                      setVoteBusy(false);
+                      if (r.ok) {
+                        play('vote');
+                        toast(`Stimme abgegeben – geheim bis zur Auswertung`, 'success', 2200);
+                      }
                     }}
                   >
                     <IconVote size={18} /> Stimme für {nameOf(selected)} abgeben
@@ -592,7 +656,7 @@ export function MatchScreen({ view }: { view: ClientView }) {
           )}
           {priv.role === 'impostor' && (phase === 'clues' || phase === 'discussion') && (
             <button className="btn btn-guess" disabled={!priv.canGuess} onClick={() => setGuessOpen(true)}>
-              Ich kenne das Wort
+              Ich kenne das Wort <span className="muted-inline">(1 Versuch)</span>
             </button>
           )}
         </div>

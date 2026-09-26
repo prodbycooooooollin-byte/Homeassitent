@@ -101,13 +101,13 @@ await A.page.waitForSelector('text=Wort ansehen');
 await wait(600);
 await shot(A, '02-onboarding');
 for (let i = 0; i < 3; i++) await A.page.click('.onb-actions .btn-primary');
-await A.page.waitForSelector('text=Lobby erstellen');
-await A.page.waitForSelector('text=Mit dem Spielserver verbunden');
+await A.page.waitForSelector('button:has-text("Lobby erstellen")');
+await A.page.waitForSelector('.conn-line.tone-ok');
 await wait(900);
 await shot(A, '03-start');
 
 // --- Lobby -------------------------------------------------------------------
-await A.page.click('text=Lobby erstellen');
+await A.page.click('button:has-text("Lobby erstellen")');
 await A.page.waitForSelector('.code-value');
 const code = (await A.page.textContent('.code-value')).trim();
 check(/^[A-Z0-9]{5}$/.test(code), `Lobbycode ${code} hat 5 gut lesbare Zeichen`);
@@ -117,28 +117,31 @@ const C = await player('Cem', 6);
 const D = await player('Dana', 9, { reduced: true });
 
 // Fehlerfall: falscher Code
-await B.page.waitForSelector('text=Mit dem Spielserver verbunden');
+await B.page.waitForSelector('.conn-line.tone-ok');
 await B.page.fill('#join-code', 'AAAAA');
 await B.page.click('button:has-text("Beitreten")');
-await B.page.waitForSelector('text=Code nicht gefunden');
-check(true, 'Falscher Code zeigt „Code nicht gefunden."');
+await B.page.waitForSelector('text=Diese Lobby gibt es nicht');
+check(true, 'Unbekannter Code → verständliche Meldung „Diese Lobby gibt es nicht (mehr)“');
 
 // Beitritt per Tastatur (Tab/Enter) für D
-await D.page.waitForSelector('text=Mit dem Spielserver verbunden');
+await D.page.waitForSelector('.conn-line.tone-ok');
 await D.page.focus('#join-code');
 await D.page.keyboard.type(code.toLowerCase());
 await D.page.keyboard.press('Enter');
-for (const p of [B, C]) {
-  await p.page.fill('#join-code', code);
-  await p.page.click('button:has-text("Beitreten")');
-}
+await B.page.fill('#join-code', code);
+await B.page.click('button:has-text("Beitreten")');
+// C fügt den kompletten Einladungslink ein und drückt Enter
+await C.page.waitForSelector('.conn-line.tone-ok');
+await C.page.fill('#join-code', `${BASE}/?lobby=${code}`);
+check((await C.page.inputValue('#join-code')) === code, 'Eingefügter Einladungslink wird zum Code');
+await C.page.keyboard.press('Enter');
 const all = [A, B, C, D];
 for (const p of all) await p.page.waitForSelector('.seat-card >> nth=3');
 check(await D.page.evaluate(() => document.documentElement.classList.contains('reduce-motion')), 'Reduzierte Bewegung folgt der Systemeinstellung');
 await shot(A, '04-lobby-beitritt');
 
 for (const p of all) await p.page.click('.ready-btn');
-await A.page.waitForSelector('.start-btn:not([disabled])');
+await A.page.waitForSelector('.start-btn[aria-disabled="false"]');
 await wait(400);
 await shot(A, '05-lobby-bereit');
 
@@ -165,7 +168,7 @@ check(!impHtml.includes(words[0]), 'Das Wort steht nirgends im DOM des Impostors
 await shot(insiders[0], '07-rolle-eingeweiht');
 await shot(imp, '08-rolle-impostor');
 for (const p of all) await p.page.click('button:has-text("Verstanden")');
-await A.page.waitForSelector('.phase-name:has-text("Hinweise")');
+await A.page.waitForSelector('.phase-steps li.current:has-text("Hinweise")');
 
 const clues = ['Stadion', 'Ballon d’Or', 'Rasen', 'Pfiff', 'Kurve', 'Nachspielzeit'];
 async function activePlayer() {
@@ -206,7 +209,7 @@ for (const p of [A, B, C]) {
   await p.page.click('.propose .btn');
   await wait(150);
 }
-await A.page.waitForSelector('.phase-name:has-text("Diskussion")');
+await A.page.waitForSelector('.phase-steps li.current:has-text("Diskussion")');
 await A.page.fill('.chat-input', 'Wer hat „Kurve" gesagt? 🤔');
 await A.page.keyboard.press('Enter');
 await B.page.fill('.chat-input', 'Klingt eher nach Rennstrecke …');
@@ -214,7 +217,7 @@ await B.page.keyboard.press('Enter');
 await wait(500);
 await shot(C, '11-diskussion');
 for (const p of all) await p.page.click('button:has-text("Bereit zur Wahl")');
-await A.page.waitForSelector('.phase-name:has-text("Geheime Wahl")');
+await A.page.waitForSelector('.phase-steps li.current:has-text("Wahl")');
 // Alle Eingeweihten wählen den Impostor, der Impostor wählt jemanden
 const impName = imp.name;
 for (const p of insiders) {
@@ -244,7 +247,7 @@ for (const p of all) {
   await p.page.waitForSelector('button:has-text("Noch eine Partie")', { timeout: 8000 });
   await p.page.click('button:has-text("Noch eine Partie")');
 }
-await A.page.waitForSelector('.start-btn:not([disabled])');
+await A.page.waitForSelector('.start-btn[aria-disabled="false"]');
 await A.page.click('.start-btn');
 for (const p of all) {
   await p.page.waitForSelector('text=Karte umdrehen', { timeout: 8000 });
@@ -269,7 +272,7 @@ await A.page.setViewportSize({ width: 1920, height: 1080 });
 await wait(2200);
 await shot(A, '17-ergebnis-1920');
 for (const p of all) await p.page.click('button:has-text("Noch eine Partie")');
-await A.page.waitForSelector('.start-btn:not([disabled])');
+await A.page.waitForSelector('.start-btn[aria-disabled="false"]');
 await A.page.click('.start-btn');
 await A.page.waitForSelector('text=Karte umdrehen', { timeout: 8000 });
 await A.page.click('.reveal-actions button');
@@ -277,14 +280,14 @@ await wait(700);
 await shot(A, '18-rolle-1920');
 
 // Wiederverbindung: B lädt neu, erhält dieselbe Rolle zurück
-const beforeRole = (await B.page.textContent('.phase-name')) ?? '';
+const beforeRole = (await B.page.textContent('.phase-steps li.current')) ?? '';
 await B.page.reload();
-await B.page.waitForSelector('.phase-name', { timeout: 8000 });
-check((await B.page.textContent('.phase-name')) === beforeRole, 'Neu laden stellt die laufende Partie wieder her');
+await B.page.waitForSelector('.phase-steps li.current', { timeout: 8000 });
+check((await B.page.textContent('.phase-steps li.current')) === beforeRole, 'Neu laden stellt die laufende Partie wieder her');
 
 // Späteinsteiger sieht nur den Hinweis
 const E = await player('Emil', 1);
-await E.page.waitForSelector('text=Mit dem Spielserver verbunden');
+await E.page.waitForSelector('.conn-line.tone-ok');
 await E.page.fill('#join-code', code);
 await E.page.click('button:has-text("Beitreten")');
 await E.page.waitForSelector('text=Du spielst ab der nächsten Partie mit.');
@@ -295,10 +298,11 @@ await shot(E, '19-spaeteinsteiger');
 // Eine echte Browser-Sitzung + neun Protokoll-Bots über WebSocket.
 {
   const H = await player('Host', 5);
-  await H.page.waitForSelector('text=Mit dem Spielserver verbunden');
-  await H.page.click('text=Lobby erstellen');
+  await H.page.waitForSelector('.conn-line.tone-ok');
+  await H.page.click('button:has-text("Lobby erstellen")');
   await H.page.waitForSelector('.code-value');
   const code10 = (await H.page.textContent('.code-value')).trim();
+  await H.page.click('summary:has-text("Dauer & Zeitlimit")');
   await H.page.click('.segmented button:has-text("12")');
   await H.page.click('.segmented button:has-text("ohne")');
   const bots = [];
@@ -321,14 +325,14 @@ await shot(E, '19-spaeteinsteiger');
     }
     await wait(60);
   }
-  await H.page.waitForSelector('.phase-name:has-text("Diskussion"), .phase-name:has-text("Geheime Wahl")', { timeout: 10000 }).catch(async (e) => {
+  await H.page.waitForSelector('.phase-steps li.current:has-text("Diskussion"), .phase-steps li.current:has-text("Wahl")', { timeout: 10000 }).catch(async (e) => {
     await shot(H, 'fehler-10');
     console.error('Stand:', n, 'Hinweise;', await H.page.textContent('.instruction'));
     throw e;
   });
   await wait(500);
   check((await H.page.$$eval('.clue-mini', (e) => e.length)) === 120, '120 Hinweise in der Historie (10 Personen × 12 Durchgänge)');
-  check((await H.page.textContent('.phase-pill')).includes('Schlussabstimmung'), 'Nach dem 12. Durchgang beginnt automatisch die Schlussabstimmung');
+  check((await H.page.textContent('.phase-steps')).includes('Schlussabstimmung'), 'Nach dem 12. Durchgang beginnt automatisch die Schlussabstimmung');
   await shot(H, '21-historie-120');
   await H.page.click('.history .segmented button:has-text("Personen")');
   await wait(300);

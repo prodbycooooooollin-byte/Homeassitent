@@ -9,7 +9,12 @@ declare const __DEFAULT_SERVER__: string;
  * Serveradresse: Umgebungsvariable IMPOSTOR_SERVER_URL, sonst Build-Standard,
  * sonst in der App unter „Einstellungen → Spielserver" eintragen.
  */
+// Der Client normalisiert die Adresse und fällt ohne gültige Angabe auf den
+// Produktionsserver zurück (shared/server.ts) – nie auf localhost.
 const defaultServer = process.env.IMPOSTOR_SERVER_URL || __DEFAULT_SERVER__ || '';
+
+// Nur für automatisierte Tests: frisches Profil simulieren (wie eine Neuinstallation).
+if (process.env.IMPOSTOR_USER_DATA) app.setPath('userData', process.env.IMPOSTOR_USER_DATA);
 
 let win: BrowserWindow | null = null;
 

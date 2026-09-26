@@ -47,7 +47,7 @@ describe('Lobby', () => {
     for (const id of t.ids) t.cmd(id, { t: 'setReady', ready: true });
     assert.equal(t.cmd('p2', { t: 'updateSettings', settings: { maxRounds: 5 } }).ok, false);
     assert.equal(t.cmd('p1', { t: 'updateSettings', settings: { maxRounds: 7 as never } }).ok, false);
-    assert.equal(t.cmd('p1', { t: 'updateSettings', settings: { maxRounds: 5 } }).ok, true);
+    assert.equal(t.cmd('p1', { t: 'updateSettings', settings: { maxRounds: 8 } }).ok, true);
     assert.ok(t.view('p1').lobby.players.every((p) => !p.ready));
     startMatch(t);
     assert.deepEqual(t.cmd('p1', { t: 'updateSettings', settings: { maxRounds: 3 } }), {
@@ -74,6 +74,28 @@ describe('Lobby', () => {
     t.lobby.setConnected('p2', false);
     t.lobby.leave('p1');
     assert.equal(t.view('p3').lobby.hostId, 'p3');
+  });
+
+  it('getrennter Host außerhalb einer Partie: Hostrolle wechselt sofort, Lobby bleibt bestehen', () => {
+    const t = setupTable(4);
+    t.lobby.setConnected('p1', false);
+    assert.equal(t.view('p2').lobby.hostId, 'p2');
+    t.lobby.setConnected('p1', true);
+    assert.equal(t.view('p1').lobby.hostId, 'p2', 'Rückkehr übernimmt die Hostrolle nicht zurück');
+    assert.equal(t.view('p1').lobby.players.length, 4, 'keine doppelten Spieler');
+  });
+
+  it('getrennter Host während einer Partie: Pause statt Hostwechsel, danach Nachfolge', () => {
+    const t = setupTable(4);
+    startMatch(t);
+    ackAll(t);
+    t.lobby.setConnected('p1', false);
+    assert.equal(t.view('p2').lobby.hostId, 'p1');
+    assert.ok(t.view('p2').match!.paused);
+    t.advance(TIMINGS.reconnectGraceMs);
+    const v = t.view('p2');
+    assert.equal(v.lastResult!.abortReason, 'disconnect_timeout');
+    assert.equal(v.lobby.hostId, 'p2');
   });
 
   it('Getrennte Personen werden außerhalb einer Partie nach 60 s entfernt', () => {

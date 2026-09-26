@@ -88,14 +88,33 @@ export interface LobbySettings {
   scoreboard: boolean;
 }
 
+/**
+ * Standard: 5 Durchgänge. Begründung: Bei 4–6 Personen und 30 s pro Zug ergeben 10
+ * Durchgänge bis zu 20–30 Minuten Hinweisphase; nach ca. 4–5 Durchgängen wiederholen
+ * sich Assoziationen und die Gruppe stimmt meist ohnehin ab. 10 und 12 bleiben wählbar.
+ */
 export const DEFAULT_SETTINGS: LobbySettings = {
   mode: 'classic',
   categories: CATEGORIES.map((c) => c.id),
-  maxRounds: 10,
+  maxRounds: 5,
   turnSeconds: 30,
   categoryHint: false,
   scoreboard: true,
 };
+
+export interface RulePreset {
+  id: 'intro' | 'standard' | 'long';
+  label: string;
+  hint: string;
+  maxRounds: LobbySettings['maxRounds'];
+  turnSeconds: LobbySettings['turnSeconds'];
+}
+
+export const PRESETS: RulePreset[] = [
+  { id: 'intro', label: 'Einsteiger', hint: '3 Durchgänge · 45 s pro Zug', maxRounds: 3, turnSeconds: 45 },
+  { id: 'standard', label: 'Standard', hint: '5 Durchgänge · 30 s pro Zug', maxRounds: 5, turnSeconds: 30 },
+  { id: 'long', label: 'Lang', hint: '10 Durchgänge · 30 s pro Zug', maxRounds: 10, turnSeconds: 30 },
+];
 
 export type MatchPhase =
   | 'roleReveal'
@@ -226,6 +245,8 @@ export interface MatchResult {
   clues: ClueCard[];
   seatOrder: PlayerId[];
   winners: PlayerId[];
+  /** Namen/Figuren der Teilnehmenden zum Partieende (auch wenn jemand die Lobby danach verlässt) */
+  players?: { id: PlayerId; name: string; avatar: number }[];
 }
 
 export interface ClientView {
@@ -319,8 +340,8 @@ export type ServerMessage =
 
 export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   bad_request: 'Ungültige Anfrage.',
-  not_found: 'Code nicht gefunden.',
-  lobby_full: 'Lobby voll.',
+  not_found: 'Diese Lobby gibt es nicht (mehr). Prüfe den Code oder lass dir einen neuen Einladungslink schicken.',
+  lobby_full: 'Die Lobby ist voll (maximal 10 Personen).',
   kicked: 'Du wurdest aus dieser Lobby entfernt.',
   not_allowed: 'Dafür fehlen dir die Rechte.',
   wrong_phase: 'Das geht in dieser Phase nicht.',

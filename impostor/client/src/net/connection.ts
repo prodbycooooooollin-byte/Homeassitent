@@ -7,9 +7,24 @@ import {
   type ErrorCode,
   type ServerMessage,
 } from '../../../shared/protocol.ts';
+import {
+  CONNECT_TIMEOUT_MS,
+  MAX_AUTO_ATTEMPTS,
+  reconnectDelay,
+  resolveServer,
+  type EndpointSource,
+  type ServerEndpoint,
+} from '../../../shared/server.ts';
 import { profileStore, settingsStore, tokenStorage } from '../state/storage.ts';
 
-export type ConnStatus = 'idle' | 'connecting' | 'online' | 'reconnecting';
+/**
+ * Verbindungszustände:
+ *  - connecting:   erster Verbindungsaufbau (Server startet ggf. gerade)
+ *  - online:       verbunden
+ *  - reconnecting: Verbindung unterbrochen – erneuter Versuch läuft
+ *  - unreachable:  nach mehreren Versuchen momentan nicht erreichbar (manuell erneut versuchen)
+ */
+export type ConnStatus = 'idle' | 'connecting' | 'online' | 'reconnecting' | 'unreachable';
 
 export interface ConnState {
   status: ConnStatus;
@@ -20,7 +35,14 @@ export interface ConnState {
   offset: number;
   /** Anzahl fehlgeschlagener Verbindungsversuche in Folge */
   failures: number;
-  serverUrl: string;
+  endpoint: ServerEndpoint;
+  endpointSource: EndpointSource;
+  /** Zeitpunkt (lokal), ab dem der aktuelle Verbindungsversuch läuft */
+  attemptStartedAt: number;
+  /** Nächster automatischer Versuch (lokal) oder null */
+  nextRetryAt: number | null;
+  /** War diese Sitzung schon einmal verbunden? */
+  everOnline: boolean;
 }
 
 export type CmdResult = { ok: true } | { ok: false; code: ErrorCode | 'timeout'; message: string };
@@ -28,28 +50,24 @@ export type CmdResult = { ok: true } | { ok: false; code: ErrorCode | 'timeout';
 type Listener = () => void;
 type NoticeListener = (kind: string, message: string) => void;
 
-/** Ermittelt die WebSocket-Adresse des Spielservers. */
-export function resolveServerUrl(): string {
-  const override = settingsStore.get().serverUrl.trim();
-  if (override) return toWsUrl(override);
-  if (window.impostorDesktop?.defaultServer) return toWsUrl(window.impostorDesktop.defaultServer);
-  if (location.protocol === 'http:' || location.protocol === 'https:') {
-    return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
-  }
-  return toWsUrl(__DEFAULT_SERVER__ || 'ws://localhost:8787/ws');
-}
-
-export function toWsUrl(raw: string): string {
-  let u = raw.trim();
-  if (!/^[a-z]+:\/\//i.test(u)) u = `wss://${u}`;
-  u = u.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+/** Ermittelt den Spielserver aus der zentralen Konfiguration (shared/server.ts). */
+export function currentServer() {
+  let pageOrigin: string | null = null;
+  let pageProtocol: string | null = null;
   try {
-    const url = new URL(u);
-    if (url.pathname === '/' || url.pathname === '') url.pathname = '/ws';
-    return url.toString();
+    pageOrigin = location.origin;
+    pageProtocol = location.protocol;
   } catch {
-    return u;
+    /* kein location (Tests) */
   }
+  return resolveServer({
+    override: settingsStore.get().serverOverride,
+    isDesktop: !!window.impostorDesktop?.isDesktop,
+    desktopDefault: window.impostorDesktop?.defaultServer ?? null,
+    buildDefault: __DEFAULT_SERVER__,
+    pageOrigin,
+    pageProtocol,
+  });
 }
 
 let actionSeq = 0;
@@ -72,8 +90,15 @@ class Connection {
     webClient: false,
     offset: 0,
     failures: 0,
-    serverUrl: '',
+    ...(() => {
+      const r = currentServer();
+      return { endpoint: r.endpoint, endpointSource: r.source };
+    })(),
+    attemptStartedAt: 0,
+    nextRetryAt: null,
+    everOnline: false,
   };
+  private connectTimer: number | null = null;
   private listeners = new Set<Listener>();
   private noticeListeners = new Set<NoticeListener>();
   private pending = new Map<string, { cmd: ClientCommand; resolve: (r: CmdResult) => void; timer: number }>();
@@ -114,32 +139,64 @@ class Connection {
   }
 
   start() {
+    if (!this.stopped) return;
     this.stopped = false;
+    window.addEventListener('online', () => {
+      if (this.state.status === 'unreachable' || this.state.status === 'reconnecting') this.retryNow();
+    });
     this.open();
   }
 
-  /** Neu verbinden, z. B. nach Änderung der Serveradresse. */
-  restart() {
-    this.ws?.close();
-    this.ws = null;
+  /** Sofort neu versuchen (Button „Erneut versuchen", Netzwerk wieder da, geänderter Override). */
+  retryNow() {
+    this.stopped = false;
     if (this.retryTimer) clearTimeout(this.retryTimer);
-    this.patch({ failures: 0, view: null });
+    this.retryTimer = null;
+    this.patch({ failures: 0, nextRetryAt: null });
     this.open();
+  }
+
+  /** Neu verbinden mit frisch ermittelter Serveradresse (z. B. nach Änderung unter „Erweitert"). */
+  restart() {
+    const old = this.ws;
+    this.ws = null;
+    old?.close();
+    this.patch({ view: null });
+    this.retryNow();
+  }
+
+  private clearTimers() {
+    if (this.connectTimer) clearTimeout(this.connectTimer);
+    this.connectTimer = null;
   }
 
   private open() {
     if (this.stopped) return;
-    const url = resolveServerUrl();
-    this.patch({ status: this.state.status === 'online' || this.state.failures > 0 ? 'reconnecting' : 'connecting', serverUrl: url });
+    // Keine parallelen oder doppelten Verbindungen.
+    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) return;
+    const { endpoint, source } = currentServer();
+    this.patch({
+      status: this.state.everOnline ? 'reconnecting' : 'connecting',
+      endpoint,
+      endpointSource: source,
+      attemptStartedAt: Date.now(),
+      nextRetryAt: null,
+    });
     let ws: WebSocket;
     try {
-      ws = new WebSocket(url);
+      ws = new WebSocket(endpoint.wsUrl);
     } catch {
       this.scheduleRetry();
       return;
     }
     this.ws = ws;
+    this.clearTimers();
+    // Kaltstart des Servers abwarten, aber hängende Versuche beenden.
+    this.connectTimer = window.setTimeout(() => {
+      if (this.ws === ws && ws.readyState !== WebSocket.OPEN) ws.close();
+    }, CONNECT_TIMEOUT_MS);
     ws.onopen = () => {
+      this.clearTimers();
       const profile = profileStore.get();
       const hello: ClientMessage = {
         type: 'hello',
@@ -150,6 +207,7 @@ class Connection {
       ws.send(JSON.stringify(hello));
     };
     ws.onmessage = (ev) => {
+      if (this.ws !== ws) return;
       let msg: ServerMessage;
       try {
         msg = JSON.parse(String(ev.data)) as ServerMessage;
@@ -161,6 +219,7 @@ class Connection {
     ws.onclose = () => {
       if (this.ws !== ws) return;
       this.ws = null;
+      this.clearTimers();
       if (this.pingTimer) clearInterval(this.pingTimer);
       this.scheduleRetry();
     };
@@ -172,9 +231,14 @@ class Connection {
   private scheduleRetry() {
     if (this.stopped) return;
     const failures = this.state.failures + 1;
-    this.patch({ status: 'reconnecting', failures });
-    const delay = Math.min(5000, 400 * 2 ** Math.min(failures, 4));
     if (this.retryTimer) clearTimeout(this.retryTimer);
+    if (failures >= MAX_AUTO_ATTEMPTS) {
+      // Begrenzte Wiederholungen: danach wartet der Client auf „Erneut versuchen".
+      this.patch({ status: 'unreachable', failures, nextRetryAt: null });
+      return;
+    }
+    const delay = reconnectDelay(failures);
+    this.patch({ status: this.state.everOnline ? 'reconnecting' : 'connecting', failures, nextRetryAt: Date.now() + delay });
     this.retryTimer = window.setTimeout(() => this.open(), delay);
   }
 
@@ -194,6 +258,8 @@ class Connection {
           playerId: msg.playerId,
           webClient: msg.webClient,
           failures: 0,
+          nextRetryAt: null,
+          everOnline: true,
           offset: msg.serverNow - Date.now(),
         });
         this.samples = [];

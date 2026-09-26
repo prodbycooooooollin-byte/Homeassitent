@@ -275,3 +275,16 @@ export function useReducedMotionPref(setting: 'system' | 'on' | 'off'): boolean 
   }, []);
   return setting === 'on' || (setting === 'system' && sys);
 }
+
+export function useMediaQuery(query: string): boolean {
+  const [match, setMatch] = useState(() => window.matchMedia?.(query).matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const on = () => setMatch(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [query]);
+  return match;
+}

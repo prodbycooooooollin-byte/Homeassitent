@@ -36,7 +36,15 @@ export function ResultScreen({ view, result, onDone }: { view: ClientView; resul
   const cmd = useCmd();
   const ui = useUI();
   const me = view.me.id;
-  const byId = useMemo(() => new Map(view.lobby.players.map((p) => [p.id, p])), [view.lobby.players]);
+  // Lobby-Mitglieder, ergänzt um Teilnehmende, die die Lobby inzwischen verlassen haben
+  const byId = useMemo(() => {
+    const m = new Map<string, PlayerPublic>();
+    for (const p of result.players ?? []) {
+      m.set(p.id, { id: p.id, name: p.name, avatar: p.avatar, isHost: false, connected: false, ready: false, joinedAt: 0, inMatch: false, score: 0 });
+    }
+    for (const p of view.lobby.players) m.set(p.id, p);
+    return m;
+  }, [view.lobby.players, result.players]);
   const name = (id: string | null) => (id ? (byId.get(id)?.name ?? 'Ehemalige Person') : '');
   const aborted = result.outcome === 'aborted';
   // Dramaturgie: 0 Spannung → 1 Rollenflip → 2 Sieger → 3 Details
@@ -137,6 +145,9 @@ export function ResultScreen({ view, result, onDone }: { view: ClientView; resul
             >
               <span className="wb-title">{winnerTitle}</span>
               <span className="wb-sub">{reasonText(result, name)}</span>
+              <span className="wb-winners">
+                {result.winner === 'impostor' ? 'Impostor' : 'Eingeweihte'}: {result.winners.map((id) => name(id)).join(', ')}
+              </span>
               <span className={`wb-me ${won ? 'won' : 'lost'}`}>{won ? 'Du hast gewonnen!' : 'Diesmal nicht.'}</span>
             </motion.div>
           )}
@@ -245,6 +256,7 @@ export function ResultScreen({ view, result, onDone }: { view: ClientView; resul
                       <li key={p.id} className={p.id === me ? 'me' : ''}>
                         <Avatar id={p.avatar} size={22} />
                         <span>{p.name}</span>
+                        {!aborted && result.winners.includes(p.id) && <span className="score-delta">+1</span>}
                         <strong>{p.score}</strong>
                       </li>
                     ))}
@@ -253,10 +265,10 @@ export function ResultScreen({ view, result, onDone }: { view: ClientView; resul
             )}
             <div className="result-actions">
               <button className="btn btn-primary btn-lg" onClick={() => leave(true)} data-autofocus autoFocus>
-                Noch eine Partie
+                Noch eine Partie – ich bin bereit
               </button>
               <button className="btn btn-ghost" onClick={() => leave(false)}>
-                Zur Lobby
+                Zur Lobby (noch nicht bereit)
               </button>
             </div>
           </motion.aside>
