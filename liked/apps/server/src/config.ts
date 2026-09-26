@@ -40,7 +40,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     dataDir: env.DATA_DIR ?? './data',
     maxRooms: Number(env.MAX_ROOMS ?? 200),
     trustProxy: env.TRUST_PROXY === '1',
-    timings: { ...TIMINGS },
+    // TIMINGS_SCALE nur für Tests/Entwicklung (z. B. 0.3 = schnellere Auflösung/Übergänge).
+    timings: scaleTimings(Number(env.TIMINGS_SCALE ?? 1)),
     reconnectWindowMs: Number(env.RECONNECT_WINDOW_MS ?? 30_000),
     tiktok: hasTikTok
       ? {
@@ -53,4 +54,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     tokenEncryptionKey: key,
     logLevel: (env.LOG_LEVEL as ServerConfig['logLevel']) ?? 'info'
   };
+}
+
+function scaleTimings(scale: number): Timings {
+  const f = Number.isFinite(scale) && scale > 0 && scale <= 1 ? scale : 1;
+  const t = { ...TIMINGS } as Timings;
+  // Nur Darstellungs-Phasen skalieren; Toleranzen und Fristen bleiben unverändert.
+  t.revealMs = Math.round(t.revealMs * f);
+  t.scoreboardMs = Math.round(t.scoreboardMs * f);
+  t.countdownMs = Math.max(1000, Math.round(t.countdownMs * f));
+  return t;
 }

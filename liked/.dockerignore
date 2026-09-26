@@ -1,0 +1,6 @@
+**/node_modules
+**/dist
+**/release
+apps/desktop
+apps/server/data
+apps/server/.env

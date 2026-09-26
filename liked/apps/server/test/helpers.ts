@@ -68,13 +68,14 @@ export class Bot {
 
   constructor(
     readonly url: string,
-    readonly name: string
+    readonly name: string,
+    readonly headers: Record<string, string> = {}
   ) {
     this.socket = this.makeSocket();
   }
 
   private makeSocket(): Socket {
-    const s = connect(this.url, { transports: ['websocket'], forceNew: true, reconnection: false });
+    const s = connect(this.url, { transports: ['websocket'], forceNew: true, reconnection: false, extraHeaders: this.headers });
     s.on('room:state', (v: RoomView) => {
       if (this.view && v.roomId === this.view.roomId && v.version < this.view.version) return;
       this.view = v;

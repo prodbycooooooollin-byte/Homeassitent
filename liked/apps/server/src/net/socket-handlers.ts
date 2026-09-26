@@ -19,9 +19,11 @@ export interface HandlerDeps {
   rooms: RoomManager;
   log: Logger;
   now: () => number;
+  /** Nur hinter einem vertrauenswürdigen Reverse Proxy: Client-IP aus X-Forwarded-For. */
+  trustProxy?: boolean;
 }
 
-export function attachSocketHandlers({ io, rooms, log, now }: HandlerDeps): { limiters: RateLimiter[] } {
+export function attachSocketHandlers({ io, rooms, log, now, trustProxy = false }: HandlerDeps): { limiters: RateLimiter[] } {
   // Gesamtbudget je Socket und zusätzlich je Ereignistyp, damit z. B. Reaktionen
   // niemals Stimmen oder Wiedergabemeldungen verdrängen.
   const perSocket = new RateLimiter(80, 15, now);
@@ -37,7 +39,8 @@ export function attachSocketHandlers({ io, rooms, log, now }: HandlerDeps): { li
 
   io.on('connection', (socket: Socket) => {
     const data = socket.data as SocketData;
-    data.ip = String(socket.handshake.address ?? 'unknown');
+    const forwarded = trustProxy ? String(socket.handshake.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim() : '';
+    data.ip = forwarded || String(socket.handshake.address ?? 'unknown');
 
     const roomOf = (): Room | null => (data.roomCode ? rooms.get(data.roomCode) ?? null : null);
 

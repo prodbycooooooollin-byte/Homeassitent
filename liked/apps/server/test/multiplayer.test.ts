@@ -317,3 +317,29 @@ describe('Protokolle (Abnahme 13)', () => {
     expect(logs).toContain('match_finished');
   }, 20000);
 });
+
+describe('Rate-Limits', () => {
+  it('begrenzt Beitrittsversuche je IP und berücksichtigt X-Forwarded-For nur mit TRUST_PROXY', async () => {
+    const s = await startServer({ trustProxy: true });
+    server = s.server;
+    const host = new Bot(s.url, 'Host', { 'x-forwarded-for': '203.0.113.1' });
+    bots = [host];
+    await host.create('demo');
+    // Ein Angreifer rät Codes: nach 10 Versuchen gesperrt.
+    const attacker = new Bot(s.url, 'Rater', { 'x-forwarded-for': '198.51.100.7' });
+    bots.push(attacker);
+    await attacker.connected();
+    const results: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const r = await attacker.emit('joinRoom', { code: 'AAAAA' + (i % 10), profile: attacker.profile(), protocolVersion: 1 });
+      results.push(r.ok ? 'ok' : r.error!);
+    }
+    expect(results.slice(0, 10).every((e) => e === 'room_not_found')).toBe(true);
+    expect(results.slice(10)).toEqual(['rate_limited', 'rate_limited']);
+    // Andere Spieler hinter demselben Proxy sind davon nicht betroffen.
+    const friend = new Bot(s.url, 'Freund', { 'x-forwarded-for': '192.0.2.44' });
+    bots.push(friend);
+    await friend.join(host.code);
+    expect(friend.playerId).toMatch(/^p_/);
+  });
+});
