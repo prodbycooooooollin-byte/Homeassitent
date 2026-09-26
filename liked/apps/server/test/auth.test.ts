@@ -205,5 +205,7 @@ describe('TikTok-URL-Verifizierung', () => {
       expect(await r.text()).toBe('tiktok-developers-site-verification=XYZ');
     }
     expect((await fetch(`${s.url}/auth/tiktok/callback/andere.txt`)).status).toBe(404);
+    expect((await fetch(`${s.url}/auth/tiktok/callback/tiktokAbCdEf123456.txt`, { method: 'HEAD' })).status).toBe(200);
+    expect((await fetch(`${s.url}/healthz`).then((r) => r.json())).tiktokVerifyFile).toBe('tiktokAbCdEf123456.txt');
   });
 });

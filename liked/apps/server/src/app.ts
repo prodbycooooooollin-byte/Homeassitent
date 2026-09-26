@@ -52,9 +52,9 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
       const ip = clientIp(req);
       // TikTok-Verifizierung: Datei unter jedem Pfad-Präfix ausliefern (z. B. /auth/tiktok/callback/<datei>).
       const verify = config.tiktokVerification;
-      if (verify && req.method === 'GET' && url.pathname.endsWith(`/${verify.file}`)) {
+      if (verify && (req.method === 'GET' || req.method === 'HEAD') && url.pathname.endsWith(`/${verify.file}`)) {
         res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
-        res.end(verify.content);
+        res.end(req.method === 'HEAD' ? undefined : verify.content);
         return;
       }
       if (url.pathname === '/healthz') {
@@ -66,7 +66,9 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
             protocol: PROTOCOL_VERSION,
             uptimeSec: Math.round((now() - startedAt) / 1000),
             rooms: rooms.rooms.size,
-            tiktokOfficialAdapter: auth ? 'configured' : 'not_configured'
+            tiktokOfficialAdapter: auth ? 'configured' : 'not_configured',
+            // Öffentlicher Dateiname (kein Secret) – hilft beim Prüfen der TikTok-Verifizierung.
+            tiktokVerifyFile: config.tiktokVerification?.file ?? null
           })
         );
         return;
