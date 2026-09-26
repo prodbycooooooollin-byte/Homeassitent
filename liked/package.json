@@ -1,0 +1,30 @@
+{
+  "name": "liked",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LIKED – Multiplayer-Partyspiel: Aus wessen TikTok-Likes stammt dieser Clip?",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev:server": "npm run dev -w @liked/server",
+    "dev:desktop": "npm run dev -w @liked/desktop",
+    "build": "npm run build -w @liked/server && npm run build -w @liked/desktop",
+    "dist:win": "npm run dist:win -w @liked/desktop"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "author": "prodbycooooooollin-byte",
+  "license": "UNLICENSED",
+  "type": "module"
+}

@@ -1,0 +1,147 @@
+name: LIKED – Tests & Windows-Build
+
+# Prüft Protokoll, Spiellogik, Server und Oberfläche und baut den Windows-Installer.
+# Der Installer wird auf einem frischen Windows-Runner still installiert, gestartet
+# (--smoke-test), und wieder deinstalliert.
+# Auslöser: Tag "liked-v<version>", Push auf main/claude/** mit Änderungen an liked/, manuell.
+
+on:
+  push:
+    tags:
+      - 'liked-v*'
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'liked/**'
+      - '.github/workflows/release-liked.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: liked
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: liked/package-lock.json
+      - name: Abhängigkeiten installieren
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Typprüfung
+        run: npm run typecheck
+      - name: Tests (Spiellogik, Connectoren, Multiplayer-Server, Auth-Dienst)
+        run: npm test
+      - name: Server-Bundle bauen
+        run: npm run build -w @liked/server
+
+  build-windows:
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: liked
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: liked/package-lock.json
+
+      - name: Version bestimmen
+        shell: bash
+        run: |
+          V=$(node -p "require('./apps/desktop/package.json').version")
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=liked-v$V" >> "$GITHUB_ENV"
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Tests unter Windows
+        run: npm test
+
+      - name: Installer bauen (NSIS, x64)
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # Optional abweichende Standard-Serveradresse (kein Secret); leer = Render-Server aus build-main.mjs.
+          LIKED_SERVER_URL: ${{ vars.LIKED_SERVER_URL }}
+
+      - name: Installer still installieren, starten und deinstallieren
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem apps/desktop/release/LIKED-Setup-*.exe | Select-Object -First 1
+          Write-Host "Installer: $($setup.FullName) ($([math]::Round($setup.Length/1MB,1)) MB)"
+          $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw "Installation fehlgeschlagen ($($p.ExitCode))" }
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\LIKED'
+          $exe = Join-Path $dir 'LIKED.exe'
+          if (-not (Test-Path $exe)) { throw "LIKED.exe nicht gefunden unter $dir" }
+          $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\LIKED.lnk'
+          if (-not (Test-Path $lnk)) { throw 'Startmenüeintrag fehlt' }
+          Write-Host 'Startmenüeintrag vorhanden.'
+          $run = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru -Wait
+          Write-Host "Smoke-Test Exit-Code: $($run.ExitCode)"
+          if ($run.ExitCode -ne 0) { throw 'App-Start fehlgeschlagen' }
+          $un = Join-Path $dir 'Uninstall LIKED.exe'
+          $u = Start-Process -FilePath $un -ArgumentList '/S' -PassThru -Wait
+          Start-Sleep -Seconds 5
+          if (Test-Path $exe) { throw 'Deinstallation hat LIKED.exe nicht entfernt' }
+          Write-Host 'Installieren, Starten und Deinstallieren erfolgreich.'
+
+      - name: Artefakte hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: liked-windows
+          path: |
+            liked/apps/desktop/release/*.exe
+            liked/apps/desktop/release/*.blockmap
+            liked/apps/desktop/release/latest.yml
+          if-no-files-found: error
+
+      - name: Versions-Release erstellen/aktualisieren
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: LIKED ${{ env.VERSION }}
+          prerelease: true
+          body: |
+            Windows-Installer für LIKED ${{ env.VERSION }} (x64).
+
+            - `LIKED-Setup-*.exe`: Installer (Startmenü, Desktopverknüpfung, Deinstallation)
+
+            Hinweise: Nicht code-signiert (Windows SmartScreen kann warnen).
+            Der automatische TikTok-Like-Import benötigt einen Server mit freigegebener TikTok-App
+            (siehe liked/docs/INTEGRATION_REPORT.md). Ohne Freigabe sind nur Demo-Partien möglich.
+          files: |
+            liked/apps/desktop/release/*.exe
+            liked/apps/desktop/release/*.blockmap
+            liked/apps/desktop/release/latest.yml
+          overwrite_files: true
+
+      - name: Update-Kanal „liked-latest“ aktualisieren
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: liked-latest
+          target_commitish: ${{ github.sha }}
+          name: LIKED – aktueller Update-Kanal
+          prerelease: true
+          body: Update-Quelle für die integrierte Update-Funktion (latest.yml + Installer). Stand ${{ env.VERSION }}.
+          files: |
+            liked/apps/desktop/release/*.exe
+            liked/apps/desktop/release/*.blockmap
+            liked/apps/desktop/release/latest.yml
+          overwrite_files: true

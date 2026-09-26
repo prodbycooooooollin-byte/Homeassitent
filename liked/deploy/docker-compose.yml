@@ -1,0 +1,23 @@
+# Beispiel: LIKED-Server hinter Caddy (automatisches HTTPS/WSS via Let's Encrypt).
+# Start im Verzeichnis liked/:  docker compose -f deploy/docker-compose.yml up -d --build
+services:
+  liked:
+    build:
+      context: ..
+      dockerfile: apps/server/Dockerfile
+    env_file: ../apps/server/.env
+    volumes:
+      - liked-data:/data
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    restart: unless-stopped
+volumes:
+  liked-data:
+  caddy-data:
