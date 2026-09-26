@@ -28,7 +28,7 @@ und alle raten gleichzeitig, aus wessen Like-Liste der Clip stammt.
 7. **Spielen:** Clip ansehen, auf die Karte der Person klicken, die ihn gelikt hat (oder Taste 1–9). Pro Runde zählt
    genau ein Tipp. Wer selbst die Quelle ist, schaut in dieser Runde zu.
 
-Alle Mitspieler müssen denselben Server verwenden (*Einstellungen → Server*).
+Die App verbindet sich automatisch mit dem zentralen LIKED-Server (`https://liked-partyspiel-server.onrender.com`, eingerichtet über `render.yaml`). Es muss nichts eingetragen werden.
 
 ## Für Entwickler
 

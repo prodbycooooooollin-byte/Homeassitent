@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import { RoomModeSchema } from '@liked/protocol';
 import type { AppSettings, TikTokOverview, UpdateState } from '../src/shared/ipc-types.js';
-import { lastRoomStore, loadSettings, saveSettings, wipeLocalGameData } from './store.js';
+import { DEFAULT_SERVER_URL, lastRoomStore, loadSettings, saveSettings, wipeLocalGameData } from './store.js';
 import { TikTokManager } from './tiktok-manager.js';
 import { Updater } from './updater.js';
 import { LocalServer } from './local-server.js';
@@ -162,7 +162,8 @@ app.whenReady().then(async () => {
     version: app.getVersion(),
     platform: process.platform,
     packaged: app.isPackaged,
-    smokeTest: SMOKE_TEST
+    smokeTest: SMOKE_TEST,
+    defaultServerUrl: DEFAULT_SERVER_URL
   }));
   ipcMain.on('app:smoke-done', (e, ok) => {
     if (!SMOKE_TEST || e.sender !== mainWindow?.webContents) return;
@@ -207,6 +208,7 @@ app.whenReady().then(async () => {
       audio: { ...settings.audio, ...patch.audio },
       display: { ...settings.display, ...patch.display }
     };
+    if (patch.serverUrl !== undefined) settings.serverUrlCustom = patch.serverUrl.replace(/\/$/, '') !== DEFAULT_SERVER_URL.replace(/\/$/, '');
     saveSettings(settings);
     if (patch.display?.fullscreen !== undefined) mainWindow?.setFullScreen(patch.display.fullscreen);
     return settings;

@@ -40,12 +40,17 @@ Healthcheck `/healthz`, `TRUST_PROXY=1`. Render stellt HTTPS/WSS automatisch ber
 
 1. Auf [render.com](https://render.com) anmelden und GitHub verbinden (Zugriff auf dieses Repository erlauben).
 2. **New → Blueprint** → Repository `Homeassitent` wählen → Branch wählen (nach dem Merge `main`) → **Apply**.
-3. Nach dem ersten Deploy die Adresse kopieren, z. B. `https://liked-server-xxxx.onrender.com`.
-   Prüfen: `https://…onrender.com/healthz` liefert `{"ok":true,…}`.
-4. Adresse in die App bringen:
-   - sofort: jeder Spieler trägt sie unter *Einstellungen → Server* ein, **oder**
-   - dauerhaft: in GitHub unter *Settings → Secrets and variables → Actions → Variables* die Variable
-     `LIKED_SERVER_URL` anlegen. Der nächste Windows-Build nutzt sie als Standardadresse.
+3. Der Dienst heißt `liked-partyspiel-server`. Dadurch lautet die Adresse
+   **`https://liked-partyspiel-server.onrender.com`**, und genau diese Adresse ist fest in der App eingebaut
+   (`apps/desktop/scripts/build-main.mjs`). Spieler müssen nichts eintragen.
+   Prüfen: `https://liked-partyspiel-server.onrender.com/healthz` liefert `{"ok":true,…}`.
+4. **Wichtig:** Zeigt Render nach dem Anlegen eine andere Adresse an (z. B. mit angehängtem Zufallskürzel, weil der
+   Name vergeben war), die Konstante `DEFAULT_SERVER_URL` in `build-main.mjs` anpassen oder in GitHub die
+   Actions-Variable `LIKED_SERVER_URL` setzen. Danach baut die CI einen neuen Installer.
+
+Die App verwendet immer den Standard-Server des installierten Builds. Nur wer unter *Einstellungen → Server* bewusst
+eine andere Adresse einträgt (z. B. den lokalen Hostmodus), weicht davon ab; „Standard-Server verwenden“ stellt
+das zurück. Ältere Installationen mit gespeicherter Adresse `localhost` werden beim Start automatisch umgestellt.
 
 **Grenzen des Gratis-Tarifs** (laut [Render-Doku](https://render.com/docs/free)):
 - Nach 15 Minuten ohne eingehenden Verkehr schläft der Dienst ein, das Aufwachen dauert etwa eine Minute. Die App

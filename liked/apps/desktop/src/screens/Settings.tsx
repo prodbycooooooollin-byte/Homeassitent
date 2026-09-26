@@ -122,8 +122,10 @@ function NetworkSettings({ disabled }: { disabled: boolean }) {
   const [url, setUrl] = useState(s.serverUrl);
   const [local, setLocal] = useState<LocalServerState | null>(null);
   const [port, setPort] = useState(47800);
+  const [defaultUrl, setDefaultUrl] = useState('');
   useEffect(() => {
     void api.localServer.status().then(setLocal);
+    void api.app.info().then((i) => setDefaultUrl(i.defaultServerUrl));
   }, []);
   const valid = /^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(url);
   return (
@@ -143,7 +145,20 @@ function NetworkSettings({ disabled }: { disabled: boolean }) {
             {t.common.confirm}
           </Button>
         </div>
-        <p className="hint">{t.settings.serverHint}</p>
+        <p className="hint">{s.serverUrlCustom ? t.settings.serverCustom : t.settings.serverDefault}</p>
+        {s.serverUrlCustom && defaultUrl && (
+          <Button
+            variant="secondary"
+            disabled={disabled}
+            onClick={async () => {
+              const next = await patch({ serverUrl: defaultUrl });
+              setUrl(next.serverUrl);
+              set({ tiktok: await api.tiktok.overview() });
+            }}
+          >
+            {t.settings.useDefaultServer}
+          </Button>
+        )}
       </Panel>
       <Panel title={t.settings.localHost}>
         <p className="hint">{t.settings.localHostHint}</p>

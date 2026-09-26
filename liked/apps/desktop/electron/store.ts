@@ -42,7 +42,8 @@ export function defaultSettings(): AppSettings {
       avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)]!,
       deviceId: randomBytes(18).toString('base64url')
     },
-    serverUrl: process.env.LIKED_SERVER_URL ?? __DEFAULT_SERVER_URL__,
+    serverUrl: DEFAULT_SERVER_URL,
+    serverUrlCustom: false,
     audio: { music: 0.5, sfx: 0.7, musicMuted: false, sfxMuted: false, videoStartMuted: false },
     display: { fullscreen: false, reducedMotion: 'system', effects: 'high' },
     introSeen: false,
@@ -51,6 +52,9 @@ export function defaultSettings(): AppSettings {
 }
 
 declare const __DEFAULT_SERVER_URL__: string;
+
+/** Im Build festgelegter zentraler Server – Spieler müssen nichts eintragen. */
+export const DEFAULT_SERVER_URL: string = process.env.LIKED_SERVER_URL || __DEFAULT_SERVER_URL__;
 
 export function loadSettings(): AppSettings {
   const d = defaultSettings();
@@ -62,6 +66,9 @@ export function loadSettings(): AppSettings {
     audio: { ...d.audio, ...s.audio },
     display: { ...d.display, ...s.display }
   };
+  // Ohne eigene Eingabe immer den Standard-Server des aktuellen Builds verwenden
+  // (auch wenn eine ältere Version eine andere Standardadresse gespeichert hat).
+  if (!merged.serverUrlCustom) merged.serverUrl = DEFAULT_SERVER_URL;
   if (!s.profile?.deviceId) writeJson('settings.json', merged);
   return merged;
 }

@@ -44,7 +44,7 @@ function browserMock(): LikedApi {
   const noop = () => () => undefined;
   return {
     app: {
-      info: async () => ({ version: '0.1.0-preview', platform: 'browser', packaged: false, smokeTest: false }),
+      info: async () => ({ version: '0.1.0-preview', platform: 'browser', packaged: false, smokeTest: false, defaultServerUrl: (import.meta.env.VITE_DEFAULT_SERVER_URL as string | undefined) ?? 'http://localhost:8787' }),
       smokeTestDone: () => undefined,
       quit: () => window.close()
     },

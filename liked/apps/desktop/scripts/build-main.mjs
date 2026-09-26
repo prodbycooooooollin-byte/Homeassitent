@@ -1,6 +1,9 @@
 import { build } from 'esbuild';
 
-const serverUrl = process.env.LIKED_SERVER_URL ?? 'http://localhost:8787';
+// Zentraler Server, mit dem sich jede installierte App automatisch verbindet (Render, siehe render.yaml).
+// Überschreibbar beim Build über die Umgebungsvariable LIKED_SERVER_URL (in CI: GitHub-Variable).
+export const DEFAULT_SERVER_URL = 'https://liked-partyspiel-server.onrender.com';
+const serverUrl = process.env.LIKED_SERVER_URL || DEFAULT_SERVER_URL;
 const common = {
   bundle: true,
   platform: 'node',

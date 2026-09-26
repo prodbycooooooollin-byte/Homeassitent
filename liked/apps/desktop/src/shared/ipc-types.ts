@@ -5,6 +5,8 @@ import type { AdapterId, ConnectionStatus, LikeIndexMeta } from '@liked/tiktok-c
 export interface AppSettings {
   profile: { name: string; avatar: string; deviceId: string };
   serverUrl: string;
+  /** true = Spieler hat bewusst einen anderen Server gewählt. */
+  serverUrlCustom?: boolean;
   audio: { music: number; sfx: number; musicMuted: boolean; sfxMuted: boolean; videoStartMuted: boolean };
   display: { fullscreen: boolean; reducedMotion: 'system' | 'on' | 'off'; effects: 'high' | 'low' };
   introSeen: boolean;
@@ -44,7 +46,7 @@ export interface ClipListEntry {
 
 export interface LikedApi {
   app: {
-    info(): Promise<{ version: string; platform: string; packaged: boolean; smokeTest: boolean }>;
+    info(): Promise<{ version: string; platform: string; packaged: boolean; smokeTest: boolean; defaultServerUrl: string }>;
     smokeTestDone(ok: boolean): void;
     quit(): void;
   };

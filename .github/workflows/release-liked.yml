@@ -76,8 +76,8 @@ jobs:
         run: npm run dist:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          # Öffentliche Standard-Serveradresse für den Build (kein Secret).
-          LIKED_SERVER_URL: ${{ vars.LIKED_SERVER_URL || 'http://localhost:8787' }}
+          # Optional abweichende Standard-Serveradresse (kein Secret); leer = Render-Server aus build-main.mjs.
+          LIKED_SERVER_URL: ${{ vars.LIKED_SERVER_URL }}
 
       - name: Installer still installieren, starten und deinstallieren
         shell: pwsh

@@ -253,6 +253,9 @@ export const de = {
     videoStartMuted: 'Clips stumm starten',
     serverUrl: 'Server-Adresse',
     serverHint: 'Alle Mitspieler müssen denselben Server verwenden.',
+    serverDefault: 'Standard-Server von LIKED – automatisch eingerichtet, nichts einzutragen.',
+    serverCustom: 'Eigener Server gewählt. Alle Mitspieler müssen denselben Server verwenden.',
+    useDefaultServer: 'Standard-Server verwenden',
     localHost: 'Lokaler Server (fortgeschritten)',
     localHostHint:
       'Startet den Spielserver auf diesem PC. Mitspieler außerhalb deines Netzes brauchen Portweiterleitung oder ein VPN. Der offizielle TikTok-Import ist im lokalen Modus nicht verfügbar.',
