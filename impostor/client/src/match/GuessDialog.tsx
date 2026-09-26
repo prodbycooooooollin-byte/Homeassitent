@@ -51,7 +51,10 @@ export function GuessDialog({ open, onClose }: { open: boolean; onClose: () => v
             autoComplete="off"
             spellCheck={false}
           />
-          <p className="muted small">Die Partie läuft währenddessen weiter. Abbrechen hat keine Folgen.</p>
+          <p className="muted small">
+            Raten geht während Hinweisphase und Diskussion – ab Beginn der Wahl ist es gesperrt. Die Partie läuft währenddessen weiter,
+            Abbrechen hat keine Folgen und niemand sieht, dass du dieses Fenster geöffnet hast.
+          </p>
           <div className="dialog-actions">
             <button type="button" className="btn btn-ghost" onClick={onClose}>
               Abbrechen

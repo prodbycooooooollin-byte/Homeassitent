@@ -12,8 +12,26 @@ Die Eingeweihten wollen den Impostor entlarven, der Impostor blufft mit oder rä
 | ![Lobby](docs/screenshots/05-lobby-bereit.jpg) | ![Rolle](docs/screenshots/07-rolle-eingeweiht.jpg) | ![Hinweise](docs/screenshots/10-hinweise.jpg) |
 | **Geheime Wahl** | **Auflösung** | **10 Personen, 120 Hinweise** |
 | ![Wahl](docs/screenshots/12-wahl-auswahl.jpg) | ![Auflösung](docs/screenshots/15-aufloesung.jpg) | ![Historie](docs/screenshots/21-historie-120.jpg) |
+| **Startseite (1920 px)** | **Lobby am Handy** | **Einladung per Link (Handy)** |
+| ![Start](docs/screenshots/v-1920-start.jpg) | ![Lobby Handy](docs/screenshots/v-phone-lobby.jpg) | ![Einladung](docs/screenshots/mp-einladung-handy.jpg) |
 
-Alle Screenshots entstehen automatisch durch `npm run test:ui` (echte Partien mit vier Browser-Clients).
+Alle Screenshots entstehen automatisch durch `npm run test:ui`, `npm run test:visual` und `npm run test:multiplayer`.
+
+## Spielserver
+
+Windows-App und Browser-Version verbinden sich **automatisch** mit dem produktiven Server
+**https://imposter-hx0a.onrender.com** (WebSocket `wss://imposter-hx0a.onrender.com/ws`). Niemand muss eine Adresse eingeben.
+Die Adresse ist zentral in [`shared/server.ts`](shared/server.ts) hinterlegt. Reihenfolge der Auflösung:
+
+1. bewusster Entwickler-Override (*Einstellungen → Erweitert*, mit „Standardserver verwenden“ jederzeit zurücksetzbar)
+2. Desktop-App: Umgebungsvariable `IMPOSTOR_SERVER_URL`, sonst Build-Wert, sonst Produktionsserver
+3. Browser: der Server, der die Seite ausgeliefert hat (gleicher Ursprung)
+
+Eingaben wie `…onrender.com`, `https://…/`, `wss://…/ws` oder `…/ws/ws` werden auf dieselbe Adresse normalisiert. Ungültige,
+leere oder alte gespeicherte Werte blockieren den Standard nicht; die früher gespeicherte `serverUrl` (z. B. `localhost` aus
+Tests) wird bei der Migration auf Einstellungsversion 2 verworfen. Lokale Adressen werden nie stillschweigend als Fallback
+verwendet. Der Render-Free-Tarif schläft nach Inaktivität ein; die App zeigt dann „Verbindung wird hergestellt … Der
+Spielserver startet gerade“ und versucht es mit wachsendem Abstand (bis ca. 2 Minuten) erneut, danach „Erneut versuchen“.
 
 ---
 
@@ -36,7 +54,8 @@ erreichbaren Server – siehe [Server bereitstellen](#server-bereitstellen).
 
 Entwicklung mit Hot-Reload: `npm run dev` (Server auf 8787 mit Neustart bei Änderungen, Vite auf http://localhost:5173).
 
-Desktop-App lokal starten: `npm run desktop` (verbindet sich standardmäßig mit `ws://localhost:8787/ws`).
+Desktop-App lokal gegen den lokalen Server starten: `IMPOSTOR_SERVER_URL=ws://localhost:8787 npm run desktop`
+(ohne die Variable verbindet sie sich mit dem Produktionsserver).
 
 ---
 
@@ -118,7 +137,10 @@ funktionslosen Modus-Kacheln in der Oberfläche.
 
 - Genau ein Impostor, Rollen und Wort pro Partie serverseitig neu ausgelost (`crypto.randomInt`), keine vorhersehbare Rotation.
 - Startperson zufällig; pro Durchgang rückt der Start um einen Platz, die Sitzordnung bleibt zyklisch.
-- Durchgänge 3 / 5 / 8 / **10** / 12 („Abstimmung spätestens nach N Durchgängen"), Kurzspiel-Preset mit 3.
+- Durchgänge 3 / **5** / 8 / 10 / 12 („Abstimmung spätestens nach N Durchgängen"). Presets: Einsteiger (3 · 45 s),
+  Standard (5 · 30 s), Lang (10 · 30 s). Der Standard wurde von 10 auf 5 gesenkt: 10 Durchgänge ergeben bei 4–6 Personen bis
+  zu 20–30 Minuten Hinweisphase, Assoziationen wiederholen sich meist nach 4–5 Durchgängen. Die zuletzt als Host gewählten
+  Regeln werden lokal gespeichert und beim Erstellen einer neuen Lobby übernommen.
 - Zugtimer 15 / **30** / 45 / 60 s oder ohne. Diskussion 45 s, geheime Wahl 30 s, Rollenbestätigung 60 s.
 - Kategorien kombinierbar, konkrete Kategorie geheim; optional gemeinsamer Kategoriehinweis für alle.
 - Keine Wortwiederholung in einer Lobby, solange der gewählte Pool reicht.
@@ -165,13 +187,14 @@ funktionslosen Modus-Kacheln in der Oberfläche.
 
 ```bash
 npm run typecheck
-npm test              # 42 Regel-, Geheimhaltungs- und Multiplayer-Tests (Spiellogik + echte WebSockets)
+npm test              # 58 Regel-, Geheimhaltungs-, Konfigurations- und Multiplayer-Tests
 npm run build
 npm run test:ui       # Browser-Ende-zu-Ende: 4 Clients, mehrere Partien, 10er-Runde mit 120 Hinweisen, Screenshots
-xvfb-run -a npm run test:desktop   # Electron-App gegen lokalen Server (unter Windows ohne xvfb-run)
+npm run test:visual   # Screenshots + Überlaufprüfung in 1920×1080, 1366×768, 1024×700, 390×844
+xvfb-run -a npm run test:multiplayer   # Desktop-App (Electron) + 2 Browser: 3 Partien, Reconnect, Fristablauf, Hostwechsel
 ```
 
-`test:ui` und `test:desktop` nutzen Chromium über `playwright-core`; Pfad per `CHROMIUM_PATH` anpassbar.
+`test:ui`, `test:visual` und `test:multiplayer` nutzen Chromium über `playwright-core`; Pfad per `CHROMIUM_PATH` anpassbar.
 
 Abgedeckt u. a.: vier unabhängige Clients per Code in derselben Lobby über mehrere Partien; genau drei gleiche Wörter und
 der Impostor erhält es in keinem Frame; nur die aktive Person kann Hinweise geben; Hinweisvalidierung ohne Wortbezug;
@@ -202,8 +225,9 @@ $env:IMPOSTOR_SERVER_URL = "wss://impostor.example.com/ws"   # optional
 npm run dist:win     # → release/Impostor-Setup-0.1.0.exe und release/Impostor-0.1.0-portable.exe
 ```
 
-Die EXE ist nicht signiert; Windows SmartScreen kann warnen. Die Serveradresse lässt sich jederzeit in der App unter
-**Einstellungen → Spielserver** ändern oder beim Start über die Umgebungsvariable `IMPOSTOR_SERVER_URL` setzen.
+Die EXE ist nicht signiert; Windows SmartScreen kann warnen. Ohne `IMPOSTOR_SERVER_URL` enthält die EXE den
+Produktionsserver als Standard. **Achtung:** Ist die Repository-Variable `IMPOSTOR_SERVER_URL` gesetzt, hat sie beim Build
+Vorrang – für den Render-Server leer lassen oder auf `https://imposter-hx0a.onrender.com` setzen.
 
 ---
 
@@ -249,7 +273,7 @@ Verbindungslimit pro IP die echte Client-IP verwendet.
 | `TRUST_PROXY` | – | `1` = `X-Forwarded-For` auswerten |
 | `MAX_CONNECTIONS_PER_IP` | `40` | gleichzeitige Verbindungen je IP |
 | `MAX_LOBBIES` | `2000` | gleichzeitige Lobbys |
-| `IMPOSTOR_SERVER_URL` | – | nur Build/Desktop: Standard-Serveradresse der App |
+| `IMPOSTOR_SERVER_URL` | – | nur Build/Desktop: abweichende Serveradresse (sonst Produktionsserver) |
 
 Es werden keine Geheimnisse benötigt oder im Repository gespeichert.
 
@@ -260,19 +284,19 @@ Es werden keine Geheimnisse benötigt oder im Repository gespeichert.
 **Implementiert:** vollständiger klassischer Modus (Lobby, Rollenverteilung, Hinweise, vorzeitige und Schlussabstimmung,
 Rateversuch, Auflösung, weitere Partien, Punktestand), Verbindungsabbrüche und Sonderfälle, Tabletop-Design mit
 Animationen für alle zehn geforderten Momente, synthetisierte Sounds und Musik, Onboarding, Regeln, lokale Einstellungen
-(Audio, Bewegung, Vollbild, Privatsphäre, Serveradresse), Tastaturbedienung, Web-Client, Electron-App, Docker-Setup,
+(Audio, Bewegung, Vollbild, Privatsphäre; Serveradresse nur unter „Erweitert“), Tastaturbedienung, Web-Client, Electron-App, Docker-Setup,
 CI-Workflow.
 
-**Hier tatsächlich getestet:** 42 automatisierte Tests (grün), Browser-Ende-zu-Ende-Lauf mit vier Clients und einer
-10er-Runde (grün), Electron-App unter Linux/Xvfb gegen lokalen Server (grün), portable Windows-EXE unter Linux mit
-electron-builder erzeugt (ohne Icon-/Metadaten-Einbettung, da dafür Wine nötig ist), die Build-Schritte des Dockerfiles
-außerhalb von Docker.
+**Hier tatsächlich getestet (alles gegen einen lokalen Server mit identischem Code):** 58 automatisierte Tests;
+Browser-Ende-zu-Ende mit vier Clients und einer 10er-Runde mit 120 Hinweisen; visuelle Prüfung in vier Fenstergrößen;
+Mehrspieler-Lauf mit der echten Electron-App (Linux/Xvfb) plus zwei unabhängigen Browsern (einer davon in Handy-Breite über
+den Einladungslink): drei Partien, Punkte, Wiederverbindung, Ablauf der 60-s-Frist, Hostwechsel. Außerdem: frisches
+Electron-Profil und Migration alter `localhost`-Einstellungen führen zum Produktionsserver.
 
 **Nicht erledigt / nicht verifiziert:**
 
-- **Keine öffentliche Bereitstellung.** Es gab keine Zugangsdaten für einen Hoster – es läuft kein öffentlich erreichbarer
-  Server. Anleitung siehe oben.
-- Das Docker-Image selbst konnte in dieser Umgebung nicht gebaut werden (Docker-Hub-Limit, kein Proxy im Container).
-- Die App wurde nicht auf einem echten Windows-Rechner gestartet; NSIS-Installer mit eingebettetem Icon entsteht im
-  Windows-Release-Workflow.
+- Der Render-Server war aus der Entwicklungsumgebung nicht erreichbar (Netzwerkrichtlinie). Die echte Verbindung zu
+  `wss://imposter-hx0a.onrender.com/ws` ist daher nicht getestet – nur, dass alle Clients genau diese Adresse verwenden.
+- Die App wurde nicht auf einem echten Windows-Rechner gestartet; getestet wurde dieselbe Electron-App unter Linux.
+- Das Docker-Image selbst wurde hier nicht gebaut (die Build-Schritte ja); auf Render läuft es bereits.
 - Keine Code-Signatur, keine eigenen Wortpakete, keine Wiederaufnahme nach Serverabsturz, keine horizontale Skalierung.

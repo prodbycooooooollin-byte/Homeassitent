@@ -993,3 +993,17 @@
 .conn-banner {
   z-index: 1200;
 }
+
+.rs-side .pc-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.15;
+  max-width: 100%;
+}
+.score-list li.me .score-delta {
+  color: #062520;
+}
