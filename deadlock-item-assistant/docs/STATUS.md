@@ -51,4 +51,5 @@
   | Overlay + Einstellungsfenster (45 s) | 2,0 % | 3,7 % | 596 MB | 0,3 % |
 
   Die Rohdaten stehen in `docs/measurements/`. Ein Einfluss auf die FPS des Spiels wurde **nicht** gemessen, weil kein Spiel lief.
-- **Windows-Build:** Die portable EXE ließ sich unter Linux mit Wine64 bauen. Sie wurde **nicht** unter Windows ausgeführt. Der NSIS-Installer benötigt 32-Bit-Wine und entsteht daher im GitHub-Workflow auf `windows-latest`.
+- **Windows-Build:** Der GitHub-Workflow `release-deadlock-item-assistant.yml` lief auf `windows-latest` erfolgreich durch: Typprüfung, alle Tests, NSIS-Installer und portable EXE, Pre-Release `dia-v0.1.0`. Unter Linux ließ sich die portable EXE zusätzlich mit Wine64 bauen.
+  Die EXE wurde **nicht** interaktiv unter Windows gestartet; der Workflow baut und testet nur.
