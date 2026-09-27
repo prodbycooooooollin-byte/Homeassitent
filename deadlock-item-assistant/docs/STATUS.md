@@ -3,19 +3,21 @@
 ## Neu in 0.3.0: Bildschirmerkennung
 
 - **Warum:** Overwolf gibt Spielevents nur für von Overwolf genehmigte Apps frei; die Entwicklerkonsole war für dich nicht nutzbar. Die Anleitung aus 0.2.0 („eigenen Schlüssel anlegen“) war falsch und ist entfernt.
-- **Was:** „Automatisch“ liest jetzt das HUD: Souls, Itemwert, eigene Items, Heldenporträts und bei gedrückter Tab-Taste die Item-Spalten. Lokal, nur während Deadlock läuft, ohne Speichern.
+- **Was:** „Automatisch“ liest jetzt das HUD: nicht ausgegebene Souls, Boons, eigene Items, Heldenporträts und bei gedrückter Tab-Taste die Item-Spalten. Lokal, nur während Deadlock läuft, ohne Speichern.
+- **Korrektur nach Hinweis des Nutzers:** Die erste Fassung hielt die Zahl im runden Zähler für die Souls. Das sind aber die Boons. Die Souls stehen im Match in der großen Zahl daneben; nur in der Sandbox steht dort der Itemwert. Die Aussage „Souls 0 gelesen“ war daher falsch.
 - **Geprüft an deinen 4 echten HUD-Screenshots** (Sandbox, Build 6701, 1920×1080; Fixtures in `test/fixtures/hud`, nur HUD-Bereiche):
   - alle 15 belegten Slots richtig, keine Fehltreffer auf leeren Slots
   - Hero (Infernus, Mina) eindeutig, keine Fehltreffer in dunklen Flächen
-  - Souls „0“ und Itemwerte 10.400 und 29.600 richtig gelesen; die Summe der erkannten Items stimmt mit dem Itemwert überein
+  - Boons „0“ und Itemwerte 10.400 und 29.600 richtig gelesen; die Summe der erkannten Items stimmt mit dem Itemwert überein
+  - Sandbox-Zusatz „ITEM VALUE“ in allen Bildern erkannt. Ist er entfernt (so sieht laut Nutzer die Match-Anzeige aus), wird die Zahl als Budget gelesen: 29.600 Souls, „beobachtet“
   - Tab-Spalte: alle 7 bzw. 8 Items richtig
   - auf 720p, 900p, 1440p und 4K hochgerechnet: HUD-Items, Hero und Itemwert überall richtig. Die Tab-Spalte (sehr kleine Icons) liest dabei 6–8 von 8; unsichere Icons zählen als „nicht erkannt“.
-  - die ganze App (auch als gepacktes Programm) mit Screenshot als Bildschirmbild: Overlay zeigt Hero, gemessene Souls und Empfehlung
+  - die ganze App (auch als gepacktes Programm) mit Screenshot als Bildschirmbild: Overlay zeigt Hero, Items und Empfehlung
 - **Nicht geprüft**, weil kein Screenshot aus einem echten 6-gegen-6-Match vorlag:
   - Lage und Größe der 12 Porträts oben
   - Tab-Spalten der Gegner
   - welche Seite dein Team ist (angenommen: Porträts auf deiner Bildhälfte)
-  - Soul-Zahlen mit mehreren Stellen im Kreis; bisher nur die Ziffern 0, 1, 2, 4, 6 und 9 gesehen
+  - die echte Souls-Anzeige im Match; ob dort ein anderer Zusatztext steht, ist unbekannt. Bisher wurden nur die Ziffern 0, 1, 2, 4, 6 und 9 gesehen.
   - Aufnahme unter Windows (`desktopCapturer`), Rechenlast neben dem Spiel, exklusives Vollbild
 - **Schwächen:** Bei mehreren Porträts wird dein Hero erst per Tab-Abgleich erkannt; bis dahin kannst du ihn unter *Verbindung* auswählen. Gegner-Items sind so aktuell wie dein letzter Tab-Druck. Schaden gegen dich wird nicht erkannt.
 - **Release:** nur noch ein Installer und eine portable EXE. Die Overwolf-Variante entfällt.
@@ -73,7 +75,7 @@
 
 ## Test- und Leistungsresultate
 
-- `npm test`: **56/56 bestanden**. Das umfasst KV3-Parser, Datensatz-Invarianten, 15 Szenarien, Store-, Provider- (inkl. SSE-Mock), GEP- und Anzeige-Tests sowie 12 Tests zur Bildschirmerkennung an echten Screenshots (inkl. Texterkennung).
+- `npm test`: **57/57 bestanden**. Das umfasst KV3-Parser, Datensatz-Invarianten, 15 Szenarien, Store-, Provider- (inkl. SSE-Mock), GEP- und Anzeige-Tests sowie 13 Tests zur Bildschirmerkennung an echten Screenshots (inkl. Texterkennung).
 - `npm run typecheck`: ohne Fehler.
 - **Leistung:** Linux, Xvfb (Software-Rendering), 4 vCPU Xeon 2,8 GHz, Electron 33.4.11, Demo-Modus mit Updates im Sekundentakt. Summe aller App-Prozesse laut `app.getAppMetrics`; CPU in Prozent eines Kerns.
 

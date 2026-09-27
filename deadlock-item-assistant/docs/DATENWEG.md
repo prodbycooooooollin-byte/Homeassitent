@@ -4,9 +4,12 @@
 
 - **Overwolf** ließ sich nicht nutzen: Die Entwicklerkonsole setzt eine Freigabe durch Overwolf voraus („Overwolf currently doesn't approve private apps“). Der Weg aus dem Update unten ist damit für ein privates Tool **nicht gangbar**. Der Code bleibt, ist ohne Freigabe aber inaktiv.
 - **Gewählt: lokale Bildschirmerkennung**, vorher an echten Screenshots auf Machbarkeit geprüft (siehe `STATUS.md`):
-  - **Anker:** die türkise Fläche des Soul-Kreises unten links. Alle anderen Bereiche liegen in festen Abständen dazu und skalieren mit der Bildhöhe.
+  - **Anker:** die türkise Fläche des runden Boon-Zählers unten links. Alle anderen Bereiche liegen in festen Abständen dazu und skalieren mit der Bildhöhe.
   - **Items:** Die 2×6 Slots werden mit 8×8-Farbfingerabdrücken der offiziellen Icons verglichen, kontrastnormiert und ohne das Stufen-Abzeichen. Die Kategorie kommt aus der Abzeichenfarbe (orange/grün/violett) und schränkt die Kandidaten ein. Angenommen wird ein Treffer nur mit deutlichem Abstand zum Zweitbesten; sonst gilt der Slot als „nicht erkannt“.
-  - **Zahlen:** Die Ziffern werden per Farbmaske freigestellt und mit tesseract.js (nur Ziffern) gelesen. Akzeptiert werden nur plausible Formate. Der Itemwert muss der Summe der Listenpreise der erkannten Items entsprechen, sonst gilt das Inventar als unvollständig.
+  - **Zahlen:** Die Ziffern werden per Farbmaske freigestellt und mit tesseract.js (nur Ziffern) gelesen. Akzeptiert werden nur plausible Formate.
+    - Die große Zahl rechts vom Boon-Zähler sind im normalen Match die nicht ausgegebenen Souls (Angabe des Nutzers) = Budget.
+    - In der Sandbox steht dort „$N ITEM VALUE“. Der Zusatz ist zu klein zum Lesen und wird an Form und Breite erkannt. Dann gibt es kein Budget; stattdessen muss der Itemwert der Summe der Listenpreise der erkannten Items entsprechen, sonst gilt das Inventar als unvollständig.
+    - Die Zahl im runden Zähler sind Boons, nicht Souls.
   - **Porträts:** Oben wird nach den offiziellen Heldenbildern gesucht; der Abgleich erfolgt über den Gesichtsausschnitt der Karte im Maßstab 0,25. Flache Flächen sind ausgeschlossen.
   - **Tab-Spalten:** Unter jedem Porträt gibt es 2 Spalten kleiner Icons, gelesen wie oben mit kleiner Positionssuche.
 - **Referenzbilder:** Community-Spiegel der Spiel-Icons (`github.com/0xThiagoAmaral/deadlock-open-assets`). Eingecheckt sind nur die Fingerabdrücke (`data/vision/refs.json`) und die Quellenliste (`data/vision/sources.json`).

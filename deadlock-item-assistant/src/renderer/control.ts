@@ -83,7 +83,7 @@ const VIEWS: Record<string, () => string> = {
     <div class="grid">
       <div class="card"><h2>Automatik</h2><div class="checks" data-live="checks"></div></div>
       <div class="card"><h2>Bildschirmerkennung</h2>
-        <p class="small">Ausgewertet werden nur feste HUD-Bereiche: Soul-Zähler und Itemwert unten links, deine Item-Slots, die Heldenporträts oben und – solange du <b>Tab</b> hältst – die Item-Spalten darunter. Bilder bleiben im Arbeitsspeicher und werden nicht gespeichert oder gesendet.</p>
+        <p class="small">Ausgewertet werden nur feste HUD-Bereiche: Souls und Boons unten links, deine Item-Slots, die Heldenporträts oben und – solange du <b>Tab</b> hältst – die Item-Spalten darunter. Bilder bleiben im Arbeitsspeicher und werden nicht gespeichert oder gesendet.</p>
         <label class="chk"><input type="checkbox" id="sc-on"${s.screen.enabled ? ' checked' : ''}> Bildschirmerkennung verwenden</label>
         <label class="f">Aufnahme-Takt</label>
         <select id="sc-int">${[[1000, '1 s (schnell)'], [1500, '1,5 s (Standard)'], [3000, '3 s (sparsam)']].map(([v, t]) => `<option value="${v}"${s.screen.intervalMs === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
@@ -199,7 +199,7 @@ const VIEWS: Record<string, () => string> = {
 
   about: () => `<h1>Datenweg</h1><p class="lead">Woher die Daten kommen – und was die App ausdrücklich nicht tut.</p>
     <div class="grid">
-      <div class="card"><h2>1 · Bildschirmerkennung</h2><p class="small">Liest dein HUD vom Bildschirm: Souls (Soul-Zähler), Itemwert, deine Item-Slots, die Heldenporträts und – mit Tab – die Item-Spalten aller Spieler. Icons werden mit Fingerabdrücken der offiziellen Icons verglichen, Zahlen per Texterkennung gelesen (tesseract.js, lokal). Der Itemwert dient als Gegenprobe. Nur sichtbare Informationen – nichts Verdecktes.</p></div>
+      <div class="card"><h2>1 · Bildschirmerkennung</h2><p class="small">Liest dein HUD vom Bildschirm: nicht ausgegebene Souls (große Zahl unten links), Boons, deine Item-Slots, die Heldenporträts und – mit Tab – die Item-Spalten aller Spieler. Icons werden mit Fingerabdrücken der offiziellen Icons verglichen, Zahlen per Texterkennung gelesen (tesseract.js, lokal). In der Sandbox steht dort der Itemwert – er dient dann als Gegenprobe der Items. Nur sichtbare Informationen – nichts Verdecktes.</p></div>
       <div class="card"><h2>2 · Zuschauer-Stream</h2><p class="small">Optional: Valves Broadcast über den quelloffenen Live-Events-Dienst. Verzögert; nur für die meistgesehenen Matches automatisch auffindbar; Budget wird berechnet.</p></div>
       <div class="card"><h2>Overwolf</h2><p class="small">Nur mit einer von Overwolf freigegebenen App nutzbar; private Tools werden nicht freigegeben. Der Code ist vorhanden, bleibt aber ohne Freigabe inaktiv.</p></div>
       <div class="card"><h2>Spieldaten</h2><p class="small">Items/Heroes aus den Spieldateien (SteamDB-Spiegel). Lokal gelesen werden <span class="mono">steam.inf</span>, <span class="mono">loginusers.vdf</span>, die Prozessliste und – während Deadlock läuft – das Bild des Spielmonitors.</p></div>
@@ -308,8 +308,11 @@ function connectLive(snap: ControlSnapshot, set: (k: string, html: string) => vo
     row(d?.detail === 'warte auf Deadlock' ? 'wait' : 'ok', 'Deadlock', d?.detail === 'warte auf Deadlock' ? 'nicht gestartet' : 'läuft'),
     row(st.hudVisible ? 'ok' : 'wait', 'HUD', st.hudVisible ? `erkannt <span class="muted">(${st.frameMs ?? '–'} ms je Bild)</span>` : 'nicht sichtbar (Menü, Shop, Tod …)'),
     row(sc.heroName ? 'ok' : 'wait', 'Dein Hero', sc.heroName ? `${esc(sc.heroName)} <span class="muted">(${esc(st.myHeroBy ?? '')})</span>` : 'noch unbekannt – kurz <b>Tab</b> halten oder unten auswählen'),
-    row(st.souls !== null ? 'ok' : 'wait', 'Souls', st.souls !== null ? `${fmt(st.souls)} <span class="muted">(gelesen)</span>` : `nicht lesbar${st.soulsText ? ` <span class="muted mono">„${esc(st.soulsText)}“</span>` : ''}`),
-    row(st.valueCheck === 'ok' ? 'ok' : st.valueCheck === 'abweichend' ? 'no' : 'wait', 'Itemwert', st.value !== null ? `${fmt(st.value)} · Summe erkannter Items ${fmt(st.itemSum)} · <b>${esc(st.valueCheck)}</b>` : 'nicht gelesen'),
+    st.lineKind === 'itemValue'
+      ? row('wait', 'Souls', 'Sandbox: dort steht der Itemwert statt der Souls – Budget unbekannt')
+      : row(st.souls !== null ? 'ok' : 'wait', 'Souls', st.souls !== null ? `${fmt(st.souls)} <span class="muted">(nicht ausgegeben, gelesen)</span>` : `nicht lesbar${st.soulsText ? ` <span class="muted mono">„${esc(st.soulsText)}“</span>` : ''}`),
+    ...(st.lineKind === 'itemValue' ? [row(st.valueCheck === 'ok' ? 'ok' : st.valueCheck === 'abweichend' ? 'no' : 'wait', 'Itemwert', st.value !== null ? `${fmt(st.value)} · Summe erkannter Items ${fmt(st.itemSum)} · <b>${esc(st.valueCheck)}</b>` : 'nicht gelesen')] : []),
+    row(st.boons !== null ? 'ok' : 'wait', 'Boons', st.boons !== null ? String(st.boons) : 'nicht gelesen'),
     row(st.unknownSlots ? 'wait' : 'ok', 'Deine Items', sc.itemNames.length ? esc(sc.itemNames.join(', ')) + (st.unknownSlots ? ` <span class="warn">+${st.unknownSlots} nicht erkannt</span>` : '') : (st.unknownSlots ? `<span class="warn">${st.unknownSlots} nicht erkannt</span>` : 'keine')),
     row(sc.enemyNames.length ? 'ok' : 'wait', 'Gegner', sc.enemyNames.length ? esc(sc.enemyNames.join(', ')) : (st.portraits.length > 1 && !sc.heroName ? 'erst nach Erkennung deines Heros zuordenbar' : 'keine erkannt')),
     row(tabAges.length ? 'ok' : 'wait', 'Gegner-Items', tabAges.length ? `per Tab gelesen: ${tabAges.join(' · ')}` : 'halte im Match kurz <b>Tab</b> – dann werden die Builds gelesen'),

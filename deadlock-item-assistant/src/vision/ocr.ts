@@ -37,8 +37,8 @@ function maskToImage(mask: Uint8Array, w: number, h: number, sub: Rect, targetH:
   return out;
 }
 
-/** Soul-Zähler im Kreis: cremefarbene Ziffern auf Türkis. */
-export function prepareSouls(r: Raster, rect: Rect): Raster | null {
+/** Boons im runden Zähler unten links: cremefarbene Ziffern auf Türkis. */
+export function prepareBoons(r: Raster, rect: Rect): Raster | null {
   const c = clampRect(r, rect);
   const mask = maskOf(r, c, isCream);
   const comps = components(mask, c.w, c.h, 4).filter((q) => q.y1 - q.y0 + 1 >= c.h * 0.3);
@@ -47,8 +47,11 @@ export function prepareSouls(r: Raster, rect: Rect): Raster | null {
   return maskToImage(mask, c.w, c.h, sub, 60);
 }
 
-/** Itemwert: große mintgrüne Ziffern; Symbol links und „ITEM VALUE“ rechts werden abgeschnitten. */
-export function prepareValue(r: Raster, rect: Rect): Raster | null {
+/**
+ * Große mintgrüne Zahl rechts neben dem Boon-Zähler. Im normalen Match: nicht ausgegebene Souls.
+ * In der Sandbox steht dort der Itemwert mit dem Zusatz „ITEM VALUE“; itemValueLabel unterscheidet beide Fälle.
+ */
+export function prepareSoulsLine(r: Raster, rect: Rect): { digits: Raster; itemValueLabel: boolean } | null {
   const c = clampRect(r, rect);
   const mask = maskOf(r, c, isMint);
   const hOf = (q: { y0: number; y1: number }) => q.y1 - q.y0 + 1;
@@ -74,8 +77,38 @@ export function prepareValue(r: Raster, rect: Rect): Raster | null {
   const sub = unionRect(run, c.w, c.h, 2);
   // Kommas (klein) liegen innerhalb der x-Spanne und bleiben erhalten; Zeilenhöhe großzügig
   sub.y = Math.max(0, sub.y - 2); sub.h = Math.min(c.h - sub.y, sub.h + Math.round(maxH * 0.35));
-  return maskToImage(mask, c.w, c.h, sub, 60);
+  const end = run[run.length - 1]!.x1;
+  const top = Math.min(...run.map((q) => q.y0)), bottom = Math.max(...run.map((q) => q.y1));
+  return { digits: maskToImage(mask, c.w, c.h, sub, 60), itemValueLabel: labelBesides(r, c, end, top, bottom, D) };
 }
+
+const isLabelTeal = (R: number, G: number, B: number) => { const [h, s, v] = hsv(R, G, B); return h >= 135 && h <= 185 && s >= 0.18 && v >= 0.45; };
+
+/**
+ * Sandbox-Zusatz „ITEM VALUE“: eine schmale, gleichmäßige Zeile kleiner türkiser Zeichen rechts neben
+ * der Zahl (ca. 3 Ziffernhöhen breit, untere Hälfte der Zeile). Zu klein zum Lesen – daher an Form
+ * und Breite erkannt. Im Match (nur Zahl) ist dort nichts.
+ */
+function labelBesides(r: Raster, c: Rect, end: number, top: number, bottom: number, D: number): boolean {
+  const x0 = c.x + end + Math.round(D * 0.3), x1 = Math.min(r.w, c.x + end + Math.round(D * 6));
+  const y0 = c.y + top + Math.round(D * 0.4), y1 = Math.min(r.h, c.y + bottom + Math.round(D * 0.15));
+  const cols: boolean[] = [];
+  for (let x = x0; x < x1; x++) {
+    let hit = false;
+    for (let y = y0; y < y1 && !hit; y++) { const i = (y * r.w + x) * 4; hit = isLabelTeal(r.data[i]!, r.data[i + 1]!, r.data[i + 2]!); }
+    cols.push(hit);
+  }
+  const first = cols.indexOf(true);
+  if (first < 0 || first > D * 1.5) return false;
+  let last = first, gap = 0;
+  for (let i = first; i < cols.length; i++) {
+    if (cols[i]) { last = i; gap = 0; } else if (++gap > D * 0.6) break;
+  }
+  const span = last - first + 1;
+  const fill = cols.slice(first, last + 1).filter(Boolean).length / span;
+  return span >= D * 2 && span <= D * 4.2 && fill >= 0.4;
+}
+
 
 function unionRect(cs: { x0: number; y0: number; x1: number; y1: number }[], w: number, h: number, pad: number): Rect {
   const x0 = Math.max(0, Math.min(...cs.map((q) => q.x0)) - pad), y0 = Math.max(0, Math.min(...cs.map((q) => q.y0)) - pad);

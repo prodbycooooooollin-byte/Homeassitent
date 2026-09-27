@@ -13,20 +13,21 @@ Einfach Deadlock starten: Die App liest dein HUD direkt vom Bildschirm und verfo
 
 | Was | Woher auf dem Bildschirm | Wie |
 |---|---|---|
-| Deine Souls (Budget) | Soul-Zähler unten links | Texterkennung (tesseract.js, lokal) |
+| Deine Souls (Budget) | große mintgrüne Zahl unten links (nicht ausgegebene Souls) | Texterkennung (tesseract.js, lokal) |
+| Boons | Zahl im runden Zähler links daneben | Texterkennung; nur zur Anzeige |
 | Deine Items | die 12 Item-Slots darunter | Vergleich mit Fingerabdrücken der offiziellen Icons; Kategorie aus der Farbe des Stufen-Abzeichens |
-| Gegenprobe | „$N ITEM VALUE“ | muss der Summe der Listenpreise der erkannten Items entsprechen |
+| Sandbox | dort steht statt der Souls „$N ITEM VALUE“ | wird am Zusatz erkannt; dann kein Budget, aber Gegenprobe: Itemwert = Summe der Listenpreise der erkannten Items |
 | Dein Hero und die Gegner | Heldenporträts oben | Vergleich mit den offiziellen Heldenbildern; bei mehreren Porträts entscheidet die Tab-Spalte, deren Items zu deinem HUD passen |
 | Builds der Gegner | Item-Spalten unter den Porträts, **solange du Tab hältst** | wie oben; die gelesenen Items bleiben bis zum nächsten Tab gültig |
-| Neues Match | Hero-Wechsel, Itemwert fällt auf einen Bruchteil, andere Gegner | automatischer Reset |
+| Neues Match | Hero-Wechsel, Inventar plötzlich leer, andere Gegner | automatischer Reset |
 
 - **Datenschutz:** Ausgewertet werden nur diese Bereiche, und nur während Deadlock läuft. Bilder bleiben im Arbeitsspeicher; gespeichert wird nur auf Knopfdruck („Prüfbild speichern“).
 - **Korrektur:** Wird dein Hero nicht erkannt, kannst du ihn unter *Verbindung* auswählen. Unsichere Slots zählen als „nicht erkannt“ und nie als falsches Item.
-- **Auflösungen:** Alle Maße skalieren mit dem Soul-Kreis. Geprüft mit 720p, 900p, 1080p, 1440p und 4K (skaliert aus echten Screenshots).
+- **Auflösungen:** Alle Maße skalieren mit dem runden Boon-Zähler. Geprüft mit 720p, 900p, 1080p, 1440p und 4K (skaliert aus echten Screenshots).
 
 **Overwolf** gibt seine Spielevents nur für Apps frei, die Overwolf selbst genehmigt; private Tools werden nicht genehmigt. Der Code dafür ist noch vorhanden, bleibt ohne Freigabe aber inaktiv. Die frühere Anleitung „eigenen Overwolf-Schlüssel anlegen“ war falsch und ist entfernt.
 
-> **Ehrlicher Stand:** siehe [`docs/STATUS.md`](docs/STATUS.md). Die Erkennung ist an deinen echten Screenshots geprüft (Sandbox, 1 Hero). **Ein echtes 6-gegen-6-Match stand noch nicht zur Verfügung**: Lage der 12 Porträts, Tab-Spalten der Gegner und größere Soul-Zahlen sind noch nicht an echten Bildern bestätigt.
+> **Ehrlicher Stand:** siehe [`docs/STATUS.md`](docs/STATUS.md). Die Erkennung ist an deinen echten Screenshots geprüft (Sandbox, 1 Hero). **Ein echtes 6-gegen-6-Match stand noch nicht zur Verfügung**: Die Souls-Anzeige im Match, die Lage der 12 Porträts und die Tab-Spalten der Gegner sind noch nicht an echten Bildern bestätigt.
 
 | Bildschirmerkennung (Mina, echter Screenshot) | Kompakt | Hinweis bei Gegnerkauf | Austausch bei vollem Inventar |
 |---|---|---|---|
@@ -67,7 +68,7 @@ cd deadlock-item-assistant
 npm ci
 npm start            # baut und startet (Quelle aus den Einstellungen)
 npm run start:demo   # startet mit Demo-Daten
-npm test             # 56 Tests, u. a. Bildschirmerkennung an echten Screenshots
+npm test             # 57 Tests, u. a. Bildschirmerkennung an echten Screenshots
 npm run typecheck
 npm run demo         # Terminal-Demo ohne Oberfläche
 npm run dist:win     # Windows-Installer und portable EXE (unter Windows; unter Linux siehe unten)

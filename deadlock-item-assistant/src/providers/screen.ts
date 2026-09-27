@@ -93,7 +93,8 @@ export class ScreenProvider extends Provider {
   private describe(): string {
     const s = this.tracker.status;
     const hero = s.myHero ? this.cat.heroName(s.myHero) : 'Hero unbekannt';
-    return `${hero} · ${s.items.length} Items${s.valueCheck === 'ok' ? ' (Itemwert geprüft)' : ''}`;
+    const souls = s.lineKind === 'itemValue' ? 'Sandbox (Itemwert statt Souls)' : s.souls !== null ? `${s.souls.toLocaleString('de-DE')} Souls` : 'Souls nicht lesbar';
+    return `${hero} · ${souls} · ${s.items.length} Items${s.valueCheck === 'ok' ? ' (Itemwert geprüft)' : ''}`;
   }
 
   /** Status nur melden, wenn er sich ändert (keine Ereignisflut alle 1,5 s) */

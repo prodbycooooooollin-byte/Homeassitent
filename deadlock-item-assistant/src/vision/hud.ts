@@ -2,8 +2,9 @@ import { type Match, bestMatch, fingerprint } from './fingerprint';
 import { type Raster, type Rect, clampRect, components, hsv, maskOf } from './raster';
 
 // HUD-Erkennung für Deadlock. Vermessen an echten Screenshots (1920×1080, Build 6701):
-//  - Soul-Zähler unten links: türkiser Kreis. Er ist der Anker, alle Maße skalieren mit seiner Breite.
-//  - Rechts daneben „$N ITEM VALUE“ = Summe der Listenpreise des Besitzes.
+//  - Runder Boon-Zähler unten links (türkis). Er ist der Anker, alle Maße skalieren mit ihm.
+//  - Rechts daneben große Zahl: im normalen Match die nicht ausgegebenen Souls; in der Sandbox
+//    stattdessen „$N ITEM VALUE“ (Summe der Listenpreise des Besitzes).
 //  - Darunter 2×6 Item-Slots, belegte Slots mit Stufen-Abzeichen oben rechts
 //    (Waffe orange, Vitalität grün, Spirit violett).
 //  - Oben Mitte: Heldenporträts. Mit gedrückter Tab-Taste erscheint unter jedem Porträt eine Item-Spalte.
@@ -11,12 +12,13 @@ import { type Raster, type Rect, clampRect, components, hsv, maskOf } from './ra
 
 export type Slot = 'weapon' | 'vitality' | 'spirit';
 
-/** Maße bei Referenzskala 1 (1080p), relativ zum Anker = linke untere Ecke der Türkisfläche des Soul-Kreises. */
+/** Maße bei Referenzskala 1 (1080p), relativ zum Anker = linke untere Ecke der Türkisfläche des Boon-Zählers. */
 export const GEO = {
   blobW: 46,
   blobH: 34,
-  souls: { dx: 4, dy: -36, w: 38, h: 30 },
-  value: { dx: 62, dy: -47, w: 200, h: 42 },
+  boons: { dx: 4, dy: -36, w: 38, h: 30 },
+  // breit genug für sechsstellige Souls plus Zusatztext
+  souls: { dx: 62, dy: -47, w: 260, h: 42 },
   tile: { dx: 76, dy: 22, size: 50, pitch: 56, cols: 6, rows: 2 },
   // Porträt: Kartenbild (280×380) im Maßstab 0,25 → Rahmen 70×95. Gesicht-Ausschnitt relativ dazu.
   portrait: { w: 70, h: 95, face: { dx: 19, dy: 20, w: 40, h: 56 }, cardScale: 0.25, topY: -8 },
@@ -46,8 +48,8 @@ export interface SlotReading {
 export interface HudReading {
   anchor: { x: number; y: number };
   scale: number;
+  boonsRect: Rect;
   soulsRect: Rect;
-  valueRect: Rect;
   slots: SlotReading[];
 }
 
@@ -85,7 +87,7 @@ const isSoulTeal = (R: number, G: number, B: number) => {
   return h >= 140 && h <= 175 && s >= 0.3 && s <= 0.8 && v >= 0.45 && v <= 0.85;
 };
 
-/** Sucht den türkisen Soul-Kreis unten links. null = HUD nicht sichtbar (Menü, Tod, Shop …). */
+/** Sucht den türkisen Boon-Zähler unten links. null = HUD nicht sichtbar (Menü, Tod, Shop …). */
 export function findAnchor(r: Raster): { x: number; y: number; scale: number; score: number } | null {
   const H = r.h;
   const region = clampRect(r, { x: 0, y: Math.round(H * 0.7), w: Math.round(H * 0.2), h: Math.round(H * 0.22) });
@@ -177,7 +179,7 @@ export function readHud(r: Raster, refs: VisionRefs): HudReading | null {
   for (let row = 0; row < t.rows; row++) for (let col = 0; col < t.cols; col++) {
     rects.push({ x: Math.round(a.x + (t.dx + col * t.pitch) * s), y: Math.round(a.y + (t.dy + row * t.pitch) * s), w: Math.round(t.size * s), h: Math.round(t.size * s) });
   }
-  return { anchor: { x: a.x, y: a.y }, scale: s, soulsRect: rel(GEO.souls), valueRect: rel(GEO.value), slots: readTiles(r, rects, refs) };
+  return { anchor: { x: a.x, y: a.y }, scale: s, boonsRect: rel(GEO.boons), soulsRect: rel(GEO.souls), slots: readTiles(r, rects, refs) };
 }
 
 // ---------------- Porträts (oben) und Tab-Spalten ----------------
