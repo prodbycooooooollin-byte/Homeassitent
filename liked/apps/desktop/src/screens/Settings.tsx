@@ -3,9 +3,9 @@ import { t } from '../i18n/de';
 import { api } from '../lib/api';
 import { sound } from '../lib/sound';
 import { set, toast, useStore, type SettingsTab } from '../state/store';
-import { Button, Panel, Segmented, Toggle } from '../components/ui';
+import { Button, Callout, Dialog, Disclosure, Icon, Panel, Segmented, Toggle, useSavedFlash } from '../components/ui';
 import { ProfileEditor } from './Menu';
-import { TikTokPanel } from './TikTokPanel';
+import { ClipsPanel, TikTokPanel } from './TikTokPanel';
 import type { AppSettings, LocalServerState } from '../shared/ipc-types';
 
 async function patch(p: Partial<AppSettings>) {
@@ -15,36 +15,88 @@ async function patch(p: Partial<AppSettings>) {
   return s;
 }
 
+/** Speichert und zeigt kurz „Gespeichert“ an. */
+function useAutosave(): [boolean, (p: Partial<AppSettings>) => Promise<AppSettings>] {
+  const [saved, flash] = useSavedFlash();
+  return [
+    saved,
+    async (p) => {
+      const s = await patch(p);
+      flash();
+      return s;
+    }
+  ];
+}
+
+function SavedNote({ saved }: { saved: boolean }) {
+  return (
+    <span className={`saved-note ${saved ? 'on' : ''}`} aria-live="polite">
+      {saved ? (
+        <>
+          <Icon name="check" size={14} /> {t.settings.saved}
+        </>
+      ) : (
+        t.profile.autosave
+      )}
+    </span>
+  );
+}
+
+/** Zurück aus Einstellungen/Regeln: im Raum zur Lobby (die App zeigt dann den Raum), sonst zum Hauptmenü. */
+export function goBackFromSubscreen() {
+  set({ screen: 'menu', returnTo: 'menu' });
+}
+
 export function Settings() {
   const tab = useStore((s) => s.settingsTab);
   const inRoom = useStore((s) => !!s.session);
   const tabs = Object.entries(t.settings.tabs) as [SettingsTab, string][];
+  const tabIcon: Record<SettingsTab, string> = { profile: 'user', tiktok: 'heart', clips: 'film', display: 'eye', audio: 'speaker', network: 'wifi', about: 'info' };
   return (
-    <div className="screen settings-screen">
-      <header className="settings-head">
-        <Button variant="ghost" icon="arrowLeft" onClick={() => set({ screen: 'menu' })}>
-          {t.common.back}
+    <div className="screen page-screen">
+      <header className="page-head">
+        <Button variant="quiet" icon="arrowLeft" onClick={goBackFromSubscreen}>
+          {inRoom ? t.lobby.backToLobby : t.common.back}
         </Button>
         <h2 className="screen-title">{t.settings.title}</h2>
       </header>
       <div className="settings-layout">
-        <nav className="settings-tabs" role="tablist" aria-label={t.settings.title}>
+        <nav className="settings-tabs" role="tablist" aria-label={t.settings.title} aria-orientation="vertical">
           {tabs.map(([k, label]) => (
-            <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'active' : ''} onClick={() => set({ settingsTab: k })}>
+            <button
+              key={k}
+              id={`tab-${k}`}
+              role="tab"
+              aria-selected={tab === k}
+              aria-controls="settings-panel"
+              tabIndex={tab === k ? 0 : -1}
+              className={tab === k ? 'active' : ''}
+              onClick={() => set({ settingsTab: k })}
+              onKeyDown={(e) => {
+                if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+                e.preventDefault();
+                const i = tabs.findIndex(([x]) => x === tab);
+                const next = tabs[(i + (e.key === 'ArrowDown' ? 1 : tabs.length - 1)) % tabs.length]![0];
+                set({ settingsTab: next });
+                document.getElementById(`tab-${next}`)?.focus();
+              }}
+            >
+              <Icon name={tabIcon[k]} size={17} />
               {label}
             </button>
           ))}
         </nav>
-        <div className="settings-content" role="tabpanel">
+        <div className="settings-content" role="tabpanel" id="settings-panel" aria-labelledby={`tab-${tab}`}>
           {tab === 'profile' && (
             <Panel title={t.profile.title}>
               <ProfileEditor />
             </Panel>
           )}
           {tab === 'tiktok' && <TikTokPanel />}
+          {tab === 'clips' && <ClipsPanel />}
           {tab === 'display' && <DisplaySettings />}
           {tab === 'audio' && <AudioSettings />}
-          {tab === 'network' && <NetworkSettings disabled={inRoom} />}
+          {tab === 'network' && <NetworkSettings locked={inRoom} />}
           {tab === 'about' && <AboutSettings />}
         </div>
       </div>
@@ -54,142 +106,191 @@ export function Settings() {
 
 function DisplaySettings() {
   const s = useStore((st) => st.settings)!;
+  const [saved, save] = useAutosave();
+  const d = s.display;
   return (
-    <Panel>
-      <Toggle checked={s.display.fullscreen} label={t.settings.fullscreen} onChange={(v) => void patch({ display: { ...s.display, fullscreen: v } })} />
+    <Panel title={t.settings.tabs.display} actions={<SavedNote saved={saved} />}>
       <div className="field">
-        <span>{t.settings.reducedMotion}</span>
+        <span className="field-label">{t.settings.theme}</span>
+        <Segmented
+          label={t.settings.theme}
+          value={d.theme}
+          options={(['dark', 'light', 'system'] as const).map((v) => ({ value: v, label: t.settings.themeOptions[v] }))}
+          onChange={(v) => void save({ display: { ...d, theme: v } })}
+        />
+      </div>
+      <div className="field">
+        <span className="field-label">{t.settings.reducedMotion}</span>
         <Segmented
           label={t.settings.reducedMotion}
-          value={s.display.reducedMotion}
+          value={d.reducedMotion}
           options={(['system', 'on', 'off'] as const).map((v) => ({ value: v, label: t.settings.reducedMotionOptions[v] }))}
-          onChange={(v) => void patch({ display: { ...s.display, reducedMotion: v } })}
+          onChange={(v) => void save({ display: { ...d, reducedMotion: v } })}
         />
+        <small className="hint">{t.settings.reducedMotionHint}</small>
       </div>
-      <div className="field">
-        <span>{t.settings.effects}</span>
-        <Segmented
-          label={t.settings.effects}
-          value={s.display.effects}
-          options={(['high', 'low'] as const).map((v) => ({ value: v, label: t.settings.effectsOptions[v] }))}
-          onChange={(v) => void patch({ display: { ...s.display, effects: v } })}
-        />
-      </div>
+      <Toggle checked={d.effects === 'high'} label={t.settings.effects} onChange={(v) => void save({ display: { ...d, effects: v ? 'high' : 'low' } })} />
+      <Toggle checked={d.fullscreen} label={t.settings.fullscreen} onChange={(v) => void save({ display: { ...d, fullscreen: v } })} />
     </Panel>
   );
 }
 
-function Slider({ label, value, muted, onChange, onMute }: { label: string; value: number; muted: boolean; onChange(v: number): void; onMute(m: boolean): void }) {
+function Slider({ label, value, muted, muteLabel, onChange, onMute }: { label: string; value: number; muted: boolean; muteLabel: string; onChange(v: number): void; onMute(m: boolean): void }) {
+  const id = `sl-${label}`;
   return (
-    <div className="slider-row">
-      <label>
-        <span>{label}</span>
-        <input type="range" min={0} max={100} value={Math.round(value * 100)} onChange={(e) => onChange(Number(e.target.value) / 100)} aria-label={label} />
-        <output>{Math.round(value * 100)}%</output>
-      </label>
-      <Toggle checked={muted} label={t.settings.mute} onChange={onMute} />
+    <div className={`slider-row ${muted ? 'is-muted' : ''}`}>
+      <label htmlFor={id}>{label}</label>
+      <input id={id} type="range" min={0} max={100} value={Math.round(value * 100)} disabled={muted} onChange={(e) => onChange(Number(e.target.value) / 100)} />
+      <output htmlFor={id}>{muted ? t.common.off : `${Math.round(value * 100)} %`}</output>
+      <Toggle checked={muted} label={muteLabel} onChange={onMute} />
     </div>
   );
 }
 
 function AudioSettings() {
   const s = useStore((st) => st.settings)!;
+  const [saved, save] = useAutosave();
   const a = s.audio;
   return (
-    <>
-      <Panel title={t.settings.gameAudio}>
-        <Slider label={t.settings.music} value={a.music} muted={a.musicMuted} onChange={(v) => void patch({ audio: { ...a, music: v } })} onMute={(m) => void patch({ audio: { ...a, musicMuted: m } })} />
+    <div className="stack">
+      <Panel title={t.settings.gameAudio} actions={<SavedNote saved={saved} />}>
+        <Slider
+          label={t.settings.music}
+          muteLabel={t.settings.muteMusic}
+          value={a.music}
+          muted={a.musicMuted}
+          onChange={(v) => void save({ audio: { ...a, music: v } })}
+          onMute={(m) => void save({ audio: { ...a, musicMuted: m } })}
+        />
         <Slider
           label={t.settings.sfx}
+          muteLabel={t.settings.muteSfx}
           value={a.sfx}
           muted={a.sfxMuted}
-          onChange={(v) => {
-            void patch({ audio: { ...a, sfx: v } }).then(() => sound.ready());
-          }}
-          onMute={(m) => void patch({ audio: { ...a, sfxMuted: m } })}
+          onChange={(v) => void save({ audio: { ...a, sfx: v } }).then(() => sound.ready())}
+          onMute={(m) => void save({ audio: { ...a, sfxMuted: m } })}
         />
       </Panel>
       <Panel title={t.settings.videoAudio}>
-        <p className="hint">{t.settings.videoAudioHint}</p>
-        <Toggle checked={a.videoStartMuted} label={t.settings.videoStartMuted} onChange={(v) => void patch({ audio: { ...a, videoStartMuted: v } })} />
+        <p>{t.settings.videoAudioHint}</p>
+        <Disclosure summary={t.common.learnMore}>
+          <p className="hint">{t.settings.videoAudioMore}</p>
+        </Disclosure>
+        <Toggle checked={a.videoStartMuted} label={t.settings.videoStartMuted} onChange={(v) => void save({ audio: { ...a, videoStartMuted: v } })} />
       </Panel>
-    </>
+    </div>
   );
 }
 
-function NetworkSettings({ disabled }: { disabled: boolean }) {
+function useServerStatus(url: string): ['checking' | 'online' | 'offline', () => void] {
+  const [state, setState] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    setState('checking');
+    fetch(`${url.replace(/\/$/, '')}/healthz`, { signal: AbortSignal.timeout(60_000) })
+      .then((r) => alive && setState(r.ok ? 'online' : 'offline'))
+      .catch(() => alive && setState('offline'));
+    return () => {
+      alive = false;
+    };
+  }, [url, n]);
+  return [state, () => setN((x) => x + 1)];
+}
+
+function NetworkSettings({ locked }: { locked: boolean }) {
   const s = useStore((st) => st.settings)!;
+  const solo = useStore((st) => !!st.session?.solo);
   const [url, setUrl] = useState(s.serverUrl);
   const [local, setLocal] = useState<LocalServerState | null>(null);
   const [port, setPort] = useState(47800);
   const [defaultUrl, setDefaultUrl] = useState('');
+  const [status, recheck] = useServerStatus(s.serverUrl);
+  const [saved, flash] = useSavedFlash();
   useEffect(() => {
     void api.localServer.status().then(setLocal);
     void api.app.info().then((i) => setDefaultUrl(i.defaultServerUrl));
   }, []);
+  useEffect(() => setUrl(s.serverUrl), [s.serverUrl]);
   const valid = /^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(url);
+  const applyUrl = async (next: string) => {
+    await patch({ serverUrl: next.replace(/\/$/, '') });
+    set({ tiktok: await api.tiktok.overview() });
+    flash();
+  };
+  const disabled = locked && !solo;
+
   return (
-    <>
-      <Panel title={t.settings.serverUrl}>
-        <div className="row gap">
-          <input className="text-input" value={url} disabled={disabled} onChange={(e) => setUrl(e.target.value.trim())} aria-invalid={!valid} />
-          <Button
-            variant="primary"
-            disabled={disabled || !valid || url === s.serverUrl}
-            onClick={async () => {
-              await patch({ serverUrl: url.replace(/\/$/, '') });
-              set({ tiktok: await api.tiktok.overview() });
-              toast('Gespeichert');
-            }}
-          >
-            {t.common.confirm}
+    <div className="stack">
+      <Panel title={t.settings.serverStatus} actions={saved ? <SavedNote saved /> : null}>
+        <div className={`server-status st-${status}`} role="status">
+          <Icon name={status === 'online' ? 'check' : status === 'offline' ? 'wifiOff' : 'clock'} size={18} />
+          <div>
+            <strong>{status === 'online' ? t.settings.serverOnline : status === 'offline' ? t.settings.serverOffline : t.settings.serverChecking}</strong>
+            <code>{s.serverUrl}</code>
+          </div>
+          <Button size="sm" variant="quiet" icon="refresh" onClick={recheck} disabled={status === 'checking'}>
+            {t.common.retry}
           </Button>
         </div>
+        {status === 'checking' && <p className="hint">{t.connection.waking}</p>}
         <p className="hint">{s.serverUrlCustom ? t.settings.serverCustom : t.settings.serverDefault}</p>
-        {s.serverUrlCustom && defaultUrl && (
-          <Button
-            variant="secondary"
-            disabled={disabled}
-            onClick={async () => {
-              const next = await patch({ serverUrl: defaultUrl });
-              setUrl(next.serverUrl);
-              set({ tiktok: await api.tiktok.overview() });
-            }}
-          >
-            {t.settings.useDefaultServer}
-          </Button>
-        )}
+        {disabled && <Callout tone="info" title={t.settings.serverLocked} />}
       </Panel>
-      <Panel title={t.settings.localHost}>
-        <p className="hint">{t.settings.localHostHint}</p>
-        {local?.running ? (
-          <>
-            <p>{t.settings.localAddresses}:</p>
-            <ul className="addr-list">
-              {local.addresses.map((a) => (
-                <li key={a}>
-                  <code>{a}</code>
-                  <Button size="sm" variant="ghost" onClick={() => void patch({ serverUrl: a })}>
-                    {t.settings.useLocal}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            <Button variant="danger" onClick={async () => setLocal(await api.localServer.stop())}>
-              {t.settings.localStop}
-            </Button>
-          </>
-        ) : (
-          <div className="row gap">
-            <input className="text-input short" type="number" min={1024} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value))} aria-label="Port" />
-            <Button variant="secondary" onClick={async () => setLocal(await api.localServer.start(port))}>
-              {t.settings.localStart}
-            </Button>
-          </div>
-        )}
-        {local?.error && <p className="error-text">{local.error}</p>}
-      </Panel>
-    </>
+
+      <Disclosure summary={t.common.advanced} defaultOpen={!!s.serverUrlCustom}>
+        <div className="stack">
+          <label className="field">
+            <span className="field-label">{t.settings.serverUrl}</span>
+            <div className="input-row">
+              <input value={url} disabled={disabled} onChange={(e) => setUrl(e.target.value.trim())} aria-invalid={!valid} spellCheck={false} />
+              <Button variant="secondary" disabled={disabled || !valid || url.replace(/\/$/, '') === s.serverUrl} onClick={() => void applyUrl(url)}>
+                {t.common.save}
+              </Button>
+            </div>
+            <small className="hint">{t.settings.serverHint}</small>
+          </label>
+          {s.serverUrlCustom && defaultUrl && (
+            <div>
+              <Button variant="quiet" icon="refresh" disabled={disabled} onClick={() => void applyUrl(defaultUrl)}>
+                {t.settings.useDefaultServer}
+              </Button>
+            </div>
+          )}
+
+          <h4>{t.settings.localHost}</h4>
+          <p className="hint">{t.settings.localHostHint}</p>
+          {local?.running ? (
+            <>
+              <p>{t.settings.localAddresses}:</p>
+              <ul className="id-list">
+                {local.addresses.map((a) => (
+                  <li key={a}>
+                    <code>{a}</code>
+                    <Button size="sm" variant="quiet" disabled={disabled} onClick={() => void applyUrl(a)}>
+                      {t.settings.useLocal}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              <div>
+                <Button variant="danger" onClick={async () => setLocal(await api.localServer.stop())}>
+                  {t.settings.localStop}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="input-row">
+              <input className="short" type="number" min={1024} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value))} aria-label="Port" />
+              <Button variant="secondary" onClick={async () => setLocal(await api.localServer.start(port))}>
+                {t.settings.localStart}
+              </Button>
+            </div>
+          )}
+          {local?.error && <Callout tone="error" title={local.error} />}
+        </div>
+      </Disclosure>
+    </div>
   );
 }
 
@@ -197,18 +298,29 @@ function AboutSettings() {
   const update = useStore((s) => s.update);
   const inMatch = useStore((s) => !!s.view && s.view.phase !== 'LOBBY' && s.view.phase !== 'RESULTS');
   const [version, setVersion] = useState('');
+  const [confirmWipe, setConfirmWipe] = useState(false);
   useEffect(() => {
     void api.app.info().then((i) => setVersion(i.version));
   }, []);
+  const tone = update.kind === 'error' ? 'bad' : update.kind === 'none' || update.kind === 'ready' ? 'ok' : update.kind === 'available' ? 'busy' : 'idle';
   return (
-    <>
+    <div className="stack">
       <Panel title={t.settings.tabs.about}>
-        <p>{t.settings.version(version)}</p>
-        <p className="muted">{t.settings.updateStates[update.kind]}{update.version ? ` · ${update.version}` : ''}{update.percent !== undefined && update.kind === 'downloading' ? ` · ${update.percent}%` : ''}</p>
+        <p>
+          <strong>LIKED</strong> · {t.settings.version(version)}
+        </p>
+        <div className={`update-status tone-${tone}`} role="status">
+          <Icon name={tone === 'ok' ? 'check' : tone === 'bad' ? 'alert' : update.kind === 'checking' || update.kind === 'downloading' ? 'clock' : 'info'} size={16} />
+          <span>
+            {t.settings.updateStates[update.kind]}
+            {update.version ? ` · ${update.version}` : ''}
+            {update.percent !== undefined && update.kind === 'downloading' ? ` · ${update.percent} %` : ''}
+          </span>
+        </div>
         {update.message && <p className="hint">{update.message}</p>}
         {update.notes && <pre className="notes">{update.notes}</pre>}
-        <div className="row gap wrap">
-          <Button variant="secondary" icon="refresh" onClick={async () => set({ update: await api.updates.check() })}>
+        <div className="button-row">
+          <Button variant="secondary" icon="refresh" disabled={update.kind === 'checking' || update.kind === 'downloading'} onClick={async () => set({ update: await api.updates.check() })}>
             {t.settings.checkUpdates}
           </Button>
           {update.kind === 'available' && (
@@ -226,18 +338,53 @@ function AboutSettings() {
         <p className="hint">{t.settings.licenses}</p>
       </Panel>
       <Panel title={t.settings.wipe}>
-        <Button
-          variant="danger"
-          onClick={async () => {
-            if (!window.confirm(t.settings.wipeConfirm)) return;
-            await api.settings.wipeLocalData();
-            set({ tiktok: await api.tiktok.overview() });
-            toast('Lokale Spieldaten gelöscht');
-          }}
-        >
-          {t.settings.wipe}
-        </Button>
+        <p>{t.settings.wipeWhat}</p>
+        <ul className="plain-list">
+          {t.settings.wipeItems.map((x) => (
+            <li key={x}>{x}</li>
+          ))}
+        </ul>
+        <p className="hint">{t.settings.wipeKeep}</p>
+        <div>
+          <Button variant="danger" icon="trash" onClick={() => setConfirmWipe(true)}>
+            {t.settings.wipe}
+          </Button>
+        </div>
       </Panel>
-    </>
+      {confirmWipe && (
+        <Dialog
+          title={t.settings.wipeConfirmTitle}
+          onClose={() => setConfirmWipe(false)}
+          footer={
+            <>
+              <span className="spacer" />
+              <Button variant="quiet" data-autofocus onClick={() => setConfirmWipe(false)}>
+                {t.common.cancel}
+              </Button>
+              <Button
+                variant="danger"
+                icon="trash"
+                onClick={async () => {
+                  setConfirmWipe(false);
+                  await api.settings.wipeLocalData();
+                  set({ tiktok: await api.tiktok.overview() });
+                  toast(t.settings.wipeDone);
+                }}
+              >
+                {t.settings.wipeConfirmButton}
+              </Button>
+            </>
+          }
+        >
+          <p>{t.settings.wipeWhat}</p>
+          <ul className="plain-list">
+            {t.settings.wipeItems.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+          <p className="hint">{t.settings.wipeKeep}</p>
+        </Dialog>
+      )}
+    </div>
   );
 }

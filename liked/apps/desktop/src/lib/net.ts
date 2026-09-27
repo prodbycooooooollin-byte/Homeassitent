@@ -15,6 +15,7 @@ import { get, set, toast } from '../state/store';
 import { api } from './api';
 import { sound } from './sound';
 import { t } from '../i18n/de';
+import { SoloDemo, SOLO_ME_ID } from './solo-demo';
 
 /**
  * Netzwerk-Client: eine Socket.IO-Verbindung zum Spielserver, Uhrenabgleich,
@@ -30,10 +31,13 @@ let poolEpoch = '';
 let poolInFlight = false;
 let lobbyEntry = 0;
 const seenNotices = new Set<string>();
+/** Aktive lokale Solo-Demo (ersetzt dann den Server vollständig). */
+let solo: SoloDemo | null = null;
 
 const errText = (code?: string) => t.errors[code ?? 'network'] ?? t.errors.network!;
 
 function emit<T extends object>(event: string, payload: unknown = {}, timeoutMs = 6000): Promise<Ack<T>> {
+  if (solo) return Promise.resolve(solo.handle(event, (payload ?? {}) as Record<string, unknown>) as Ack<T>);
   return new Promise((resolve) => {
     if (!socket?.connected) return resolve({ ok: false, error: 'not_in_room' });
     socket.timeout(timeoutMs).emit(event, payload, (err: Error | null, res: Ack<T>) => {
@@ -125,6 +129,8 @@ function beginReconnectWindow() {
 }
 
 export async function resetToMenu(): Promise<void> {
+  solo?.close();
+  solo = null;
   set({ session: null, view: null, vote: null, reconnectDeadline: null, screen: 'menu', reactions: [] });
   poolEpoch = '';
   lastPhaseKey = '';
@@ -168,6 +174,32 @@ async function enter(res: JoinResult & { mode: RoomMode }, serverUrl: string) {
   const session = { serverUrl, code: res.roomCode, token: res.token, playerId: res.playerId, salt: res.indexSalt, mode: res.mode };
   set({ session, screen: 'menu' });
   await api.lastRoom.set({ serverUrl, code: res.roomCode, token: res.token, at: Date.now() });
+}
+
+/** „Allein ausprobieren“: lokale Partie mit zwei simulierten Mitspielern und Beispielclips. */
+export function startSoloDemo(): void {
+  solo?.close();
+  const st = get().settings!;
+  lastPhaseKey = '';
+  const demo = new SoloDemo({
+    me: { name: st.profile.name || 'Du', avatar: st.profile.avatar, seed: st.profile.deviceId },
+    onView: (v) => onView(v),
+    onReaction: (r) => set((x) => ({ reactions: [...x.reactions.slice(-12), { ...r, at: Date.now() }] }))
+  });
+  solo = demo;
+  set({
+    session: { serverUrl: 'solo', code: demo.code, token: '', playerId: SOLO_ME_ID, salt: '0'.repeat(32), mode: 'demo', solo: true },
+    view: null,
+    vote: null,
+    clockOffset: 0,
+    screen: 'menu',
+    reactions: []
+  });
+  demo.start();
+}
+
+export function isSolo(): boolean {
+  return solo !== null;
 }
 
 export async function createRoom(mode: RoomMode): Promise<string | null> {
@@ -301,7 +333,7 @@ function sideEffects(prev: RoomView | null, v: RoomView) {
   }
 
   // Eigene gespielte Clips merken (weniger Wiederholungen in späteren Partien).
-  if (v.phase === 'REVEAL' && v.reveal && v.reveal.ownerId === v.youId) {
+  if (!v.solo && v.phase === 'REVEAL' && v.reveal && v.reveal.ownerId === v.youId) {
     sound.once(`played:${v.reveal.roundId}`, () => void api.tiktok.recordPlayed([v.reveal!.clip.videoId]));
   }
 
@@ -324,7 +356,7 @@ function onPhase(phase: Phase, v: RoomView) {
 
 export async function maybeSubmitPool(v: RoomView | null = get().view, force = false): Promise<void> {
   const sess = get().session;
-  if (!sess || !v || v.phase !== 'LOBBY' || poolInFlight) return;
+  if (!sess || sess.solo || !v || v.phase !== 'LOBBY' || poolInFlight) return;
   if (!v.players.some((p) => p.id === v.youId)) return;
   const epoch = `${v.roomId}:${lobbyEntry}:${v.settings.clipsPerPerson}`;
   if (!force && poolEpoch === epoch) return;

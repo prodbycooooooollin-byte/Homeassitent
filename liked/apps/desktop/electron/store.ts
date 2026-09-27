@@ -45,7 +45,7 @@ export function defaultSettings(): AppSettings {
     serverUrl: DEFAULT_SERVER_URL,
     serverUrlCustom: false,
     audio: { music: 0.5, sfx: 0.7, musicMuted: false, sfxMuted: false, videoStartMuted: false },
-    display: { fullscreen: false, reducedMotion: 'system', effects: 'high' },
+    display: { fullscreen: false, reducedMotion: 'system', effects: 'high', theme: 'dark' },
     introSeen: false,
     experimentalWebAdapter: false
   };

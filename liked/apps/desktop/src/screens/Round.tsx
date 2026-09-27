@@ -1,11 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { RoomView } from '@liked/protocol';
 import { t } from '../i18n/de';
-import { actions, castVote } from '../lib/net';
+import { actions, castVote, leaveRoom } from '../lib/net';
 import { sound } from '../lib/sound';
 import { useStore } from '../state/store';
-import { Avatar, DemoBadge, Icon, TimerRing, useServerNow } from '../components/ui';
+import { Avatar, Button, Dialog, Icon, ModeBadge, SimBadge, TimerRing, useServerNow } from '../components/ui';
 import { TikTokEmbed } from '../player/TikTokEmbed';
 import { DemoClip } from '../player/DemoClip';
 import type { ClipPlayerProps } from '../player/types';
@@ -99,6 +99,7 @@ function AnswerCards({ view }: { view: RoomView }) {
     const onKey = (e: KeyboardEvent) => {
       const k = Number(e.key);
       if (!Number.isInteger(k) || k < 1 || k > round.answerOptions.length || e.repeat) return;
+      if (document.querySelector('.modal')) return;
       if (!canVote) return;
       void castVote(round.answerOptions[k - 1]!);
     };
@@ -125,6 +126,7 @@ function AnswerCards({ view }: { view: RoomView }) {
             <span className="answer-key" aria-hidden="true">{i + 1}</span>
             <Avatar avatar={p?.avatar ?? 'ghost'} size={58} ring={chosen ? (state === 'confirmed' ? 'cyan' : 'violet') : undefined} />
             <span className="answer-name">{p?.name ?? '?'}</span>
+            {p?.simulated && <SimBadge />}
             {chosen && (
               <span className="answer-state">
                 <Icon name={state === 'confirmed' ? 'check' : state === 'late' ? 'x' : 'sparkle'} size={16} />
@@ -168,10 +170,13 @@ export function MiniStandings({ view, highlight }: { view: RoomView; highlight?:
           <motion.li key={s.playerId} layout transition={{ type: 'spring', stiffness: 300, damping: 30 }} className={s.playerId === view.youId ? 'me' : ''}>
             <span className="place">{s.place}</span>
             <Avatar avatar={p?.avatar ?? 'ghost'} size={30} />
-            <span className="nm">{p?.name ?? '?'}</span>
+            <span className="nm">
+              {p?.name ?? '?'}
+              {p?.simulated && <Icon name="robot" size={13} className="sim-icon" />}
+            </span>
             {s.streak >= 2 && <span className="streak-chip">🔥{s.streak}</span>}
             <span className="pts">{s.score.toLocaleString('de-DE')}</span>
-            {highlight?.get(s.playerId) ? <span className="pts-plus">+{highlight.get(s.playerId)}</span> : null}
+            {highlight?.get(s.playerId) ? <span className="pts-plus">{t.reveal.points(highlight.get(s.playerId)!)}</span> : null}
           </motion.li>
         );
       })}
@@ -180,6 +185,7 @@ export function MiniStandings({ view, highlight }: { view: RoomView; highlight?:
 }
 
 export function RoundHeader({ view }: { view: RoomView }) {
+  const [confirmLeave, setConfirmLeave] = useState(false);
   return (
     <div className="round-header">
       <span className="round-count">{t.round.round(Math.max(1, view.roundNumber), view.totalRounds)}</span>
@@ -188,7 +194,30 @@ export function RoundHeader({ view }: { view: RoomView }) {
           <span key={i} className={i < view.blockIndex ? 'done' : i === view.blockIndex ? 'current' : ''} />
         ))}
       </div>
-      {view.mode === 'demo' && <DemoBadge text={t.common.demo} />}
+      <span className="spacer" />
+      <ModeBadge mode={view.mode} solo={view.solo} />
+      <Button size="sm" variant="quiet" icon="logout" onClick={() => setConfirmLeave(true)}>
+        {view.solo ? t.lobby.leaveSolo : t.round.leave}
+      </Button>
+      {confirmLeave && (
+        <Dialog
+          title={view.solo ? t.lobby.leaveSolo : t.round.leave}
+          onClose={() => setConfirmLeave(false)}
+          footer={
+            <>
+              <span className="spacer" />
+              <Button variant="primary" data-autofocus onClick={() => setConfirmLeave(false)}>
+                {t.round.stay}
+              </Button>
+              <Button variant="danger" icon="logout" onClick={() => void leaveRoom()}>
+                {view.solo ? t.lobby.leaveSolo : t.round.leave}
+              </Button>
+            </>
+          }
+        >
+          <p>{view.solo ? t.round.leaveSoloText : t.round.leaveText}</p>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -209,13 +238,13 @@ export function RoundScreen({ view }: { view: RoomView }) {
         </main>
         <aside className="round-right">
           <div className="question-row">
-            <h2 className="question">{t.round.question}</h2>
+            <h2 className="question">{view.mode === 'demo' ? t.round.questionDemo : t.round.question}</h2>
             {view.phase === 'PLAYING_AND_VOTING' && <TimerRing endsAt={round.deadline} totalMs={round.answerSeconds * 1000} />}
           </div>
           {isOwner ? (
             <motion.div className="owner-panel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <Icon name="eye" size={40} />
-              <p>{t.round.yourClip}</p>
+              <Icon name="eye" size={34} />
+              <p>{view.mode === 'demo' ? t.round.yourClipDemo : t.round.yourClip}</p>
             </motion.div>
           ) : (
             <>

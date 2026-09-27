@@ -191,7 +191,8 @@ app.whenReady().then(async () => {
         .object({
           fullscreen: z.boolean(),
           reducedMotion: z.enum(['system', 'on', 'off']),
-          effects: z.enum(['high', 'low'])
+          effects: z.enum(['high', 'low']),
+          theme: z.enum(['dark', 'light', 'system'])
         })
         .partial(),
       introSeen: z.boolean(),
@@ -234,6 +235,7 @@ app.whenReady().then(async () => {
   handle('tiktok:cancel', None, () => tiktok.cancel());
   handle('tiktok:commit', None, () => tiktok.commitCollected());
   handle('tiktok:disconnect', None, () => tiktok.disconnect());
+  handle('tiktok:dismiss', None, () => tiktok.dismissError());
   handle('tiktok:sample', z.number().int().min(1).max(20), (n) => tiktok.sample(n));
   handle('tiktok:list', None, () => tiktok.listClips());
   handle('tiktok:exclude', z.object({ id: z.string().regex(/^\d{6,25}$/), excluded: z.boolean() }), ({ id, excluded }) =>

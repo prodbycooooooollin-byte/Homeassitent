@@ -9,6 +9,7 @@ import { Background } from './components/Background';
 import { Icon, useServerNow } from './components/ui';
 import { CreateRoom, Intro, JoinRoom, MainMenu } from './screens/Menu';
 import { Settings } from './screens/Settings';
+import { Rules } from './screens/Rules';
 import { Lobby } from './screens/Lobby';
 import { RoundScreen } from './screens/Round';
 import { RevealScreen, ScoreboardScreen } from './screens/Reveal';
@@ -66,6 +67,21 @@ function useReducedMotion() {
   }, [pref]);
 }
 
+function useTheme() {
+  const pref = useStore((s) => s.settings?.display.theme ?? 'dark');
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const apply = () => {
+      const theme = pref === 'system' ? (mq.matches ? 'light' : 'dark') : pref;
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [pref]);
+}
+
 function ReconnectOverlay() {
   const deadline = useStore((s) => s.reconnectDeadline);
   const now = useServerNow(250);
@@ -91,7 +107,7 @@ function Toasts() {
       <AnimatePresence>
         {toasts.map((x) => (
           <motion.div key={x.id} className={`toast toast-${x.kind}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}>
-            <Icon name={x.kind === 'info' ? 'sparkle' : 'alert'} size={16} /> {x.text}
+            <Icon name={x.kind === 'info' ? 'info' : 'alert'} size={16} /> {x.text}
           </motion.div>
         ))}
       </AnimatePresence>
@@ -160,6 +176,7 @@ export function App() {
 function AppInner() {
   useBoot();
   useReducedMotion();
+  useTheme();
   const settings = useStore((s) => s.settings);
   const screen = useStore((s) => s.screen);
   const view = useStore((s) => s.view);
@@ -173,7 +190,8 @@ function AppInner() {
   let key: string = screen;
   let content: React.ReactNode;
   const me = view?.players.find((p) => p.id === view.youId);
-  if (session && view && !(screen === 'settings' && view.phase === 'LOBBY')) {
+  const subscreen = screen === 'settings' || screen === 'rules';
+  if (session && view && !(subscreen && view.phase === 'LOBBY')) {
     if (me?.waiting) {
       key = 'waiting';
       content = <WaitingScreen view={view} />;
@@ -209,7 +227,13 @@ function AppInner() {
     );
   } else {
     content =
-      screen === 'intro' ? <Intro /> : screen === 'create' ? <CreateRoom /> : screen === 'join' ? <JoinRoom /> : screen === 'settings' ? <Settings /> : <MainMenu />;
+      screen === 'intro' ? <Intro /> : screen === 'create' ? <CreateRoom /> : screen === 'join' ? <JoinRoom /> : screen === 'settings' ? (
+        <Settings />
+      ) : screen === 'rules' ? (
+        <Rules />
+      ) : (
+        <MainMenu />
+      );
   }
 
   const mood = !view ? 'menu' : view.phase === 'LOBBY' ? 'lobby' : view.phase === 'RESULTS' ? 'finale' : view.phase === 'REVEAL' ? 'reveal' : 'round';

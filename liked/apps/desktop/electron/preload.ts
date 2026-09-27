@@ -34,6 +34,7 @@ const api: LikedApi = {
     cancel: () => invoke('tiktok:cancel'),
     commitCollected: () => invoke('tiktok:commit'),
     disconnect: () => invoke('tiktok:disconnect'),
+    dismissError: () => invoke('tiktok:dismiss'),
     sample: (n) => invoke('tiktok:sample', n),
     listClips: () => invoke('tiktok:list'),
     setExcluded: (id, excluded) => invoke('tiktok:exclude', { id, excluded }),

@@ -26,7 +26,7 @@ function browserMock(): LikedApi {
       profile: { name: '', avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)]!, deviceId: crypto.randomUUID().replace(/-/g, '') },
       serverUrl: (import.meta.env.VITE_DEFAULT_SERVER_URL as string | undefined) ?? 'http://localhost:8787',
       audio: { music: 0.5, sfx: 0.7, musicMuted: false, sfxMuted: false, videoStartMuted: false },
-      display: { fullscreen: false, reducedMotion: 'system', effects: 'high' },
+      display: { fullscreen: false, reducedMotion: 'system', effects: 'high', theme: 'dark' },
       introSeen: false,
       experimentalWebAdapter: false
     };
@@ -35,10 +35,35 @@ function browserMock(): LikedApi {
   };
   let settings = read();
   let recent: string[] = [];
+  // Nur Entwicklungsvorschau: ?tiktok=<zustand> zeigt einen Verbindungszustand zur Sichtprüfung.
+  // Es werden keine Clips oder Likes erfunden.
+  const mockKind = new URLSearchParams(location.search).get('tiktok');
+  const acc = { displayName: 'Vorschau-Account', adapter: 'portability' as const };
+  const mockStatus = (): TikTokOverview['status'] => {
+    switch (mockKind) {
+      case 'disconnected':
+        return { kind: 'disconnected' };
+      case 'authorizing':
+        return { kind: 'authorizing', adapter: 'portability' };
+      case 'connected':
+        return { kind: 'connected_no_likes', account: acc };
+      case 'preparing':
+        return { kind: 'syncing', account: acc, stage: 'preparing', startedAt: Date.now() - 60_000, nextCheckAt: Date.now() + 90_000 };
+      case 'downloading':
+        return { kind: 'syncing', account: acc, stage: 'downloading', startedAt: Date.now() - 60_000 };
+      case 'expired':
+        return { kind: 'expired', account: acc };
+      case 'error':
+        return { kind: 'error', account: null, message: 'Die Anmeldung wurde nicht innerhalb von 10 Minuten im Browser bestätigt.', retryable: true };
+      default:
+        return { kind: 'unsupported', reason: 'adapter_unavailable' };
+    }
+  };
+  let mockState = mockStatus();
   const overview = (): TikTokOverview => ({
-    status: { kind: 'unsupported', reason: 'adapter_unavailable', detail: 'Browser-Vorschau ohne Desktop-App' },
+    status: mockState,
     index: null,
-    officialConfigured: null,
+    officialConfigured: mockKind ? true : null,
     experimentalEnabled: false
   });
   const noop = () => () => undefined;
@@ -66,6 +91,10 @@ function browserMock(): LikedApi {
       cancel: async () => overview(),
       commitCollected: async () => overview(),
       disconnect: async () => overview(),
+      dismissError: async () => {
+        mockState = { kind: 'disconnected' };
+        return overview();
+      },
       sample: async () => [],
       listClips: async () => [],
       setExcluded: async () => undefined,

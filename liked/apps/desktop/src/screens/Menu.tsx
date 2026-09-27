@@ -3,9 +3,9 @@ import { motion } from 'motion/react';
 import { AVATARS, DisplayNameSchema } from '@liked/protocol';
 import { t } from '../i18n/de';
 import { api } from '../lib/api';
-import { createRoom, joinRoom } from '../lib/net';
+import { createRoom, joinRoom, startSoloDemo } from '../lib/net';
 import { get, set, toast, useStore } from '../state/store';
-import { Avatar, Button, DemoBadge, Icon, Panel } from '../components/ui';
+import { Avatar, Button, Icon, Panel, useSavedFlash } from '../components/ui';
 import { TikTokChip } from './TikTokPanel';
 
 async function saveProfile(patch: { name?: string; avatar?: string }) {
@@ -13,29 +13,80 @@ async function saveProfile(patch: { name?: string; avatar?: string }) {
   set({ settings: s });
 }
 
-export function ProfileEditor({ compact }: { compact?: boolean }) {
+export function nameError(raw: string): string | null {
+  const trimmed = raw.normalize('NFC').replace(/\s+/g, ' ').trim();
+  if (trimmed.length < 2) return t.profile.errors.short;
+  if (trimmed.length > 20) return t.profile.errors.long;
+  return DisplayNameSchema.safeParse(raw).success ? null : t.profile.errors.chars;
+}
+
+/** Profil mit automatischer Speicherung und sichtbarer Bestätigung. */
+export function ProfileEditor({ compact, autoFocus }: { compact?: boolean; autoFocus?: boolean }) {
   const settings = useStore((s) => s.settings)!;
   const [name, setName] = useState(settings.profile.name);
-  const valid = DisplayNameSchema.safeParse(name).success;
+  const [touched, setTouched] = useState(false);
+  const [saved, flash] = useSavedFlash();
+  const err = nameError(name);
+  const showErr = (touched || name.length > 0) && err;
+  const commitName = async () => {
+    setTouched(true);
+    if (err) return;
+    const clean = DisplayNameSchema.parse(name);
+    if (clean !== settings.profile.name) {
+      await saveProfile({ name: clean });
+      flash();
+    }
+  };
   return (
     <div className={`profile-editor ${compact ? 'compact' : ''}`}>
       <label className="field">
-        <span>{t.profile.name}</span>
+        <span className="field-label">
+          {t.profile.name}
+          <small className="counter" aria-hidden="true">{name.trim().length}/20</small>
+        </span>
         <input
           value={name}
-          maxLength={20}
-          placeholder="z. B. Mia"
+          maxLength={24}
+          placeholder={t.profile.namePlaceholder}
+          autoFocus={autoFocus}
           onChange={(e) => setName(e.target.value)}
-          onBlur={() => valid && void saveProfile({ name: DisplayNameSchema.parse(name) })}
-          aria-invalid={!valid}
+          onBlur={() => void commitName()}
+          onKeyDown={(e) => e.key === 'Enter' && void commitName()}
+          aria-invalid={!!showErr}
+          aria-describedby="name-msg"
         />
+        <span id="name-msg" className={`field-msg ${showErr ? 'error' : saved ? 'ok' : ''}`} aria-live="polite">
+          {showErr ? (
+            <>
+              <Icon name="alert" size={14} /> {err}
+            </>
+          ) : saved ? (
+            <>
+              <Icon name="check" size={14} /> {t.profile.saved}
+            </>
+          ) : (
+            t.profile.autosave
+          )}
+        </span>
       </label>
       <div className="field">
-        <span>{t.profile.avatar}</span>
+        <span className="field-label">{t.profile.avatar}</span>
         <div className="avatar-picker" role="radiogroup" aria-label={t.profile.avatar}>
           {AVATARS.map((a) => (
-            <button key={a} type="button" role="radio" aria-checked={settings.profile.avatar === a} className={settings.profile.avatar === a ? 'active' : ''} onClick={() => void saveProfile({ avatar: a })}>
-              <Avatar avatar={a} size={compact ? 36 : 44} />
+            <button
+              key={a}
+              type="button"
+              role="radio"
+              aria-checked={settings.profile.avatar === a}
+              aria-label={t.avatarName(a)}
+              title={t.avatarName(a)}
+              className={settings.profile.avatar === a ? 'active' : ''}
+              onClick={async () => {
+                await saveProfile({ avatar: a });
+                flash();
+              }}
+            >
+              <Avatar avatar={a} size={compact ? 34 : 42} />
             </button>
           ))}
         </div>
@@ -45,50 +96,107 @@ export function ProfileEditor({ compact }: { compact?: boolean }) {
   );
 }
 
-function needName(): boolean {
-  const ok = DisplayNameSchema.safeParse(get().settings?.profile.name ?? '').success;
-  if (!ok) toast(t.menu.needName, 'warn');
-  return !ok;
+function hasValidName(): boolean {
+  return !nameError(get().settings?.profile.name ?? '');
+}
+
+function ProfileCard() {
+  const settings = useStore((s) => s.settings)!;
+  const [editing, setEditing] = useState(!settings.profile.name);
+  return (
+    <Panel
+      className="profile-card"
+      title={t.profile.title}
+      actions={
+        settings.profile.name ? (
+          <Button size="sm" variant="quiet" icon={editing ? 'check' : 'edit'} onClick={() => setEditing(!editing)} aria-expanded={editing}>
+            {editing ? t.common.close : t.common.edit}
+          </Button>
+        ) : null
+      }
+    >
+      {editing ? (
+        <ProfileEditor compact autoFocus={!settings.profile.name} />
+      ) : (
+        <div className="profile-preview">
+          <Avatar avatar={settings.profile.avatar} size={52} label={t.avatarName(settings.profile.avatar)} />
+          <div>
+            <strong>{settings.profile.name}</strong>
+            <small>{t.profile.hint}</small>
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
 }
 
 export function MainMenu() {
-  const settings = useStore((s) => s.settings)!;
+  const needName = () => {
+    if (hasValidName()) return false;
+    toast(t.menu.needName, 'warn');
+    return true;
+  };
   return (
-    <div className="screen menu-screen">
-      <motion.div className="menu-hero" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
-        <h1 className="logo" aria-label="LIKED">
-          <span className="logo-text">LIKED</span>
-          <Icon name="heart" size={48} className="logo-heart" />
-        </h1>
-        <p className="tagline">{t.tagline}</p>
-      </motion.div>
-
-      <div className="menu-body">
-        <motion.nav className="menu-actions" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.05 } } }}>
-          {[
-            { key: 'create', label: t.menu.create, icon: 'sparkle', variant: 'primary' as const, on: () => !needName() && set({ screen: 'create' }) },
-            { key: 'join', label: t.menu.join, icon: 'users', variant: 'cyan' as const, on: () => !needName() && set({ screen: 'join' }) },
-            { key: 'settings', label: t.menu.settings, icon: 'gear', variant: 'secondary' as const, on: () => set({ screen: 'settings', settingsTab: 'profile' }) },
-            { key: 'howto', label: t.menu.howTo, icon: 'eye', variant: 'ghost' as const, on: () => set({ screen: 'intro' }) },
-            { key: 'quit', label: t.menu.quit, icon: 'logout', variant: 'ghost' as const, on: () => api.app.quit() }
-          ].map((b) => (
-            <motion.div key={b.key} variants={{ hidden: { opacity: 0, x: -20 }, show: { opacity: 1, x: 0 } }}>
-              <Button variant={b.variant} size={b.key === 'create' || b.key === 'join' ? 'xl' : 'lg'} icon={b.icon} onClick={b.on} className="menu-btn">
-                {b.label}
-              </Button>
-            </motion.div>
-          ))}
-        </motion.nav>
-
-        <motion.aside className="menu-side" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1, duration: 0.4 }}>
-          <Panel title={t.profile.title}>
-            <ProfileEditor compact />
-          </Panel>
-          <TikTokChip />
-          <p className="server-line">
-            <Icon name="wifi" size={14} /> {settings.serverUrl}
+    <div className="screen home-screen">
+      <div className="home-wrap">
+        <motion.header className="home-head" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
+          <h1 className="logo" aria-label="LIKED">
+            <span className="logo-text">LIKED</span>
+            <Icon name="heart" size={34} className="logo-heart" />
+          </h1>
+          <p className="tagline">{t.tagline}</p>
+          <p className="players-line">
+            <Icon name="users" size={16} /> {t.menu.players}
           </p>
-        </motion.aside>
+        </motion.header>
+
+        <div className="home-grid">
+          <main className="home-main">
+            <div className="action-cards">
+              <button className="action-card primary" onClick={() => !needName() && set({ screen: 'create' })}>
+                <Icon name="sparkle" size={26} />
+                <span className="action-text">
+                  <strong>{t.menu.create}</strong>
+                  <small>{t.menu.createHint}</small>
+                </span>
+              </button>
+              <button className="action-card" onClick={() => !needName() && set({ screen: 'join' })}>
+                <Icon name="users" size={26} />
+                <span className="action-text">
+                  <strong>{t.menu.join}</strong>
+                  <small>{t.menu.joinHint}</small>
+                </span>
+              </button>
+            </div>
+            <button className="solo-card" onClick={() => startSoloDemo()}>
+              <Icon name="play" size={22} />
+              <span className="action-text">
+                <strong>{t.menu.solo}</strong>
+                <small>{t.menu.soloHint}</small>
+              </span>
+              <Icon name="arrowRight" size={20} className="solo-arrow" />
+            </button>
+            <nav className="home-links" aria-label="Weitere">
+              <Button variant="quiet" icon="book" onClick={() => set({ screen: 'rules', returnTo: 'menu' })}>
+                {t.menu.rules}
+              </Button>
+              <Button variant="quiet" icon="eye" onClick={() => set({ screen: 'intro' })}>
+                {t.menu.howTo}
+              </Button>
+              <Button variant="quiet" icon="gear" onClick={() => set({ screen: 'settings', settingsTab: 'profile' })}>
+                {t.menu.settings}
+              </Button>
+              <Button variant="quiet" icon="logout" onClick={() => api.app.quit()}>
+                {t.menu.quit}
+              </Button>
+            </nav>
+          </main>
+
+          <aside className="home-side">
+            <ProfileCard />
+            <TikTokChip />
+          </aside>
+        </div>
       </div>
     </div>
   );
@@ -106,26 +214,34 @@ export function CreateRoom() {
   };
   return (
     <div className="screen narrow-screen">
-      <Button variant="ghost" icon="arrowLeft" onClick={() => set({ screen: 'menu' })}>
+      <Button variant="quiet" icon="arrowLeft" onClick={() => set({ screen: 'menu' })}>
         {t.common.back}
       </Button>
       <h2 className="screen-title">{t.menu.createTitle}</h2>
       <div className="mode-grid">
-        <button className="mode-card" disabled={busy || !hasLikes} onClick={() => void go('tiktok')}>
-          <Icon name="heart" size={40} />
+        <button className="mode-card" disabled={busy || !hasLikes} onClick={() => void go('tiktok')} aria-describedby={!hasLikes ? 'tiktok-missing' : undefined}>
+          <Icon name="heart" size={30} />
           <strong>{t.menu.modeTikTok}</strong>
           <span>{t.menu.modeTikTokHint}</span>
-          {!hasLikes && <em className="mode-missing">{t.menu.needTikTok}</em>}
+          {!hasLikes && (
+            <em className="mode-missing" id="tiktok-missing">
+              <Icon name="info" size={14} /> {t.menu.needTikTok}
+            </em>
+          )}
         </button>
-        <button className="mode-card demo" disabled={busy} onClick={() => void go('demo')}>
-          <Icon name="play" size={40} />
+        <button className="mode-card" disabled={busy} onClick={() => void go('demo')}>
+          <Icon name="film" size={30} />
           <strong>{t.menu.modeDemo}</strong>
           <span>{t.menu.modeDemoHint}</span>
-          <DemoBadge text={t.common.demo} />
+        </button>
+        <button className="mode-card" disabled={busy} onClick={() => startSoloDemo()}>
+          <Icon name="play" size={30} />
+          <strong>{t.menu.modeSolo}</strong>
+          <span>{t.menu.modeSoloHint}</span>
         </button>
       </div>
       {!hasLikes && (
-        <Button variant="cyan" icon="heart" onClick={() => set({ screen: 'settings', settingsTab: 'tiktok' })}>
+        <Button variant="secondary" icon="heart" onClick={() => set({ screen: 'settings', settingsTab: 'tiktok' })}>
           {t.tiktok.connect}
         </Button>
       )}
@@ -145,7 +261,7 @@ export function JoinRoom() {
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => input.current?.focus(), []);
   const go = async () => {
-    if (code.length !== 6) return;
+    if (code.length !== 6 || busy) return;
     setBusy(true);
     const err = await joinRoom(code);
     setBusy(false);
@@ -154,10 +270,11 @@ export function JoinRoom() {
   };
   return (
     <div className="screen narrow-screen">
-      <Button variant="ghost" icon="arrowLeft" onClick={() => set({ screen: 'menu' })}>
+      <Button variant="quiet" icon="arrowLeft" onClick={() => set({ screen: 'menu' })}>
         {t.common.back}
       </Button>
       <h2 className="screen-title">{t.menu.joinTitle}</h2>
+      <p className="lead">{t.menu.joinHint}</p>
       <form
         className="join-form"
         onSubmit={(e) => {
@@ -179,7 +296,7 @@ export function JoinRoom() {
           spellCheck={false}
           autoComplete="off"
         />
-        <Button variant="cyan" size="xl" icon="users" disabled={busy || code.length !== 6} type="submit" onClick={() => void go()}>
+        <Button variant="primary" size="lg" icon="users" disabled={busy || code.length !== 6} type="submit">
           {t.menu.joinButton}
         </Button>
       </form>
@@ -187,41 +304,164 @@ export function JoinRoom() {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Einführung                                                          */
+/* ------------------------------------------------------------------ */
+
+function IntroVisual({ step }: { step: number }) {
+  if (step === 0) {
+    return (
+      <div className="intro-visual" aria-hidden="true">
+        <div className="iv-phone">
+          <Icon name="heart" size={28} />
+          <span>12.4K</span>
+        </div>
+        <Icon name="arrowRight" size={24} className="iv-arrow" />
+        <div className="iv-list">
+          {['fox', 'owl', 'frog'].map((a) => (
+            <div key={a} className="iv-row">
+              <Avatar avatar={a} size={26} />
+              <span className="iv-bar" />
+              <Icon name="heart" size={14} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (step === 1) {
+    return (
+      <div className="intro-visual" aria-hidden="true">
+        <div className="iv-clip">
+          <span className="iv-emoji">🐈</span>
+          <span className="iv-progress" />
+        </div>
+        <div className="iv-answers">
+          {[
+            ['owl', 'Mila'],
+            ['frog', 'Jonas'],
+            ['cat', 'Lea']
+          ].map(([a, n], i) => (
+            <div key={a} className={`iv-answer ${i === 1 ? 'picked' : ''}`}>
+              <Avatar avatar={a!} size={26} />
+              <span>{n}</span>
+              {i === 1 && <Icon name="check" size={14} />}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="intro-visual" aria-hidden="true">
+      <div className="iv-points">
+        <div className="iv-point-row">
+          <Avatar avatar="frog" size={28} />
+          <span>Jonas</span>
+          <span className="iv-chip ok">
+            <Icon name="check" size={12} /> #1
+          </span>
+          <span className="iv-chip streak">3er-Serie ×1,10</span>
+          <strong>+1.100</strong>
+        </div>
+        <div className="iv-point-row">
+          <Avatar avatar="owl" size={28} />
+          <span>Mila</span>
+          <span className="iv-chip ok">
+            <Icon name="check" size={12} /> #2
+          </span>
+          <strong>+850</strong>
+        </div>
+        <div className="iv-point-row dim">
+          <Avatar avatar="cat" size={28} />
+          <span>Lea</span>
+          <span className="iv-chip bad">
+            <Icon name="x" size={12} /> Falsch
+          </span>
+          <strong>0</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Intro() {
-  const [i, setI] = useState(0);
   const slides = t.intro.slides;
-  const finish = async () => {
+  const total = slides.length + 1;
+  const [i, setI] = useState(0);
+  const finish = async (next?: 'solo' | 'create') => {
     const s = await api.settings.set({ introSeen: true });
     set({ settings: s, screen: 'menu' });
+    if (next === 'solo') startSoloDemo();
+    if (next === 'create') set({ screen: hasValidName() ? 'create' : 'menu' });
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === 'BUTTON' && e.key === 'Enter') return;
       if (e.key === 'Escape') void finish();
-      if (e.key === 'ArrowRight' || e.key === 'Enter') i < slides.length - 1 ? setI(i + 1) : void finish();
+      if (e.key === 'ArrowRight' && i < total - 1) setI(i + 1);
+      if (e.key === 'ArrowLeft' && i > 0) setI(i - 1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
-  const s = slides[i]!;
+  const last = i === total - 1;
+  const s = slides[i];
   return (
     <div className="screen intro-screen">
-      <motion.div key={i} className="intro-card" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
-        <div className="intro-step">{i + 1} / {slides.length}</div>
-        <h2>{s.title}</h2>
-        <p>{s.text}</p>
+      <motion.div key={i} className="intro-card" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25 }} aria-live="polite">
+        <div className="intro-step">{t.intro.step(i + 1, total)}</div>
+        {s ? (
+          <>
+            <IntroVisual step={i} />
+            <h2>{s.title}</h2>
+            <p>{s.text}</p>
+          </>
+        ) : (
+          <>
+            <h2>{t.intro.finishTitle}</h2>
+            <p>{t.intro.finishText}</p>
+            <div className="intro-finish">
+              <Button variant="primary" size="lg" icon="play" onClick={() => void finish('solo')}>
+                {t.menu.solo}
+              </Button>
+              <Button variant="secondary" size="lg" icon="sparkle" onClick={() => void finish('create')}>
+                {t.menu.create}
+              </Button>
+              <Button variant="quiet" icon="book" onClick={async () => {
+                await finish();
+                set({ screen: 'rules', returnTo: 'menu' });
+              }}>
+                {t.menu.rules}
+              </Button>
+            </div>
+          </>
+        )}
       </motion.div>
       <div className="intro-actions">
-        <Button variant="ghost" onClick={() => void finish()}>
-          {t.intro.skip}
-        </Button>
-        <div className="intro-dots">
-          {slides.map((_, k) => (
+        {i > 0 ? (
+          <Button variant="quiet" icon="arrowLeft" onClick={() => setI(i - 1)}>
+            {t.intro.back}
+          </Button>
+        ) : (
+          <Button variant="quiet" onClick={() => void finish()}>
+            {t.intro.skip}
+          </Button>
+        )}
+        <div className="intro-dots" aria-hidden="true">
+          {Array.from({ length: total }, (_, k) => (
             <span key={k} className={k === i ? 'active' : ''} />
           ))}
         </div>
-        <Button variant="primary" onClick={() => (i < slides.length - 1 ? setI(i + 1) : void finish())}>
-          {i < slides.length - 1 ? t.intro.next : t.intro.done}
-        </Button>
+        {!last ? (
+          <Button variant="primary" iconRight="arrowRight" onClick={() => setI(i + 1)}>
+            {t.intro.next}
+          </Button>
+        ) : (
+          <Button variant="quiet" onClick={() => void finish()}>
+            {t.intro.skip}
+          </Button>
+        )}
       </div>
     </div>
   );

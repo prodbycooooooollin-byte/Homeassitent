@@ -5,7 +5,7 @@ import { t } from '../i18n/de';
 import { actions } from '../lib/net';
 import { sound } from '../lib/sound';
 import { useStore } from '../state/store';
-import { Avatar, Button, Icon } from '../components/ui';
+import { Avatar, Button, Icon, SimBadge } from '../components/ui';
 import { MiniStandings, RoundHeader } from './Round';
 
 /** Auflösung: kurze Spannung → „Das war …“ → Tipps, Korrektheit, Ränge, Punkte, Serien. */
@@ -55,8 +55,9 @@ export function RevealScreen({ view }: { view: RoomView }) {
           ) : (
             <motion.div key="owner" className="reveal-owner" initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.4, rotate: -8 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 18 }}>
               <p className="muted">{t.reveal.itWas}</p>
-              <Avatar avatar={owner?.avatar ?? 'ghost'} size={140} ring="violet" />
+              <Avatar avatar={owner?.avatar ?? 'ghost'} size={120} ring="violet" label={t.avatarName(owner?.avatar ?? 'ghost')} />
               <h2 className="reveal-name">{owner?.name ?? '?'}</h2>
+              {owner?.simulated && <SimBadge />}
             </motion.div>
           )}
         </AnimatePresence>
@@ -70,13 +71,13 @@ export function RevealScreen({ view }: { view: RoomView }) {
                 <motion.li key={v.voterId} className={`reveal-vote ${v.correct ? 'ok' : 'bad'} ${v.voterId === view.youId ? 'me' : ''}`} variants={{ hidden: { opacity: 0, x: 30 }, show: { opacity: 1, x: 0 } }}>
                   <Avatar avatar={voter?.avatar ?? 'ghost'} size={40} />
                   <span className="nm">{voter?.name}</span>
-                  <span className="arrow">→</span>
+                  <span className="arrow" aria-label="tippt auf">→</span>
                   <span className="target">{target ? target.name : t.reveal.noVote}</span>
                   <span className={`verdict ${v.correct ? 'ok' : 'bad'}`}>
                     <Icon name={v.correct ? 'check' : 'x'} size={16} /> {v.correct ? t.reveal.correct : v.targetId ? t.reveal.wrong : t.reveal.noVote}
                   </span>
                   {v.rank && <span className="rank">{t.reveal.rank(v.rank)}</span>}
-                  {v.streak >= 2 && <span className="streak-chip">🔥 {t.reveal.streak(v.streak)} ×{v.multiplier.toFixed(2).replace('.', ',')}</span>}
+                  {v.streak >= 2 && v.correct && <span className="streak-chip">{t.reveal.streak(v.streak)} ×{v.multiplier.toFixed(2).replace('.', ',')}</span>}
                   <motion.span className="points" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: reduced ? 0 : 0.35 }}>
                     {v.points > 0 ? t.reveal.points(v.points) : '0'}
                   </motion.span>
@@ -118,7 +119,7 @@ export function ScoreboardScreen({ view }: { view: RoomView }) {
         </LayoutGroup>
         <p className="muted">{view.paused ? t.scoreboard.paused : t.scoreboard.next}</p>
         {isHost && (
-          <Button variant="ghost" icon={view.paused ? 'play' : 'pause'} onClick={() => void actions.pause(!view.paused)}>
+          <Button variant="secondary" icon={view.paused ? 'play' : 'pause'} onClick={() => void actions.pause(!view.paused)}>
             {view.paused ? t.scoreboard.resume : t.scoreboard.pause}
           </Button>
         )}

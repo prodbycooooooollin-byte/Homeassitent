@@ -8,7 +8,7 @@ export interface AppSettings {
   /** true = Spieler hat bewusst einen anderen Server gewählt. */
   serverUrlCustom?: boolean;
   audio: { music: number; sfx: number; musicMuted: boolean; sfxMuted: boolean; videoStartMuted: boolean };
-  display: { fullscreen: boolean; reducedMotion: 'system' | 'on' | 'off'; effects: 'high' | 'low' };
+  display: { fullscreen: boolean; reducedMotion: 'system' | 'on' | 'off'; effects: 'high' | 'low'; theme: 'dark' | 'light' | 'system' };
   introSeen: boolean;
   /** Experimenteller lokaler Web-Adapter – standardmäßig aus, nicht verifiziert. */
   experimentalWebAdapter: boolean;
@@ -65,6 +65,8 @@ export interface LikedApi {
     /** Experimenteller Adapter: gesammelte Links übernehmen. */
     commitCollected(): Promise<TikTokOverview>;
     disconnect(): Promise<TikTokOverview>;
+    /** Fehlerhinweis bewusst ausblenden (Zustand fällt auf Import bzw. „nicht verbunden“ zurück). */
+    dismissError(): Promise<TikTokOverview>;
     sample(n: number): Promise<{ id: string; t?: number }[]>;
     listClips(): Promise<ClipListEntry[]>;
     setExcluded(id: string, excluded: boolean): Promise<void>;

@@ -16,17 +16,21 @@ und alle raten gleichzeitig, aus wessen Like-Liste der Clip stammt.
    legt einen Startmenüeintrag und eine Desktopverknüpfung an. Deinstallieren geht über „Apps & Features“.
    Der Installer ist nicht signiert, daher kann SmartScreen warnen: „Weitere Informationen → Trotzdem ausführen“.
 2. **Profil:** Beim ersten Start die kurze Einführung ansehen (oder überspringen). Danach Anzeigename und Avatar
-   wählen. Ein Konto oder Passwort ist nicht nötig.
+   wählen. Ein Konto oder Passwort ist nicht nötig. Zum Kennenlernen: **„Allein ausprobieren“** startet eine
+   komplette Proberunde mit zwei klar gekennzeichneten simulierten Mitspielern und Beispielclips – ohne TikTok und
+   ohne Server.
 3. **TikTok verbinden:** *Einstellungen → TikTok → „TikTok verbinden“.* Die Anmeldung öffnet sich im Browser direkt
-   bei TikTok. Danach auf **„Likes synchronisieren“** klicken. TikTok stellt die Daten asynchron bereit (Minuten bis
+   bei TikTok. Danach auf **„Likes importieren“** klicken. TikTok stellt die Daten asynchron bereit (Minuten bis
    Tage). LIKED zeigt den Status an und fragt ihn beim nächsten Start erneut ab.
-4. **Raum erstellen:** *Raum erstellen → „Mit TikTok-Likes“* (oder zum Ausprobieren „Demo-Partie“). Den Raumcode
+4. **Raum erstellen:** *Raum erstellen → „Mit TikTok-Likes“* (oder „Demo mit Freunden“ mit Beispielclips). Den Raumcode
    bzw. Beitrittslink an Freunde schicken.
 5. **Beitreten:** *Raum beitreten* → sechsstelligen Code eingeben (ein eingefügter Link wird erkannt).
-6. **Lobby:** „Ton & Video testen“ → „Ich bin bereit“. Der Host wählt Clips pro Person (5/8/10) und die Antwortzeit
+6. **Lobby:** „Ton & Bild testen“ → „Ich bin bereit“. Unter *Einstellungen → Meine Clips* lassen sich einzelne
+   importierte Likes privat ausschließen. Der Host wählt Clips pro Person (5/8/10) und die Antwortzeit
    (15/20/30 s) und startet, sobald mindestens drei Spieler bereit sind.
 7. **Spielen:** Clip ansehen, auf die Karte der Person klicken, die ihn gelikt hat (oder Taste 1–9). Pro Runde zählt
-   genau ein Tipp. Wer selbst die Quelle ist, schaut in dieser Runde zu.
+   genau ein Tipp. Wer selbst die Quelle ist, schaut in dieser Runde zu. Die vollständigen Regeln stehen jederzeit
+   unter **„Spielregeln“** (Hauptmenü und Lobby).
 
 Die App verbindet sich automatisch mit dem zentralen LIKED-Server (`https://liked-partyspiel.onrender.com`, eingerichtet über `render.yaml`). Es muss nichts eingetragen werden.
 

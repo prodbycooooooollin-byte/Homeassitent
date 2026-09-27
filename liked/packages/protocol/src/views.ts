@@ -18,6 +18,8 @@ export interface PublicPlayer {
   poolStatus: PoolStatus;
   /** Wartet auf die nächste Lobby (während einer laufenden Partie beigetreten). */
   waiting: boolean;
+  /** Nur in der lokalen Solo-Demo: simulierter Mitspieler. Der Server setzt dieses Feld nie. */
+  simulated?: boolean;
 }
 
 export type RoundRole = 'voter' | 'owner' | 'spectator';
@@ -135,6 +137,8 @@ export interface RoomView {
   notices: Notice[];
   /** Verständlicher Grund, warum noch nicht gestartet werden kann. */
   startBlockers: StartBlocker[];
+  /** Nur lokal: Solo-Demo ohne Server mit simulierten Mitspielern. */
+  solo?: boolean;
 }
 
 export type StartBlocker =

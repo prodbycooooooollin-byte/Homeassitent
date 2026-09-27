@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Dezenter animierter Hintergrund (Canvas). Überlagert nie das Video, pausiert bei
+ * Ruhiger Hintergrund mit wenigen, langsamen Punkten (Canvas). Überlagert nie das Video, pausiert bei
  * verstecktem Fenster und entfällt bei reduzierter Bewegung oder niedriger Qualität.
  */
 export function Background({ mood, enabled }: { mood: 'menu' | 'lobby' | 'round' | 'reveal' | 'finale'; enabled: boolean }) {
@@ -26,14 +26,14 @@ export function Background({ mood, enabled }: { mood: 'menu' | 'lobby' | 'round'
     };
     resize();
     window.addEventListener('resize', resize);
-    const parts = Array.from({ length: 46 }, () => ({
+    const parts = Array.from({ length: 22 }, () => ({
       x: Math.random(),
       y: Math.random(),
-      r: 0.6 + Math.random() * 2.2,
+      r: 0.8 + Math.random() * 1.6,
       vx: (Math.random() - 0.5) * 0.00012,
       vy: -0.00004 - Math.random() * 0.00012,
       hue: Math.random() < 0.6 ? 275 : 188,
-      a: 0.15 + Math.random() * 0.4
+      a: 0.08 + Math.random() * 0.2
     }));
     let last = performance.now();
     const frame = (now: number) => {
@@ -41,7 +41,7 @@ export function Background({ mood, enabled }: { mood: 'menu' | 'lobby' | 'round'
       last = now;
       ctx.clearRect(0, 0, w, h);
       const m = moodRef.current;
-      const speed = m === 'round' ? 0.4 : m === 'reveal' ? 2.2 : m === 'finale' ? 1.6 : 1;
+      const speed = m === 'round' ? 0.3 : m === 'reveal' ? 1.2 : 0.7;
       for (const p of parts) {
         p.x += p.vx * dt * speed;
         p.y += p.vy * dt * speed;
@@ -77,10 +77,7 @@ export function Background({ mood, enabled }: { mood: 'menu' | 'lobby' | 'round'
 
   return (
     <div className={`bg bg-${mood}`} aria-hidden="true">
-      <div className="bg-glow bg-glow-a" />
-      <div className="bg-glow bg-glow-b" />
       {enabled && <canvas ref={ref} className="bg-canvas" />}
-      <div className="bg-grid" />
     </div>
   );
 }

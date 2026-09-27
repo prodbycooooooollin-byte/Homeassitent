@@ -35,6 +35,16 @@ WebSocket-Clients und den Auth-Dienst gegen eine nachgebaute TikTok-API.
   Domains wird abgelehnt, ungültige IPC-Eingaben werden verworfen.
 - Browser-Vorschau, 4 Spieler: Einführung, Menü, Demo-Raum, Beitritt per Code, Medientest, Ready, Start, Countdown,
   Runde, Besitzeransicht, Auflösung, Zwischenstand, Finale, jeweils bei 1440×900 und 1280×720 (Screenshots geprüft).
+- UI-Überarbeitung (Browser-Vorschau, Playwright, Screenshots gesichtet) bei 1440×900 und 1280×720, Startseite und
+  Spielablauf zusätzlich bei 1920×1080: frischer Start ohne TikTok, Einführung mit Zurück, Namensprüfung und
+  „Gespeichert“-Anzeige, Spielregeln, alle Einstellungsreiter inkl. leerer „Meine Clips“, Lösch-Dialog (Esc schließt),
+  helles Erscheinungsbild, Solo-Demo: Medientest negativ („Kein Ton“ → Tipps → Lobby zeigt „Test nicht erfolgreich“,
+  „Bereit“ gesperrt) und positiv, Bereit, Start, Tipp per Taste 1, Auflösung, Zwischenstand, Verlassen während einer
+  Runde mit Bestätigung; bei 1440×900 eine vollständige Solo-Partie bis zum Endergebnis, „Nochmal spielen“ und
+  „Demo beenden“. Kein horizontales Überlaufen. TikTok-Zustände über `?tiktok=` (nicht verbunden, Warte auf
+  Browser, verbunden, vorbereitet, läuft, abgelaufen, fehlgeschlagen inkl. „Ausblenden“, nicht verfügbar).
+- `apps/desktop/test/solo-demo.test.ts`: Solo-Demo komplett bis RESULTS (15 Runden, je 10 Tippchancen, keine offenen
+  Timer), Neustart, Verlassen, Medientest/Bereit-Regeln, keine Lösung vor der Auflösung, Rundenzahl/Dauer-Schätzung.
 - Lastmessung: 50 Räume, 200 Spieler, 1 000 Runden (siehe SERVER.md).
 - Docker-Build-Schritte simuliert (Server-Workspace ohne Desktop installieren, bündeln, starten).
 
@@ -48,3 +58,5 @@ WebSocket-Clients und den Auth-Dienst gegen eine nachgebaute TikTok-API.
 - Update-Ablauf (latest.yml → Download → Installation beim Beenden). Voraussetzung sind ein erstes Release und ein
   öffentliches Repository oder Release-Hosting.
 - Experimenteller Web-Adapter.
+- „Meine Clips“ mit echten importierten Likes (Liste, Ausschließen, Vorschau) – ohne echten Import nur der leere
+  Zustand geprüft. Die neue Oberfläche wurde nicht auf einem Windows-PC in Electron gesichtet (nur Browser-Vorschau).

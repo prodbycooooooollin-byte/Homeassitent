@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import type { Reaction, RoomMode, RoomView } from '@liked/protocol';
 import type { AppSettings, TikTokOverview, UpdateState } from '../shared/ipc-types';
 
-export type Screen = 'intro' | 'menu' | 'create' | 'join' | 'settings';
-export type SettingsTab = 'profile' | 'tiktok' | 'display' | 'audio' | 'network' | 'about';
+export type Screen = 'intro' | 'menu' | 'create' | 'join' | 'settings' | 'rules';
+export type SettingsTab = 'profile' | 'tiktok' | 'clips' | 'display' | 'audio' | 'network' | 'about';
 export type ConnState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
 export interface Session {
@@ -13,6 +13,8 @@ export interface Session {
   playerId: string;
   salt: string;
   mode: RoomMode;
+  /** Lokale Solo-Demo ohne Server. */
+  solo?: boolean;
 }
 
 export interface LocalVote {
@@ -46,6 +48,13 @@ interface State {
   reducedMotion: boolean;
   prefillCode: string;
   poolError: string | null;
+  /**
+   * Lokaler Ausgang des Medientests je Raum: Der Server kennt nur „bestätigt“ ja/nein;
+   * „nicht erfolgreich“ (mit gemeldetem Problem) merkt sich der Client, um passende Hilfe zu zeigen.
+   */
+  mediaFailed: { roomId: string; problem: 'sound' | 'picture' | 'both' } | null;
+  /** Wohin „Zurück“ aus Einstellungen/Regeln führt. */
+  returnTo: 'menu' | 'room';
 }
 
 export const useStore = create<State>(() => ({
@@ -65,7 +74,9 @@ export const useStore = create<State>(() => ({
   reactions: [],
   reducedMotion: false,
   prefillCode: '',
-  poolError: null
+  poolError: null,
+  mediaFailed: null,
+  returnTo: 'menu'
 }));
 
 export const set = useStore.setState;

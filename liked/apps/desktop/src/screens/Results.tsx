@@ -3,7 +3,7 @@ import type { RoomView } from '@liked/protocol';
 import { t } from '../i18n/de';
 import { actions, leaveRoom } from '../lib/net';
 import { useStore } from '../state/store';
-import { Avatar, Button, DemoBadge, Icon, Panel } from '../components/ui';
+import { Avatar, Button, Icon, ModeBadge, Panel, SimBadge } from '../components/ui';
 
 export function ResultsScreen({ view }: { view: RoomView }) {
   const res = view.results!;
@@ -20,16 +20,17 @@ export function ResultsScreen({ view }: { view: RoomView }) {
     <div className="screen results-screen">
       <header className="results-head">
         <h2 className="screen-title">
-          <Icon name="trophy" size={34} /> {t.results.title}
+          <Icon name="trophy" size={28} /> {t.results.title}
         </h2>
-        {view.mode === 'demo' && <DemoBadge text={t.lobby.demoBadge} />}
+        <ModeBadge mode={view.mode} solo={view.solo} />
         {res.endReason !== 'complete' && <p className="hint warn">{t.results.endReason[res.endReason]}</p>}
+        {view.solo && <p className="hint">{t.results.soloDone}</p>}
       </header>
 
       <div className="results-layout">
         <div className="podium">
           {podiumOrder.map((s, i) => {
-            const height = s.place === 1 ? 220 : s.place === 2 ? 160 : 120;
+            const height = s.place === 1 ? 150 : s.place === 2 ? 110 : 80;
             return (
               <motion.div
                 key={s.playerId}
@@ -38,7 +39,7 @@ export function ResultsScreen({ view }: { view: RoomView }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: reduced ? 0 : 0.3 + (3 - s.place) * 0.35, type: 'spring', stiffness: 160, damping: 18 }}
               >
-                <Avatar avatar={byId.get(s.playerId)?.avatar ?? 'ghost'} size={s.place === 1 ? 110 : 84} ring={s.place === 1 ? 'gold' : undefined} />
+                <Avatar avatar={byId.get(s.playerId)?.avatar ?? 'ghost'} size={s.place === 1 ? 88 : 68} ring={s.place === 1 ? 'gold' : undefined} />
                 <strong>{nameOf(s.playerId)}</strong>
                 <span className="podium-pts">{s.score.toLocaleString('de-DE')}</span>
                 <div className="podium-block" style={{ height }}>
@@ -51,12 +52,12 @@ export function ResultsScreen({ view }: { view: RoomView }) {
         </div>
 
         <div className="results-side">
-          <Panel title="Rangliste">
+          <Panel title={t.results.ranking}>
             <table className="ranking">
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Spieler</th>
+                  <th>{t.results.player}</th>
                   <th>{t.results.points}</th>
                   <th>{t.results.correct}</th>
                   <th>{t.results.longestStreak}</th>
@@ -70,6 +71,7 @@ export function ResultsScreen({ view }: { view: RoomView }) {
                     <td>
                       <span className="cell-player">
                         <Avatar avatar={byId.get(s.playerId)?.avatar ?? 'ghost'} size={26} /> {nameOf(s.playerId)}
+                        {byId.get(s.playerId)?.simulated && <SimBadge />}
                       </span>
                     </td>
                     <td>{s.score.toLocaleString('de-DE')}</td>
@@ -85,7 +87,7 @@ export function ResultsScreen({ view }: { view: RoomView }) {
           </Panel>
 
           {me && (
-            <Panel title="Deine Werte">
+            <Panel title={t.results.yourStats}>
               <div className="stat-grid">
                 <div><strong>{me.score.toLocaleString('de-DE')}</strong><span>{t.results.points}</span></div>
                 <div><strong>{me.correct}/{me.opportunities}</strong><span>{t.results.correct}</span></div>
@@ -96,7 +98,7 @@ export function ResultsScreen({ view }: { view: RoomView }) {
           )}
 
           {res.titles.length > 0 && (
-            <Panel title="Titel">
+            <Panel title={t.results.titlesHead}>
               <ul className="titles">
                 {res.titles.map((ti) => (
                   <li key={ti.id}>
@@ -109,7 +111,11 @@ export function ResultsScreen({ view }: { view: RoomView }) {
           )}
 
           <div className="row gap wrap">
-            {isHost ? (
+            {view.solo ? (
+              <Button variant="primary" size="lg" icon="refresh" onClick={() => void actions.rematch()}>
+                {t.results.soloAgain}
+              </Button>
+            ) : isHost ? (
               <>
                 <Button variant="primary" size="lg" icon="refresh" onClick={() => void actions.rematch()}>
                   {t.results.rematch}
@@ -121,7 +127,7 @@ export function ResultsScreen({ view }: { view: RoomView }) {
             ) : (
               <p className="muted">{t.results.hostDecides}</p>
             )}
-            <Button variant="ghost" size="lg" icon="logout" onClick={() => void leaveRoom()}>
+            <Button variant="quiet" size="lg" icon="logout" onClick={() => void leaveRoom()}>
               {t.results.mainMenu}
             </Button>
           </div>
@@ -137,7 +143,7 @@ export function WaitingScreen({ view }: { view: RoomView }) {
       <div className="spinner" />
       <h2>{t.lobby.waitingNext}</h2>
       <p className="muted">Raum {view.code}</p>
-      <Button variant="ghost" icon="logout" onClick={() => void leaveRoom()}>
+      <Button variant="secondary" icon="logout" onClick={() => void leaveRoom()}>
         {t.lobby.leave}
       </Button>
     </div>

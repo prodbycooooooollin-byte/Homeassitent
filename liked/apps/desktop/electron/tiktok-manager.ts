@@ -106,6 +106,18 @@ export class TikTokManager {
     const idx = this.indexMeta();
     switch (body.state) {
       case 'none':
+        // Der Server kennt dieses Gerät nicht (mehr) – z. B. abgelaufene Anmeldung oder Server-Neustart.
+        if (this.status.kind === 'authorizing') {
+          return this.set({ kind: 'error', account: null, message: 'Die Anmeldung ist abgelaufen. Bitte erneut verbinden.', retryable: true });
+        }
+        if (idx?.adapter === 'portability') {
+          return this.set({
+            kind: 'error',
+            account: null,
+            message: 'Die TikTok-Verbindung ist auf dem Server nicht mehr vorhanden (z. B. nach einem Server-Neustart). Deine importierten Likes bleiben nutzbar; für einen neuen Import bitte erneut verbinden.',
+            retryable: true
+          });
+        }
         return this.set({ kind: 'disconnected' });
       case 'authorizing':
         return this.set({ kind: 'authorizing', adapter: 'portability' });
@@ -203,7 +215,9 @@ export class TikTokManager {
       this.pollTimer = null;
       const o = await this.refreshOfficial().catch(() => null);
       if (o?.status.kind === 'authorizing' && Date.now() - startedAt < 10 * 60_000) this.pollAuthorization(startedAt);
-      else if (o?.status.kind === 'authorizing') this.set({ kind: 'disconnected' });
+      else if (o?.status.kind === 'authorizing') {
+        this.set({ kind: 'error', account: null, message: 'Die Anmeldung wurde nicht innerhalb von 10 Minuten im Browser bestätigt.', retryable: true });
+      }
     }, 3000);
   }
 
@@ -223,6 +237,11 @@ export class TikTokManager {
   }
 
   async cancel(): Promise<TikTokOverview> {
+    if (this.status.kind === 'authorizing' && this.status.adapter === 'portability') {
+      if (this.pollTimer) clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+      return this.set({ kind: 'error', account: null, message: 'Anmeldung abgebrochen.', retryable: true });
+    }
     if (this.webWindow) {
       this.closeWeb();
       return this.restoreAfterCancel();
@@ -232,6 +251,14 @@ export class TikTokManager {
   }
 
   private restoreAfterCancel(): TikTokOverview {
+    const idx = this.indexMeta();
+    if (idx) return this.set({ kind: 'ready', account: { displayName: idx.accountLabel, adapter: idx.adapter }, clipCount: idx.count, lastSyncAt: idx.syncedAt });
+    return this.set({ kind: 'disconnected' });
+  }
+
+  /** Fehlerhinweis bewusst schließen: zurück zu den vorhandenen Daten bzw. „nicht verbunden“. */
+  dismissError(): TikTokOverview {
+    if (this.status.kind !== 'error' && this.status.kind !== 'expired' && this.status.kind !== 'unsupported') return this.overview();
     const idx = this.indexMeta();
     if (idx) return this.set({ kind: 'ready', account: { displayName: idx.accountLabel, adapter: idx.adapter }, clipCount: idx.count, lastSyncAt: idx.syncedAt });
     return this.set({ kind: 'disconnected' });
