@@ -30,6 +30,8 @@ export interface ServerConfig {
   tiktokVerification: { file: string; content: string } | null;
   /** Warum keine Verifizierung aktiv ist (für /healthz, ohne Inhalte). */
   tiktokVerificationStatus: 'ok' | 'not_set' | 'missing_file' | 'missing_content' | 'invalid_file';
+  /** Betreiberangaben für Datenschutzerklärung und Nutzungsbedingungen. */
+  operator: { name: string | null; contact: string | null };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -62,7 +64,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     logLevel: (env.LOG_LEVEL as ServerConfig['logLevel']) ?? 'info',
     // Eine echte Runde dauert ≥ 15 s; diese Limits bremsen nur Missbrauch.
     rateLimits: { perSocket: [80, 15], perEvent: [20, 4], joinPerIp: [10, 1 / 6] },
-    ...parseTikTokVerification(env)
+    ...parseTikTokVerification(env),
+    operator: { name: env.OPERATOR_NAME?.trim() || null, contact: env.OPERATOR_CONTACT?.trim() || null }
   };
 }
 

@@ -219,3 +219,17 @@ describe('TikTok-URL-Verifizierung', () => {
     expect((await fetch(`${s.url}/healthz`).then((r) => r.json())).tiktokVerifyFile).toBe('tiktokAbCdEf123456.txt');
   });
 });
+
+describe('Rechtstexte', () => {
+  it('liefert Datenschutzerklärung und Nutzungsbedingungen mit Betreiberangaben aus', async () => {
+    const s = await startServer({ operator: { name: 'Max <Muster>', contact: 'max@example.org' } });
+    server = s.server;
+    const privacy = await fetch(`${s.url}/privacy`).then((r) => r.text());
+    expect(privacy).toContain('Datenschutzerklärung');
+    expect(privacy).toContain('Privacy Policy');
+    expect(privacy).toContain('Max &#60;Muster&#62;');
+    const terms = await fetch(`${s.url}/terms`);
+    expect(terms.status).toBe(200);
+    expect(await terms.text()).toContain('Terms of Service');
+  });
+});

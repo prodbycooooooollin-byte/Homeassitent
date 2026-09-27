@@ -8,6 +8,9 @@ import { buildView } from './rooms/view.js';
 import { attachSocketHandlers } from './net/socket-handlers.js';
 import { TikTokAuthService } from './auth/tiktok-auth-service.js';
 import { RateLimiter } from './net/rate-limit.js';
+import { privacyPage, termsPage } from './legal.js';
+
+const LEGAL_UPDATED = '27.09.2026';
 
 export const SERVER_VERSION = '0.1.0';
 
@@ -55,6 +58,11 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
       if (verify && (req.method === 'GET' || req.method === 'HEAD') && url.pathname.endsWith(`/${verify.file}`)) {
         res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(req.method === 'HEAD' ? undefined : verify.content);
+        return;
+      }
+      if (url.pathname === '/privacy' || url.pathname === '/terms') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" });
+        res.end(url.pathname === '/privacy' ? privacyPage(config.operator, LEGAL_UPDATED) : termsPage(config.operator, LEGAL_UPDATED));
         return;
       }
       if (url.pathname === '/healthz') {
