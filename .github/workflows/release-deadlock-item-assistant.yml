@@ -55,8 +55,27 @@ jobs:
       - name: Tests
         run: npm test
 
-      - name: EXE bauen (NSIS-Installer + portable)
-        run: npm run dist:win
+      - name: App bauen
+        run: npm run build
+
+      - name: EXE bauen – Standard (Spectator-Fallback, ohne Overwolf)
+        run: npx electron-builder --win nsis portable --x64 --publish never -c.nsis.artifactName='Deadlock-Item-Assistent-Standard-Setup-${version}.${ext}' -c.portable.artifactName='Deadlock-Item-Assistent-Standard-${version}-portable.${ext}'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Overwolf-Laufzeit (ow-electron) installieren
+        id: ow
+        continue-on-error: true
+        shell: bash
+        run: |
+          npm uninstall electron electron-builder
+          npm install -D @overwolf/ow-electron@42.7.1 @overwolf/ow-electron-builder@26.9.3
+          npm run build
+
+      - name: EXE bauen – Automatisch (ow-electron mit Spielevents)
+        if: steps.ow.outcome == 'success'
+        continue-on-error: true
+        run: npx ow-electron-builder --win nsis --x64 --publish never -c.nsis.artifactName='Deadlock-Item-Assistent-Auto-Setup-${version}.${ext}'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
@@ -79,8 +98,8 @@ jobs:
           body: |
             Windows-Build des Deadlock Item-Assistenten.
 
-            - `Deadlock-Item-Assistent-Setup-*.exe`: Installer
-            - `Deadlock-Item-Assistent-*-portable.exe`: ohne Installation lauffähig
+            - `Deadlock-Item-Assistent-Auto-Setup-*.exe`: **empfohlen** – mit Overwolf-Spielevents (vollautomatisch; eigener Overwolf-Entwicklerzugang nötig, siehe README)
+            - `Deadlock-Item-Assistent-Standard-*`: ohne Overwolf (automatischer Spectator-Fallback, verzögert)
 
             Hinweise: nicht signiert (SmartScreen kann warnen). Spieldaten: Build 6701.
             Live-Anbindung (Spectator-Stream) im echten Match ungetestet – siehe deadlock-item-assistant/docs/STATUS.md.

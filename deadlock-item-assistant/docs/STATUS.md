@@ -1,4 +1,15 @@
-# Ehrlicher Stand (27.09.2026)
+# Ehrlicher Stand (27.09.2026, Version 0.2.0)
+
+## Neu in 0.2.0
+
+- **Automatik:** Der neue Standard ist die Quelle „Automatisch“. Nutzt Overwolf-Spielevents über ow-electron, wenn vorhanden; sonst Spectator-Fallback mit automatischer Konto- und Match-Suche.
+- **GEP-Provider:** mit simulierten Events nach dem dokumentierten Schema getestet (`test/gep.test.ts`, 6 Tests). **Nicht mit echtem ow-electron und Spiel getestet.**
+- **Budget:**
+  - direkt gemessen, sobald die Bedeutung von „souls“ erkannt ist
+  - sonst berechnet (Gesamt-Souls − Itemwert − Verkaufsverluste), angezeigt als „bezahlbar (berechnet)“ und nie als „sicher bezahlbar“
+- **Design:** Deadlock-Farbwelt aus den Panorama-Styles des Spiels, mitgelieferte OFL-Schriften (Barlow Condensed, Cinzel), neue Screenshots.
+- **Windows-Build:** Der Workflow baut zusätzlich die Variante „Auto“ mit ow-electron. Dieser Schritt ist als Versuch markiert; siehe CI-Ergebnis.
+
 
 ## Mit echten Daten geprüft
 
@@ -21,7 +32,7 @@
 
 ## Blockiert oder offen
 
-1. **Automatische Live-Anbindung mit Budget.** Keine verfügbare, zulässige Quelle liefert das *ausgebbare* Budget automatisch.
+1. **Automatische Live-Anbindung (0.1.0-Stand, durch 0.2.0 ersetzt).** Früher lieferte keine zulässige Quelle das Budget automatisch.
    - Overwolf scheidet für ein privates Tool aus.
    - Der Spectator-Stream liefert nur den Gesamtwert.
    - Das Budget kommt daher aus der Schnelleingabe oder bleibt „unbekannt“.

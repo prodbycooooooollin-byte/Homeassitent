@@ -22,7 +22,7 @@ export interface RecVM {
   priceText: string;
   missingText: string | null;
   etaText: string | null;
-  affordable: 'yes' | 'no' | 'unknown';
+  affordable: 'yes' | 'likely' | 'no' | 'unknown';
   affordText: string;
   reason: string;
   reasonsLong: string[];
@@ -33,6 +33,7 @@ export interface RecVM {
 }
 
 export interface OverlayVM {
+  myHero: string | null;
   source: SourceId | null;
   sourceLabel: string;
   isDemo: boolean;
@@ -73,7 +74,7 @@ const PROV_LABEL: Record<string, string> = {
 };
 
 function recVM(cat: Catalog, r: Recommendation, label: string, primary: boolean): RecVM {
-  const affordText = r.affordable === 'yes' ? 'bezahlbar' : r.affordable === 'unknown' ? 'Budget unbekannt' : 'noch nicht bezahlbar';
+  const affordText = r.affordable === 'yes' ? 'bezahlbar' : r.affordable === 'likely' ? 'bezahlbar (berechnet)' : r.affordable === 'unknown' ? 'Budget unbekannt' : 'noch nicht bezahlbar';
   return {
     label, item: itemVM(cat, r.item!), priceText: fmt(r.price ?? 0),
     missingText: r.missing ? `fehlen ${fmt(r.missing)}` : null,
@@ -96,13 +97,14 @@ export function alertVM(cat: Catalog, a: EnemyAlert, now: number): AlertVM {
 export function buildOverlayVM(cat: Catalog, o: AdvisorOutput | null, diag: ProviderDiagnostics | null, alerts: EnemyAlert[], now: number, alertVisibleMs: number): OverlayVM {
   const source = diag?.id ?? null;
   const isDemo = source === 'demo';
-  const sourceLabel = source === 'demo' ? 'DEMO · Beispieldaten' : source === 'manual' ? 'Manuelle Eingabe' : source === 'spectator' ? 'Spectator (verzögert)' : 'Keine Quelle';
+  const auto = diag?.label.startsWith('Automatisch') ?? false;
+  const sourceLabel = auto ? (source === 'spectator' ? 'Automatisch · Zuschauer-Stream' : 'Automatisch · Live') : source === 'demo' ? 'DEMO · Beispieldaten' : source === 'manual' ? 'Manuelle Eingabe' : source === 'spectator' ? 'Spectator (verzögert)' : source === 'gep' ? 'Live · Overwolf' : 'Keine Quelle';
   const hist = alerts.slice(-8).reverse().map((a) => alertVM(cat, a, now));
   const latest = hist[0] && now - hist[0].at < alertVisibleMs ? hist[0] : null;
   const patchText = `Spieldaten Build ${cat.manifest.build} (${cat.manifest.versionDate.split(' ').slice(0, 3).join(' ')})`;
   if (!o) {
     return {
-      source, sourceLabel, isDemo, freshness: 'none', statusText: diag?.detail || 'Warte auf Daten', dataNotice: 'Noch keine Matchdaten.', primaryText: '',
+      myHero: null, source, sourceLabel, isDemo, freshness: 'none', statusText: diag?.detail || 'Warte auf Daten', dataNotice: 'Noch keine Matchdaten.', primaryText: '',
       buy: null, save: null, holdText: null, swap: null, swapNote: null, alert: latest, alertsHistory: hist, threats: [], needs: [], alternatives: [],
       slotsText: '', budgetText: '', warnings: [], patchText,
     };
@@ -111,12 +113,14 @@ export function buildOverlayVM(cat: Catalog, o: AdvisorOutput | null, diag: Prov
   const buy = o.buyNow?.item ? recVM(cat, o.buyNow, o.buyNow.affordable === 'unknown' ? 'NÄCHSTER KAUF' : 'JETZT KAUFEN', o.primary === 'buy') : null;
   const save = o.saveFor?.item ? recVM(cat, o.saveFor, o.primary === 'save' ? 'DARAUF SPAREN' : 'DANACH', o.primary === 'save') : null;
   // Datenhinweis, der die Empfehlung betrifft, bleibt im kompakten Overlay sichtbar
-  const notice = o.status === 'stale' ? 'Daten veraltet – nicht aktuell' : o.budget.status !== 'observed' ? 'Budget unbekannt – Preis selbst prüfen' : o.warnings.find((w) => /unbekannt|eingeschränkt/i.test(w)) ?? null;
+  const noData = o.status === 'no-data';
+  const notice = noData ? null : o.status === 'stale' ? 'Daten veraltet – nicht aktuell' : o.budget.status === 'derived' ? null : o.budget.status !== 'observed' ? 'Budget unbekannt – Preis selbst prüfen' : o.warnings.find((w) => /unbekannt|eingeschränkt/i.test(w)) ?? null;
   const slotsText = `${o.slots.used}/${o.slots.total ?? '?'} Slots${o.slots.totalStatus === 'unknown' ? ' (Zusatzslots unbekannt)' : ''} · aktiv ${o.slots.activeUsed}/${o.slots.activeTotal}*`;
-  const budgetText = o.budget.status === 'observed' ? `${fmt(o.budget.value!)} Souls` : o.budget.status === 'stale' ? `${fmt(o.budget.value!)} Souls (veraltet)` : 'Souls unbekannt';
+  const budgetText = o.budget.status === 'observed' ? `${fmt(o.budget.value!)} Souls` : o.budget.status === 'derived' ? `≈ ${fmt(o.budget.value!)} Souls (berechnet)` : o.budget.status === 'stale' ? `${fmt(o.budget.value!)} Souls (veraltet)` : 'Souls unbekannt';
   return {
+    myHero: o.myHeroClass ? cat.heroName(o.myHeroClass) : null,
     source, sourceLabel, isDemo, freshness, statusText: o.statusText, dataNotice: notice,
-    primaryText: o.primaryReason,
+    primaryText: noData && diag?.detail ? diag.detail : o.primaryReason,
     buy, save,
     holdText: o.primary === 'save' && !buy ? 'Nichts kaufen – weiter sparen' : null,
     swap: o.swap ? {

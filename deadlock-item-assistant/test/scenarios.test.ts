@@ -102,12 +102,20 @@ test('Bevorzugter Counter zu teuer: Zwischenlösung gegen Sparen abgewogen, nich
   assert.ok(['buy', 'save'].includes(o.primary));
 });
 
-test('Gesamt-Souls bekannt, ausgebbares Budget unbekannt: nichts ist „sicher bezahlbar“', () => {
+test('Gesamt-Souls bekannt, ausgebbares Budget unbekannt: berechnet, aber nie „sicher bezahlbar“', () => {
   const o = run({ me: HAZE_MID, noSouls: true, enemies: avgEnemies(9000) });
   assert.ok(o.buyNow);
-  assert.equal(o.buyNow!.affordable, 'unknown');
+  assert.equal(o.budget.status, 'derived');
+  const itemValue = HAZE_MID.items!.reduce((s, n) => s + cat.item(I(n))!.cost, 0);
+  assert.equal(o.budget.value, HAZE_MID.nw! - itemValue);
+  assert.notEqual(o.buyNow!.affordable, 'yes');
+  assert.ok(o.warnings.some((w) => w.includes('berechnet')));
+});
+
+test('Weder Budget noch Gesamt-Souls bekannt: Budget unbekannt', () => {
+  const o = run({ me: { ...HAZE_MID, nw: undefined }, noSouls: true, enemies: avgEnemies(9000) });
   assert.equal(o.budget.status, 'unknown');
-  assert.ok(o.warnings.some((w) => w.includes('unbekannt')));
+  assert.equal(o.buyNow!.affordable, 'unknown');
   assert.equal(o.buyNow!.missing, null);
 });
 

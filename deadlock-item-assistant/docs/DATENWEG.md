@@ -1,5 +1,39 @@
 # Datenweg – Recherche und Entscheidung
 
+## Update 27.09.2026: vollautomatischer Weg über ow-electron
+
+Die erste Entscheidung („Overwolf nicht gewählt“) ist überholt. Grundlage für die neue Entscheidung:
+
+- **`@overwolf/ow-electron`**, derzeit Version 42.7.1, ist eine Electron-Variante mit gebündelter Overwolf-Laufzeit. Sie braucht keinen Overwolf-Client. Matchlock und andere eigenständige Deadlock-Apps arbeiten laut eigener Beschreibung so.
+- Laut README des offiziellen Beispiels `github.com/overwolf/ow-electron-packages-sample` gibt es einen **Dev Mode** (ab ow-electron 39.8.10, nur Windows). Er lässt die Spielpakete (GEP, Overlay, Recorder) mit eigenen Zugangsdaten (`OW_DEV_KEY` oder `OW_CLI_EMAIL` plus `OW_CLI_API_KEY`) **lokal ohne Signatur und ohne Freigabe** laufen.
+- Für ein persönliches Tool reicht das. Veröffentlichung und Freigabe sind nur für den Vertrieb nötig.
+- **Deadlock-Spiel-ID:** 24482, laut `@overwolf/ow-electron-packages-types`.
+- **GEP-API** laut Typdefinitionen:
+  - Ablauf: `game-detected` → `event.enable()` → `setRequiredFeatures(id, null)`.
+  - Daten kommen über `new-info-update` / `new-game-event` und `getInfo(id)`.
+- **Deadlock-Schema** laut Overwolf-Doku, abgerufen nur über Such-Snippets, weil die Seite hier gesperrt ist:
+  - `match_info.match_id`
+  - `match_info.roster_N` mit `steam_id`, `is_local`, `team_id`, `hero_id`, `hero_name`, `level`, `kills`, `deaths`, `assist`, `hero_damage`, `souls`
+  - `match_info.items_N` mit `steam_id` und `items[] {id, class_name, name, enhanced, upgrade_info}`
+  - `match_info.incoming_damage` mit `time_filter`, `total_damage`, `damages[]`
+  - `match_outcome`
+  - Events: `match_start`, `match_end`, `match_clock` …
+- **Bedeutung von `souls`** ist nicht dokumentiert. Die App misst sie: Sinkt der Wert beim eigenen Kauf um den Preis, sind es ausgebbare Souls. Bleibt er gleich oder steigt er, ist es der Gesamtwert, und das Budget wird berechnet.
+- **Rohdaten** der ersten 20.000 Events werden zur Überprüfung in `%APPDATA%/deadlock-item-assistant/gep-rohdaten.jsonl` gespeichert.
+
+**Automatische Erkennung** ohne Anmeldung:
+
+- Steam-Konto aus `Steam/config/loginusers.vdf`
+- laufendes Deadlock über `tasklist`
+- Match-ID aus den Spielevents
+- im Fallback: Community-API bzw. `console.log` (nur mit `-condebug`, Format unbestätigt)
+
+**Nicht verifiziert** (keine Windows-Umgebung, `content.overwolf.com` hier gesperrt):
+
+- ob der Dev Mode auch in der gepackten, unsignierten App greift oder nur beim Start per `ow-electron .`
+- die exakten Wertformate der Events
+
+
 Stand der Recherche: **27.09.2026**. In der Entwicklungsumgebung waren die meisten Hosts gesperrt: `api.deadlock-api.com`, `assets.deadlock-api.com`, `dev.overwolf.com`, `deadlock.wiki` und weitere. Erreichbar waren `raw.githubusercontent.com`, die GitHub-Weboberfläche per Abruf, die Websuche und npm.
 
 Deshalb gilt:

@@ -41,8 +41,10 @@ test('Spectator-Assembler: Hero, Team, eigener Spieler, Items; net_worth wird ni
   assert.deepEqual(w.unknownItemIds, [987654321]);
   assert.equal(s.extraSlotsByTeam![0], 1);
   const out = new Engine(cat).ingest(s).output;
-  assert.equal(out.budget.status, 'unknown');
-  assert.equal(out.buyNow?.affordable, 'unknown');
+  // Budget wird berechnet (Gesamt-Souls − Itemwert), aber nie als „sicher bezahlbar“ ausgegeben
+  assert.equal(out.budget.status, 'derived');
+  assert.equal(out.budget.value, 9000 - cat.item(I('Extended Magazine'))!.cost);
+  assert.notEqual(out.buyNow?.affordable, 'yes');
 });
 
 test('Spectator-Provider über HTTP/SSE (lokaler Mock-Server): verbinden, Snapshots, Ende', async () => {

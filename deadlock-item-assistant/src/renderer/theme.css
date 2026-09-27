@@ -1,53 +1,82 @@
-/* Gemeinsame Gestaltungsgrundlage: dunkle, warme Flächen, Elfenbeinschrift,
-   Bernstein-Akzente, Rot nur bei hoher Dringlichkeit. Systemschriften (offline). */
+/* Deadlock-Stil. Farbwerte aus den Panorama-Styles des Spiels (citadel_base_styles.css, Build 6701):
+   baseText #FFEFD7, offBlack #10130D, soulColor #70F8C1, goldColor #FFED79, colorEnemy #FF410D,
+   courage (Waffe) #EC9719, fortitude (Vitalität) #7BBA1D, spirit #CE90FF.
+   Schriften: Barlow (Semi) Condensed und Cinzel, SIL Open Font License, lokal mitgeliefert. */
+
+@font-face { font-family: 'Barlow SC'; src: url('fonts/barlow-semi-condensed-latin-400-normal.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'Barlow SC'; src: url('fonts/barlow-semi-condensed-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+@font-face { font-family: 'Barlow SC'; src: url('fonts/barlow-semi-condensed-latin-600-normal.woff2') format('woff2'); font-weight: 600; }
+@font-face { font-family: 'Barlow SC'; src: url('fonts/barlow-semi-condensed-latin-700-normal.woff2') format('woff2'); font-weight: 700; }
+@font-face { font-family: 'Barlow C'; src: url('fonts/barlow-condensed-latin-500-normal.woff2') format('woff2'); font-weight: 500; }
+@font-face { font-family: 'Barlow C'; src: url('fonts/barlow-condensed-latin-600-normal.woff2') format('woff2'); font-weight: 600; }
+@font-face { font-family: 'Barlow C'; src: url('fonts/barlow-condensed-latin-700-normal.woff2') format('woff2'); font-weight: 700; }
+@font-face { font-family: 'Cinzel'; src: url('fonts/cinzel-latin-600-normal.woff2') format('woff2'); font-weight: 600; }
+@font-face { font-family: 'Cinzel'; src: url('fonts/cinzel-latin-700-normal.woff2') format('woff2'); font-weight: 700; }
+
 :root {
-  --ink: #f1e8d6;
-  --ink-2: rgba(241, 232, 214, 0.78);
-  --ink-3: rgba(241, 232, 214, 0.55);
-  --ink-4: rgba(241, 232, 214, 0.34);
-  --amber: #e2a94f;
-  --amber-2: #c8893a;
-  --amber-soft: rgba(226, 169, 79, 0.16);
-  --red: #d0604a;
-  --red-soft: rgba(208, 96, 74, 0.16);
-  --souls: #9fd2cf;
-  --ok: #9dbb7a;
-  --panel: rgba(21, 17, 13, 0.9);
-  --panel-2: rgba(33, 27, 21, 0.92);
-  --line: rgba(232, 196, 138, 0.16);
-  --line-2: rgba(232, 196, 138, 0.28);
-  --slot-weapon: #d4893a;
-  --slot-vitality: #74a85c;
-  --slot-spirit: #9c78d6;
-  --radius: 10px;
-  --radius-s: 6px;
-  --serif: 'Palatino Linotype', 'Book Antiqua', Palatino, 'URW Palladio L', Georgia, serif;
-  --sans: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', 'Noto Sans', system-ui, sans-serif;
+  --ink: #FFEFD7;
+  --ink-2: rgba(255, 239, 215, 0.76);
+  --ink-3: rgba(255, 239, 215, 0.52);
+  --ink-4: rgba(255, 239, 215, 0.3);
+  --gold: #FFED79;
+  --gold-2: #f0de8d;
+  --gold-soft: rgba(255, 237, 121, 0.1);
+  --souls: #70F8C1;
+  --souls-soft: rgba(112, 248, 193, 0.12);
+  --enemy: #FF410D;
+  --enemy-soft: rgba(255, 65, 13, 0.14);
+  --ok: #70F8C1;
+  --bg-0: #0a0d0c;
+  --bg-1: #10140f;
+  --bg-2: #151a18;
+  --bg-3: #1c2220;
+  --panel: rgba(13, 17, 15, 0.94);
+  --line: rgba(255, 239, 215, 0.09);
+  --line-2: rgba(255, 239, 215, 0.18);
+  --weapon: #EC9719; --weapon-dk: #5b3a06;
+  --vitality: #7BBA1D; --vitality-dk: #1f3400;
+  --spirit: #CE90FF; --spirit-dk: #362147;
+  --ui: 'Barlow SC', 'Bahnschrift', 'Segoe UI', sans-serif;
+  --cond: 'Barlow C', 'Bahnschrift SemiCondensed', 'Arial Narrow', sans-serif;
+  --title: 'Cinzel', 'Georgia', serif;
   --t: 160ms;
 }
 
 * { box-sizing: border-box; }
 
-.caps { font: 600 10px/1.2 var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.caps { font: 600 11px/1.2 var(--cond); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); }
 
-/* Item-Icon: echtes Shop-Bild, falls synchronisiert; sonst gestaltetes Ersatzsymbol mit Spalte, Stufe, Aktiv-Markierung */
+/* Item-Karte im Shop-Stil: Spaltenfarbe, Stufen-Pips, Aktiv-Kennung */
 .icon {
-  position: relative; flex: none; width: 42px; height: 42px; border-radius: 8px; overflow: hidden;
-  display: grid; place-items: center; font: 600 14px/1 var(--serif); color: #fff8ea;
-  border: 1px solid rgba(255, 240, 210, 0.22); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 6px rgba(0,0,0,0.45);
+  position: relative; flex: none; width: 44px; height: 44px; border-radius: 3px; overflow: hidden;
+  display: grid; place-items: center; font: 700 15px/1 var(--cond); letter-spacing: .04em; color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.16); text-shadow: 0 1px 2px rgba(0,0,0,.6);
 }
-.icon.weapon { background: radial-gradient(120% 90% at 30% 20%, #eaa458 0%, #a95f22 55%, #5b2f10 100%); }
-.icon.vitality { background: radial-gradient(120% 90% at 30% 20%, #9fd07f 0%, #4f8a3a 55%, #25461a 100%); }
-.icon.spirit { background: radial-gradient(120% 90% at 30% 20%, #c7a6f2 0%, #7650b4 55%, #372258 100%); }
+.icon::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+.icon.weapon { background: linear-gradient(155deg, #f3a53a 0%, #b56a0b 48%, var(--weapon-dk) 100%); }
+.icon.weapon::after { background: var(--weapon); }
+.icon.vitality { background: linear-gradient(155deg, #9ad33c 0%, #4f8413 48%, var(--vitality-dk) 100%); }
+.icon.vitality::after { background: var(--vitality); }
+.icon.spirit { background: linear-gradient(155deg, #dcaeff 0%, #8a55b3 48%, var(--spirit-dk) 100%); }
+.icon.spirit::after { background: var(--spirit); }
 .icon img { width: 100%; height: 100%; object-fit: cover; }
-.icon .tier { position: absolute; left: 3px; bottom: 2px; display: flex; gap: 2px; }
-.icon .tier i { width: 4px; height: 4px; border-radius: 1px; background: rgba(255, 248, 234, 0.85); box-shadow: 0 0 2px rgba(0,0,0,.6); }
-.icon .act { position: absolute; right: 2px; top: 2px; font: 700 8px/1 var(--sans); padding: 1px 2px; border-radius: 3px; background: rgba(0,0,0,.55); color: #fff3d6; letter-spacing: .04em; }
-.icon.sm { width: 24px; height: 24px; border-radius: 5px; font-size: 10px; }
+.icon .tier { position: absolute; left: 4px; top: 4px; display: flex; gap: 2px; }
+.icon .tier i { width: 4px; height: 4px; transform: rotate(45deg); background: rgba(255, 255, 255, 0.9); }
+.icon .act { position: absolute; right: 3px; top: 3px; font: 700 8px/1 var(--cond); padding: 1px 3px; border-radius: 2px; background: rgba(0,0,0,.55); color: var(--gold); letter-spacing: .08em; }
+.icon.sm { width: 24px; height: 24px; font-size: 10px; border-radius: 2px; }
 .icon.sm .tier, .icon.sm .act { display: none; }
+.icon.sm::after { height: 2px; }
 
-.souls { color: var(--souls); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.souls::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 5px; transform: rotate(45deg) translateY(-1px); border: 1.5px solid currentColor; border-radius: 1px; }
+/* Souls: Minzgrün mit Seelen-Rhombus wie im HUD */
+.souls { color: var(--souls); font-variant-numeric: tabular-nums; white-space: nowrap; font-family: var(--cond); font-weight: 600; letter-spacing: .02em; }
+.souls::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; transform: rotate(45deg) translateY(-1px); background: currentColor; box-shadow: 0 0 6px rgba(112,248,193,.6); }
 
-.pill { display: inline-block; font: 500 10px/1 var(--sans); padding: 3px 6px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink-2); }
-.pill.demo { color: var(--amber); border-color: rgba(226,169,79,.55); font-weight: 700; letter-spacing: .12em; }
+.pill { display: inline-block; font: 600 10px/1 var(--cond); letter-spacing: .12em; text-transform: uppercase; padding: 3px 7px; border-radius: 2px; border: 1px solid var(--line-2); color: var(--ink-2); }
+.pill.demo { color: var(--bg-0); background: var(--gold); border-color: var(--gold); }
+.pill.live { color: var(--souls); border-color: rgba(112,248,193,.45); }
+
+/* Art-déco-Eckwinkel */
+.deco { position: relative; }
+.deco::before, .deco::after { content: ''; position: absolute; width: 10px; height: 10px; pointer-events: none; }
+.deco::before { left: -1px; top: -1px; border-left: 2px solid var(--gold); border-top: 2px solid var(--gold); }
+.deco::after { right: -1px; bottom: -1px; border-right: 2px solid var(--gold); border-bottom: 2px solid var(--gold); }

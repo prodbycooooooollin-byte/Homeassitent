@@ -1,7 +1,7 @@
 // Normalisierter Matchzustand und Engine-Ausgaben. Alle Datenprovider liefern
 // ProviderSnapshot; der MatchStore macht daraus einen validierten MatchState.
 
-export type SourceId = 'demo' | 'manual' | 'spectator';
+export type SourceId = 'demo' | 'manual' | 'spectator' | 'gep';
 
 /** observed = direkt gemeldet; derived = aus anderen Werten abgeleitet; stale = zu alt; unknown = nicht verfügbar. */
 export type Availability = 'observed' | 'derived' | 'stale' | 'unknown';
@@ -117,6 +117,8 @@ export interface PlayerState {
   itemHistory: ItemEvent[];
   unknownItemIds: number[];
   heroDamageTotal: Obs<number>;
+  /** Verlust durch Verkäufe (halber Kaufpreis) – für das berechnete Budget */
+  soldLoss: number;
 }
 
 export interface MatchState {
@@ -185,7 +187,8 @@ export interface Recommendation {
   price: number | null;
   missing: number | null;
   etaSec: number | null;
-  affordable: 'yes' | 'no' | 'unknown';
+  /** likely = mit berechnetem (nicht gemessenem) Budget bezahlbar */
+  affordable: 'yes' | 'likely' | 'no' | 'unknown';
   consumes: string[];
   reasonShort: string;
   reasonsLong: string[];
@@ -217,6 +220,7 @@ export interface EnemyAlert {
 }
 
 export interface AdvisorOutput {
+  myHeroClass: string | null;
   generatedAt: number;
   status: 'ok' | 'limited' | 'stale' | 'no-data';
   statusText: string;

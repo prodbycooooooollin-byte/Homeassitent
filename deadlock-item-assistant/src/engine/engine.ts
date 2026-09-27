@@ -15,7 +15,7 @@ export class Engine {
   private prevPrimaryItem: string | null = null;
 
   constructor(readonly cat: Catalog, readonly weights: Weights = DEFAULT_WEIGHTS) {
-    this.store = new MatchStore({ ...DEFAULT_STORE_OPTIONS, componentsOf: (i) => cat.item(i)?.components ?? [] });
+    this.store = new MatchStore({ ...DEFAULT_STORE_OPTIONS, componentsOf: (i) => cat.item(i)?.components ?? [], costOf: (i) => cat.item(i)?.cost ?? 0 });
     this.advisor = new Advisor(cat, weights);
     this.alerts = new AlertManager(cat, weights);
   }

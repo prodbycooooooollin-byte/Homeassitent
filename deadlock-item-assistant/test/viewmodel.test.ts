@@ -8,7 +8,7 @@ const cat = catalog();
 const diag = (id: 'demo' | 'spectator') => ({ id, label: id, state: 'live' as const, detail: '', startedAt: 0, lastDataAt: 0, rawEvents: 0, snapshots: 1, intervalMsAvg: null, unknownItemIds: [], notes: [], errors: [] });
 
 test('Overlay-Ansicht: Demo gekennzeichnet, Budget unbekannt sichtbar, keine erfundenen Prozentangaben', () => {
-  const o = new Engine(cat).ingest(snap({ me: { hero: 'Haze', items: ['Extended Magazine'], nw: 6000 }, noSouls: true, enemies: [{ hero: 'Infernus', nw: 7000, items: ['Extra Spirit'] }] })).output;
+  const o = new Engine(cat).ingest(snap({ me: { hero: 'Haze', items: ['Extended Magazine'] }, noSouls: true, enemies: [{ hero: 'Infernus', nw: 7000, items: ['Extra Spirit'] }] })).output;
   const vm = buildOverlayVM(cat, o, diag('demo'), [], Date.now(), 9000);
   assert.equal(vm.isDemo, true);
   assert.equal(vm.buy?.affordable, 'unknown');

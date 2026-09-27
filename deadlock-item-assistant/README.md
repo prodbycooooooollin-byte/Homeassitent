@@ -7,27 +7,67 @@ Windows-Desktop-App mit einem kleinen Ingame-Overlay für **Deadlock**. Die App 
 - **Dezente Hinweise** bei entscheidenden gegnerischen Käufen: gebündelt, ohne Duplikate, ohne Ton und ohne Fokuswechsel.
 - **Austauschvorschlag** bei vollem Inventar: Netto-Kosten, Gewinn und Verlust. Das Item geht nie reflexhaft an das billigste.
 
-> **Ehrlicher Stand:** siehe [`docs/STATUS.md`](docs/STATUS.md). Eine automatische Live-Anbindung mit *ausgebbarem* Budget gibt es über keine für ein privates Tool zulässige Quelle ([`docs/DATENWEG.md`](docs/DATENWEG.md)). Die App bietet deshalb drei klar getrennte Quellen:
-> **Spectator-Stream** (verzögert, im echten Match ungetestet), **Schnelleingabe** und **Demo** (Beispieldaten).
+## Vollautomatisch
+
+Einmal einrichten, danach wird **jedes Match automatisch verfolgt**. Das umfasst deinen Hero, deine Souls (dein Budget), deine Items, die Heroes und Builds aller Gegner und den Schaden gegen dich. Pro Match gibst du nichts ein.
+
+| Schritt | Was passiert |
+|---|---|
+| Steam-Konto | wird automatisch aus deiner lokalen Steam-Anmeldung (`loginusers.vdf`) erkannt, ohne Login und ohne Passwort |
+| Spielstart | Deadlock wird automatisch erkannt |
+| Live-Daten | **Overwolf-Spielevents** über die mitgelieferte Overwolf-Laufzeit (ow-electron), ohne Overwolf-Client |
+| Match | Die Match-ID kommt aus den Spielevents; bei jedem neuen Match setzt die App alles zurück |
+| Budget | kommt direkt aus den Spielevents. Die Bedeutung von „souls“ wird beim ersten eigenen Kauf gemessen; bis dahin wird das Budget berechnet und so gekennzeichnet |
+
+**Einmalige Einrichtung:** Overwolf gibt die Spielevents im *Entwicklermodus* für deinen eigenen Rechner frei. Dafür brauchst du einen eigenen, kostenlosen Entwicklerzugang auf [console.overwolf.com](https://console.overwolf.com):
+
+1. Unter *Profile → API Keys* einen Schlüssel oder Dev-Token erzeugen.
+2. In der App unter **Verbindung → Live-Spielevents einrichten** einfügen.
+3. Speichern. Die App startet einmal neu.
+
+Die App legt kein Konto für dich an und akzeptiert keine Bedingungen für dich.
+
+**Ohne Schlüssel** läuft die Automatik trotzdem, über den Zuschauer-Stream als Fallback:
+
+- Das Steam-Konto wird automatisch erkannt, das laufende Match über die Community-API gesucht.
+- Diese Suche findet nur die ca. 200 meistgesehenen Matches.
+- Die Daten sind verzögert, und das Budget wird aus Gesamt-Souls minus Itemwert berechnet.
+- Voraussetzung ist der quelloffene Live-Events-Dienst lokal per Docker: `docker run -p 3000:3000 ghcr.io/deadlock-api/deadlock-live-events:latest`.
+
+> **Ehrlicher Stand:** siehe [`docs/STATUS.md`](docs/STATUS.md). Die Overwolf-Anbindung ist gegen das dokumentierte Event-Schema gebaut und mit simulierten Events getestet. **Mit echtem Spiel und echter Overwolf-Laufzeit ist sie noch nicht geprüft**, weil die Entwicklungsumgebung Linux ohne Zugang zu Overwolf war.
 
 | Kompakt | Hinweis bei Gegnerkauf | Austausch bei vollem Inventar | Details (Strg+Umschalt+D) |
 |---|---|---|---|
 | ![kompakt](docs/screenshots/overlay-compact.png) | ![Hinweis](docs/screenshots/overlay-alert.png) | ![Austausch](docs/screenshots/overlay-swap.png) | ![Details](docs/screenshots/overlay-expanded-warden.png) |
 
-Die Screenshots zeigen die echte Oberfläche im **Demo-Modus** (Beispieldaten), aufgenommen unter Linux/Xvfb. Das Einstellungsfenster zeigt dieselbe Darstellung vor hellen und dunklen Szenen: [`docs/screenshots/control-overview.png`](docs/screenshots/control-overview.png).
+Das Design folgt Deadlocks eigener Farbwelt (Werte aus den Panorama-Styles des Spiels):
+
+- fast schwarze, grünlich getönte Flächen
+- Elfenbeintext `#FFEFD7`
+- Gold `#FFED79` für die Empfehlung
+- Mintgrün `#70F8C1` für Souls
+- Feindrot `#FF410D` für Hinweise
+- Shop-Kategoriefarben: Waffe orange, Vitalität grün, Spirit violett
+
+Die Screenshots zeigen die echte Oberfläche im Demo-Modus, aufgenommen unter Linux/Xvfb. Zur Einrichtung siehe [`docs/screenshots/control-connect.png`](docs/screenshots/control-connect.png).
 
 ## Voraussetzungen
 
 - **Nutzung:** Windows 10/11 (x64); Deadlock im **randlosen Fenstermodus**. Exklusiver Vollbildmodus ist nicht verifiziert.
-- **Spectator-Stream (optional):**
-  - Docker Desktop mit dem quelloffenen Live-Events-Dienst: `docker run -p 3000:3000 ghcr.io/deadlock-api/deadlock-live-events:latest`
-  - die Match-ID
-  - deine SteamID3 (Account-ID als Zahl)
+- **Für die volle Automatik:** der eigene Overwolf-Entwicklerschlüssel (siehe oben) und die Variante **„Auto“**.
+- **Falls Deadlock als Administrator läuft:** die App ebenfalls als Administrator starten.
 - **Entwicklung:** Node.js 22 und npm.
 
 ## Installation / Start
 
-**Fertige Version:** Unter *Releases* (Tag `dia-v<version>`) die Datei `Deadlock-Item-Assistent-Setup-*.exe` (Installer) oder `…-portable.exe` herunterladen. Die EXE ist nicht signiert, deshalb kann SmartScreen warnen.
+**Fertige Version:** Unter *Releases* (Tag `dia-v<version>`):
+
+- `Deadlock-Item-Assistent-Auto-Setup-*.exe` (**empfohlen**, mit Overwolf-Laufzeit)
+- `Deadlock-Item-Assistent-Standard-*` (ohne Overwolf, nur Zuschauer-Stream-Fallback)
+
+Nicht signiert, deshalb kann SmartScreen warnen.
+
+**Falls der Entwicklermodus in der installierten Version nicht greift:** `npm ci`, dann `npm i -D @overwolf/ow-electron`, dann `npm run start:ow` mit gesetztem `OW_DEV_KEY`. So wird die App direkt aus dem Quellcode mit der Overwolf-Laufzeit gestartet.
 
 **Aus dem Quellcode:**
 
@@ -36,7 +76,7 @@ cd deadlock-item-assistant
 npm ci
 npm start            # baut und startet (Quelle aus den Einstellungen)
 npm run start:demo   # startet mit Demo-Daten
-npm test             # 37 Tests
+npm test             # 44 Tests
 npm run typecheck
 npm run demo         # Terminal-Demo ohne Oberfläche
 npm run dist:win     # Windows-Installer und portable EXE (unter Windows; unter Linux siehe unten)

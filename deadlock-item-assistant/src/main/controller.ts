@@ -10,6 +10,8 @@ import { DEMO_SCENARIOS, DemoProvider } from '../providers/demo';
 import { ManualProvider, type ManualState, emptyManualState } from '../providers/manual';
 import type { Provider, ProviderDiagnostics } from '../providers/provider';
 import { SpectatorProvider } from '../providers/spectator';
+import { AutoProvider } from '../providers/auto';
+import { type GepApi, GepProvider } from '../providers/gep';
 import { type OverlayVM, buildOverlayVM } from '../present/viewModel';
 import type { AdvisorOutput, EnemyAlert, ProviderSnapshot, ReportedProblem } from '../shared/types';
 import type { AppSettings } from './settings';
@@ -32,6 +34,7 @@ export interface ControlSnapshot {
   store: { snapshots: number; rejectedOutOfOrder: number; duplicates: number; matchResets: number; matchId: string | null; events: string[] };
   perf: PerfSample[];
   jobs: Record<string, string>;
+  auto: { active: boolean; mode: string; account: { name: string | null; id: number } | null; gameRunning: boolean | null; gepStatus: string; gepReady: boolean; soulsSemantics: string | null };
 }
 
 export interface PerfSample { at: number; cpuPct: number; memMB: number; gpuCpuPct: number | null; label: string }
@@ -48,6 +51,15 @@ export class Controller {
   private installed: ReturnType<typeof installedBuild> = null;
   private languageLoaded: string | null = null;
   private pendingDemoBuy: NodeJS.Timeout | null = null;
+  /** Overwolf-GEP (nur unter ow-electron mit gültigem Entwicklerzugang verfügbar) */
+  gep: GepApi | null = null;
+  gepStatus = 'Overwolf-Laufzeit nicht vorhanden – Spectator-Fallback';
+
+  setGep(gep: GepApi | null, status: string) {
+    this.gep = gep;
+    this.gepStatus = status;
+    if (this.settings.source === 'auto') this.startSource(); else this.onChange();
+  }
 
   constructor(private dataDir: string, private userDir: string, public settings: AppSettings, private onChange: () => void) {
     this.cat = this.loadCatalog();
@@ -79,7 +91,14 @@ export class Controller {
     this.output = null;
     this.alerts = [];
     const s = this.settings;
-    if (s.source === 'demo') {
+    if (s.source === 'auto') {
+      const acc = s.accountOverride.trim() ? Number(s.accountOverride) : null;
+      this.provider = new AutoProvider(this.cat, {
+        gep: this.gep, gepStatus: this.gepStatus, spectatorBaseUrl: s.spectator.baseUrl,
+        accountOverride: acc !== null && Number.isFinite(acc) ? acc : null,
+        gepLogFile: path.join(this.userDir, 'gep-rohdaten.jsonl'),
+      });
+    } else if (s.source === 'demo') {
       const d = new DemoProvider(this.cat, s.demoScenario);
       d.autoBuy = s.demoAutoBuy;
       this.provider = d;
@@ -152,6 +171,21 @@ export class Controller {
       store: { ...st.stats, matchId: st.matchId, events: st.events.slice(-15).reverse().map((e) => `${e.kind} · ${this.cat.heroName(st.players[e.playerKey]?.heroClass.value)} · ${this.cat.itemName(e.item)}`) },
       perf: this.perf.slice(-30),
       jobs: this.jobs,
+      auto: this.autoInfo(),
+    };
+  }
+
+  private autoInfo(): ControlSnapshot['auto'] {
+    const p = this.provider;
+    const auto = p instanceof AutoProvider ? p : null;
+    const inner = auto ? (auto as unknown as { inner: unknown }).inner : null;
+    const gepInner = inner instanceof GepProvider ? inner : null;
+    return {
+      active: !!auto, mode: auto?.mode ?? 'aus',
+      account: auto?.account ? { name: auto.account.personaName, id: auto.account.accountId } : null,
+      gameRunning: gepInner ? gepInner.gameRunning : auto?.gameRunning ?? null,
+      gepStatus: this.gepStatus, gepReady: !!this.gep,
+      soulsSemantics: gepInner ? gepInner.semantics : null,
     };
   }
 

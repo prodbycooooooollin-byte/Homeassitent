@@ -1,6 +1,6 @@
 {
   "name": "deadlock-item-assistant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Dynamischer, erklärbarer Item-Berater für Deadlock (Windows-Overlay).",
   "main": "dist/main/main.js",
@@ -14,7 +14,8 @@
     "probe": "tsx src/cli/probe.ts",
     "gamedata:fetch": "tsx scripts/fetch-gamedata.ts",
     "gamedata:extract": "tsx scripts/extract-gamedata.ts",
-    "dist:win": "npm run build && electron-builder --win --publish never"
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "start:ow": "npm run build && ow-electron ."
   },
   "build": {
     "appId": "local.deadlock-item-assistant",
@@ -54,6 +55,9 @@
     }
   },
   "devDependencies": {
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/barlow-semi-condensed": "^5.3.0",
+    "@fontsource/cinzel": "^5.3.0",
     "@types/node": "^22.7.0",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
@@ -65,5 +69,10 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prodbycooooooollin-byte/Homeassitent.git"
+  },
+  "overwolf": {
+    "packages": [
+      "gep"
+    ]
   }
 }

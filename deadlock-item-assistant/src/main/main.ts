@@ -1,4 +1,5 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, screen } from 'electron';
+import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Controller } from './controller';
@@ -10,6 +11,35 @@ import { type AppSettings, loadSettings, saveSettings } from './settings';
 
 const dataDir = app.isPackaged ? path.join(process.resourcesPath, 'data') : path.join(__dirname, '..', '..', 'data');
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+
+// --- Overwolf-Spielevents (nur unter ow-electron vorhanden) ---
+// Dev Mode liest den Entwicklerzugang aus der Umgebung beim Start. Ist er nur in den Einstellungen
+// hinterlegt, startet sich die App einmal selbst mit gesetzter Umgebungsvariable neu.
+type OwPackages = NodeJS.EventEmitter & { gep?: unknown };
+const owPackages = (app as unknown as { overwolf?: { packages?: OwPackages } }).overwolf?.packages ?? null;
+{
+  const early = loadSettings(settingsFile());
+  const key = early.overwolf.devKey.trim();
+  if (owPackages && key && !process.env.OW_DEV_KEY && !process.env.DIA_RELAUNCHED) {
+    spawn(process.execPath, process.argv.slice(1), { env: { ...process.env, OW_DEV_KEY: key, DIA_RELAUNCHED: '1' }, detached: true, stdio: 'ignore' }).unref();
+    app.exit(0);
+  }
+}
+
+function initOverwolf() {
+  if (!owPackages) {
+    controller.setGep(null, 'Overwolf-Laufzeit nicht vorhanden (Standard-Electron) – Spectator-Fallback');
+    return;
+  }
+  controller.setGep(null, process.env.OW_DEV_KEY || process.env.OW_CLI_API_KEY ? 'Overwolf-Spielevents werden geladen …' : 'Overwolf-Entwicklerzugang fehlt – Spielevents inaktiv (siehe „Verbindung“)');
+  owPackages.on('ready', (_e: unknown, name: string, version: string) => {
+    if (name !== 'gep' || !owPackages.gep) return;
+    controller.setGep(owPackages.gep as never, `Overwolf-Spielevents bereit (GEP ${version})`);
+  });
+  owPackages.on('failed-to-initialize', (_e: unknown, name: string) => {
+    if (name === 'gep') controller.setGep(null, 'Overwolf-Spielevents konnten nicht starten – Entwicklerzugang prüfen');
+  });
+}
 
 let overlay: BrowserWindow | null = null;
 let control: BrowserWindow | null = null;
@@ -108,7 +138,7 @@ function push() {
   if (control && !control.isDestroyed()) control.webContents.send('control', { snap: controller.controlSnapshot(), vm, layout });
 }
 
-type SettingsPatch = Partial<Omit<AppSettings, 'overlay' | 'spectator' | 'hotkeys'>> & { overlay?: Partial<AppSettings['overlay']>; spectator?: Partial<AppSettings['spectator']>; hotkeys?: Partial<AppSettings['hotkeys']> };
+type SettingsPatch = Partial<Omit<AppSettings, 'overlay' | 'spectator' | 'hotkeys' | 'overwolf'>> & { overlay?: Partial<AppSettings['overlay']>; spectator?: Partial<AppSettings['spectator']>; hotkeys?: Partial<AppSettings['hotkeys']>; overwolf?: Partial<AppSettings['overwolf']> };
 
 type Action =
   | { type: 'toggle-details' | 'toggle-edit' | 'toggle-visible' | 'open-control' | 'reset-position' | 'update-gamedata' | 'restart-source' | 'test-alert' }
@@ -134,14 +164,22 @@ function handle(a: Action) {
     case 'reset-position': s.overlay = { ...s.overlay, displayId: null, relX: null, relY: null }; persist(); layoutOverlay(); break;
     case 'overlay-height': contentHeight = a.height; layoutOverlay(); return;
     case 'settings': {
-      const sourceChanged = (a.patch.source && a.patch.source !== s.source) || a.patch.demoScenario || a.patch.spectator || a.patch.demoAutoBuy !== undefined;
+      const sourceChanged = (a.patch.source && a.patch.source !== s.source) || a.patch.demoScenario || a.patch.spectator || a.patch.demoAutoBuy !== undefined || a.patch.accountOverride !== undefined;
+      const keyChanged = a.patch.overwolf?.devKey !== undefined && a.patch.overwolf.devKey.trim() !== s.overwolf.devKey;
       controller.settings = {
         ...s, ...a.patch,
         overlay: { ...s.overlay, ...(a.patch.overlay ?? {}) },
         spectator: { ...s.spectator, ...(a.patch.spectator ?? {}) },
         hotkeys: { ...s.hotkeys, ...(a.patch.hotkeys ?? {}) },
+        overwolf: { ...s.overwolf, ...(a.patch.overwolf ?? {}), devKey: (a.patch.overwolf?.devKey ?? s.overwolf.devKey).trim() },
       };
       persist();
+      if (keyChanged && owPackages) {
+        // Neuer Entwicklerzugang wirkt erst nach einem Neustart
+        spawn(process.execPath, process.argv.slice(1), { env: { ...process.env, OW_DEV_KEY: controller.settings.overwolf.devKey, DIA_RELAUNCHED: '1' }, detached: true, stdio: 'ignore' }).unref();
+        app.exit(0);
+        return;
+      }
       if (a.patch.hotkeys) registerHotkeys();
       if (a.patch.overlay?.acrylic !== undefined) applyAcrylic();
       layoutOverlay();
@@ -196,6 +234,7 @@ app.whenReady().then(() => {
   if (!process.env.DIA_NO_CONTROL) createControl();
   control?.webContents.on('did-finish-load', push);
   controller.startSource();
+  initOverwolf();
   setInterval(() => controller.tick(), 1000);
   setInterval(samplePerf, 2000);
   screen.on('display-metrics-changed', layoutOverlay);
@@ -217,6 +256,15 @@ async function captureForVerification(dir: string) {
     fs.writeFileSync(path.join(dir, `${name}.png`), img.toPNG());
   };
   const scen = process.env.DIA_SCENARIO ?? 'infernus-lead';
+  if (process.env.DIA_CAPTURE_AUTO) {
+    // Automatik-Modus ohne laufendes Spiel (Wartezustand) festhalten
+    handle({ type: 'settings', patch: { source: 'auto' } });
+    await wait(2500);
+    control?.webContents.send('select-tab', 'connect');
+    await wait(1200);
+    await shot(control, 'control-connect-auto');
+    await shot(overlay, 'overlay-auto-waiting');
+  }
   if (process.env.DIA_FILL_MANUAL) {
     // Testeinträge für die Sichtprüfung der Schnelleingabe (keine echten Matchdaten)
     const byName = (n: string) => [...controller.cat.items.values()].find((i) => i.nameEn === n)!.className;

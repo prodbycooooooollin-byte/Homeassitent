@@ -144,7 +144,7 @@ function reasonParts(cat: Catalog, a: Assessment, c: Ranked): { lines: string[];
 }
 
 export interface BuyCtx {
-  affordable: 'yes' | 'no' | 'unknown';
+  affordable: 'yes' | 'likely' | 'no' | 'unknown';
   budget: number | null;
   income: number | null;
   slotFree: boolean;
@@ -169,7 +169,7 @@ export function describeBuy(cat: Catalog, a: Assessment, c: Ranked, ctx: BuyCtx)
   };
 }
 
-export function describeSave(cat: Catalog, a: Assessment, c: Ranked, ctx: { budget: number | null; income: number | null; versus: Ranked | null; interimWorth: boolean }): Recommendation {
+export function describeSave(cat: Catalog, a: Assessment, c: Ranked, ctx: { budget: number | null; income: number | null; versus: Ranked | null; interimWorth: boolean; derived?: boolean }): Recommendation {
   const { lines, tags } = reasonParts(cat, a, c);
   const missing = ctx.budget !== null ? Math.max(0, c.price - ctx.budget) : null;
   const eta = missing !== null && missing > 0 && ctx.income ? missing / ctx.income : null;
@@ -179,7 +179,7 @@ export function describeSave(cat: Catalog, a: Assessment, c: Ranked, ctx: { budg
     if (pct > 0) long.push(`Etwa ${pct} % mehr Modellnutzen als ${cat.itemName(ctx.versus.item)} (Arbeitsmodell, keine Siegchance).`);
   }
   return {
-    kind: 'save', item: c.item, price: c.price, missing, etaSec: eta, affordable: missing === 0 ? 'yes' : missing === null ? 'unknown' : 'no',
+    kind: 'save', item: c.item, price: c.price, missing, etaSec: eta, affordable: missing === 0 ? (ctx.derived ? 'likely' : 'yes') : missing === null ? 'unknown' : 'no',
     consumes: c.consumes, reasonShort: shortLine(cat, a, c), reasonsLong: long.slice(0, 3), drawback: drawback(cat, a, c, ctx.budget), provenanceTags: tags, score: c.score,
   };
 }

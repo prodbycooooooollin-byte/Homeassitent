@@ -19,12 +19,14 @@ export interface StoreOptions {
   /** Ausgebbare Souls veralten schneller (ms) */
   budgetStaleAfterMs: Record<SourceId, number>;
   componentsOf: (item: string) => string[];
+  /** Listenpreis eines Items (für das berechnete Budget) */
+  costOf?: (item: string) => number;
 }
 
 export const DEFAULT_STORE_OPTIONS: Omit<StoreOptions, 'componentsOf'> = {
   removalConfirmations: 2,
-  staleAfterMs: { demo: 8000, manual: 10 * 60_000, spectator: 45_000 },
-  budgetStaleAfterMs: { demo: 8000, manual: 90_000, spectator: 45_000 },
+  staleAfterMs: { demo: 8000, manual: 10 * 60_000, spectator: 45_000, gep: 30_000 },
+  budgetStaleAfterMs: { demo: 8000, manual: 90_000, spectator: 45_000, gep: 30_000 },
 };
 
 const obs = <T>(value: T, source: SourceId, at: number, gameTime: number | null, status: 'observed' | 'derived' = 'observed'): Obs<T> =>
@@ -35,7 +37,7 @@ function emptyPlayer(key: string): PlayerState {
     key, isMe: false, team: unknownObs(), heroClass: unknownObs(), name: null, level: unknownObs(),
     kills: unknownObs(), deaths: unknownObs(), assists: unknownObs(), netWorth: unknownObs(),
     spendableSouls: unknownObs(), items: unknownObs(), pendingRemoval: {}, itemHistory: [], unknownItemIds: [],
-    heroDamageTotal: unknownObs(),
+    heroDamageTotal: unknownObs(), soldLoss: 0,
   };
 }
 
@@ -178,6 +180,7 @@ export class MatchStore {
           result.delete(m);
           delete pl.pendingRemoval[m];
           const e: ItemEvent = { playerKey: pl.key, kind: 'no-longer-seen', item: m, at, gameTime: gt, source: src };
+          pl.soldLoss += Math.floor((this.opts.costOf?.(m) ?? 0) / 2);
           events.push(e);
           pl.itemHistory.push(e);
         } else {

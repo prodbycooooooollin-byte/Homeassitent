@@ -7,7 +7,7 @@ import { type Layout, esc, iconHtml, key, renderOverlay } from './overlayView';
 
 type Msg = { snap: ControlSnapshot; vm: OverlayVM; layout: Layout };
 const main = document.getElementById('main')!;
-let tab = 'status';
+let tab = 'connect';
 let last: Msg | null = null;
 let structureKey = '';
 
@@ -42,7 +42,7 @@ function render() {
   // Formulare nicht neu aufbauen, während der Nutzer tippt
   const active = document.activeElement;
   const typing = active && main.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'SELECT');
-  const sk = `${tab}|${snap.settings.source}|${tab === 'manual' ? JSON.stringify(snap.manual) : ''}|${tab === 'source' || tab === 'overlay' || tab === 'data' ? JSON.stringify(snap.settings) + JSON.stringify(snap.jobs) + snap.catalog.languageLoaded : ''}`;
+  const sk = `${tab}|${snap.settings.source}|${tab === 'manual' ? JSON.stringify(snap.manual) : ''}|${tab === 'connect' || tab === 'overlay' || tab === 'data' ? JSON.stringify(snap.settings) + JSON.stringify(snap.jobs) + snap.catalog.languageLoaded : ''}|${tab === 'connect' ? JSON.stringify(snap.auto) + (snap.diag?.state ?? '') + (snap.diag?.detail ?? '') + (snap.store.matchId ?? '') : ''}`;
   if (sk !== structureKey && !typing) { structureKey = sk; main.innerHTML = VIEWS[tab]?.() ?? ''; bind(); }
   updateLive();
 }
@@ -72,29 +72,57 @@ const VIEWS: Record<string, () => string> = {
       <div class="card"><h2>Letzte Item-Ereignisse</h2><div data-live="events" class="small"></div></div>
     </div>`,
 
-  source: () => {
+  connect: () => {
     const s = last!.snap.settings;
-    const opt = (id: string, t: string, d: string, q: string) => `<button class="opt${s.source === id ? ' on' : ''}" data-source="${id}"><div class="t">${t}</div><div class="d">${d}</div><div class="q">${q}</div></button>`;
-    return `<h1>Datenquelle</h1><p class="lead">Wähle, woher die Matchdaten kommen. Keine Quelle liest den Spielprozess aus oder steuert das Spiel.</p>
-    <div class="choice">
-      ${opt('spectator', 'Spectator-Stream', 'Gegner-Heroes, Items, Gesamt-Souls über Valves Zuschauer-Übertragung (Deadlock API Live Events).', 'Verzögert · ausgebbare Souls fehlen · Match-ID nötig · im echten Match ungetestet')}
-      ${opt('manual', 'Schnelleingabe', 'Du trägst deinen Hero, deine Items, deine Souls und die Gegner-Items selbst ein (z. B. vom Scoreboard).', 'Eingeschränkte Alternative · so aktuell wie deine Eingabe')}
-      ${opt('demo', 'Demo', 'Skriptgesteuertes Beispielmatch für Test und Design.', 'Keine echten Daten')}
+    const au = last!.snap.auto;
+    const d = last!.snap.diag;
+    const live = d?.state === 'live';
+    const bannerCls = s.source !== 'auto' ? 'wait' : live ? 'ok' : d?.state === 'error' ? 'no' : 'wait';
+    const title = s.source !== 'auto' ? 'Automatik aus' : live ? 'Match wird verfolgt' : au.gameRunning === false ? 'Warte auf Deadlock' : 'Bereit';
+    const row = (cls: string, k: string, v: string) => `<div class="chk-row ${cls}"><span class="ic"></span><span class="k">${k}</span><span class="v">${v}</span></div>`;
+    const opt = (id: string, t: string, dsc: string, q: string) => `<button class="opt${s.source === id ? ' on' : ''}" data-source="${id}"><div class="t">${t}</div><div class="d">${dsc}</div><div class="q">${q}</div></button>`;
+    const sem = au.soulsSemantics === 'spendable' ? 'gemessen (Overwolf)' : au.soulsSemantics === 'networth' ? 'berechnet aus Gesamt-Souls' : au.mode === 'spectator' ? 'berechnet aus Gesamt-Souls (verzögert)' : 'wird beim ersten eigenen Kauf erkannt';
+    return `<h1>Verbindung</h1><p class="lead">Einmal einrichten – danach verfolgt die App jedes Match automatisch: dein Hero, deine Souls, deine Items und die Builds der Gegner. Du musst pro Match nichts eintragen.</p>
+    <div class="hero-banner ${bannerCls}"><span class="dia"></span><div><div class="big">${esc(title)}</div><div class="sub">${esc(d?.detail ?? '')}</div></div></div>
+    <div class="grid">
+      <div class="card"><h2>Automatik</h2><div class="checks">
+        ${row(au.account ? 'ok' : 'no', 'Steam-Konto', au.account ? `${esc(au.account.name ?? 'erkannt')} <span class="muted mono">#${au.account.id}</span>` : 'nicht gefunden – unten Account-ID eintragen')}
+        ${row(au.gameRunning ? 'ok' : 'wait', 'Deadlock', au.gameRunning ? 'läuft' : au.gameRunning === false ? 'nicht gestartet' : 'wird über Spielevents erkannt')}
+        ${row(au.gepReady ? 'ok' : 'wait', 'Live-Spielevents', esc(au.gepStatus))}
+        ${row(live ? 'ok' : 'wait', 'Match', live ? `wird verfolgt <span class="muted mono">${esc(last!.snap.store.matchId ?? '')}</span>` : 'noch keins')}
+        ${row(au.soulsSemantics === 'spendable' ? 'ok' : 'wait', 'Budget', esc(sem))}
+      </div></div>
+      <div class="card"><h2>Live-Spielevents einrichten</h2>
+        <p class="small">Die volle Automatik (eigene Souls in Echtzeit, alle Items sofort, Schaden gegen dich) nutzt Overwolfs Spielevents im Entwicklermodus. Dafür brauchst du einmalig einen <b>eigenen, kostenlosen</b> Overwolf-Entwicklerzugang – die App legt nichts für dich an.</p>
+        <ol class="steps small">
+          <li>Auf <span class="mono">console.overwolf.com</span> mit deinem Konto anmelden.</li>
+          <li>Unter <i>Profile → API Keys</i> einen Schlüssel bzw. Dev-Token erzeugen.</li>
+          <li>Hier einfügen und speichern – die App startet einmal neu.</li>
+        </ol>
+        <label class="f">Overwolf-Entwicklerschlüssel (OW_DEV_KEY)</label>
+        <input type="password" id="ow-key" value="${esc(s.overwolf.devKey)}" placeholder="Dev-Token einfügen">
+        <div class="row" style="margin-top:12px"><button class="b primary" data-a="ow-save">Speichern &amp; neu starten</button></div>
+        <p class="small muted">Funktioniert nur in der Variante „Auto“ (mit Overwolf-Laufzeit). Ohne Schlüssel arbeitet die Automatik mit dem verzögerten Zuschauer-Stream weiter.</p></div>
     </div>
-    ${s.source === 'spectator' ? `<div class="card" style="margin-top:16px"><h2>Spectator-Stream</h2>
-      <div class="note">Voraussetzung: ein erreichbarer Live-Events-Dienst. Empfohlen ist der quelloffene Dienst lokal per Docker
-      (<span class="mono">ghcr.io/deadlock-api/deadlock-live-events</span>, Port 3000). Die Daten kommen aus Valves Broadcast und sind gegenüber dem Spiel verzögert.
-      Der Dienst sieht nur öffentliche Zuschauerdaten – dein ausgebbares Budget ist darin nicht enthalten.</div>
-      <div class="grid"><div><label class="f">Dienst-URL</label><input type="text" id="sp-base" value="${esc(s.spectator.baseUrl)}"></div>
-      <div><label class="f">Match-ID</label><input type="text" id="sp-match" value="${esc(s.spectator.matchId)}" placeholder="z. B. 41234567"></div>
-      <div><label class="f">Deine Steam-Account-ID (SteamID3, Zahl)</label><input type="text" id="sp-acc" value="${esc(s.spectator.accountId)}"></div></div>
-      <div class="row" style="margin-top:12px"><button class="b primary" data-a="sp-save">Übernehmen &amp; verbinden</button><button class="b" data-a="restart-source">Neu verbinden</button></div>
-      <p class="small muted">Match-ID finden: Die Community-API listet nur die ~200 meistgesehenen laufenden Matches (<span class="mono">npm run probe -- --find --account …</span>). Ob und wo das Spiel die eigene Match-ID während des Matches anzeigt, ist hier nicht verifiziert.</p>
-      ${last!.snap.jobs.source ? `<div class="note bad">${esc(last!.snap.jobs.source)}</div>` : ''}</div>` : ''}
-    ${s.source === 'demo' ? `<div class="card" style="margin-top:16px"><h2>Demo-Szenario</h2>
-      <select id="demo-sc">${last!.snap.scenarios.map((x) => `<option value="${x.id}"${x.id === s.demoScenario ? ' selected' : ''}>${esc(x.title)} – ${esc(x.description)}</option>`).join('')}</select>
-      <label class="f"><input type="checkbox" id="demo-auto"${s.demoAutoBuy ? ' checked' : ''}> Empfohlene Käufe im Demo automatisch ausführen</label></div>` : ''}
-    ${s.source === 'manual' ? '<div class="card" style="margin-top:16px"><h2>Schnelleingabe aktiv</h2><p class="small">Einträge im Reiter „Schnelleingabe“. Das Overlay kennzeichnet unbekannte oder alte Werte.</p></div>' : ''}`;
+    <details style="margin-top:18px"><summary>Andere Quellen &amp; Erweitert</summary>
+      <div class="choice" style="margin-top:12px">
+        ${opt('auto', 'Automatisch', 'Bestes verfügbares Live-Signal, jedes Match automatisch.', 'Empfohlen')}
+        ${opt('spectator', 'Zuschauer-Stream', 'Feste Match-ID per Hand.', 'Verzögert')}
+        ${opt('manual', 'Schnelleingabe', 'Alles selbst eintragen.', 'Notlösung')}
+        ${opt('demo', 'Demo', 'Beispielmatch zum Ausprobieren.', 'Keine echten Daten')}
+      </div>
+      <div class="grid" style="margin-top:14px">
+        <div class="card"><h2>Konto &amp; Dienst</h2>
+          <label class="f">Steam-Account-ID überschreiben (leer = automatisch)</label><input type="text" id="acc-ov" value="${esc(s.accountOverride)}">
+          <label class="f">Zuschauer-Stream-Dienst</label><input type="text" id="sp-base" value="${esc(s.spectator.baseUrl)}">
+          ${s.source === 'spectator' ? `<label class="f">Match-ID</label><input type="text" id="sp-match" value="${esc(s.spectator.matchId)}">
+          <label class="f">Account-ID für diese Quelle</label><input type="text" id="sp-acc" value="${esc(s.spectator.accountId)}">` : ''}
+          <div class="row" style="margin-top:12px"><button class="b primary" data-a="adv-save">Übernehmen</button><button class="b" data-a="restart-source">Neu verbinden</button></div>
+          ${last!.snap.jobs.source ? `<div class="note bad">${esc(last!.snap.jobs.source)}</div>` : ''}</div>
+        ${s.source === 'demo' ? `<div class="card"><h2>Demo-Szenario</h2>
+          <select id="demo-sc">${last!.snap.scenarios.map((x) => `<option value="${x.id}"${x.id === s.demoScenario ? ' selected' : ''}>${esc(x.title)} – ${esc(x.description)}</option>`).join('')}</select>
+          <label class="chk"><input type="checkbox" id="demo-auto"${s.demoAutoBuy ? ' checked' : ''}> Empfohlene Käufe automatisch ausführen</label></div>` : ''}
+      </div></details>`;
   },
 
   manual: () => {
@@ -105,7 +133,7 @@ const VIEWS: Record<string, () => string> = {
     const picker = (who: string) => `<div class="picker" data-pick="${who}"><input type="text" placeholder="Item suchen …"><div class="list"></div></div>`;
     const active = last!.snap.settings.source === 'manual';
     return `<h1>Schnelleingabe</h1><p class="lead">Eingeschränkte Alternative ohne Live-Anbindung: Übertrage die für dich sichtbaren Informationen (Scoreboard/Shop). Nichts wird geraten – leere Felder gelten als unbekannt.</p>
-    ${active ? '' : '<div class="note">Die Schnelleingabe wird genutzt, wenn unter „Datenquelle“ „Schnelleingabe“ gewählt ist.</div>'}
+    ${active ? '' : '<div class="note">Die Schnelleingabe wird genutzt, wenn unter „Verbindung → Andere Quellen“ „Schnelleingabe“ gewählt ist.</div>'}
     <div class="mgrid">
       <div class="card"><h2>Du</h2>${heroSel('me-hero', m.myHero)}
         <label class="f">Ausgebbare Souls (aktueller Stand im Shop)</label>
@@ -171,12 +199,12 @@ const VIEWS: Record<string, () => string> = {
     <div class="grid"><div class="card"><h2>Mittelwerte</h2><div class="kv" data-live="perfavg"></div></div>
     <div class="card wide"><h2>Verlauf</h2><div data-live="perf"></div></div></div>`,
 
-  about: () => `<h1>Datenweg</h1><p class="lead">Wie die App an Daten kommt – und was davon im echten Match noch unbestätigt ist.</p>
+  about: () => `<h1>Datenweg</h1><p class="lead">Woher die Daten kommen – und was die App ausdrücklich nicht tut.</p>
     <div class="grid">
-      <div class="card"><h2>Overwolf (nicht gewählt)</h2><p class="small">Liefert laut Doku Matchzustand, Spieler, Souls und Items; eingehender Schaden nur mit geöffnetem Schadensfenster. Private Apps werden nicht freigegeben, Monetarisierung nur über Overwolf. Für ein persönliches Tool daher ungeeignet; die App meldet sich nirgends an.</p></div>
-      <div class="card"><h2>Spectator-Stream (umgesetzt)</h2><p class="small">Quelloffener Dienst parst Valves Broadcast. Felder laut Quellcode: Hero, Team, K/D/A, Gesamtwert (net_worth), Item-IDs, Zusatzslots je Team. Nicht enthalten: ausgebbare Souls, Kaufzeitpunkte, Schaden gegen dich. Verzögert. Item-ID-Zuordnung unbestätigt.</p></div>
-      <div class="card"><h2>Schnelleingabe (umgesetzt)</h2><p class="small">Klar gekennzeichnete Alternative. Bildschirmerkennung (OCR) ist NICHT umgesetzt, weil sie ohne echte Screenshots nicht verifiziert werden konnte.</p></div>
-      <div class="card"><h2>Spieldaten</h2><p class="small">Items/Heroes aus den Spieldateien (SteamDB-Spiegel). Lokal wird nur die Versionsdatei <span class="mono">steam.inf</span> gelesen. Kein Speicherzugriff, keine Injektion, keine Eingaben ans Spiel.</p></div>
+      <div class="card"><h2>1 · Overwolf-Spielevents</h2><p class="small">Über die gebündelte Overwolf-Laufzeit (ow-electron) im Entwicklermodus mit deinem eigenen Schlüssel: eigener Spieler, Souls, Items aller Spieler, Match-ID, Schadensfenster. Kein Overwolf-Client, keine Anmeldung durch die App, keine Veröffentlichung.</p></div>
+      <div class="card"><h2>2 · Zuschauer-Stream</h2><p class="small">Fallback ohne Schlüssel: Steam-Konto wird aus der lokalen Steam-Konfiguration erkannt, das laufende Match über die Community-API gesucht (nur meistgesehene Matches) und über Valves Broadcast verfolgt. Verzögert; Budget wird berechnet.</p></div>
+      <div class="card"><h2>Spieldaten</h2><p class="small">Items/Heroes aus den Spieldateien (SteamDB-Spiegel). Lokal gelesen werden nur <span class="mono">steam.inf</span>, <span class="mono">loginusers.vdf</span> und die Prozessliste.</p></div>
+      <div class="card"><h2>Nie</h2><p class="small">Kein Speicherzugriff, keine Injektion durch die App selbst, keine Eingaben ans Spiel, keine automatischen Käufe.</p></div>
     </div>`,
 };
 
@@ -184,7 +212,8 @@ function bind() {
   main.querySelectorAll<HTMLElement>('[data-a]').forEach((el) => el.addEventListener('click', () => {
     const a = el.dataset.a!;
     const v = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value ?? '';
-    if (a === 'sp-save') send({ type: 'settings', patch: { spectator: { baseUrl: v('sp-base').trim(), matchId: v('sp-match').trim(), accountId: v('sp-acc').trim() } } });
+    if (a === 'adv-save') send({ type: 'settings', patch: { accountOverride: v('acc-ov').trim(), spectator: { baseUrl: v('sp-base').trim(), ...(document.getElementById('sp-match') ? { matchId: v('sp-match').trim(), accountId: v('sp-acc').trim() } : {}) } } });
+    else if (a === 'ow-save') send({ type: 'settings', patch: { overwolf: { devKey: v('ow-key').trim() } } });
     else if (a === 'hk-save') send({ type: 'settings', patch: { hotkeys: { details: v('hk-details'), edit: v('hk-edit'), toggle: v('hk-toggle'), control: v('hk-control') } } });
     else if (a === 'lang-sync') send({ type: 'sync-language', language: v('lang') === 'english' ? 'german' : v('lang') });
     else if (a === 'demo-buy') { const vm = last!.vm; const it = vm.buy?.item.cls; if (it) send({ type: 'demo-buy', item: it, sell: vm.swap && vm.swap.buy.cls === it ? vm.swap.sell.cls : undefined }); }

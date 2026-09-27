@@ -22,14 +22,14 @@ export function iconHtml(it: ItemVM, small = false): string {
 
 function recHtml(r: RecVM): string {
   const sub: string[] = [];
-  if (r.affordable === 'unknown') sub.push(`<span class="unk">${esc(r.affordText)}</span>`);
+  if (r.affordable === 'unknown' || r.affordable === 'likely') sub.push(`<span class="${r.affordable === 'likely' ? 'calc' : 'unk'}">${esc(r.affordText)}</span>`);
   if (r.missingText) sub.push(`<span class="no">${esc(r.missingText)}</span>`);
   if (r.etaText) sub.push(`<span>${esc(r.etaText)}</span>`);
   if (r.consumesText && !/^Upgrade von/.test(r.reason)) sub.push(`<span>${esc(r.consumesText)}</span>`);
   return `<div class="rec${r.primary ? ' primary' : ''}">
     ${iconHtml(r.item)}
     <div class="body">
-      <div class="top"><span class="label" title="${r.primary ? 'Empfohlen' : ''}">${r.primary ? '▸ ' : ''}${esc(r.label)}</span><span class="price souls">${esc(r.priceText)}</span></div>
+      <div class="top"><span class="label" title="${r.primary ? 'Empfohlen' : ''}">${r.primary ? '◆ ' : ''}${esc(r.label)}</span><span class="price souls">${esc(r.priceText)}</span></div>
       <div class="name">${esc(r.item.name)}</div>
       <div class="reason">${esc(r.reason)}</div>
       ${sub.length ? `<div class="sub">${sub.join('')}</div>` : ''}
@@ -47,10 +47,10 @@ export function renderOverlay(vm: OverlayVM, layout: Layout): string {
       <button class="done" data-a="done">Fertig</button></div>
       <div class="edithint">Ziehen zum Verschieben · ${esc(key(layout.hotkeys.edit))} beendet den Bearbeitungsmodus</div>`);
   }
-  const freshTxt = vm.freshness === 'stale' ? 'veraltet' : vm.freshness === 'none' ? 'keine Daten' : vm.freshness === 'limited' ? 'eingeschränkt' : 'aktuell';
+  const freshTxt = vm.freshness === 'stale' ? 'veraltet' : vm.freshness === 'none' ? 'wartet' : vm.freshness === 'limited' ? 'eingeschränkt' : 'aktuell';
   parts.push(`<div class="head">
     <span class="fresh ${vm.freshness}"><span class="dot"></span><span class="txt">${esc(freshTxt)} · ${esc(vm.isDemo ? 'Beispieldaten' : vm.sourceLabel)}</span></span>
-    <span class="sp"></span>${vm.isDemo ? '<span class="pill demo">DEMO</span>' : ''}</div>`);
+    <span class="sp"></span>${vm.myHero ? `<span class="hero">${esc(vm.myHero)}</span>` : ''}${vm.isDemo ? '<span class="pill demo">DEMO</span>' : vm.freshness === 'fresh' ? '<span class="pill live">LIVE</span>' : ''}</div>`);
 
   if (vm.buy) parts.push(recHtml(vm.buy));
   if (vm.holdText && !vm.buy) parts.push(`<div class="hold">${esc(vm.holdText)}</div>`);
@@ -65,7 +65,7 @@ export function renderOverlay(vm: OverlayVM, layout: Layout): string {
 
   if (vm.dataNotice) parts.push(`<div class="notice${vm.freshness === 'stale' ? ' bad' : ''}"><span class="ic">!</span><span>${esc(vm.dataNotice)}</span></div>`);
   if (vm.alert) {
-    parts.push(`<div class="alert"><span class="flag">⚑</span><div><div class="t">${esc(vm.alert.text)}</div><div class="c">${esc(vm.alert.consequence)}${vm.alert.change ? ` ${esc(vm.alert.change)}` : ''}</div></div></div>`);
+    parts.push(`<div class="alert"><span class="flag">NEU</span><div><div class="t">${esc(vm.alert.text)}</div><div class="c">${esc(vm.alert.consequence)}${vm.alert.change ? ` ${esc(vm.alert.change)}` : ''}</div></div></div>`);
   }
 
   if (layout.expanded) {
@@ -79,7 +79,7 @@ export function renderOverlay(vm: OverlayVM, layout: Layout): string {
     }
     if (vm.threats.length) {
       parts.push(`<div class="sec"><h4>Relevante Gegner</h4>${vm.threats.slice(0, 4).map((t) => `
-        <div class="thr"><span class="n">${esc(t.hero)}</span><span class="bar"><i style="width:${t.pct}%"></i></span><span class="lv ${t.level}">${esc(t.level)} ${t.pct}</span>
+        <div class="thr"><span class="n">${esc(t.hero)}</span><span class="bar ${t.level}"><i style="width:${t.pct}%"></i></span><span class="lv ${t.level}">${esc(t.level)} ${t.pct}</span>
         <span class="f">${esc(t.factors.slice(0, 2).join(' · '))} · ${esc(t.mix)} (${esc(t.mixSource)})${t.cc !== '–' ? ` · CC: ${esc(t.cc)}` : ''}</span></div>`).join('')}</div>`);
     }
     if (vm.needs.length) {
@@ -96,5 +96,5 @@ export function renderOverlay(vm: OverlayVM, layout: Layout): string {
     if (vm.warnings.length) parts.push(`<div class="sec"><h4>Datenlage</h4>${vm.warnings.map((w) => `<div class="hist">${esc(w)}</div>`).join('')}</div>`);
     parts.push(`<div class="foot"><span>${esc(vm.slotsText)}</span><span class="souls">${esc(vm.budgetText)}</span><span>${esc(vm.patchText)}</span><span>Details: ${esc(key(layout.hotkeys.details))}</span></div>`);
   }
-  return `<div class="panel${layout.edit ? ' edit' : ''}">${parts.join('')}</div>`;
+  return `<div class="panel deco${layout.edit ? ' edit' : ''}">${parts.join('')}</div>`;
 }

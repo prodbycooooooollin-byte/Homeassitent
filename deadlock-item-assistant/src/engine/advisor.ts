@@ -144,9 +144,20 @@ export class Advisor {
     const me = a.me.player;
     const owned = a.me.items;
     const slots = slotInfo(cat, state, owned);
-    const budgetObs: Obs<number> = me ? me.spendableSouls : unknownObs();
-    const budget = budgetObs.status === 'observed' ? budgetObs.value : null;
+    let budgetObs: Obs<number> = me ? me.spendableSouls : unknownObs();
+    let budget = budgetObs.status === 'observed' ? budgetObs.value : null;
     const myNw = me ? me.netWorth : unknownObs<number>();
+    // Berechnetes Budget, wenn keine Quelle die ausgebbaren Souls liefert:
+    // Gesamt-Souls − Listenpreis der besessenen Items − Verkaufsverluste (Annahme: Net Worth = gesammelte Souls).
+    let budgetDerived = false;
+    if (budget === null && me && myNw.status === 'observed' && myNw.value !== null && a.me.itemsKnown) {
+      const d = myNw.value - owned.reduce((s, i) => s + (cat.item(i)?.cost ?? 0), 0) - me.soldLoss;
+      if (d >= 0) {
+        budget = d; budgetDerived = true;
+        budgetObs = { value: d, status: 'derived', source: 'engine', observedAt: myNw.observedAt, gameTime: myNw.gameTime };
+      }
+    }
+    const yes = budgetDerived ? 'likely' as const : 'yes' as const;
     if (myNw.status === 'observed' && myNw.value !== null && myNw.observedAt !== null) this.income.add(myNw.observedAt, myNw.value);
     const income = this.income.rate();
 
@@ -154,7 +165,8 @@ export class Advisor {
       return this.empty(now, 'no-data', me ? 'Eigener Hero unbekannt.' : 'Kein eigener Spieler erkannt.', a, slots, budgetObs, warnings);
     }
     if (!a.me.itemsKnown) warnings.push('Eigenes Inventar unbekannt – Empfehlung ohne Rücksicht auf vorhandene Items.');
-    if (budgetObs.status === 'stale') warnings.push('Ausgebbare Souls veraltet – nicht als bezahlbar gewertet.');
+    if (budgetDerived) warnings.push('Budget berechnet (Gesamt-Souls minus Itemwert) – im Shop gegenprüfen.');
+    else if (budgetObs.status === 'stale') warnings.push('Ausgebbare Souls veraltet – nicht als bezahlbar gewertet.');
     else if (budget === null) warnings.push('Ausgebbare Souls unbekannt – kein Kauf wird als sicher bezahlbar markiert.');
     if (cat.knowledgeBuildMismatch) warnings.push('Kuratierte Mechanikdaten stammen aus einem anderen Build – Empfehlungen eingeschränkt.');
     if (a.me.profile?.confidence === 'low') warnings.push(`Profil für ${cat.heroName(a.me.heroClass)} ist nur grob geschätzt.`);
@@ -186,8 +198,8 @@ export class Advisor {
       if (B) saveFor = describeSave(cat, a, B, { budget: null, income, versus: A, interimWorth: true });
       primaryReason = budgetObs.status === 'stale' ? 'Budget veraltet – nur kaufen, wenn du genug Souls hast.' : 'Budget unbekannt – nur kaufen, wenn du genug Souls hast.';
     } else {
-      if (A) buyNow = describeBuy(cat, a, A, { affordable: A.price <= budget ? 'yes' : 'no', budget, income, slotFree: slotOk(A), interimFor: s.primary === 'buy' && B && B.score > A.score ? B : null, isComponentOf: isComponent ? B : null, delaySec });
-      if (B) saveFor = describeSave(cat, a, B, { budget: A && s.primary === 'buy' && B.score <= A.score ? budget - A.price : budget, income, versus: A, interimWorth: s.primary === 'buy' });
+      if (A) buyNow = describeBuy(cat, a, A, { affordable: A.price <= budget ? yes : 'no', budget, income, slotFree: slotOk(A), interimFor: s.primary === 'buy' && B && B.score > A.score ? B : null, isComponentOf: isComponent ? B : null, delaySec });
+      if (B) saveFor = describeSave(cat, a, B, { budget: A && s.primary === 'buy' && B.score <= A.score ? budget - A.price : budget, income, versus: A, interimWorth: s.primary === 'buy', derived: budgetDerived });
       primaryReason = primaryReasonText(cat, s.primary, A, B && A && B.score <= A.score ? A : B, { isComponent, delaySec, ratio: A && B ? A.score / Math.max(0.001, B.score) : 0, missing: B ? Math.max(0, B.price - budget) : 0, far: B ? B.price - budget >= w.decision.farAwaySouls : false });
     }
 
@@ -203,11 +215,11 @@ export class Advisor {
 
     const status: AdvisorOutput['status'] = opts.stale ? 'stale' : (budget === null || warnings.length || !a.me.itemsKnown) ? 'limited' : 'ok';
     if (opts.stale) {
-      if (buyNow) buyNow = { ...buyNow, affordable: buyNow.affordable === 'yes' ? 'unknown' : buyNow.affordable };
+      if (buyNow) buyNow = { ...buyNow, affordable: buyNow.affordable === 'yes' || buyNow.affordable === 'likely' ? 'unknown' : buyNow.affordable };
       warnings.unshift('Daten veraltet – Empfehlung nicht aktuell.');
     }
     return {
-      generatedAt: now, status, statusText: statusText(status, state), buyNow, saveFor, primary: s.primary, primaryReason, swap, swapNote,
+      myHeroClass: a.me.heroClass, generatedAt: now, status, statusText: statusText(status, state), buyNow, saveFor, primary: s.primary, primaryReason, swap, swapNote,
       threats: a.threats, needs: a.needs, ranking: ranked.slice(0, 30).map(({ item, score, terms, price, consumes, needsSlot, restricted }) => ({ item, score, terms, price, consumes, needsSlot, restricted })),
       slots: { used: slots.used, total: slots.total, totalStatus: slots.totalStatus, activeUsed: slots.activeUsed, activeTotal: slots.activeTotal },
       budget: budgetObs, warnings,
@@ -310,7 +322,7 @@ export class Advisor {
 
   private empty(now: number, status: AdvisorOutput['status'], text: string, a: Assessment, slots: SlotInfo, budget: Obs<number>, warnings: string[]): AdvisorOutput {
     return {
-      generatedAt: now, status, statusText: text, buyNow: null, saveFor: null, primary: 'none', primaryReason: text, swap: null, swapNote: null,
+      myHeroClass: a.me.heroClass, generatedAt: now, status, statusText: text, buyNow: null, saveFor: null, primary: 'none', primaryReason: text, swap: null, swapNote: null,
       threats: a.threats, needs: a.needs, ranking: [], slots: { used: slots.used, total: slots.total, totalStatus: slots.totalStatus, activeUsed: slots.activeUsed, activeTotal: slots.activeTotal },
       budget, warnings,
     };

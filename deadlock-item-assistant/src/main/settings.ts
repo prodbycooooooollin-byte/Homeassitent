@@ -4,7 +4,11 @@ import * as path from 'node:path';
 export interface Hotkeys { details: string; edit: string; toggle: string; control: string }
 
 export interface AppSettings {
-  source: 'demo' | 'manual' | 'spectator';
+  source: 'auto' | 'demo' | 'manual' | 'spectator';
+  /** Overwolf-Entwicklerzugang für die Spielevents (Dev Mode); vom Nutzer selbst angelegt */
+  overwolf: { devKey: string };
+  /** Steam-Account-ID manuell überschreiben (sonst automatisch aus Steam erkannt) */
+  accountOverride: string;
   demoScenario: string;
   demoAutoBuy: boolean;
   spectator: { baseUrl: string; matchId: string; accountId: string };
@@ -26,7 +30,9 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  source: 'demo',
+  source: 'auto',
+  overwolf: { devKey: '' },
+  accountOverride: '',
   demoScenario: 'infernus-lead',
   demoAutoBuy: true,
   spectator: { baseUrl: 'http://localhost:3000', matchId: '', accountId: '' },
@@ -41,6 +47,7 @@ export function loadSettings(file: string): AppSettings {
     return {
       ...DEFAULT_SETTINGS, ...raw,
       spectator: { ...DEFAULT_SETTINGS.spectator, ...(raw.spectator ?? {}) },
+      overwolf: { ...DEFAULT_SETTINGS.overwolf, ...(raw.overwolf ?? {}) },
       overlay: { ...DEFAULT_SETTINGS.overlay, ...(raw.overlay ?? {}) },
       hotkeys: { ...DEFAULT_SETTINGS.hotkeys, ...(raw.hotkeys ?? {}) },
     };
