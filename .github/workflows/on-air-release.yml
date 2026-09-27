@@ -139,13 +139,17 @@ jobs:
               --notes "Technischer Release für den integrierten Updater. Enthält nur latest.json – Installer liegen in den on-air-v*-Releases."
           fi
           # Nie auf eine ältere Version zurückstellen (Läufe können sich überholen).
-          current=$(curl -fsSL "https://github.com/${{ github.repository }}/releases/download/on-air-stable/latest.json" 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version)}catch{console.log('0.0.0')}})" || echo 0.0.0)
+          # Stand über die API lesen (die öffentliche Download-Adresse ist zwischengespeichert).
+          channel_version() {
+            local j; j=$(gh release download on-air-stable -p latest.json -O - 2>/dev/null || true)
+            printf '%s' "$j" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version)}catch{console.log('0.0.0')}})"
+          }
+          current=$(channel_version)
           newer=$(node -e "const [a,b]=process.argv.slice(1).map(v=>v.split('.').map(Number));for(let i=0;i<3;i++){if(a[i]!==b[i]){console.log(a[i]>b[i]?'yes':'no');process.exit()}}console.log('no')" "$VERSION" "$current")
           if [ "$newer" != "yes" ]; then echo "Kanal steht schon auf $current – unverändert."; exit 0; fi
           gh release upload on-air-stable dist-release/latest.json --clobber
-          for i in 1 2 3 4 5 6; do
-            got=$(curl -fsSL "https://github.com/${{ github.repository }}/releases/download/on-air-stable/latest.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).version))" || true)
-            [ "$got" = "$VERSION" ] && { echo "Kanal: $got"; exit 0; }
-            sleep 10
-          done
-          echo "::error::Kanal zeigt $got statt $VERSION"; exit 1
+          got=$(channel_version)
+          [ "$got" = "$VERSION" ] || { echo "::error::Kanal zeigt $got statt $VERSION"; exit 1; }
+          echo "Kanal: $got"
+          # Öffentlich erreichbar (Inhalt kann dort einige Minuten zwischengespeichert sein).
+          curl -fsIL "https://github.com/${{ github.repository }}/releases/download/on-air-stable/latest.json" > /dev/null
