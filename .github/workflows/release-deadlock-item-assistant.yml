@@ -59,7 +59,8 @@ jobs:
         run: npm run build
 
       - name: EXE bauen – Standard (Spectator-Fallback, ohne Overwolf)
-        run: npx electron-builder --win nsis portable --x64 --publish never -c.nsis.artifactName='Deadlock-Item-Assistent-Standard-Setup-${version}.${ext}' -c.portable.artifactName='Deadlock-Item-Assistent-Standard-${version}-portable.${ext}'
+        shell: bash
+        run: npx electron-builder --win nsis portable --x64 --publish never --config.nsis.artifactName='Deadlock-Item-Assistent-Standard-Setup-${version}.${ext}' --config.portable.artifactName='Deadlock-Item-Assistent-Standard-${version}-portable.${ext}'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
@@ -75,7 +76,8 @@ jobs:
       - name: EXE bauen – Automatisch (ow-electron mit Spielevents)
         if: steps.ow.outcome == 'success'
         continue-on-error: true
-        run: npx ow-electron-builder --win nsis --x64 --publish never -c.nsis.artifactName='Deadlock-Item-Assistent-Auto-Setup-${version}.${ext}'
+        shell: bash
+        run: npx ow-electron-builder --win nsis --x64 --publish never --config.nsis.artifactName='Deadlock-Item-Assistent-Auto-Setup-${version}.${ext}'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
