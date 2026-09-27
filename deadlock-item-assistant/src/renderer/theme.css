@@ -1,0 +1,53 @@
+/* Gemeinsame Gestaltungsgrundlage: dunkle, warme Flächen, Elfenbeinschrift,
+   Bernstein-Akzente, Rot nur bei hoher Dringlichkeit. Systemschriften (offline). */
+:root {
+  --ink: #f1e8d6;
+  --ink-2: rgba(241, 232, 214, 0.78);
+  --ink-3: rgba(241, 232, 214, 0.55);
+  --ink-4: rgba(241, 232, 214, 0.34);
+  --amber: #e2a94f;
+  --amber-2: #c8893a;
+  --amber-soft: rgba(226, 169, 79, 0.16);
+  --red: #d0604a;
+  --red-soft: rgba(208, 96, 74, 0.16);
+  --souls: #9fd2cf;
+  --ok: #9dbb7a;
+  --panel: rgba(21, 17, 13, 0.9);
+  --panel-2: rgba(33, 27, 21, 0.92);
+  --line: rgba(232, 196, 138, 0.16);
+  --line-2: rgba(232, 196, 138, 0.28);
+  --slot-weapon: #d4893a;
+  --slot-vitality: #74a85c;
+  --slot-spirit: #9c78d6;
+  --radius: 10px;
+  --radius-s: 6px;
+  --serif: 'Palatino Linotype', 'Book Antiqua', Palatino, 'URW Palladio L', Georgia, serif;
+  --sans: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', 'Noto Sans', system-ui, sans-serif;
+  --t: 160ms;
+}
+
+* { box-sizing: border-box; }
+
+.caps { font: 600 10px/1.2 var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+
+/* Item-Icon: echtes Shop-Bild, falls synchronisiert; sonst gestaltetes Ersatzsymbol mit Spalte, Stufe, Aktiv-Markierung */
+.icon {
+  position: relative; flex: none; width: 42px; height: 42px; border-radius: 8px; overflow: hidden;
+  display: grid; place-items: center; font: 600 14px/1 var(--serif); color: #fff8ea;
+  border: 1px solid rgba(255, 240, 210, 0.22); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 6px rgba(0,0,0,0.45);
+}
+.icon.weapon { background: radial-gradient(120% 90% at 30% 20%, #eaa458 0%, #a95f22 55%, #5b2f10 100%); }
+.icon.vitality { background: radial-gradient(120% 90% at 30% 20%, #9fd07f 0%, #4f8a3a 55%, #25461a 100%); }
+.icon.spirit { background: radial-gradient(120% 90% at 30% 20%, #c7a6f2 0%, #7650b4 55%, #372258 100%); }
+.icon img { width: 100%; height: 100%; object-fit: cover; }
+.icon .tier { position: absolute; left: 3px; bottom: 2px; display: flex; gap: 2px; }
+.icon .tier i { width: 4px; height: 4px; border-radius: 1px; background: rgba(255, 248, 234, 0.85); box-shadow: 0 0 2px rgba(0,0,0,.6); }
+.icon .act { position: absolute; right: 2px; top: 2px; font: 700 8px/1 var(--sans); padding: 1px 2px; border-radius: 3px; background: rgba(0,0,0,.55); color: #fff3d6; letter-spacing: .04em; }
+.icon.sm { width: 24px; height: 24px; border-radius: 5px; font-size: 10px; }
+.icon.sm .tier, .icon.sm .act { display: none; }
+
+.souls { color: var(--souls); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.souls::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 5px; transform: rotate(45deg) translateY(-1px); border: 1.5px solid currentColor; border-radius: 1px; }
+
+.pill { display: inline-block; font: 500 10px/1 var(--sans); padding: 3px 6px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink-2); }
+.pill.demo { color: var(--amber); border-color: rgba(226,169,79,.55); font-weight: 700; letter-spacing: .12em; }

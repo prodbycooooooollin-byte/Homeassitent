@@ -123,7 +123,7 @@ export class MatchStore {
     if (p.deaths !== undefined) pl.deaths = obs(p.deaths, src, at, gt);
     if (p.assists !== undefined) pl.assists = obs(p.assists, src, at, gt);
     if (p.netWorth !== undefined) pl.netWorth = obs(p.netWorth, src, at, gt);
-    if (p.spendableSouls !== undefined) pl.spendableSouls = obs(p.spendableSouls, src, at, gt);
+    if (p.spendableSouls !== undefined) pl.spendableSouls = obs(p.spendableSouls, src, p.spendableSoulsAt ?? at, p.spendableSoulsAt !== undefined ? null : gt);
     if (p.heroDamageTotal !== undefined) pl.heroDamageTotal = obs(p.heroDamageTotal, src, at, gt);
     if (p.unknownItemIds) pl.unknownItemIds = [...new Set([...pl.unknownItemIds, ...p.unknownItemIds])].slice(-30);
     if (p.items === undefined) return [];

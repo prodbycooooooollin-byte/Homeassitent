@@ -1,0 +1,89 @@
+name: Release Deadlock Item-Assistent (Windows)
+
+# Baut die Windows-EXE (NSIS-Installer + portable) auf echtem Windows und veröffentlicht sie
+# als GitHub-Pre-Release "dia-v<version aus package.json>".
+
+on:
+  push:
+    tags:
+      - 'dia-v*'
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'deadlock-item-assistant/**'
+      - '.github/workflows/release-deadlock-item-assistant.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release-Tag (z. B. dia-v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: deadlock-item-assistant
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Release-Tag bestimmen
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then TAG="${{ github.event.inputs.tag }}";
+          elif [ "${{ github.ref_type }}" = "tag" ]; then TAG="${{ github.ref_name }}";
+          else TAG="dia-v$(node -p "require('./package.json').version")"; fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "Release-Tag: $TAG"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: deadlock-item-assistant/package-lock.json
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Typprüfung
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: EXE bauen (NSIS-Installer + portable)
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Artefakte hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadlock-item-assistant-windows
+          path: |
+            deadlock-item-assistant/release/*.exe
+            deadlock-item-assistant/release/*.blockmap
+          if-no-files-found: error
+
+      - name: GitHub-Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Deadlock Item-Assistent ${{ env.RELEASE_TAG }}
+          prerelease: true
+          body: |
+            Windows-Build des Deadlock Item-Assistenten.
+
+            - `Deadlock-Item-Assistent-Setup-*.exe`: Installer
+            - `Deadlock-Item-Assistent-*-portable.exe`: ohne Installation lauffähig
+
+            Hinweise: nicht signiert (SmartScreen kann warnen). Spieldaten: Build 6701.
+            Live-Anbindung (Spectator-Stream) im echten Match ungetestet – siehe deadlock-item-assistant/docs/STATUS.md.
+            Deadlock im randlosen Fenstermodus spielen.
+          files: deadlock-item-assistant/release/*.exe
+          overwrite_files: true

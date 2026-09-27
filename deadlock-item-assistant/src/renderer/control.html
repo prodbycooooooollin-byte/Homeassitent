@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; style-src 'self'">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="overlay.css">
+<link rel="stylesheet" href="control.css">
+<title>Deadlock Item-Assistent</title>
+</head>
+<body>
+<div class="app">
+  <nav id="nav">
+    <div class="brand"><span class="mark">◆</span><div><div class="t">Item-Assistent</div><div class="s">für Deadlock</div></div></div>
+    <button data-tab="status" class="on">Übersicht</button>
+    <button data-tab="source">Datenquelle</button>
+    <button data-tab="manual">Schnelleingabe</button>
+    <button data-tab="overlay">Overlay &amp; Hotkeys</button>
+    <button data-tab="data">Spieldaten</button>
+    <button data-tab="perf">Leistung</button>
+    <button data-tab="about">Datenweg</button>
+    <div class="navfoot" id="navfoot"></div>
+  </nav>
+  <main id="main"></main>
+</div>
+<script src="control.js"></script>
+</body>
+</html>

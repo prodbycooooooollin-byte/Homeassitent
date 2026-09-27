@@ -19,16 +19,39 @@
   "build": {
     "appId": "local.deadlock-item-assistant",
     "productName": "Deadlock Item-Assistent",
-    "directories": { "output": "release" },
-    "files": ["dist/**", "package.json"],
-    "extraResources": [{ "from": "data", "to": "data", "filter": ["**/*", "!raw/**"] }],
-    "win": { "target": ["nsis", "portable"] },
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "data",
+        "to": "data",
+        "filter": [
+          "**/*",
+          "!raw/**"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
     "nsis": {
       "artifactName": "Deadlock-Item-Assistent-Setup-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },
-    "portable": { "artifactName": "Deadlock-Item-Assistent-${version}-portable.${ext}" }
+    "portable": {
+      "artifactName": "Deadlock-Item-Assistent-${version}-portable.${ext}"
+    }
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
@@ -39,5 +62,8 @@
     "typescript": "^5.6.0"
   },
   "author": "prodbycooooooollin-byte",
-  "repository": { "type": "git", "url": "https://github.com/prodbycooooooollin-byte/Homeassitent.git" }
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prodbycooooooollin-byte/Homeassitent.git"
+  }
 }

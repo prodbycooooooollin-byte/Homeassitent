@@ -38,6 +38,8 @@ export interface ProviderPlayer {
   netWorth?: number;
   /** Aktuell ausgebbare Souls. Nur wenn die Quelle das ausdrücklich liefert (manuell/Demo). */
   spendableSouls?: number;
+  /** Zeitpunkt (Wanduhr), zu dem spendableSouls beobachtet/eingegeben wurde, falls abweichend vom Snapshot */
+  spendableSoulsAt?: number;
   /** Aktueller Besitz als Klassennamen. undefined = unbekannt (NICHT leer). */
   items?: string[];
   /** true = items ist eine vollständige Momentaufnahme des Besitzes. */

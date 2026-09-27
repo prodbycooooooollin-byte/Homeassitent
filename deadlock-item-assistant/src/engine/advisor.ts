@@ -119,7 +119,22 @@ export class Advisor {
 
   constructor(private cat: Catalog, public weights: Weights) {}
 
-  reset() { this.shown = null; this.income.reset(); }
+  reset() { this.shown = null; this.income.reset(); this.goalLedger = { goal: null, interims: 0 }; this.lastOwned = []; }
+
+  /** Merkt sich, ob eine angezeigte Zwischenlösung für ein Sparziel gekauft wurde. */
+  private goalLedger: { goal: string | null; interims: number } = { goal: null, interims: 0 };
+  private lastOwned: string[] = [];
+  private updateLedger(owned: string[]) {
+    const shown = this.shown;
+    const bought = owned.filter((i) => !this.lastOwned.includes(i));
+    if (shown && shown.save && bought.length) {
+      if (bought.includes(shown.save)) this.goalLedger = { goal: null, interims: 0 };
+      else if (shown.buy && bought.includes(shown.buy)) {
+        this.goalLedger = this.goalLedger.goal === shown.save ? { goal: shown.save, interims: this.goalLedger.interims + 1 } : { goal: shown.save, interims: 1 };
+      }
+    }
+    this.lastOwned = [...owned];
+  }
 
   run(state: MatchState, now: number, opts: { stale: boolean }): AdvisorOutput {
     const cat = this.cat, w = this.weights;
@@ -154,7 +169,8 @@ export class Advisor {
     const reach = budget !== null ? budget + (income !== null ? Math.max(w.decision.reachSouls, income * 180) : w.decision.reachSouls) : Infinity;
 
     // 1) Entscheidung über Items (ohne Texte)
-    const d = this.decide(ranked, budget, income, reach, slotOk);
+    this.updateLedger(owned);
+    const d = this.decide(ranked, budget, income, reach, slotOk, slots, a.me.expectedTier);
     // 2) Stabilisierung der sichtbaren Auswahl
     const s = this.stabilize(now, byItem, owned, budget, d);
     // 3) Texte aus denselben Faktoren
@@ -199,7 +215,7 @@ export class Advisor {
   }
 
   /** Jetzt kaufen / darauf sparen – entscheidet ausdrücklich, ob sich eine Zwischenlösung lohnt. */
-  decide(ranked: Ranked[], budget: number | null, income: number | null, reach: number, slotOk: (c: Ranked) => boolean): Decision {
+  decide(ranked: Ranked[], budget: number | null, income: number | null, reach: number, slotOk: (c: Ranked) => boolean, slots: SlotInfo, expectedTier: number): Decision {
     const w = this.weights.decision;
     const cat = this.cat;
     if (budget === null) {
@@ -220,7 +236,14 @@ export class Advisor {
     const ratio = A ? A.score / Math.max(0.001, B.score) : 0;
     const far = missing >= w.farAwaySouls;
     const gain = B.score - (A?.score ?? 0);
-    const interimWorth = !!A && (isComponent || ratio >= w.interimMinRatio || (far && ratio >= w.interimMinRatioFar) || gain < w.saveMinGain)
+    // Wurde für dasselbe Ziel schon eine Zwischenlösung gekauft, muss die nächste fast gleichwertig sein
+    // (sonst schiebt eine Kette von Zwischenkäufen das Ziel immer weiter hinaus).
+    const priorInterims = this.goalLedger.goal === B.item ? this.goalLedger.interims : 0;
+    // Niedrigstufiges Item, das einen der letzten Slots belegt, muss später mit Verlust verkauft werden
+    const slotPressure = A && A.needsSlot && slots.free !== null && slots.free <= 2 && (cat.item(A.item)?.tier ?? 4) < expectedTier ? 0.1 : 0;
+    const minRatio = Math.min(0.97, w.interimMinRatio + 0.1 * priorInterims + slotPressure);
+    const minRatioFar = Math.min(0.97, w.interimMinRatioFar + 0.15 * priorInterims + slotPressure);
+    const interimWorth = !!A && (isComponent || ratio >= minRatio || (far && ratio >= minRatioFar) || (gain < w.saveMinGain && priorInterims === 0))
       && !(delaySec !== null && delaySec > w.maxDelaySec && !isComponent && ratio < 0.95);
     return { buy: A?.item ?? null, save: B.item, primary: interimWorth ? 'buy' : 'save' };
   }

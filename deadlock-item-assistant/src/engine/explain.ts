@@ -29,6 +29,25 @@ function enemyPhrase(a: Assessment, t: EnemyThreat): string {
   return t.heroName;
 }
 
+/** Deutscher Genitiv für Namen: „Wardens“, aber „Infernus'“ */
+export const gen = (name: string) => (/[sxzß]$/i.test(name) ? `${name}'` : `${name}s`);
+
+const NEED_SHORT: Partial<Record<NeedKey, (hero: string) => string>> = {
+  antiHeal: (h) => `gegen ${gen(h)} Heilung`,
+  ccDefense: (h) => `Schutz vor ${gen(h)} Kontrolle`,
+  bulletDefense: (h) => `weniger Waffenschaden von ${h}`,
+  spiritDefense: (h) => `weniger Spirit-Schaden von ${h}`,
+  meleeDefense: (h) => `weniger Nahkampfschaden von ${h}`,
+  burstDefense: (h) => `überlebt ${gen(h)} Burst eher`,
+  mobility: () => 'mehr Mobilität',
+};
+
+function needShort(a: Assessment, need: NeedKey): string {
+  const t = topDriver(a, need);
+  const f = NEED_SHORT[need];
+  return t && f ? f(t.heroName) : '';
+}
+
 function needSentence(cat: Catalog, a: Assessment, need: NeedKey): { text: string; tags: string[] } {
   const t = topDriver(a, need);
   const tags: string[] = [];
@@ -40,7 +59,7 @@ function needSentence(cat: Catalog, a: Assessment, need: NeedKey): { text: strin
       return { text: `Gegen die Heilung von ${who}${t.sustainSources.length ? ` (${t.sustainSources.slice(0, 2).join(', ')})` : ''}.`, tags };
     case 'ccDefense': {
       const types = t.ccTypes.slice(0, 2).join('/') || 'Kontrolle';
-      const enabler = t.enabler > 0.35 && strongest(a)?.key !== t.key ? `, die ${strongest(a)!.heroName}s Schaden ermöglicht` : '';
+      const enabler = t.enabler > 0.35 && strongest(a)?.key !== t.key ? `, die ${gen(strongest(a)!.heroName)} Schaden ermöglicht` : '';
       if (a.threats.some((x) => x.key === t.key && x.factors.some((f) => f.provenance === 'reported'))) tags.push('von dir gemeldet');
       return { text: `Schutz vor ${types} von ${who}${enabler}.`, tags };
     }
@@ -87,6 +106,25 @@ function drawback(cat: Catalog, a: Assessment, c: Ranked, budget: number | null)
   return null;
 }
 
+function synergyShort(cat: Catalog, a: Assessment, c: Ranked): string {
+  const s = a.me.scaling;
+  if (c.consumes.length) return `Upgrade von ${c.consumes.map((x) => cat.itemName(x)).join(' + ')}`;
+  return s.W >= s.S * 1.2 ? 'mehr Waffenschaden' : s.S >= s.W * 1.2 ? 'mehr Spirit-Schaden' : 'mehr Schaden';
+}
+
+/** Kompakte Zeile: die zwei stärksten Gründe, knapp formuliert. */
+function shortLine(cat: Catalog, a: Assessment, c: Ranked): string {
+  const syn = (c.terms.find((t) => t.key === 'synergy')?.value ?? 0) + (c.consumes.length ? 0.1 : 0);
+  const parts = (Object.entries(c.perNeed) as [NeedKey, number][]).map(([k, v]) => ({ v, text: needShort(a, k) })).filter((p) => p.text);
+  if (syn > 0.03) parts.push({ v: syn, text: synergyShort(cat, a, c) });
+  parts.sort((x, y) => y.v - x.v);
+  if (!parts.length) return 'Deckt eine aktuelle Lücke ab';
+  const top = parts[0];
+  const second = parts[1] && parts[1].v >= top.v * 0.45 ? parts[1] : null;
+  const txt = second ? `${top.text} · ${second.text}` : top.text;
+  return txt.charAt(0).toUpperCase() + txt.slice(1);
+}
+
 function reasonParts(cat: Catalog, a: Assessment, c: Ranked): { lines: string[]; tags: string[] } {
   const needs = (Object.entries(c.perNeed) as [NeedKey, number][]).sort((x, y) => y[1] - x[1]);
   const syn = c.terms.find((t) => t.key === 'synergy')?.value ?? 0;
@@ -117,9 +155,9 @@ export interface BuyCtx {
 
 export function describeBuy(cat: Catalog, a: Assessment, c: Ranked, ctx: BuyCtx): Recommendation {
   const { lines, tags } = reasonParts(cat, a, c);
-  let short = lines[0];
-  if (ctx.isComponentOf) short = `Erster Schritt zu ${cat.itemName(ctx.isComponentOf.item)} – ${lines[0].charAt(0).toLowerCase()}${lines[0].slice(1)}`;
-  else if (ctx.interimFor) short = `Günstige Zwischenlösung, ohne ${cat.itemName(ctx.interimFor.item)} stark zu verzögern.`;
+  let short = shortLine(cat, a, c);
+  if (ctx.isComponentOf) short = `Erster Schritt zu ${cat.itemName(ctx.isComponentOf.item)} · ${short.charAt(0).toLowerCase()}${short.slice(1)}`;
+  else if (ctx.interimFor) short = `Günstige Zwischenlösung, ohne ${cat.itemName(ctx.interimFor.item)} stark zu verzögern`;
   const long = [...lines];
   if (ctx.interimFor && !ctx.isComponentOf) long.unshift(`Zwischenkauf: bringt jetzt ${Math.round((c.score / Math.max(0.001, ctx.interimFor.score)) * 100)} % des Nutzens von ${cat.itemName(ctx.interimFor.item)}.`);
   if (ctx.delaySec) long.push(`Verzögert das Sparziel um ca. ${Math.round(ctx.delaySec)} s (geschätzt aus deiner Einnahmerate).`);
@@ -142,7 +180,7 @@ export function describeSave(cat: Catalog, a: Assessment, c: Ranked, ctx: { budg
   }
   return {
     kind: 'save', item: c.item, price: c.price, missing, etaSec: eta, affordable: missing === 0 ? 'yes' : missing === null ? 'unknown' : 'no',
-    consumes: c.consumes, reasonShort: lines[0], reasonsLong: long.slice(0, 3), drawback: drawback(cat, a, c, ctx.budget), provenanceTags: tags, score: c.score,
+    consumes: c.consumes, reasonShort: shortLine(cat, a, c), reasonsLong: long.slice(0, 3), drawback: drawback(cat, a, c, ctx.budget), provenanceTags: tags, score: c.score,
   };
 }
 

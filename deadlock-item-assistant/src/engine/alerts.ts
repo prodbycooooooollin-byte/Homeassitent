@@ -10,13 +10,13 @@ import type { Weights } from './weights';
 
 interface Pending { enemyKey: string; items: string[]; kinds: ItemEvent['kind'][]; firstAt: number; relevance: number; consequence: string }
 
-const CONSEQUENCE: Partial<Record<NeedKey, string>> = {
-  antiHeal: 'Heilungsreduktion erhält höhere Priorität.',
-  ccDefense: 'Mehr Kontrolle – CC-Schutz wird wichtiger.',
-  bulletDefense: 'Mehr Waffenschaden gegen dich zu erwarten.',
-  spiritDefense: 'Mehr Spirit-Schaden gegen dich zu erwarten.',
-  meleeDefense: 'Mehr Nahkampfdruck zu erwarten.',
-  burstDefense: 'Burst-Gefahr steigt.',
+const CONSEQUENCE: Partial<Record<NeedKey, [string, string]>> = {
+  antiHeal: ['Heilungsreduktion erhält höhere Priorität.', 'Heilungsreduktion gewinnt etwas an Wert.'],
+  ccDefense: ['Mehr Kontrolle – CC-Schutz wird wichtiger.', 'Etwas mehr Kontrolle zu erwarten.'],
+  bulletDefense: ['Deutlich mehr Waffenschaden gegen dich zu erwarten.', 'Etwas mehr Waffenschaden zu erwarten.'],
+  spiritDefense: ['Deutlich mehr Spirit-Schaden gegen dich zu erwarten.', 'Etwas mehr Spirit-Schaden zu erwarten.'],
+  meleeDefense: ['Mehr Nahkampfdruck zu erwarten.', 'Etwas mehr Nahkampfdruck.'],
+  burstDefense: ['Burst-Gefahr steigt deutlich.', 'Burst-Gefahr steigt leicht.'],
 };
 
 function withoutItems(state: MatchState, enemyKey: string, items: string[]): MatchState {
@@ -42,7 +42,7 @@ export function alertImpact(cat: Catalog, w: Weights, state: MatchState, enemyKe
   const defMag = def.reduce((s, x) => s + Math.max(0, x.d), 0) * 0.6;
   const relevance = (0.4 + 0.6 * threat) * (needMag + defMag);
   const consequence = needTop && needTop.d >= (defTop?.d ?? 0) * 0.6 && needTop.d > 0.01
-    ? CONSEQUENCE[needTop.k] ?? 'Neubewertung.'
+    ? (CONSEQUENCE[needTop.k]?.[needTop.d >= 0.1 ? 0 : 1] ?? 'Neubewertung.')
     : defTop && defTop.d > 0.01 ? defTop.text : 'Geringe Auswirkung auf deine Kaufentscheidung.';
   return { relevance, consequence, threat };
 }
@@ -90,7 +90,7 @@ export class AlertManager {
       const wording: EnemyAlert['wording'] = p.kinds.includes('upgraded') ? 'Upgrade erkannt' : p.kinds.every((x) => x === 'purchased') ? 'gekauft' : 'neu erkannt';
       const alert: EnemyAlert = {
         id: `${p.enemyKey}-${now}`, enemyKey: p.enemyKey, heroName: this.cat.heroName(pl?.heroClass.value), items: p.items, wording,
-        consequence: imp.consequence, changedRecommendation: recommendationChange ? recommendationChange() : null, at: now, relevance: imp.relevance,
+        consequence: imp.consequence, changedRecommendation: (recommendationChange ? recommendationChange() : null) ?? 'Dein Kaufplan bleibt.', at: now, relevance: imp.relevance,
       };
       out.push(alert);
     }

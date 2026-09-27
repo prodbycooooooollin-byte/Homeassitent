@@ -75,5 +75,6 @@ jeweiligen Haushalts gemappt werden (Kommentare markieren die Stellen).
 
 ## Weiteres Projekt in diesem Repository
 
+- [`deadlock-item-assistant/`](deadlock-item-assistant/README.md) – Windows-Desktop-App mit Ingame-Overlay für Deadlock: Jetzt kaufen/Sparen, Begründungen, Hinweise bei Gegnerkäufen und Austauschvorschläge (Electron + TypeScript, eigenständiges npm-Projekt).
 - [`lol-build-assistant/`](lol-build-assistant/README.md) – Windows-Desktop-App mit Ingame-Overlay für dynamische, erklärbare Item-Empfehlungen in League of Legends (Electron + TypeScript, eigenständiges npm-Projekt).
 
