@@ -1,6 +1,21 @@
 # Datenweg – Recherche und Entscheidung
 
-## Update 27.09.2026: vollautomatischer Weg über ow-electron
+## Update 27.09.2026 (0.3.0): Bildschirmerkennung statt Overwolf
+
+- **Overwolf** ließ sich nicht nutzen: Die Entwicklerkonsole setzt eine Freigabe durch Overwolf voraus („Overwolf currently doesn't approve private apps“). Der Weg aus dem Update unten ist damit für ein privates Tool **nicht gangbar**. Der Code bleibt, ist ohne Freigabe aber inaktiv.
+- **Gewählt: lokale Bildschirmerkennung**, vorher an echten Screenshots auf Machbarkeit geprüft (siehe `STATUS.md`):
+  - **Anker:** die türkise Fläche des Soul-Kreises unten links. Alle anderen Bereiche liegen in festen Abständen dazu und skalieren mit der Bildhöhe.
+  - **Items:** Die 2×6 Slots werden mit 8×8-Farbfingerabdrücken der offiziellen Icons verglichen, kontrastnormiert und ohne das Stufen-Abzeichen. Die Kategorie kommt aus der Abzeichenfarbe (orange/grün/violett) und schränkt die Kandidaten ein. Angenommen wird ein Treffer nur mit deutlichem Abstand zum Zweitbesten; sonst gilt der Slot als „nicht erkannt“.
+  - **Zahlen:** Die Ziffern werden per Farbmaske freigestellt und mit tesseract.js (nur Ziffern) gelesen. Akzeptiert werden nur plausible Formate. Der Itemwert muss der Summe der Listenpreise der erkannten Items entsprechen, sonst gilt das Inventar als unvollständig.
+  - **Porträts:** Oben wird nach den offiziellen Heldenbildern gesucht; der Abgleich erfolgt über den Gesichtsausschnitt der Karte im Maßstab 0,25. Flache Flächen sind ausgeschlossen.
+  - **Tab-Spalten:** Unter jedem Porträt gibt es 2 Spalten kleiner Icons, gelesen wie oben mit kleiner Positionssuche.
+- **Referenzbilder:** Community-Spiegel der Spiel-Icons (`github.com/0xThiagoAmaral/deadlock-open-assets`). Eingecheckt sind nur die Fingerabdrücke (`data/vision/refs.json`) und die Quellenliste (`data/vision/sources.json`).
+  - 156 von 156 Items abgedeckt
+  - 37 von 38 Heroes; für Vyper gab es kein passendes Kartenbild
+- **Grenzen:** Die App sieht nur, was dein Bildschirm zeigt. Gegner-Items gibt es nur per Tab. Schaden gegen dich wird nicht erkannt. Ein 6-gegen-6-Match war noch nicht prüfbar.
+
+
+## Update 27.09.2026 (0.2.0, überholt): Weg über ow-electron
 
 Die erste Entscheidung („Overwolf nicht gewählt“) ist überholt. Grundlage für die neue Entscheidung:
 
@@ -49,7 +64,7 @@ Deshalb gilt:
 | **Overwolf GEP** (Deadlock) | Matchzustand, Spieler/Heroes, `souls`, Items; `incoming_damage` mit `time_filter` (Schadensfenster) | Freigabe nötig. Laut Overwolf werden **private Apps nicht genehmigt**. Monetarisierung nur über Overwolf-Werbung oder -Abos. Zusätzlicher Client nötig. | **Nicht gewählt**: für ein persönliches Tool ungeeignet. Es wird nichts angemeldet. |
 | **Deadlock API Live Events** (Spectator/Broadcast, Open Source) | je Spieler: `hero_id`, `team`, `steam_id`, K/D/A, `net_worth`, `hero_damage` (gesamt), `upgrades` (Item-IDs); je Team: `flex_unlocked` | Verzögert (Broadcast); Match-ID nötig; **kein ausgebbares Budget**; kein Schaden gegen mich; keine Kaufzeitpunkte | **Umgesetzt** als Live-Provider. **Im echten Match ungetestet.** |
 | **Schnelleingabe** | was der Nutzer sieht und einträgt | so aktuell wie die Eingabe | **Umgesetzt** als klar gekennzeichnete Alternative |
-| **Bildschirmerkennung (OCR)** | sichtbares Scoreboard/Inventar | ohne echte Screenshots nicht verifizierbar | **Nicht umgesetzt** (siehe unten) |
+| **Bildschirmerkennung** | eigenes HUD, Porträts, Tab-Item-Spalten | nur Sichtbares; Gegner-Items nur per Tab | **Umgesetzt in 0.3.0** (siehe oben) |
 | **Spieldateien** (SteamDB-Spiegel) | Items, Preise, Komponenten, Eigenschaften, Beschreibungen, Heroes, Fähigkeiten | statisch, patchgebunden | **Umgesetzt** (Build 6701 vom 25.09.2026) |
 
 ## Quellen im Detail
@@ -121,7 +136,7 @@ Deutsche Itemnamen sind im Spiegel nicht enthalten. Die App zeigt daher die offi
 
 ### Bildschirmerkennung
 
-Nicht umgesetzt. Der Auftrag verlangt, die Machbarkeit zuerst an echten Screenshots zu prüfen. Solche lagen nicht vor. Eine OCR ohne Verifikation würde eine Zuverlässigkeit vortäuschen, die nicht belegt ist.
+In 0.1.0 und 0.2.0 nicht umgesetzt, weil keine echten Screenshots zur Prüfung vorlagen. In 0.3.0 umgesetzt, nachdem die Machbarkeit an echten Screenshots geprüft war (siehe oben).
 
 ## Daten-Prototyp
 

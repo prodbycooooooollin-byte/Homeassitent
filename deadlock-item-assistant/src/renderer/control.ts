@@ -42,7 +42,7 @@ function render() {
   // Formulare nicht neu aufbauen, während der Nutzer tippt
   const active = document.activeElement;
   const typing = active && main.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'SELECT');
-  const sk = `${tab}|${snap.settings.source}|${tab === 'manual' ? JSON.stringify(snap.manual) : ''}|${tab === 'connect' || tab === 'overlay' || tab === 'data' ? JSON.stringify(snap.settings) + JSON.stringify(snap.jobs) + snap.catalog.languageLoaded : ''}|${tab === 'connect' ? JSON.stringify(snap.auto) + (snap.diag?.state ?? '') + (snap.diag?.detail ?? '') + (snap.store.matchId ?? '') : ''}`;
+  const sk = `${tab}|${snap.settings.source}|${tab === 'manual' ? JSON.stringify(snap.manual) : ''}|${tab === 'connect' || tab === 'overlay' || tab === 'data' ? JSON.stringify(snap.settings) + JSON.stringify(snap.jobs) + snap.catalog.languageLoaded : ''}|${tab === 'connect' ? String(snap.screen.available) + snap.screen.reason + snap.auto.gepStatus + (snap.auto.account?.id ?? '') : ''}`;
   if (sk !== structureKey && !typing) { structureKey = sk; main.innerHTML = VIEWS[tab]?.() ?? ''; bind(); }
   updateLive();
 }
@@ -75,50 +75,48 @@ const VIEWS: Record<string, () => string> = {
   connect: () => {
     const s = last!.snap.settings;
     const au = last!.snap.auto;
-    const d = last!.snap.diag;
-    const live = d?.state === 'live';
-    const bannerCls = s.source !== 'auto' ? 'wait' : live ? 'ok' : d?.state === 'error' ? 'no' : 'wait';
-    const title = s.source !== 'auto' ? 'Automatik aus' : live ? 'Match wird verfolgt' : au.gameRunning === false ? 'Warte auf Deadlock' : 'Bereit';
-    const row = (cls: string, k: string, v: string) => `<div class="chk-row ${cls}"><span class="ic"></span><span class="k">${k}</span><span class="v">${v}</span></div>`;
+    const sc = last!.snap.screen;
     const opt = (id: string, t: string, dsc: string, q: string) => `<button class="opt${s.source === id ? ' on' : ''}" data-source="${id}"><div class="t">${t}</div><div class="d">${dsc}</div><div class="q">${q}</div></button>`;
-    const sem = au.soulsSemantics === 'spendable' ? 'gemessen (Overwolf)' : au.soulsSemantics === 'networth' ? 'berechnet aus Gesamt-Souls' : au.mode === 'spectator' ? 'berechnet aus Gesamt-Souls (verzögert)' : 'wird beim ersten eigenen Kauf erkannt';
-    return `<h1>Verbindung</h1><p class="lead">Einmal einrichten – danach verfolgt die App jedes Match automatisch: dein Hero, deine Souls, deine Items und die Builds der Gegner. Du musst pro Match nichts eintragen.</p>
-    <div class="hero-banner ${bannerCls}"><span class="dia"></span><div><div class="big">${esc(title)}</div><div class="sub">${esc(d?.detail ?? '')}</div></div></div>
+    const heroes = last!.snap.heroes;
+    return `<h1>Verbindung</h1><p class="lead">Die App liest dein Deadlock-HUD direkt vom Bildschirm – lokal, ohne Anmeldung, ohne Overwolf. Starte einfach ein Match: Hero, Souls, Items und die Gegner werden automatisch erkannt.</p>
+    <div data-live="banner"></div>
     <div class="grid">
-      <div class="card"><h2>Automatik</h2><div class="checks">
-        ${row(au.account ? 'ok' : 'no', 'Steam-Konto', au.account ? `${esc(au.account.name ?? 'erkannt')} <span class="muted mono">#${au.account.id}</span>` : 'nicht gefunden – unten Account-ID eintragen')}
-        ${row(au.gameRunning ? 'ok' : 'wait', 'Deadlock', au.gameRunning ? 'läuft' : au.gameRunning === false ? 'nicht gestartet' : 'wird über Spielevents erkannt')}
-        ${row(au.gepReady ? 'ok' : 'wait', 'Live-Spielevents', esc(au.gepStatus))}
-        ${row(live ? 'ok' : 'wait', 'Match', live ? `wird verfolgt <span class="muted mono">${esc(last!.snap.store.matchId ?? '')}</span>` : 'noch keins')}
-        ${row(au.soulsSemantics === 'spendable' ? 'ok' : 'wait', 'Budget', esc(sem))}
-      </div></div>
-      <div class="card"><h2>Live-Spielevents einrichten</h2>
-        <p class="small">Die volle Automatik (eigene Souls in Echtzeit, alle Items sofort, Schaden gegen dich) nutzt Overwolfs Spielevents im Entwicklermodus. Dafür brauchst du einmalig einen <b>eigenen, kostenlosen</b> Overwolf-Entwicklerzugang – die App legt nichts für dich an.</p>
-        <ol class="steps small">
-          <li>Auf <span class="mono">console.overwolf.com</span> mit deinem Konto anmelden.</li>
-          <li>Unter <i>Profile → API Keys</i> einen Schlüssel bzw. Dev-Token erzeugen.</li>
-          <li>Hier einfügen und speichern – die App startet einmal neu.</li>
-        </ol>
-        <label class="f">Overwolf-Entwicklerschlüssel (OW_DEV_KEY)</label>
-        <input type="password" id="ow-key" value="${esc(s.overwolf.devKey)}" placeholder="Dev-Token einfügen">
-        <div class="row" style="margin-top:12px"><button class="b primary" data-a="ow-save">Speichern &amp; neu starten</button></div>
-        <p class="small muted">Funktioniert nur in der Variante „Auto“ (mit Overwolf-Laufzeit). Ohne Schlüssel arbeitet die Automatik mit dem verzögerten Zuschauer-Stream weiter.</p></div>
+      <div class="card"><h2>Automatik</h2><div class="checks" data-live="checks"></div></div>
+      <div class="card"><h2>Bildschirmerkennung</h2>
+        <p class="small">Ausgewertet werden nur feste HUD-Bereiche: Soul-Zähler und Itemwert unten links, deine Item-Slots, die Heldenporträts oben und – solange du <b>Tab</b> hältst – die Item-Spalten darunter. Bilder bleiben im Arbeitsspeicher und werden nicht gespeichert oder gesendet.</p>
+        <label class="chk"><input type="checkbox" id="sc-on"${s.screen.enabled ? ' checked' : ''}> Bildschirmerkennung verwenden</label>
+        <label class="f">Aufnahme-Takt</label>
+        <select id="sc-int">${[[1000, '1 s (schnell)'], [1500, '1,5 s (Standard)'], [3000, '3 s (sparsam)']].map(([v, t]) => `<option value="${v}"${s.screen.intervalMs === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
+        <label class="f">Dein Hero (Korrektur, falls falsch oder nicht erkannt)</label>
+        <select id="sc-hero"><option value="">automatisch erkennen</option>${heroes.map((h) => `<option value="${h.cls}"${h.cls === s.screen.heroOverride ? ' selected' : ''}>${esc(h.name)}</option>`).join('')}</select>
+        <div class="row" style="margin-top:12px"><button class="b" data-a="screen-save">Prüfbild speichern</button><button class="b" data-a="restart-source">Neu starten</button></div>
+        <p class="small muted">„Prüfbild speichern“ legt das zuletzt aufgenommene Bild und das Erkennungsergebnis in deinem Nutzerordner ab – nur auf Knopfdruck, zum Nachprüfen.</p>
+        ${last!.snap.jobs.screen ? `<div class="note">${esc(last!.snap.jobs.screen)}</div>` : ''}
+        ${sc.available ? '' : `<div class="note bad">Nicht aktiv: ${esc(sc.reason)}</div>`}
+        <p class="small muted">Voraussetzung: Deadlock im <b>randlosen Fenstermodus</b> (exklusives Vollbild lässt sich unter Windows oft nicht aufnehmen).</p></div>
     </div>
     <details style="margin-top:18px"><summary>Andere Quellen &amp; Erweitert</summary>
       <div class="choice" style="margin-top:12px">
-        ${opt('auto', 'Automatisch', 'Bestes verfügbares Live-Signal, jedes Match automatisch.', 'Empfohlen')}
+        ${opt('auto', 'Automatisch', 'Bildschirmerkennung, jedes Match automatisch.', 'Empfohlen')}
         ${opt('spectator', 'Zuschauer-Stream', 'Feste Match-ID per Hand.', 'Verzögert')}
         ${opt('manual', 'Schnelleingabe', 'Alles selbst eintragen.', 'Notlösung')}
         ${opt('demo', 'Demo', 'Beispielmatch zum Ausprobieren.', 'Keine echten Daten')}
       </div>
       <div class="grid" style="margin-top:14px">
         <div class="card"><h2>Konto &amp; Dienst</h2>
+          <p class="small muted">Steam-Konto: ${au.account ? `${esc(au.account.name ?? 'erkannt')} <span class="mono">#${au.account.id}</span>` : 'nicht gefunden'} (nur für den Zuschauer-Stream nötig)</p>
           <label class="f">Steam-Account-ID überschreiben (leer = automatisch)</label><input type="text" id="acc-ov" value="${esc(s.accountOverride)}">
           <label class="f">Zuschauer-Stream-Dienst</label><input type="text" id="sp-base" value="${esc(s.spectator.baseUrl)}">
           ${s.source === 'spectator' ? `<label class="f">Match-ID</label><input type="text" id="sp-match" value="${esc(s.spectator.matchId)}">
           <label class="f">Account-ID für diese Quelle</label><input type="text" id="sp-acc" value="${esc(s.spectator.accountId)}">` : ''}
           <div class="row" style="margin-top:12px"><button class="b primary" data-a="adv-save">Übernehmen</button><button class="b" data-a="restart-source">Neu verbinden</button></div>
           ${last!.snap.jobs.source ? `<div class="note bad">${esc(last!.snap.jobs.source)}</div>` : ''}</div>
+        <div class="card"><h2>Overwolf-Spielevents</h2>
+          <p class="small">Overwolf gibt seine Spielevents nur für Apps frei, die Overwolf selbst geprüft und genehmigt hat; private Tools werden laut Overwolf nicht genehmigt. Ein eigener Entwicklerzugang ist ohne Freigabe durch Overwolf nicht erhältlich. Deshalb nutzt die App die Bildschirmerkennung.</p>
+          <p class="small muted">Status: ${esc(au.gepStatus)}</p>
+          <label class="f">Falls du einen von Overwolf ausgestellten Zugang hast (OW_DEV_KEY)</label>
+          <input type="password" id="ow-key" value="${esc(s.overwolf.devKey)}" placeholder="leer lassen">
+          <div class="row" style="margin-top:12px"><button class="b" data-a="ow-save">Speichern &amp; neu starten</button></div></div>
         ${s.source === 'demo' ? `<div class="card"><h2>Demo-Szenario</h2>
           <select id="demo-sc">${last!.snap.scenarios.map((x) => `<option value="${x.id}"${x.id === s.demoScenario ? ' selected' : ''}>${esc(x.title)} – ${esc(x.description)}</option>`).join('')}</select>
           <label class="chk"><input type="checkbox" id="demo-auto"${s.demoAutoBuy ? ' checked' : ''}> Empfohlene Käufe automatisch ausführen</label></div>` : ''}
@@ -201,9 +199,10 @@ const VIEWS: Record<string, () => string> = {
 
   about: () => `<h1>Datenweg</h1><p class="lead">Woher die Daten kommen – und was die App ausdrücklich nicht tut.</p>
     <div class="grid">
-      <div class="card"><h2>1 · Overwolf-Spielevents</h2><p class="small">Über die gebündelte Overwolf-Laufzeit (ow-electron) im Entwicklermodus mit deinem eigenen Schlüssel: eigener Spieler, Souls, Items aller Spieler, Match-ID, Schadensfenster. Kein Overwolf-Client, keine Anmeldung durch die App, keine Veröffentlichung.</p></div>
-      <div class="card"><h2>2 · Zuschauer-Stream</h2><p class="small">Fallback ohne Schlüssel: Steam-Konto wird aus der lokalen Steam-Konfiguration erkannt, das laufende Match über die Community-API gesucht (nur meistgesehene Matches) und über Valves Broadcast verfolgt. Verzögert; Budget wird berechnet.</p></div>
-      <div class="card"><h2>Spieldaten</h2><p class="small">Items/Heroes aus den Spieldateien (SteamDB-Spiegel). Lokal gelesen werden nur <span class="mono">steam.inf</span>, <span class="mono">loginusers.vdf</span> und die Prozessliste.</p></div>
+      <div class="card"><h2>1 · Bildschirmerkennung</h2><p class="small">Liest dein HUD vom Bildschirm: Souls (Soul-Zähler), Itemwert, deine Item-Slots, die Heldenporträts und – mit Tab – die Item-Spalten aller Spieler. Icons werden mit Fingerabdrücken der offiziellen Icons verglichen, Zahlen per Texterkennung gelesen (tesseract.js, lokal). Der Itemwert dient als Gegenprobe. Nur sichtbare Informationen – nichts Verdecktes.</p></div>
+      <div class="card"><h2>2 · Zuschauer-Stream</h2><p class="small">Optional: Valves Broadcast über den quelloffenen Live-Events-Dienst. Verzögert; nur für die meistgesehenen Matches automatisch auffindbar; Budget wird berechnet.</p></div>
+      <div class="card"><h2>Overwolf</h2><p class="small">Nur mit einer von Overwolf freigegebenen App nutzbar; private Tools werden nicht freigegeben. Der Code ist vorhanden, bleibt aber ohne Freigabe inaktiv.</p></div>
+      <div class="card"><h2>Spieldaten</h2><p class="small">Items/Heroes aus den Spieldateien (SteamDB-Spiegel). Lokal gelesen werden <span class="mono">steam.inf</span>, <span class="mono">loginusers.vdf</span>, die Prozessliste und – während Deadlock läuft – das Bild des Spielmonitors.</p></div>
       <div class="card"><h2>Nie</h2><p class="small">Kein Speicherzugriff, keine Injektion durch die App selbst, keine Eingaben ans Spiel, keine automatischen Käufe.</p></div>
     </div>`,
 };
@@ -221,6 +220,9 @@ function bind() {
   }));
   main.querySelectorAll<HTMLElement>('[data-source]').forEach((el) => el.addEventListener('click', () => send({ type: 'settings', patch: { source: el.dataset.source } })));
   const on = (id: string, ev: string, fn: (el: HTMLInputElement) => void) => { const el = document.getElementById(id) as HTMLInputElement | null; el?.addEventListener(ev, () => fn(el)); };
+  on('sc-on', 'change', (el) => send({ type: 'settings', patch: { screen: { enabled: el.checked } } }));
+  on('sc-int', 'change', (el) => send({ type: 'settings', patch: { screen: { intervalMs: Number(el.value) } } }));
+  on('sc-hero', 'change', (el) => send({ type: 'settings', patch: { screen: { heroOverride: el.value } } }));
   on('demo-sc', 'change', (el) => send({ type: 'settings', patch: { demoScenario: el.value } }));
   on('demo-auto', 'change', (el) => send({ type: 'settings', patch: { demoAutoBuy: el.checked } }));
   on('ov-scale', 'change', (el) => send({ type: 'settings', patch: { overlay: { scale: Number(el.value) } } }));
@@ -284,6 +286,36 @@ function bindPicker(p: HTMLElement) {
   list.addEventListener('mousedown', (e) => { const cls = (e.target as HTMLElement).closest('[data-cls]')?.getAttribute('data-cls'); if (cls) pick(cls); });
 }
 
+function connectLive(snap: ControlSnapshot, set: (k: string, html: string) => void) {
+  const s = snap.settings;
+  const d = snap.diag;
+  const sc = snap.screen;
+  const st = sc.status;
+  const au = snap.auto;
+  const live = d?.state === 'live';
+  const bannerCls = s.source !== 'auto' ? 'wait' : live ? 'ok' : d?.state === 'error' ? 'no' : 'wait';
+  const title = s.source !== 'auto' ? 'Automatik aus' : live ? 'Match wird verfolgt' : d?.detail === 'warte auf Deadlock' ? 'Warte auf Deadlock' : 'Bereit';
+  set('banner', `<div class="hero-banner ${bannerCls}"><span class="dia"></span><div><div class="big">${esc(title)}</div><div class="sub">${esc(d?.detail ?? '')}</div></div></div>`);
+  const row = (cls: string, k: string, v: string) => `<div class="chk-row ${cls}"><span class="ic"></span><span class="k">${k}</span><span class="v">${v}</span></div>`;
+  const fmt = (n: number) => n.toLocaleString('de-DE');
+  if (au.mode !== 'screen' || !st) {
+    set('checks', row('wait', 'Quelle', esc(au.mode === 'gep' ? 'Overwolf-Spielevents' : au.mode === 'spectator' ? 'Zuschauer-Stream (Bildschirmerkennung nicht aktiv)' : s.source === 'auto' ? 'startet …' : 'Automatik aus'))
+      + (sc.available ? '' : row('no', 'Erkennung', esc(sc.reason))));
+    return;
+  }
+  const tabAges = Object.entries(st.tabSeen).map(([h, t]) => `${esc(snap.heroes.find((x) => x.cls === h)?.name ?? h)} ${ago(t)}`);
+  set('checks', [
+    row(d?.detail === 'warte auf Deadlock' ? 'wait' : 'ok', 'Deadlock', d?.detail === 'warte auf Deadlock' ? 'nicht gestartet' : 'läuft'),
+    row(st.hudVisible ? 'ok' : 'wait', 'HUD', st.hudVisible ? `erkannt <span class="muted">(${st.frameMs ?? '–'} ms je Bild)</span>` : 'nicht sichtbar (Menü, Shop, Tod …)'),
+    row(sc.heroName ? 'ok' : 'wait', 'Dein Hero', sc.heroName ? `${esc(sc.heroName)} <span class="muted">(${esc(st.myHeroBy ?? '')})</span>` : 'noch unbekannt – kurz <b>Tab</b> halten oder unten auswählen'),
+    row(st.souls !== null ? 'ok' : 'wait', 'Souls', st.souls !== null ? `${fmt(st.souls)} <span class="muted">(gelesen)</span>` : `nicht lesbar${st.soulsText ? ` <span class="muted mono">„${esc(st.soulsText)}“</span>` : ''}`),
+    row(st.valueCheck === 'ok' ? 'ok' : st.valueCheck === 'abweichend' ? 'no' : 'wait', 'Itemwert', st.value !== null ? `${fmt(st.value)} · Summe erkannter Items ${fmt(st.itemSum)} · <b>${esc(st.valueCheck)}</b>` : 'nicht gelesen'),
+    row(st.unknownSlots ? 'wait' : 'ok', 'Deine Items', sc.itemNames.length ? esc(sc.itemNames.join(', ')) + (st.unknownSlots ? ` <span class="warn">+${st.unknownSlots} nicht erkannt</span>` : '') : (st.unknownSlots ? `<span class="warn">${st.unknownSlots} nicht erkannt</span>` : 'keine')),
+    row(sc.enemyNames.length ? 'ok' : 'wait', 'Gegner', sc.enemyNames.length ? esc(sc.enemyNames.join(', ')) : (st.portraits.length > 1 && !sc.heroName ? 'erst nach Erkennung deines Heros zuordenbar' : 'keine erkannt')),
+    row(tabAges.length ? 'ok' : 'wait', 'Gegner-Items', tabAges.length ? `per Tab gelesen: ${tabAges.join(' · ')}` : 'halte im Match kurz <b>Tab</b> – dann werden die Builds gelesen'),
+  ].join(''));
+}
+
 function updateLive() {
   const { snap, vm, layout } = last!;
   const set = (k: string, html: string) => main.querySelectorAll(`[data-live="${k}"]`).forEach((el) => { if (el.innerHTML !== html) el.innerHTML = html; });
@@ -296,6 +328,7 @@ function updateLive() {
     ${d?.unknownItemIds.length ? `<span class="k">Unbekannte Item-IDs</span><span class="warn mono">${d.unknownItemIds.slice(0, 8).join(', ')}</span>` : ''}
     ${d?.errors.length ? `<span class="k">Fehler</span><span class="bad small">${esc(d.errors.slice(-2).join(' | '))}</span>` : ''}
     ${d?.notes.length ? `<span class="k">Hinweise</span><span class="small muted">${esc(d.notes.join(' · '))}</span>` : ''}`);
+  if (tab === 'connect') connectLive(snap, set);
   const o = snap.output;
   set('store', `<span class="k">Match-ID</span><span class="mono">${esc(snap.store.matchId ?? '–')}</span>
     <span class="k">Snapshots</span><span>${snap.store.snapshots}</span>

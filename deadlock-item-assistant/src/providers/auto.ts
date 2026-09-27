@@ -3,11 +3,13 @@ import type { ProviderSnapshot } from '../shared/types';
 import { type SteamAccount, activeMatchFor, deadlockDir, detectSteamAccount, isDeadlockRunning, matchIdFromConsoleLog } from './discovery';
 import { type GepApi, GepProvider } from './gep';
 import { Provider, type ProviderDiagnostics } from './provider';
+import { type ScreenOptions, ScreenProvider } from './screen';
 import { SpectatorProvider } from './spectator';
 
 // AUTOMATISCH: wählt selbst die beste verfügbare Live-Quelle und verfolgt jedes Match.
-//  1. Overwolf-Spielevents (ow-electron + Entwicklerschlüssel): eigener Hero, eigene Souls, alle Items, Schadensfenster.
-//  2. Sonst Spectator-Stream: Steam-Konto automatisch erkannt, Match-ID automatisch gesucht, Budget berechnet.
+//  1. Overwolf-Spielevents, falls die Laufzeit mit gültigem Zugang bereitsteht (für private Apps in der Regel nicht).
+//  2. Bildschirmerkennung (Standard): eigenes HUD, Heldenporträts, Tab-Item-Spalten. Lokal, ohne Anmeldung.
+//  3. Sonst Spectator-Stream: Steam-Konto automatisch erkannt, Match-ID automatisch gesucht, Budget berechnet.
 // Kein Umschalten per Hand, kein Eintragen pro Match.
 
 export interface AutoOptions {
@@ -17,6 +19,8 @@ export interface AutoOptions {
   accountOverride: number | null;
   gepLogFile?: string;
   fetchImpl?: typeof fetch;
+  /** Bildschirmerkennung (null = nicht verfügbar, z. B. Referenzdaten fehlen) */
+  screen?: ScreenOptions | null;
 }
 
 export class AutoProvider extends Provider {
@@ -28,14 +32,14 @@ export class AutoProvider extends Provider {
   private timer: NodeJS.Timeout | null = null;
   private currentMatch: string | null = null;
   private stopped = true;
-  mode: 'gep' | 'spectator' | 'waiting' = 'waiting';
+  mode: 'gep' | 'screen' | 'spectator' | 'waiting' = 'waiting';
 
   constructor(private cat: Catalog, private opts: AutoOptions) { super(); }
 
   diagnostics(): ProviderDiagnostics {
     const inner = this.inner?.diagnostics();
     const acc = this.account ? `Steam: ${this.account.personaName ?? '?'} (${this.account.accountId})` : 'Steam-Konto nicht gefunden';
-    const base = { ...super.diagnostics(), id: (this.mode === 'spectator' ? 'spectator' : 'gep') as ProviderDiagnostics['id'] };
+    const base = { ...super.diagnostics(), id: (this.mode === 'spectator' ? 'spectator' : this.mode === 'screen' ? 'screen' : 'gep') as ProviderDiagnostics['id'] };
     if (!inner) return { ...base, notes: [acc, this.opts.gepStatus, ...base.notes] };
     return { ...inner, id: base.id, label: `Automatisch · ${inner.label}`, notes: [acc, this.opts.gepStatus, ...inner.notes] };
   }
@@ -47,6 +51,11 @@ export class AutoProvider extends Provider {
     if (this.opts.gep) {
       this.mode = 'gep';
       this.attach(new GepProvider(this.cat, this.opts.gep, { logFile: this.opts.gepLogFile }));
+      return;
+    }
+    if (this.opts.screen) {
+      this.mode = 'screen';
+      this.attach(new ScreenProvider(this.cat, this.opts.screen));
       return;
     }
     this.mode = 'spectator';
@@ -84,7 +93,7 @@ export class AutoProvider extends Provider {
             this.currentMatch = id;
             this.attach(new SpectatorProvider(this.cat, { baseUrl: this.opts.spectatorBaseUrl, matchId: id, myAccountId: this.account.accountId }, this.opts.fetchImpl));
           } else if (!id) {
-            this.setState('waiting', 'Match nicht auffindbar (Community-API kennt nur ~200 meistgesehene Matches). Für volle Automatik Overwolf-Schlüssel einrichten.');
+            this.setState('waiting', 'Match nicht auffindbar (Community-API kennt nur ~200 meistgesehene Matches). Bildschirmerkennung einschalten für volle Automatik.');
           }
         }
       }

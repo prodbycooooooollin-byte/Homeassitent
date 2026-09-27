@@ -12,6 +12,11 @@ import type { Provider, ProviderDiagnostics } from '../providers/provider';
 import { SpectatorProvider } from '../providers/spectator';
 import { AutoProvider } from '../providers/auto';
 import { type GepApi, GepProvider } from '../providers/gep';
+import { type FrameSource, ScreenProvider } from '../providers/screen';
+import type { VisionRefs } from '../vision/hud';
+import type { TextRecognizer } from '../vision/ocr';
+import { loadRefs } from '../vision/refs';
+import type { TrackerStatus } from '../vision/tracker';
 import { type OverlayVM, buildOverlayVM } from '../present/viewModel';
 import type { AdvisorOutput, EnemyAlert, ProviderSnapshot, ReportedProblem } from '../shared/types';
 import type { AppSettings } from './settings';
@@ -35,6 +40,14 @@ export interface ControlSnapshot {
   perf: PerfSample[];
   jobs: Record<string, string>;
   auto: { active: boolean; mode: string; account: { name: string | null; id: number } | null; gameRunning: boolean | null; gepStatus: string; gepReady: boolean; soulsSemantics: string | null };
+  screen: { available: boolean; reason: string; status: TrackerStatus | null; itemNames: string[]; enemyNames: string[]; heroName: string | null };
+}
+
+/** Von Electron bereitgestellte Bausteine der Bildschirmerkennung */
+export interface ScreenDeps {
+  source: FrameSource;
+  createOcr: () => Promise<TextRecognizer>;
+  gameRunning: () => Promise<boolean | null>;
 }
 
 export interface PerfSample { at: number; cpuPct: number; memMB: number; gpuCpuPct: number | null; label: string }
@@ -53,7 +66,22 @@ export class Controller {
   private pendingDemoBuy: NodeJS.Timeout | null = null;
   /** Overwolf-GEP (nur unter ow-electron mit gültigem Entwicklerzugang verfügbar) */
   gep: GepApi | null = null;
-  gepStatus = 'Overwolf-Laufzeit nicht vorhanden – Spectator-Fallback';
+  gepStatus = 'Overwolf-Laufzeit nicht vorhanden';
+  screenDeps: ScreenDeps | null = null;
+  private visionRefs: { refs: VisionRefs; forBuild: number } | null = null;
+
+  setScreenDeps(d: ScreenDeps | null) {
+    this.screenDeps = d;
+    if (this.settings.source === 'auto') this.startSource(); else this.onChange();
+  }
+
+  /** Warum die Bildschirmerkennung nicht läuft (leer = läuft) */
+  private screenBlocker(): string {
+    if (!this.settings.screen.enabled) return 'in den Einstellungen ausgeschaltet';
+    if (!this.visionRefs) return 'Referenzdaten (data/vision/refs.json) fehlen';
+    if (!this.screenDeps) return 'Bildschirmaufnahme nicht verfügbar';
+    return '';
+  }
 
   setGep(gep: GepApi | null, status: string) {
     this.gep = gep;
@@ -64,6 +92,7 @@ export class Controller {
   constructor(private dataDir: string, private userDir: string, public settings: AppSettings, private onChange: () => void) {
     this.cat = this.loadCatalog();
     this.engine = new Engine(this.cat);
+    try { this.visionRefs = loadRefs(path.join(this.dataDir, 'vision', 'refs.json')); } catch { this.visionRefs = null; }
     this.manual.on('snapshot', (s: ProviderSnapshot) => { if (this.provider === this.manual) this.ingest(s); });
     try { this.installed = installedBuild(); } catch { this.installed = null; }
   }
@@ -97,6 +126,10 @@ export class Controller {
         gep: this.gep, gepStatus: this.gepStatus, spectatorBaseUrl: s.spectator.baseUrl,
         accountOverride: acc !== null && Number.isFinite(acc) ? acc : null,
         gepLogFile: path.join(this.userDir, 'gep-rohdaten.jsonl'),
+        screen: !this.screenBlocker() && this.screenDeps && this.visionRefs ? {
+          refs: this.visionRefs.refs, source: this.screenDeps.source, createOcr: this.screenDeps.createOcr, gameRunning: this.screenDeps.gameRunning,
+          intervalMs: s.screen.intervalMs, heroOverride: s.screen.heroOverride || null,
+        } : null,
       });
     } else if (s.source === 'demo') {
       const d = new DemoProvider(this.cat, s.demoScenario);
@@ -172,6 +205,24 @@ export class Controller {
       perf: this.perf.slice(-30),
       jobs: this.jobs,
       auto: this.autoInfo(),
+      screen: this.screenInfo(),
+    };
+  }
+
+  screenProvider(): ScreenProvider | null {
+    const p = this.provider;
+    const inner = p instanceof AutoProvider ? p.inner : p;
+    return inner instanceof ScreenProvider ? inner : null;
+  }
+
+  private screenInfo(): ControlSnapshot['screen'] {
+    const sp = this.screenProvider();
+    const st = sp?.status() ?? null;
+    return {
+      available: !this.screenBlocker(), reason: this.screenBlocker(), status: st,
+      itemNames: st?.items.map((i) => this.cat.itemName(i)) ?? [],
+      enemyNames: st?.enemies.map((h) => this.cat.heroName(h)) ?? [],
+      heroName: st?.myHero ? this.cat.heroName(st.myHero) : null,
     };
   }
 

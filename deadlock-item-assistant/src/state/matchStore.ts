@@ -25,8 +25,9 @@ export interface StoreOptions {
 
 export const DEFAULT_STORE_OPTIONS: Omit<StoreOptions, 'componentsOf'> = {
   removalConfirmations: 2,
-  staleAfterMs: { demo: 8000, manual: 10 * 60_000, spectator: 45_000, gep: 30_000 },
-  budgetStaleAfterMs: { demo: 8000, manual: 90_000, spectator: 45_000, gep: 30_000 },
+  // screen: Gegner-Items stammen aus der Tab-Ansicht und bleiben länger gültig; Souls veralten schnell
+  staleAfterMs: { demo: 8000, manual: 10 * 60_000, spectator: 45_000, gep: 30_000, screen: 180_000 },
+  budgetStaleAfterMs: { demo: 8000, manual: 90_000, spectator: 45_000, gep: 30_000, screen: 10_000 },
 };
 
 const obs = <T>(value: T, source: SourceId, at: number, gameTime: number | null, status: 'observed' | 'derived' = 'observed'): Obs<T> =>
@@ -80,8 +81,14 @@ export class MatchStore {
     const signature = JSON.stringify({ ...s, receivedAt: 0 });
     if (signature === this.lastSignature) {
       state.stats.duplicates++;
-      // Duplikat: nur Frische aktualisieren, keine Inhalte
+      // Duplikat: nur Frische aktualisieren, keine Inhalte. Die Quelle hat die Werte erneut bestätigt.
       state.lastUpdateAt = s.receivedAt;
+      for (const p of s.players) {
+        const pl = state.players[p.key];
+        if (!pl) continue;
+        if (p.spendableSouls !== undefined && p.spendableSoulsAt === undefined) pl.spendableSouls = { ...pl.spendableSouls, status: 'observed', observedAt: s.receivedAt };
+        if (p.items !== undefined && pl.items.value !== null) pl.items = { ...pl.items, status: 'observed', observedAt: s.receivedAt };
+      }
       return { accepted: false, reason: 'Duplikat', reset, events: [] };
     }
     this.lastSignature = signature;

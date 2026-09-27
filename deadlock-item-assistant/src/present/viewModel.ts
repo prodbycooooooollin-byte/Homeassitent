@@ -98,7 +98,9 @@ export function buildOverlayVM(cat: Catalog, o: AdvisorOutput | null, diag: Prov
   const source = diag?.id ?? null;
   const isDemo = source === 'demo';
   const auto = diag?.label.startsWith('Automatisch') ?? false;
-  const sourceLabel = auto ? (source === 'spectator' ? 'Automatisch · Zuschauer-Stream' : 'Automatisch · Live') : source === 'demo' ? 'DEMO · Beispieldaten' : source === 'manual' ? 'Manuelle Eingabe' : source === 'spectator' ? 'Spectator (verzögert)' : source === 'gep' ? 'Live · Overwolf' : 'Keine Quelle';
+  const sourceLabel = auto
+    ? (source === 'spectator' ? 'Automatisch · Zuschauer-Stream' : source === 'screen' ? 'Auto · Bildschirm' : 'Automatisch · Live')
+    : source === 'demo' ? 'DEMO · Beispieldaten' : source === 'manual' ? 'Manuelle Eingabe' : source === 'spectator' ? 'Spectator (verzögert)' : source === 'gep' ? 'Live · Overwolf' : source === 'screen' ? 'Bildschirmerkennung' : 'Keine Quelle';
   const hist = alerts.slice(-8).reverse().map((a) => alertVM(cat, a, now));
   const latest = hist[0] && now - hist[0].at < alertVisibleMs ? hist[0] : null;
   const patchText = `Spieldaten Build ${cat.manifest.build} (${cat.manifest.versionDate.split(' ').slice(0, 3).join(' ')})`;

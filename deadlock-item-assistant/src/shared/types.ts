@@ -1,7 +1,7 @@
 // Normalisierter Matchzustand und Engine-Ausgaben. Alle Datenprovider liefern
 // ProviderSnapshot; der MatchStore macht daraus einen validierten MatchState.
 
-export type SourceId = 'demo' | 'manual' | 'spectator' | 'gep';
+export type SourceId = 'demo' | 'manual' | 'spectator' | 'gep' | 'screen';
 
 /** observed = direkt gemeldet; derived = aus anderen Werten abgeleitet; stale = zu alt; unknown = nicht verfügbar. */
 export type Availability = 'observed' | 'derived' | 'stale' | 'unknown';

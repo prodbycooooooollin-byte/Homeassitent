@@ -9,6 +9,8 @@ export interface AppSettings {
   overwolf: { devKey: string };
   /** Steam-Account-ID manuell überschreiben (sonst automatisch aus Steam erkannt) */
   accountOverride: string;
+  /** Bildschirmerkennung des HUD (lokal). heroOverride = Korrektur, falls der eigene Hero nicht erkannt wird */
+  screen: { enabled: boolean; intervalMs: number; heroOverride: string };
   demoScenario: string;
   demoAutoBuy: boolean;
   spectator: { baseUrl: string; matchId: string; accountId: string };
@@ -33,6 +35,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   source: 'auto',
   overwolf: { devKey: '' },
   accountOverride: '',
+  screen: { enabled: true, intervalMs: 1500, heroOverride: '' },
   demoScenario: 'infernus-lead',
   demoAutoBuy: true,
   spectator: { baseUrl: 'http://localhost:3000', matchId: '', accountId: '' },
@@ -48,6 +51,7 @@ export function loadSettings(file: string): AppSettings {
       ...DEFAULT_SETTINGS, ...raw,
       spectator: { ...DEFAULT_SETTINGS.spectator, ...(raw.spectator ?? {}) },
       overwolf: { ...DEFAULT_SETTINGS.overwolf, ...(raw.overwolf ?? {}) },
+      screen: { ...DEFAULT_SETTINGS.screen, ...(raw.screen ?? {}) },
       overlay: { ...DEFAULT_SETTINGS.overlay, ...(raw.overlay ?? {}) },
       hotkeys: { ...DEFAULT_SETTINGS.hotkeys, ...(raw.hotkeys ?? {}) },
     };

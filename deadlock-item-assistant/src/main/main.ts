@@ -1,9 +1,13 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, nativeImage, screen, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Controller } from './controller';
 import { type AppSettings, loadSettings, saveSettings } from './settings';
+import { isDeadlockRunning } from '../providers/discovery';
+import type { FrameSource } from '../providers/screen';
+import { createTesseract } from '../vision/ocr';
+import { type Raster, fromBGRA } from '../vision/raster';
 
 // Eigenständige Windows-Desktop-App. Das Overlay ist ein transparentes, klickdurchlässiges
 // Fenster über dem Spiel (randloser Fenstermodus). Keine Injektion, kein Speicherzugriff,
@@ -28,10 +32,10 @@ const owPackages = (app as unknown as { overwolf?: { packages?: OwPackages } }).
 
 function initOverwolf() {
   if (!owPackages) {
-    controller.setGep(null, 'Overwolf-Laufzeit nicht vorhanden (Standard-Electron) – Spectator-Fallback');
+    controller.setGep(null, 'Overwolf-Laufzeit nicht vorhanden – Bildschirmerkennung wird genutzt');
     return;
   }
-  controller.setGep(null, process.env.OW_DEV_KEY || process.env.OW_CLI_API_KEY ? 'Overwolf-Spielevents werden geladen …' : 'Overwolf-Entwicklerzugang fehlt – Spielevents inaktiv (siehe „Verbindung“)');
+  controller.setGep(null, process.env.OW_DEV_KEY || process.env.OW_CLI_API_KEY ? 'Overwolf-Spielevents werden geladen …' : 'Overwolf-Spielevents ohne Freigabe durch Overwolf nicht nutzbar – Bildschirmerkennung wird genutzt');
   owPackages.on('ready', (_e: unknown, name: string, version: string) => {
     if (name !== 'gep' || !owPackages.gep) return;
     controller.setGep(owPackages.gep as never, `Overwolf-Spielevents bereit (GEP ${version})`);
@@ -39,6 +43,52 @@ function initOverwolf() {
   owPackages.on('failed-to-initialize', (_e: unknown, name: string) => {
     if (name === 'gep') controller.setGep(null, 'Overwolf-Spielevents konnten nicht starten – Entwicklerzugang prüfen');
   });
+}
+
+// --- Bildschirmerkennung: Aufnahme des Spielmonitors (lokal, nur im Arbeitsspeicher) ---
+function nativeToRaster(img: Electron.NativeImage): Raster | null {
+  if (img.isEmpty()) return null;
+  const { width, height } = img.getSize();
+  return fromBGRA(width, height, img.toBitmap());
+}
+
+const screenSource: FrameSource = {
+  async grab() {
+    // Nur für Tests: festes Bild statt Bildschirm (DIA_SCREEN_FILE)
+    if (process.env.DIA_SCREEN_FILE) return nativeToRaster(nativeImage.createFromPath(process.env.DIA_SCREEN_FILE));
+    const d = targetDisplay();
+    const size = { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor) };
+    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
+    const src = sources.find((s) => s.display_id === String(d.id)) ?? sources[0];
+    return src ? nativeToRaster(src.thumbnail) : null;
+  },
+};
+
+function initScreen() {
+  controller.screenDeps = {
+    source: screenSource,
+    createOcr: createTesseract,
+    gameRunning: async () => (process.platform === 'win32' && !process.env.DIA_SCREEN_FILE ? isDeadlockRunning() : null),
+  };
+}
+
+/** Prüfbild speichern (nur auf Knopfdruck): letztes Bild + Erkennungsergebnis im Nutzerordner */
+function saveScreenCheck() {
+  const sp = controller.screenProvider();
+  const r = sp?.lastRaster;
+  if (!sp || !r) { controller.jobs.screen = 'Noch kein Bild aufgenommen – läuft Deadlock mit sichtbarem HUD?'; return; }
+  const dir = path.join(app.getPath('userData'), 'erkennung');
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const bgra = Buffer.alloc(r.w * r.h * 4);
+  for (let i = 0; i < bgra.length; i += 4) { bgra[i] = r.data[i + 2]!; bgra[i + 1] = r.data[i + 1]!; bgra[i + 2] = r.data[i]!; bgra[i + 3] = 255; }
+  fs.writeFileSync(path.join(dir, `pruefbild-${stamp}.png`), nativeImage.createFromBitmap(bgra, { width: r.w, height: r.h }).toPNG());
+  const f = sp.lastFrame;
+  fs.writeFileSync(path.join(dir, `pruefbild-${stamp}.json`), JSON.stringify({
+    status: sp.status(), frame: f && { ...f, tab: [...f.tab.entries()], hud: f.hud && { ...f.hud, reading: { ...f.hud.reading } } },
+  }, null, 2));
+  controller.jobs.screen = `Prüfbild gespeichert: ${dir}`;
+  void shell.openPath(dir);
 }
 
 let overlay: BrowserWindow | null = null;
@@ -138,10 +188,10 @@ function push() {
   if (control && !control.isDestroyed()) control.webContents.send('control', { snap: controller.controlSnapshot(), vm, layout });
 }
 
-type SettingsPatch = Partial<Omit<AppSettings, 'overlay' | 'spectator' | 'hotkeys' | 'overwolf'>> & { overlay?: Partial<AppSettings['overlay']>; spectator?: Partial<AppSettings['spectator']>; hotkeys?: Partial<AppSettings['hotkeys']>; overwolf?: Partial<AppSettings['overwolf']> };
+type SettingsPatch = Partial<Omit<AppSettings, 'overlay' | 'spectator' | 'hotkeys' | 'overwolf' | 'screen'>> & { overlay?: Partial<AppSettings['overlay']>; spectator?: Partial<AppSettings['spectator']>; hotkeys?: Partial<AppSettings['hotkeys']>; overwolf?: Partial<AppSettings['overwolf']>; screen?: Partial<AppSettings['screen']> };
 
 type Action =
-  | { type: 'toggle-details' | 'toggle-edit' | 'toggle-visible' | 'open-control' | 'reset-position' | 'update-gamedata' | 'restart-source' | 'test-alert' }
+  | { type: 'toggle-details' | 'toggle-edit' | 'toggle-visible' | 'open-control' | 'reset-position' | 'update-gamedata' | 'restart-source' | 'test-alert' | 'screen-save' }
   | { type: 'overlay-height'; height: number }
   | { type: 'settings'; patch: SettingsPatch }
   | { type: 'manual'; patch: Record<string, unknown> }
@@ -164,7 +214,8 @@ function handle(a: Action) {
     case 'reset-position': s.overlay = { ...s.overlay, displayId: null, relX: null, relY: null }; persist(); layoutOverlay(); break;
     case 'overlay-height': contentHeight = a.height; layoutOverlay(); return;
     case 'settings': {
-      const sourceChanged = (a.patch.source && a.patch.source !== s.source) || a.patch.demoScenario || a.patch.spectator || a.patch.demoAutoBuy !== undefined || a.patch.accountOverride !== undefined;
+      const sourceChanged = (a.patch.source && a.patch.source !== s.source) || a.patch.demoScenario || a.patch.spectator || a.patch.demoAutoBuy !== undefined || a.patch.accountOverride !== undefined
+        || a.patch.screen?.enabled !== undefined || a.patch.screen?.intervalMs !== undefined;
       const keyChanged = a.patch.overwolf?.devKey !== undefined && a.patch.overwolf.devKey.trim() !== s.overwolf.devKey;
       controller.settings = {
         ...s, ...a.patch,
@@ -172,8 +223,11 @@ function handle(a: Action) {
         spectator: { ...s.spectator, ...(a.patch.spectator ?? {}) },
         hotkeys: { ...s.hotkeys, ...(a.patch.hotkeys ?? {}) },
         overwolf: { ...s.overwolf, ...(a.patch.overwolf ?? {}), devKey: (a.patch.overwolf?.devKey ?? s.overwolf.devKey).trim() },
+        screen: { ...s.screen, ...(a.patch.screen ?? {}) },
       };
       persist();
+      // Hero-Korrektur wirkt sofort, ohne die Erkennung neu zu starten
+      if (a.patch.screen?.heroOverride !== undefined) controller.screenProvider()?.setHeroOverride(a.patch.screen.heroOverride || null);
       if (keyChanged && owPackages) {
         // Neuer Entwicklerzugang wirkt erst nach einem Neustart
         spawn(process.execPath, process.argv.slice(1), { env: { ...process.env, OW_DEV_KEY: controller.settings.overwolf.devKey, DIA_RELAUNCHED: '1' }, detached: true, stdio: 'ignore' }).unref();
@@ -187,6 +241,7 @@ function handle(a: Action) {
       break;
     }
     case 'restart-source': controller.startSource(); break;
+    case 'screen-save': saveScreenCheck(); break;
     case 'manual': controller.updateManual(a.patch as never); break;
     case 'manual-new-match': controller.manual.newMatch(); break;
     case 'report': controller.reportProblem(a.enemyKey, a.kind); break;
@@ -227,6 +282,7 @@ app.whenReady().then(() => {
   const settings = loadSettings(settingsFile());
   if (process.argv.includes('--demo')) settings.source = 'demo';
   controller = new Controller(dataDir, app.getPath('userData'), settings, schedulePush);
+  initScreen();
   createOverlay();
   registerHotkeys();
   ipcMain.on('action', (_e, a: Action) => handle(a));
@@ -259,11 +315,19 @@ async function captureForVerification(dir: string) {
   if (process.env.DIA_CAPTURE_AUTO) {
     // Automatik-Modus ohne laufendes Spiel (Wartezustand) festhalten
     handle({ type: 'settings', patch: { source: 'auto' } });
-    await wait(2500);
+    // Mit Testbild (DIA_SCREEN_FILE): Texterkennung laden und einige Bilder auswerten lassen
+    await wait(process.env.DIA_SCREEN_FILE ? 9000 : 2500);
     control?.webContents.send('select-tab', 'connect');
     await wait(1200);
     await shot(control, 'control-connect-auto');
-    await shot(overlay, 'overlay-auto-waiting');
+    await shot(overlay, process.env.DIA_SCREEN_FILE ? 'overlay-screen' : 'overlay-auto-waiting');
+    if (process.env.DIA_SCREEN_FILE) {
+      handle({ type: 'toggle-details' });
+      await wait(1500);
+      await shot(overlay, 'overlay-screen-expanded');
+      handle({ type: 'toggle-details' });
+      if (process.env.DIA_SCREEN_ONLY) { app.quit(); return; }
+    }
   }
   if (process.env.DIA_FILL_MANUAL) {
     // Testeinträge für die Sichtprüfung der Schnelleingabe (keine echten Matchdaten)
