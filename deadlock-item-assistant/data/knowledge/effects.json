@@ -1,0 +1,354 @@
+{
+ "_doc": "Kuratierte Spezialeffekte je Item (Build 6701). Jeder Eintrag verweist auf eine Eigenschaft (prop) und/oder ein Muster im offiziellen Beschreibungstext (desc). Beim Laden wird gepr\u00fcft, ob prop/desc im aktuellen Datensatz noch passen; sonst gilt der Effekt als 'unbest\u00e4tigt' und Empfehlungen damit werden eingeschr\u00e4nkt. Einfache Werte (Resistenzen, Leben, Waffenschaden \u2026) werden automatisch aus den Eigenschaften abgeleitet und stehen hier nicht.",
+ "forBuild": 6701,
+ "items": {
+  "upgrade_toxic_bullets": [
+   {
+    "kind": "antiHeal",
+    "prop": "HealAmpReceivePenaltyPercent",
+    "delivery": "bullet",
+    "desc": "Healing Reduction",
+    "note": "baut sich \u00fcber Treffer auf"
+   },
+   {
+    "kind": "percentDamage",
+    "prop": "DotHealthPercent",
+    "delivery": "bullet"
+   }
+  ],
+  "upgrade_healbane": [
+   {
+    "kind": "antiHeal",
+    "prop": "HealAmpReceivePenaltyPercent",
+    "delivery": "spirit",
+    "desc": "Healing Reduction"
+   }
+  ],
+  "upgrade_rupture": [
+   {
+    "kind": "antiHeal",
+    "prop": "HealAmpReceivePenaltyPercent",
+    "delivery": "active",
+    "desc": "damage over time"
+   },
+   {
+    "kind": "percentDamage",
+    "prop": "DotHealthPercent",
+    "delivery": "active"
+   }
+  ],
+  "upgrade_inhibitor": [
+   {
+    "kind": "antiHeal",
+    "prop": "HealAmpReceivePenaltyPercent",
+    "delivery": "bullet",
+    "desc": "healing reduction"
+   },
+   {
+    "kind": "enemyDamageReduction",
+    "prop": "OutgoingDamagePenaltyPercent",
+    "delivery": "bullet",
+    "desc": "reduce the target's outgoing damage"
+   }
+  ],
+  "upgrade_banshee_slugs": [
+   {
+    "kind": "antiHeal",
+    "prop": "HealAmpReceivePenaltyPercent",
+    "delivery": "headshot",
+    "desc": "Healing Reduction"
+   }
+  ],
+  "upgrade_spirit_burn": [
+   {
+    "kind": "antiHeal",
+    "prop": "HealAmpReceivePenaltyPercent",
+    "delivery": "spirit",
+    "note": "nur nach hohem Spirit-Schaden in kurzer Zeit"
+   }
+  ],
+  "upgrade_unstoppable": [
+   {
+    "kind": "ccImmunity",
+    "desc": "immune to Stun, Silence, Sleep, Root, and Disarm",
+    "usableWhileStunned": false,
+    "note": "muss vor der Kontrolle aktiviert werden"
+   }
+  ],
+  "upgrade_auto_cleanse": [
+   {
+    "kind": "ccCleanse",
+    "desc": "automatically cleansed",
+    "usableWhileStunned": true,
+    "note": "l\u00f6st automatisch aus, auch unter Stun"
+   }
+  ],
+  "upgrade_reduce_debuff_duration": [
+   {
+    "kind": "ccCleanse",
+    "desc": "Purge all non-ultimate negative effects",
+    "usableWhileStunned": false,
+    "note": "nicht nutzbar unter Stun oder Schlaf"
+   }
+  ],
+  "upgrade_divine_barrier": [
+   {
+    "kind": "ccCleanse",
+    "desc": "Remove all non-stun debuffs",
+    "usableWhileStunned": false,
+    "strength": 0.5,
+    "note": "entfernt keine Stuns"
+   }
+  ],
+  "upgrade_vex_barrier": [
+   {
+    "kind": "ccBarrier",
+    "prop": "VexBarrierCombatBarrier",
+    "desc": "Stunned, Chained, Immobilized, Slept or Silenced"
+   }
+  ],
+  "upgrade_counterspell": [
+   {
+    "kind": "spellParry",
+    "desc": "protects you from the damage and effects of enemy abilities",
+    "note": "erfordert Timing"
+   }
+  ],
+  "upgrade_discord": [
+   {
+    "kind": "ccCleanse",
+    "desc": "Existing debuffs on the target are reduced",
+    "usableWhileStunned": false,
+    "strength": 0.4
+   }
+  ],
+  "upgrade_metal_skin": [
+   {
+    "kind": "bulletImmunity",
+    "desc": "immune to bullets",
+    "strength": 0.6,
+    "note": "kurz aktiv"
+   }
+  ],
+  "upgrade_deflecting_armor": [
+   {
+    "kind": "bulletImmunity",
+    "prop": "DeflectionPercent",
+    "desc": "deflect incoming bullets",
+    "strength": 0.5,
+    "note": "zuf\u00e4llige Abwehr, blockt auch On-Hit-Effekte"
+   }
+  ],
+  "upgrade_self_bubble": [
+   {
+    "kind": "invulnerable",
+    "desc": "untargetable and invincible",
+    "usableWhileStunned": false
+   }
+  ],
+  "upgrade_cheat_death": [
+   {
+    "kind": "deathPrevention",
+    "prop": "DeathImmunityDuration"
+   }
+  ],
+  "upgrade_spellbreaker": [
+   {
+    "kind": "spiritBurstReduction",
+    "prop": "SpiritDamageReductionProc"
+   }
+  ],
+  "upgrade_spirit_bubble": [
+   {
+    "kind": "spiritBurstReduction",
+    "prop": "CombatBarrier",
+    "desc": "significant Spirit Damage",
+    "strength": 0.6
+   }
+  ],
+  "upgrade_weapon_shielding": [
+   {
+    "kind": "bulletBurstReduction",
+    "prop": "CombatBarrier",
+    "desc": "significant Weapon Damage",
+    "strength": 0.6
+   }
+  ],
+  "upgrade_damage_recycler": [
+   {
+    "kind": "antiHealResist",
+    "desc": "Reduces the effect of enemy applied healing reduction"
+   }
+  ],
+  "upgrade_warp_stone": [
+   {
+    "kind": "escape",
+    "desc": "Teleport",
+    "strength": 0.6
+   }
+  ],
+  "upgrade_magic_carpet": [
+   {
+    "kind": "escape",
+    "desc": "immune to slows",
+    "strength": 0.7
+   }
+  ],
+  "upgrade_suppressor": [
+   {
+    "kind": "enemyFireRateSlow",
+    "prop": "FireRateSlow",
+    "delivery": "spirit"
+   }
+  ],
+  "upgrade_juggernaut": [
+   {
+    "kind": "enemyFireRateSlow",
+    "prop": "FireRateSlow",
+    "delivery": "when-shot"
+   }
+  ],
+  "upgrade_withering_whip": [
+   {
+    "kind": "enemyFireRateSlow",
+    "prop": "FireRateSlow",
+    "delivery": "active"
+   }
+  ],
+  "upgrade_bullet_armor_reduction_aura": [
+   {
+    "kind": "enemyFireRateSlow",
+    "prop": "FireRateSlow",
+    "delivery": "aura"
+   }
+  ],
+  "upgrade_return_fire": [
+   {
+    "kind": "damageReflect",
+    "prop": "BulletDamageReflectedPct",
+    "delivery": "active"
+   }
+  ],
+  "upgrade_spirit_sap": [
+   {
+    "kind": "enemySpiritReduction",
+    "prop": "TechPowerReduction",
+    "delivery": "active"
+   }
+  ],
+  "upgrade_focus_lens": [
+   {
+    "kind": "enemySpiritReduction",
+    "prop": "TechPowerReduction",
+    "delivery": "active"
+   },
+   {
+    "kind": "enemySilence",
+    "desc": "Silence",
+    "delivery": "active"
+   }
+  ],
+  "upgrade_spirit_snatch": [
+   {
+    "kind": "enemySpiritReduction",
+    "prop": "TechPowerReduction",
+    "delivery": "melee"
+   }
+  ],
+  "upgrade_proc_silence": [
+   {
+    "kind": "enemySpiritReduction",
+    "prop": "TechDamageReduction",
+    "delivery": "bullet",
+    "desc": "reduce the target's outgoing spirit damage"
+   },
+   {
+    "kind": "enemySilence",
+    "prop": "SilenceDuration",
+    "delivery": "bullet"
+   }
+  ],
+  "upgrade_glitch": [
+   {
+    "kind": "enemySilence",
+    "desc": "Silencing",
+    "delivery": "active"
+   },
+   {
+    "kind": "enemyDisarm",
+    "desc": "Disarming",
+    "delivery": "active"
+   },
+   {
+    "kind": "enemyItemBlock",
+    "desc": "preventing item usage",
+    "delivery": "active"
+   }
+  ],
+  "upgrade_targeted_silence": [
+   {
+    "kind": "enemySilence",
+    "desc": "Silences",
+    "delivery": "active"
+   }
+  ],
+  "upgrade_greater_withering_whip": [
+   {
+    "kind": "enemyDisarm",
+    "desc": "Disarms",
+    "delivery": "active"
+   }
+  ],
+  "upgrade_phantom_strike": [
+   {
+    "kind": "enemyDisarm",
+    "desc": "Disarm",
+    "delivery": "active"
+   }
+  ],
+  "upgrade_target_stun": [
+   {
+    "kind": "enemyStun",
+    "prop": "StunDuration",
+    "delivery": "active"
+   }
+  ],
+  "upgrade_ultimate_burst": [
+   {
+    "kind": "enemyStun",
+    "prop": "StunDuration",
+    "delivery": "ultimate"
+   }
+  ],
+  "upgrade_crushing_fists": [
+   {
+    "kind": "enemyStun",
+    "prop": "StunDuration",
+    "delivery": "melee"
+   }
+  ],
+  "upgrade_aprounds": [
+   {
+    "kind": "resistIgnore",
+    "prop": "ProcChance",
+    "delivery": "bullet",
+    "desc": "ignoring their Bullet Resistance"
+   }
+  ],
+  "upgrade_magic_shock": [
+   {
+    "kind": "resistIgnore",
+    "desc": "Ignores Spirit Resistance",
+    "delivery": "spirit",
+    "strength": 0.4
+   }
+  ],
+  "upgrade_siphon_bullets": [
+   {
+    "kind": "percentDamage",
+    "prop": "HealthStealPctHero",
+    "delivery": "bullet"
+   }
+  ]
+ }
+}

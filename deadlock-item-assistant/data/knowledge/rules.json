@@ -1,0 +1,11 @@
+{
+  "_doc": "Inventar- und Wirtschaftsregeln. 'verified' = aus Spieldateien/Lokalisierung Build 6701 belegt, 'reported' = aus Sekundärquellen (Web, Sept. 2026), 'assumed' = nicht belegt, im UI als Annahme markiert.",
+  "forBuild": 6701,
+  "sellRefundFraction": { "value": 0.5, "status": "verified", "source": "citadel_main_english: Citadel_Shop_Destroy_Item_Confirm '(half the purchase price)'" },
+  "recentPurchaseFullRefund": { "value": true, "status": "reported", "source": "Sekundärquellen: voller Erstattungsbetrag direkt nach dem Kauf im Shopbereich; wird NICHT in Berechnungen verwendet" },
+  "componentDiscount": { "value": "full-component-cost", "status": "reported", "source": "steamdb.com/deadlock/mechanics/shop-tiers-and-investments: Upgrade kostet nur die Differenz, Komponente wird verbraucht und belegt keinen weiteren Slot" },
+  "baseSlots": { "value": 9, "status": "reported", "source": "Sekundärquellen 2026 ('nine slots by default')" },
+  "extraSlotsMax": { "value": 3, "status": "verified", "source": "citadel_main_english: ModIconTooltip_UnlockSlot02..04 – durch zerstörte gegnerische Walker" },
+  "columnLockedSlots": { "value": false, "status": "reported", "source": "Lokalisierung kennt nur 'Item Slots Full' + 'Active Slots Full'; spaltengebundene Slots sind nicht mehr belegt" },
+  "activeSlots": { "value": 4, "status": "assumed", "source": "Lokalisierung belegt eine eigene Grenze ('Active Slots Full'), die Anzahl nicht" }
+}

@@ -1,0 +1,26 @@
+{
+  "build": 6701,
+  "versionDate": "Sep 25 2026 11:10:43",
+  "source": "github.com/SteamDatabase/GameTracking-Deadlock (Spiegel der Spieldateien)",
+  "sourceFiles": [
+    "scripts/abilities.vdata",
+    "scripts/heroes.vdata",
+    "scripts/generic_data.vdata",
+    "steam.inf",
+    "localization/citadel_gc_mod_names_english",
+    "localization/citadel_mods_english",
+    "localization/citadel_gc_hero_names_english",
+    "localization/citadel_heroes_english"
+  ],
+  "extractedAt": "2026-09-27T09:25:25.148Z",
+  "itemPricePerTier": [
+    0,
+    800,
+    1600,
+    3200,
+    6400,
+    9999
+  ],
+  "itemCount": 156,
+  "heroCount": 38
+}
