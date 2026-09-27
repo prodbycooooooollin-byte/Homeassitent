@@ -8,7 +8,9 @@ import { buildView } from './rooms/view.js';
 import { attachSocketHandlers } from './net/socket-handlers.js';
 import { TikTokAuthService } from './auth/tiktok-auth-service.js';
 import { RateLimiter } from './net/rate-limit.js';
-import { privacyPage, termsPage } from './legal.js';
+import { homePage, privacyPage, termsPage } from './legal.js';
+
+const DOWNLOAD_URL = 'https://github.com/prodbycooooooollin-byte/Homeassitent/releases/tag/liked-latest';
 
 const LEGAL_UPDATED = '27.09.2026';
 
@@ -60,6 +62,11 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
       if (verify && (req.method === 'GET' || req.method === 'HEAD')) {
         res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(req.method === 'HEAD' ? undefined : verify.content);
+        return;
+      }
+      if (url.pathname === '/' || url.pathname === '/index.html') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" });
+        res.end(homePage(config.operator, DOWNLOAD_URL));
         return;
       }
       if (url.pathname === '/privacy' || url.pathname === '/terms') {

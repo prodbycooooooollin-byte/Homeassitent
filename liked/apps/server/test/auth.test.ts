@@ -234,6 +234,9 @@ describe('Rechtstexte', () => {
     expect(privacy).toContain('Datenschutzerklärung');
     expect(privacy).toContain('Privacy Policy');
     expect(privacy).toContain('Max &#60;Muster&#62;');
+    const home = await fetch(`${s.url}/`).then((r) => r.text());
+    expect(home).toContain('Aus wessen Likes stammt dieser Clip?');
+    expect(home).toContain('/privacy');
     const terms = await fetch(`${s.url}/terms`);
     expect(terms.status).toBe(200);
     expect(await terms.text()).toContain('Terms of Service');

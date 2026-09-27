@@ -87,3 +87,22 @@ export function termsPage(op: Operator, updated: string): string {
 <li>Privacy: see the <a href="/privacy">Privacy Policy</a>.</li></ol>`
   );
 }
+
+/** Offizielle Website der App (für die TikTok-App-Einreichung und neugierige Mitspieler). */
+export function homePage(op: Operator, downloadUrl: string): string {
+  return layout(
+    'Aus wessen Likes stammt dieser Clip?',
+    `<h1 style="font-size:3em;margin-bottom:0">LIKED <span style="color:#22d3ee">♥</span></h1>
+<p style="font-size:1.3em;margin-top:.3em">Aus wessen Likes stammt dieser Clip?</p>
+<p>LIKED ist ein Multiplayer-Partyspiel für Windows. 3 bis 8 Freunde verbinden ihren TikTok-Account, das Spiel mischt Clips aus den gelikten Videos aller Spieler, und alle raten gleichzeitig am eigenen PC, von wem der Clip stammt. Schnelle richtige Tipps bringen mehr Punkte, Serien geben Bonus.</p>
+<h2>So funktioniert's</h2><ol>
+<li>LIKED für Windows installieren.</li>
+<li>TikTok verbinden – die Anmeldung erfolgt direkt bei TikTok; LIKED sieht dein Passwort nie.</li>
+<li>Likes synchronisieren (über die offizielle TikTok Data Portability API).</li>
+<li>Raum erstellen, Code an Freunde schicken, gemeinsam spielen.</li></ol>
+<h2>Download</h2><p><a href="${esc(downloadUrl)}">LIKED für Windows herunterladen</a></p>
+<h2>Daten & Rechtliches</h2><p>Aus deinem TikTok-Archiv wird nur die Like-Liste gelesen. Details: <a href="/privacy">Datenschutzerklärung</a> · <a href="/terms">Nutzungsbedingungen</a></p>
+${operatorBlock(op, 'de')}
+<hr><p class="muted">LIKED is a multiplayer party game for Windows: friends connect their TikTok accounts, the game mixes clips from everyone's liked videos and players guess whose likes each clip came from. Login happens on TikTok; only the Like List is used. <a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a>. LIKED is not affiliated with TikTok.</p>`
+  );
+}
