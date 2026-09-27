@@ -21,7 +21,7 @@
     "productName": "Deadlock Item-Assistent",
     "directories": {
       "output": "release",
-      "buildResources": "build"
+      "buildResources": "assets"
     },
     "files": [
       "dist/**",
@@ -42,7 +42,7 @@
         "nsis",
         "portable"
       ],
-      "icon": "build/icon.ico"
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "artifactName": "Deadlock-Item-Assistent-Setup-${version}.${ext}",
