@@ -80,6 +80,7 @@ const VIEWS: Record<string, () => string> = {
     const heroes = last!.snap.heroes;
     return `<h1>Verbindung</h1><p class="lead">Die App liest dein Deadlock-HUD direkt vom Bildschirm – lokal, ohne Anmeldung, ohne Overwolf. Starte einfach ein Match: Hero, Souls, Items und die Gegner werden automatisch erkannt.</p>
     <div data-live="banner"></div>
+    ${s.source !== 'auto' ? `<div class="note bad" style="display:flex;align-items:center;gap:14px;margin-bottom:14px"><span>Gerade aktiv: <b>${s.source === 'demo' ? 'Demo (Beispieldaten, kein echtes Match)' : s.source === 'manual' ? 'Schnelleingabe' : 'Zuschauer-Stream'}</b>. Für dein echtes Match die Automatik einschalten.</span><button class="b primary" data-source="auto">Automatik einschalten</button></div>` : ''}
     <div class="grid">
       <div class="card"><h2>Automatik</h2><div class="checks" data-live="checks"></div></div>
       <div class="card"><h2>Bildschirmerkennung</h2>

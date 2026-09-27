@@ -280,7 +280,9 @@ function samplePerf() {
 
 app.whenReady().then(() => {
   const settings = loadSettings(settingsFile());
+  // Demo ist nur zum Ausprobieren: Nach einem Neustart läuft immer wieder die Automatik
   if (process.argv.includes('--demo')) settings.source = 'demo';
+  else if (settings.source === 'demo') settings.source = 'auto';
   controller = new Controller(dataDir, app.getPath('userData'), settings, schedulePush);
   initScreen();
   createOverlay();
