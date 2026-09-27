@@ -234,7 +234,8 @@ export function Dialog({ title, onClose, children, footer, wide, focusKey }: { t
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     const el = ref.current!;
-    const first = (el.querySelector('[data-autofocus]') as HTMLElement | null) ?? (el.querySelector(FOCUSABLE) as HTMLElement | null);
+    const first =
+      (el.querySelector('[data-autofocus], input:not([disabled])') as HTMLElement | null) ?? (el.querySelector(FOCUSABLE) as HTMLElement | null);
     first?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {

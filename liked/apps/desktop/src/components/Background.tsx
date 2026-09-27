@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Ruhiger Hintergrund mit wenigen, langsamen Punkten (Canvas). Überlagert nie das Video, pausiert bei
+ * Spielhintergrund: weiche Farbflächen und schwebende Lichtpunkte (Canvas). Überlagert nie das Video, pausiert bei
  * verstecktem Fenster und entfällt bei reduzierter Bewegung oder niedriger Qualität.
  */
 export function Background({ mood, enabled }: { mood: 'menu' | 'lobby' | 'round' | 'reveal' | 'finale'; enabled: boolean }) {
@@ -26,14 +26,14 @@ export function Background({ mood, enabled }: { mood: 'menu' | 'lobby' | 'round'
     };
     resize();
     window.addEventListener('resize', resize);
-    const parts = Array.from({ length: 22 }, () => ({
+    const parts = Array.from({ length: 40 }, () => ({
       x: Math.random(),
       y: Math.random(),
       r: 0.8 + Math.random() * 1.6,
       vx: (Math.random() - 0.5) * 0.00012,
       vy: -0.00004 - Math.random() * 0.00012,
-      hue: Math.random() < 0.6 ? 275 : 188,
-      a: 0.08 + Math.random() * 0.2
+      hue: [270, 330, 188][Math.floor(Math.random() * 3)]!,
+      a: 0.18 + Math.random() * 0.4
     }));
     let last = performance.now();
     const frame = (now: number) => {
@@ -76,8 +76,14 @@ export function Background({ mood, enabled }: { mood: 'menu' | 'lobby' | 'round'
   }, [enabled]);
 
   return (
-    <div className={`bg bg-${mood}`} aria-hidden="true">
+    <div className={`bg bg-${mood} ${enabled ? 'animated' : ''}`} aria-hidden="true">
+      <div className="bg-aurora">
+        <span className="blob b1" />
+        <span className="blob b2" />
+        <span className="blob b3" />
+      </div>
       {enabled && <canvas ref={ref} className="bg-canvas" />}
+      <div className="bg-vignette" />
     </div>
   );
 }

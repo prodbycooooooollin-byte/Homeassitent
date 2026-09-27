@@ -1,93 +1,119 @@
 /*
- * Zentrale Design-Tokens. Ruhiger Grundstil: dunkler Hintergrund mit violetten und
- * türkisen Akzenten, wenig Leuchteffekte. Das helle Erscheinungsbild überschreibt
- * nur Farben – Abstände, Radien und Schriften bleiben gleich.
+ * Design-Tokens im Partyspiel-Stil: tiefes Indigo, kräftiges Pink und Violett als Hauptfarben,
+ * Türkis und Gold als Akzente. Das helle Erscheinungsbild überschreibt nur Farben.
  */
 :root,
 :root[data-theme='dark'] {
-  --bg-0: #0e0f15;
-  --bg-1: #14151d;
-  --surface: #181a23;
-  --surface-2: #20222e;
-  --surface-3: #292c3a;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.16);
+  --bg-0: #0c0722;
+  --bg-1: #140b33;
+  --surface: #1b1143;
+  --surface-2: #251857;
+  --surface-3: #33236f;
+  --glass: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.2);
 
-  --text-0: #f3f3f8;
-  --text-1: #cfd0dc;
-  /* Sekundärtext: Kontrast ≥ 4.5:1 auf --surface */
-  --text-2: #a3a5b8;
+  --text-0: #fbf8ff;
+  --text-1: #ddd5f7;
+  --text-2: #aea3d6;
 
-  --violet: #9b6cf6;
-  --violet-strong: #7c4ddf;
-  --violet-soft: rgba(155, 108, 246, 0.14);
-  --violet-line: rgba(155, 108, 246, 0.45);
+  --pink: #ff4d8d;
+  --pink-deep: #c81e63;
+  --violet: #a974ff;
+  --violet-strong: #7c3aed;
+  --violet-deep: #5321b5;
+  --violet-soft: rgba(169, 116, 255, 0.16);
+  --violet-line: rgba(169, 116, 255, 0.55);
   --on-violet: #ffffff;
-  --cyan: #3cc8dc;
-  --cyan-soft: rgba(60, 200, 220, 0.13);
-  --cyan-line: rgba(60, 200, 220, 0.5);
-  --success: #4ed6a0;
-  --success-soft: rgba(78, 214, 160, 0.13);
-  --danger: #f58a8a;
-  --danger-soft: rgba(245, 138, 138, 0.13);
-  --warn: #f2c14e;
-  --warn-soft: rgba(242, 193, 78, 0.13);
-  --gold: #e3c06c;
+  --cyan: #34e3ef;
+  --cyan-deep: #0e8fa0;
+  --cyan-soft: rgba(52, 227, 239, 0.13);
+  --cyan-line: rgba(52, 227, 239, 0.55);
+  --success: #45e69a;
+  --success-deep: #13985a;
+  --success-soft: rgba(69, 230, 154, 0.14);
+  --danger: #ff6283;
+  --danger-deep: #b0183d;
+  --danger-soft: rgba(255, 98, 131, 0.14);
+  --warn: #ffbd4a;
+  --warn-soft: rgba(255, 189, 74, 0.14);
+  --gold: #ffd257;
+  --silver: #cfd6ea;
+  --bronze: #e39a5c;
 
-  --focus: #7fe3f1;
-  --backdrop: rgba(6, 6, 10, 0.66);
+  --grad-hot: linear-gradient(135deg, #ff4d8d 0%, #c04dff 55%, #7c3aed 100%);
+  --grad-logo: linear-gradient(100deg, #ff5f98 0%, #c77dff 45%, #4ee8f2 100%);
+  --grad-cyan: linear-gradient(135deg, #4ef0f7, #1bb6d6);
+
+  --focus: #7ff3fa;
+  --backdrop: rgba(6, 3, 18, 0.72);
   --clip-bg: #000;
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 18px 50px rgba(0, 0, 0, 0.45);
-  --bg-grad-a: rgba(124, 77, 223, 0.16);
-  --bg-grad-b: rgba(60, 200, 220, 0.07);
+  --shadow-1: 0 8px 24px rgba(5, 2, 20, 0.35);
+  --shadow-2: 0 24px 60px rgba(5, 2, 20, 0.6);
+  --inner-hi: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --blob-a: #7c3aed;
+  --blob-b: #ff4d8d;
+  --blob-c: #0ea5b7;
+  --blob-opacity: 0.38;
   color-scheme: dark;
 }
 
 :root[data-theme='light'] {
-  --bg-0: #f3f3f8;
-  --bg-1: #ebebf3;
+  --bg-0: #f2ecff;
+  --bg-1: #e9e0ff;
   --surface: #ffffff;
-  --surface-2: #f4f4f9;
-  --surface-3: #e7e7f0;
-  --line: rgba(20, 20, 40, 0.1);
-  --line-strong: rgba(20, 20, 40, 0.2);
+  --surface-2: #f4efff;
+  --surface-3: #e6dbff;
+  --glass: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.86));
+  --line: rgba(60, 20, 120, 0.12);
+  --line-strong: rgba(60, 20, 120, 0.24);
 
-  --text-0: #171824;
-  --text-1: #34364a;
-  --text-2: #5c5f75;
+  --text-0: #1b1036;
+  --text-1: #3b2f63;
+  --text-2: #5f5388;
 
-  --violet: #6d3fd6;
-  --violet-strong: #5a2fc0;
-  --violet-soft: rgba(109, 63, 214, 0.09);
-  --violet-line: rgba(109, 63, 214, 0.4);
-  --on-violet: #ffffff;
-  --cyan: #0b7f93;
-  --cyan-soft: rgba(11, 127, 147, 0.09);
-  --cyan-line: rgba(11, 127, 147, 0.45);
-  --success: #137a52;
-  --success-soft: rgba(19, 122, 82, 0.09);
-  --danger: #b42323;
-  --danger-soft: rgba(180, 35, 35, 0.08);
-  --warn: #8a5a00;
-  --warn-soft: rgba(200, 140, 0, 0.12);
-  --gold: #a07a1a;
+  --pink: #e0186a;
+  --pink-deep: #a3104c;
+  --violet: #6d28d9;
+  --violet-strong: #6d28d9;
+  --violet-deep: #4c1a9e;
+  --violet-soft: rgba(109, 40, 217, 0.09);
+  --violet-line: rgba(109, 40, 217, 0.45);
+  --cyan: #0a8aa5;
+  --cyan-deep: #066579;
+  --cyan-soft: rgba(10, 138, 165, 0.1);
+  --cyan-line: rgba(10, 138, 165, 0.45);
+  --success: #0e8a52;
+  --success-deep: #096b3f;
+  --success-soft: rgba(14, 138, 82, 0.1);
+  --danger: #c81e45;
+  --danger-deep: #951232;
+  --danger-soft: rgba(200, 30, 69, 0.08);
+  --warn: #9a5b00;
+  --warn-soft: rgba(200, 130, 0, 0.12);
+  --gold: #b07d0a;
+  --silver: #6b7390;
+  --bronze: #a8602a;
 
-  --focus: #0b7f93;
-  --backdrop: rgba(30, 30, 50, 0.4);
-  --clip-bg: #0e0f15;
-  --shadow-1: 0 1px 2px rgba(20, 20, 40, 0.08);
-  --shadow-2: 0 18px 50px rgba(20, 20, 40, 0.18);
-  --bg-grad-a: rgba(109, 63, 214, 0.08);
-  --bg-grad-b: rgba(11, 127, 147, 0.05);
+  --grad-logo: linear-gradient(100deg, #e0186a 0%, #7c3aed 50%, #0a8aa5 100%);
+  --focus: #0a8aa5;
+  --backdrop: rgba(40, 20, 80, 0.4);
+  --clip-bg: #140b33;
+  --shadow-1: 0 8px 22px rgba(60, 20, 120, 0.1);
+  --shadow-2: 0 24px 60px rgba(60, 20, 120, 0.22);
+  --inner-hi: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --blob-a: #b794ff;
+  --blob-b: #ff9cc2;
+  --blob-c: #8ee7f2;
+  --blob-opacity: 0.45;
   color-scheme: light;
 }
 
 :root {
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 22px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
   --r-pill: 999px;
 
   --s-1: 4px;
@@ -104,14 +130,13 @@
   --font-mono: 'Cascadia Mono', Consolas, monospace;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --t-hover: 120ms;
-  --t-page: 300ms;
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-hover: 140ms;
 
-  /* Schriftgrößen skalieren moderat zwischen 1280 px und 2560 px Breite. */
   --fs-xs: clamp(12px, 0.25vw + 9px, 14px);
   --fs-sm: clamp(13px, 0.3vw + 9.5px, 15px);
   --fs-md: clamp(14px, 0.4vw + 10px, 17px);
   --fs-lg: clamp(17px, 0.55vw + 10px, 22px);
-  --fs-xl: clamp(22px, 0.9vw + 11px, 32px);
-  --fs-xxl: clamp(30px, 1.6vw + 10px, 48px);
+  --fs-xl: clamp(22px, 1vw + 10px, 34px);
+  --fs-xxl: clamp(32px, 2vw + 8px, 56px);
 }

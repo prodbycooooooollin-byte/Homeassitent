@@ -22,6 +22,7 @@ export const de = {
     on: 'An',
     off: 'Aus',
     edit: 'Bearbeiten',
+    done: 'Fertig',
     save: 'Speichern',
     dismiss: 'Ausblenden',
     learnMore: 'Mehr erfahren',

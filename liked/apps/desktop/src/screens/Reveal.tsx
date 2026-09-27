@@ -55,7 +55,10 @@ export function RevealScreen({ view }: { view: RoomView }) {
           ) : (
             <motion.div key="owner" className="reveal-owner" initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.4, rotate: -8 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 18 }}>
               <p className="muted">{t.reveal.itWas}</p>
-              <Avatar avatar={owner?.avatar ?? 'ghost'} size={120} ring="violet" label={t.avatarName(owner?.avatar ?? 'ghost')} />
+              <div className="reveal-spot">
+                <span className="reveal-rays" aria-hidden="true" />
+                <Avatar avatar={owner?.avatar ?? 'ghost'} size={132} ring="violet" label={t.avatarName(owner?.avatar ?? 'ghost')} />
+              </div>
               <h2 className="reveal-name">{owner?.name ?? '?'}</h2>
               {owner?.simulated && <SimBadge />}
             </motion.div>

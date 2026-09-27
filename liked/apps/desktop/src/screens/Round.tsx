@@ -168,7 +168,7 @@ export function MiniStandings({ view, highlight }: { view: RoomView; highlight?:
         const p = byId.get(s.playerId);
         return (
           <motion.li key={s.playerId} layout transition={{ type: 'spring', stiffness: 300, damping: 30 }} className={s.playerId === view.youId ? 'me' : ''}>
-            <span className="place">{s.place}</span>
+            <span className={`place p${s.place}`}>{s.place}</span>
             <Avatar avatar={p?.avatar ?? 'ghost'} size={30} />
             <span className="nm">
               {p?.name ?? '?'}

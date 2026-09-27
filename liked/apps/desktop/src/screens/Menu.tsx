@@ -5,7 +5,7 @@ import { t } from '../i18n/de';
 import { api } from '../lib/api';
 import { createRoom, joinRoom, startSoloDemo } from '../lib/net';
 import { get, set, toast, useStore } from '../state/store';
-import { Avatar, Button, Icon, Panel, useSavedFlash } from '../components/ui';
+import { Avatar, Button, Dialog, Icon, useSavedFlash } from '../components/ui';
 import { TikTokChip } from './TikTokPanel';
 
 async function saveProfile(patch: { name?: string; avatar?: string }) {
@@ -37,6 +37,12 @@ export function ProfileEditor({ compact, autoFocus }: { compact?: boolean; autoF
       flash();
     }
   };
+  // Gültige Namen auch ohne Verlassen des Feldes kurz nach dem Tippen speichern.
+  useEffect(() => {
+    if (err) return;
+    const h = window.setTimeout(() => void commitName(), 500);
+    return () => window.clearTimeout(h);
+  }, [name]);
   return (
     <div className={`profile-editor ${compact ? 'compact' : ''}`}>
       <label className="field">
@@ -50,7 +56,7 @@ export function ProfileEditor({ compact, autoFocus }: { compact?: boolean; autoF
           placeholder={t.profile.namePlaceholder}
           autoFocus={autoFocus}
           onChange={(e) => setName(e.target.value)}
-          onBlur={() => void commitName()}
+          onBlur={() => name.length > 0 && void commitName()}
           onKeyDown={(e) => e.key === 'Enter' && void commitName()}
           aria-invalid={!!showErr}
           aria-describedby="name-msg"
@@ -100,33 +106,75 @@ function hasValidName(): boolean {
   return !nameError(get().settings?.profile.name ?? '');
 }
 
-function ProfileCard() {
+/** Spielerplakette oben rechts – Klick öffnet die Profilbearbeitung. */
+function PlayerBadge() {
   const settings = useStore((s) => s.settings)!;
-  const [editing, setEditing] = useState(!settings.profile.name);
+  const hasName = !nameError(settings.profile.name);
+  const [editing, setEditing] = useState(!hasName);
   return (
-    <Panel
-      className="profile-card"
-      title={t.profile.title}
-      actions={
-        settings.profile.name ? (
-          <Button size="sm" variant="quiet" icon={editing ? 'check' : 'edit'} onClick={() => setEditing(!editing)} aria-expanded={editing}>
-            {editing ? t.common.close : t.common.edit}
-          </Button>
-        ) : null
-      }
-    >
-      {editing ? (
-        <ProfileEditor compact autoFocus={!settings.profile.name} />
-      ) : (
-        <div className="profile-preview">
-          <Avatar avatar={settings.profile.avatar} size={52} label={t.avatarName(settings.profile.avatar)} />
-          <div>
-            <strong>{settings.profile.name}</strong>
-            <small>{t.profile.hint}</small>
-          </div>
-        </div>
+    <>
+      <button className="player-badge" onClick={() => setEditing(true)} aria-label={`${t.profile.title}: ${t.common.edit}`}>
+        <Avatar avatar={settings.profile.avatar} size={44} label={t.avatarName(settings.profile.avatar)} />
+        <span className="player-badge-text">
+          <small>{t.profile.title}</small>
+          <strong>{hasName ? settings.profile.name : t.profile.noName}</strong>
+        </span>
+        <Icon name="edit" size={16} className="player-badge-edit" />
+      </button>
+      {editing && (
+        <Dialog
+          title={t.profile.title}
+          onClose={() => setEditing(false)}
+          footer={
+            <>
+              <span className="spacer" />
+              <Button variant="primary" icon="check" onClick={() => setEditing(false)}>
+                {t.common.done}
+              </Button>
+            </>
+          }
+        >
+          <ProfileEditor autoFocus={!hasName} />
+        </Dialog>
       )}
-    </Panel>
+    </>
+  );
+}
+
+/** Dekorative Szene rechts auf dem Titelbildschirm (rein grafisch). */
+function TitleShowcase() {
+  return (
+    <div className="showcase" aria-hidden="true">
+      <div className="sc-phone">
+        <div className="sc-screen">
+          <span className="sc-emoji">🐈</span>
+          <span className="sc-progress" />
+        </div>
+        <span className="sc-heart h1">
+          <Icon name="heart" size={22} />
+        </span>
+        <span className="sc-heart h2">
+          <Icon name="heart" size={16} />
+        </span>
+        <span className="sc-heart h3">
+          <Icon name="heart" size={28} />
+        </span>
+      </div>
+      <div className="sc-guess g1">
+        <Avatar avatar="owl" size={36} />
+        <span>Mila?</span>
+      </div>
+      <div className="sc-guess g2 picked">
+        <Avatar avatar="frog" size={36} />
+        <span>Jonas!</span>
+        <Icon name="check" size={16} />
+      </div>
+      <div className="sc-guess g3">
+        <Avatar avatar="cat" size={36} />
+        <span>Lea?</span>
+      </div>
+      <div className="sc-points">+1.000</div>
+    </div>
   );
 }
 
@@ -138,65 +186,69 @@ export function MainMenu() {
   };
   return (
     <div className="screen home-screen">
-      <div className="home-wrap">
-        <motion.header className="home-head" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-          <h1 className="logo" aria-label="LIKED">
-            <span className="logo-text">LIKED</span>
-            <Icon name="heart" size={34} className="logo-heart" />
-          </h1>
-          <p className="tagline">{t.tagline}</p>
-          <p className="players-line">
-            <Icon name="users" size={16} /> {t.menu.players}
-          </p>
-        </motion.header>
+      <header className="home-topbar">
+        <span className="players-line">
+          <Icon name="users" size={16} /> {t.menu.players}
+        </span>
+        <div className="home-topbar-right">
+          <TikTokChip />
+          <PlayerBadge />
+        </div>
+      </header>
 
-        <div className="home-grid">
-          <main className="home-main">
-            <div className="action-cards">
-              <button className="action-card primary" onClick={() => !needName() && set({ screen: 'create' })}>
-                <Icon name="sparkle" size={26} />
-                <span className="action-text">
-                  <strong>{t.menu.create}</strong>
-                  <small>{t.menu.createHint}</small>
-                </span>
-              </button>
-              <button className="action-card" onClick={() => !needName() && set({ screen: 'join' })}>
-                <Icon name="users" size={26} />
-                <span className="action-text">
-                  <strong>{t.menu.join}</strong>
-                  <small>{t.menu.joinHint}</small>
-                </span>
-              </button>
-            </div>
-            <button className="solo-card" onClick={() => startSoloDemo()}>
-              <Icon name="play" size={22} />
-              <span className="action-text">
+      <div className="title-layout">
+        <main className="title-main">
+          <motion.div className="title-hero" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+            <h1 className="logo" aria-label="LIKED">
+              <span className="logo-text">LIKED</span>
+              <Icon name="heart" size={46} className="logo-heart" />
+            </h1>
+            <p className="tagline">{t.tagline}</p>
+          </motion.div>
+
+          <nav className="main-menu" aria-label="Hauptmenü">
+            <button className="menu-btn menu-primary" onClick={() => !needName() && set({ screen: 'create' })}>
+              <Icon name="sparkle" size={28} />
+              <span className="menu-btn-text">
+                <strong>{t.menu.create}</strong>
+                <small>{t.menu.createHint}</small>
+              </span>
+              <Icon name="arrowRight" size={22} className="menu-arrow" />
+            </button>
+            <button className="menu-btn menu-secondary" onClick={() => !needName() && set({ screen: 'join' })}>
+              <Icon name="users" size={28} />
+              <span className="menu-btn-text">
+                <strong>{t.menu.join}</strong>
+                <small>{t.menu.joinHint}</small>
+              </span>
+              <Icon name="arrowRight" size={22} className="menu-arrow" />
+            </button>
+            <button className="menu-btn menu-tertiary" onClick={() => startSoloDemo()}>
+              <Icon name="play" size={28} />
+              <span className="menu-btn-text">
                 <strong>{t.menu.solo}</strong>
                 <small>{t.menu.soloHint}</small>
               </span>
-              <Icon name="arrowRight" size={20} className="solo-arrow" />
+              <Icon name="arrowRight" size={22} className="menu-arrow" />
             </button>
-            <nav className="home-links" aria-label="Weitere">
-              <Button variant="quiet" icon="book" onClick={() => set({ screen: 'rules', returnTo: 'menu' })}>
-                {t.menu.rules}
-              </Button>
-              <Button variant="quiet" icon="eye" onClick={() => set({ screen: 'intro' })}>
-                {t.menu.howTo}
-              </Button>
-              <Button variant="quiet" icon="gear" onClick={() => set({ screen: 'settings', settingsTab: 'profile' })}>
-                {t.menu.settings}
-              </Button>
-              <Button variant="quiet" icon="logout" onClick={() => api.app.quit()}>
-                {t.menu.quit}
-              </Button>
-            </nav>
-          </main>
+          </nav>
 
-          <aside className="home-side">
-            <ProfileCard />
-            <TikTokChip />
-          </aside>
-        </div>
+          <nav className="home-links" aria-label="Weitere">
+            <Button variant="quiet" icon="book" onClick={() => set({ screen: 'rules', returnTo: 'menu' })}>
+              {t.menu.rules}
+            </Button>
+            <Button variant="quiet" icon="eye" onClick={() => set({ screen: 'intro' })}>
+              {t.menu.howTo}
+            </Button>
+            <Button variant="quiet" icon="gear" onClick={() => set({ screen: 'settings', settingsTab: 'profile' })}>
+              {t.menu.settings}
+            </Button>
+            <Button variant="quiet" icon="logout" onClick={() => api.app.quit()}>
+              {t.menu.quit}
+            </Button>
+          </nav>
+        </main>
+        <TitleShowcase />
       </div>
     </div>
   );

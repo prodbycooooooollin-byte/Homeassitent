@@ -111,7 +111,7 @@ export function Lobby({ view }: { view: RoomView }) {
             <h3 id="players-h">{t.lobby.players(view.players.length, MAX_PLAYERS)}</h3>
             {!view.solo && <span className="muted">{needMore > 0 ? t.lobby.blockers.too_few_players(active.length, MIN_PLAYERS) : t.lobby.capacity(MAX_PLAYERS)}</span>}
           </div>
-          <div className={`player-grid n${Math.min(view.players.length + (view.solo || free === 0 ? 0 : 1), 9)}`}>
+          <div className={`player-grid ${view.solo ? 'solo' : ''}`}>
             <AnimatePresence initial={false}>
               {view.players.map((p) => (
                 <motion.div
@@ -123,7 +123,7 @@ export function Lobby({ view }: { view: RoomView }) {
                   exit={{ opacity: 0, scale: 0.94 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Avatar avatar={p.avatar} size={48} label={t.avatarName(p.avatar)} />
+                  <Avatar avatar={p.avatar} size={64} label={t.avatarName(p.avatar)} ring={p.ready ? 'success' : undefined} />
                   <div className="player-info">
                     <strong className="player-name">
                       {p.name}
@@ -163,6 +163,9 @@ export function Lobby({ view }: { view: RoomView }) {
             </AnimatePresence>
             {!view.solo && free > 0 && (
               <div className="invite-card">
+                <span className="slot-plus" aria-hidden="true">
+                  <Icon name="users" size={22} />
+                </span>
                 <strong>{needMore > 0 ? t.lobby.inviteNeed(needMore) : t.lobby.inviteMore(free)}</strong>
                 <span className="muted">
                   {t.lobby.code}: <b className="mono">{view.code}</b>
@@ -172,7 +175,12 @@ export function Lobby({ view }: { view: RoomView }) {
                 </Button>
               </div>
             )}
-            {!view.solo && free === 0 && <div className="invite-card full">{t.lobby.full}</div>}
+            {!view.solo &&
+              Array.from({ length: Math.max(0, free - 1) }, (_, i) => (
+                <div key={`slot${i}`} className="empty-slot" aria-hidden="true">
+                  <span>{view.players.length + i + 2}</span>
+                </div>
+              ))}
           </div>
 
           <div className="reactions-bar" role="group" aria-label={t.lobby.reactions}>
