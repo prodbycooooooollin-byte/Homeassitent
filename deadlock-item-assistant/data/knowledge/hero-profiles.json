@@ -1,0 +1,386 @@
+{
+ "_doc": "KURATIERTE EINSCHÄTZUNG, keine Messung: Skalierung und grobe Schadensmischung je Hero (Bullet/Spirit/Melee). 'confidence' low = neuere Heroes, deren Spielweise hier nicht belastbar bekannt ist. Die Engine mischt diese Werte mit der tatsächlich beobachteten Item-Investition des Spielers und kennzeichnet das Ergebnis als 'aus Build geschätzt'. CC und Heilung werden NICHT hier, sondern automatisch aus den Fähigkeitsdaten abgeleitet.",
+ "forBuild": 6701,
+ "heroes": {
+  "hero_inferno": {
+   "scaling": "hybrid",
+   "damageMix": {
+    "bullet": 0.4,
+    "spirit": 0.6,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_gigawatt": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.35,
+    "spirit": 0.65,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_hornet": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.75,
+    "spirit": 0.25,
+    "melee": 0
+   },
+   "range": "long",
+   "confidence": "high"
+  },
+  "hero_ghost": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.2,
+    "spirit": 0.8,
+    "melee": 0
+   },
+   "range": "close",
+   "confidence": "high"
+  },
+  "hero_atlas": {
+   "scaling": "melee",
+   "damageMix": {
+    "bullet": 0.4,
+    "spirit": 0.25,
+    "melee": 0.35
+   },
+   "range": "close",
+   "confidence": "high"
+  },
+  "hero_wraith": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.75,
+    "spirit": 0.25,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_forge": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.55,
+    "spirit": 0.45,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_chrono": {
+   "scaling": "hybrid",
+   "damageMix": {
+    "bullet": 0.5,
+    "spirit": 0.5,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_dynamo": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.3,
+    "spirit": 0.7,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_kelvin": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.3,
+    "spirit": 0.7,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_haze": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.8,
+    "spirit": 0.2,
+    "melee": 0
+   },
+   "range": "close",
+   "confidence": "high"
+  },
+  "hero_astro": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.6,
+    "spirit": 0.4,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "medium"
+  },
+  "hero_bebop": {
+   "scaling": "hybrid",
+   "damageMix": {
+    "bullet": 0.4,
+    "spirit": 0.6,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_nano": {
+   "scaling": "hybrid",
+   "damageMix": {
+    "bullet": 0.4,
+    "spirit": 0.4,
+    "melee": 0.2
+   },
+   "range": "close",
+   "confidence": "medium"
+  },
+  "hero_orion": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.6,
+    "spirit": 0.4,
+    "melee": 0
+   },
+   "range": "long",
+   "confidence": "high"
+  },
+  "hero_krill": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.3,
+    "spirit": 0.6,
+    "melee": 0.1
+   },
+   "range": "close",
+   "confidence": "high"
+  },
+  "hero_shiv": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.6,
+    "spirit": 0.2,
+    "melee": 0.2
+   },
+   "range": "close",
+   "confidence": "high"
+  },
+  "hero_tengu": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.4,
+    "spirit": 0.6,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_warden": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.6,
+    "spirit": 0.4,
+    "melee": 0
+   },
+   "range": "close",
+   "confidence": "high"
+  },
+  "hero_yamato": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.5,
+    "spirit": 0.3,
+    "melee": 0.2
+   },
+   "range": "close",
+   "confidence": "high"
+  },
+  "hero_lash": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.2,
+    "spirit": 0.6,
+    "melee": 0.2
+   },
+   "range": "close",
+   "confidence": "high"
+  },
+  "hero_viscous": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.3,
+    "spirit": 0.7,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_synth": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.25,
+    "spirit": 0.75,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "high"
+  },
+  "hero_mirage": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.6,
+    "spirit": 0.4,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "medium"
+  },
+  "hero_viper": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.6,
+    "spirit": 0.4,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "medium"
+  },
+  "hero_magician": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.3,
+    "spirit": 0.7,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "medium"
+  },
+  "hero_vampirebat": {
+   "scaling": "hybrid",
+   "damageMix": {
+    "bullet": 0.55,
+    "spirit": 0.45,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "low"
+  },
+  "hero_drifter": {
+   "scaling": "hybrid",
+   "damageMix": {
+    "bullet": 0.5,
+    "spirit": 0.4,
+    "melee": 0.1
+   },
+   "range": "close",
+   "confidence": "low"
+  },
+  "hero_priest": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.65,
+    "spirit": 0.35,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "low"
+  },
+  "hero_frank": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.4,
+    "spirit": 0.6,
+    "melee": 0
+   },
+   "range": "close",
+   "confidence": "low"
+  },
+  "hero_bookworm": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.3,
+    "spirit": 0.7,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "low"
+  },
+  "hero_doorman": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.35,
+    "spirit": 0.65,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "low"
+  },
+  "hero_punkgoat": {
+   "scaling": "melee",
+   "damageMix": {
+    "bullet": 0.4,
+    "spirit": 0.3,
+    "melee": 0.3
+   },
+   "range": "close",
+   "confidence": "low"
+  },
+  "hero_necro": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.3,
+    "spirit": 0.7,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "low"
+  },
+  "hero_fencer": {
+   "scaling": "melee",
+   "damageMix": {
+    "bullet": 0.45,
+    "spirit": 0.3,
+    "melee": 0.25
+   },
+   "range": "close",
+   "confidence": "low"
+  },
+  "hero_familiar": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.3,
+    "spirit": 0.7,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "low"
+  },
+  "hero_werewolf": {
+   "scaling": "weapon",
+   "damageMix": {
+    "bullet": 0.55,
+    "spirit": 0.2,
+    "melee": 0.25
+   },
+   "range": "close",
+   "confidence": "low"
+  },
+  "hero_unicorn": {
+   "scaling": "spirit",
+   "damageMix": {
+    "bullet": 0.3,
+    "spirit": 0.7,
+    "melee": 0
+   },
+   "range": "mid",
+   "confidence": "low"
+  }
+ }
+}

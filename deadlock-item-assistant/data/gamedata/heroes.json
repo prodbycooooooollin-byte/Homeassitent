@@ -1,0 +1,4049 @@
+[
+ {
+  "className": "hero_inferno",
+  "heroId": 1,
+  "nameEn": "Infernus",
+  "role": "Lights up enemies and watches them burn",
+  "abilities": [
+   {
+    "className": "ability_incendiary_projectile",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 25,
+     "ParticleRadiusMultiplier": 1.15,
+     "IncomingDamagePercentFromCaster": 16,
+     "DebuffDuration": 8,
+     "Damage": 40,
+     "HeightOffGround": 50,
+     "GrowthPerMeter": 0.5,
+     "InitialWidth": 1,
+     "SlowDuration": 4,
+     "SlowPercent": 28
+    },
+    "description": "Spew an incendiary mixture, dealing Spirit Damage, applying Slow, and coating targets in napalm."
+   },
+   {
+    "className": "ability_flame_dash",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 38,
+     "AbilityDuration": 3,
+     "DashSpeed": 12,
+     "DashAirSpeed": 8,
+     "FlameAuraRadius": 4.5,
+     "DPS": 30,
+     "AuraLingerDuration": 1,
+     "GroundFlameDuration": 4,
+     "GroundAuraSpacing": 1,
+     "SpeedBurstSpeed": 20,
+     "SideMoveSpeedReduction": -65,
+     "FlameDashJumpBonus": 50,
+     "SlowResistance": 50
+    },
+    "description": "Dash forward, gaining Slow Resistance while leaving a flaming trail that deals Spirit DPS. Hold[MoveForward]while active to dash farther."
+   },
+   {
+    "className": "ability_afterburn",
+    "slot": "Signature_3",
+    "props": {
+     "BuildUpDuration": 17,
+     "BuildUpBulletPercentPerHit": 8.1,
+     "CritBuildup": 15.4,
+     "RefillDuration": 0.5,
+     "RefillDurationCrit": 1,
+     "BurnDurationBase": 3,
+     "BurnDuration": 3,
+     "DPS": 14
+    },
+    "description": "Weapon hits build up a burning effect, dealing Spirit DPS. Abilities refresh to the base burn duration and weapon hits extend it."
+   },
+   {
+    "className": "ability_fire_bomb",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 190,
+     "ExplodeDelay": 3.25,
+     "StunDuration": 1.25,
+     "Damage": 125,
+     "Radius": 12
+    },
+    "description": "Become a living bomb, dealing Spirit Damage and applying Stun to all nearby enemies after a delay. Once cast, Concussive Combustion cannot be interrupted."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.7,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 830,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_gigawatt",
+  "heroId": 2,
+  "nameEn": "Seven",
+  "role": "Electrocutes crowds of enemies",
+  "abilities": [
+   {
+    "className": "citadel_ability_lightning_ball",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 26,
+     "ShockRadius": 4.25,
+     "DPS": 75,
+     "MinShockDuration": 0.5,
+     "MaxLifetime": 5
+    },
+    "description": "Shoot a ball of lightning that travels in a straight line. Does damage to all targets in its radius. Slows down when damaging enemies and stops if it hits the world."
+   },
+   {
+    "className": "citadel_ability_static_charge",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 42,
+     "ShockRadius": 5,
+     "Damage": 35,
+     "ShockDelay": 3.5,
+     "StunDuration": 0.9
+    },
+    "description": "Apply a charge to a target enemy hero. After a short duration, the static charge stuns and damages enemies within the radius."
+   },
+   {
+    "className": "ability_power_surge",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 50,
+     "AbilityDuration": 10,
+     "DamagePerChain": 10,
+     "BonusPerChain": 10,
+     "ChainCount": 4,
+     "ChainTickRate": 0.2,
+     "ChainRadius": 10
+    },
+    "description": "Power up your weapon with a shock effect, making your bullets proc shock damage on your target. This shock damage bounces to enemies near your target. Occurs once per burst shot."
+   },
+   {
+    "className": "citadel_ability_storm_cloud",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 205,
+     "Radius": 30,
+     "InitialRadius": 10,
+     "DPS": 95,
+     "DamageInterval": 0.3,
+     "ExpandTime": 3.5,
+     "CloudHeight": 120,
+     "CameraDistance": 600,
+     "EndingSoonTime": 2,
+     "LightningStrikes": 1,
+     "LightningStrikeRadius": 7,
+     "LightningStrikeDelay": 0.25,
+     "LightningStrikeDamage": 75,
+     "LightningStrikeKnockBackForce": 500,
+     "FlightControlEnabled": 1.5
+    },
+    "description": "Channel an expanding storm cloud around you that damages all enemies within its radius. Enemies do not take damage when they are out of line-of-sight."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.7,
+   "ESprintSpeed": 1.8,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 730,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 0.45,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_hornet",
+  "heroId": 3,
+  "nameEn": "Vindicta",
+  "role": "Snipes the unsuspecting",
+  "abilities": [
+   {
+    "className": "citadel_ability_hornet_chain",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 40,
+     "Damage": 40,
+     "SlowPercent": 40,
+     "ChainLength": 9,
+     "CaptureRadius": 9,
+     "ChainDuration": 1.75,
+     "EnemyDragSpeed": 1000
+    },
+    "description": "Throw a stake that tethers enemies to the location where the stake lands. Enemy movement is restricted to the length of the tether."
+   },
+   {
+    "className": "citadel_ability_hornet_leap",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 42,
+     "AbilityDuration": 13,
+     "FlyingItemCastRange": 50,
+     "MaxFlyHeight": 1720,
+     "JumpVelocity": 1000,
+     "AirSideMoveSpeedPercentage": -35,
+     "MinVelocityZ": -20,
+     "WeaponRecoilReduction": 40,
+     "MagicDamagePerBullet": 10
+    },
+    "description": "Leap into the air and fly. While in flight your weapon deals bonus spirit damage and your items have increased range."
+   },
+   {
+    "className": "citadel_ability_hornet_sting",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 32,
+     "DotHealthPercent": 2.2,
+     "ImpactDamage": 40,
+     "DebuffDuration": 5,
+     "VisualSplashRadius": 4,
+     "BulletResistReduction": -6,
+     "TechArmorDamageReduction": -6
+    },
+    "description": "Your crow familiar deals impact damage, reduces their bullet resist and applies a bleed that deals damage based on the target's current health."
+   },
+   {
+    "className": "citadel_ability_hornet_snipe",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 55,
+     "Range": 1000,
+     "Damage": 90,
+     "ShotRadius": 4,
+     "LowHealthEnemyDamageBonus": 90,
+     "LowHealthEnemyThresholdPct": 50,
+     "ViewPunch": 2.5,
+     "MoveSpeed": 4,
+     "MaxSoundDistance": 2000,
+     "WeaponDamageBonusPerKill": 6,
+     "BonusGoldOnKill": 250,
+     "HeadshotBonus": 20,
+     "MinChargeDamagePercent": 50,
+     "TimeToFullCharge": 1
+    },
+    "description": "Use your scoped rifle to fire a powerful shot over long distances. Deal only partial damage until fully charged after {s:TimeToFullCharge}s of being scoped. Does bonus damage to enemies with less than {s:LowHealthEnemyThresholdPct}% health remaining. Landing a killing blow on a player with Assassinate grants you bonus weapon damage."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7.9,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 755,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 2,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_ghost",
+  "heroId": 4,
+  "nameEn": "Lady Geist",
+  "role": "Sacrifices health then drains it back",
+  "abilities": [
+   {
+    "className": "ability_blood_bomb",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 14,
+     "SelfDamagePct": 30,
+     "Damage": 90,
+     "Radius": 7,
+     "ArmingDuration": 0.65,
+     "BeepSoundIntervalBias": 0.55,
+     "BeepSoundMaxFrequency": 0.1,
+     "BeepSoundBuildupCount": 4
+    },
+    "description": "Sacrifice some of your health to launch a bomb that deals damage after a brief arm time. Self damage type is Spirit and can be mitigated."
+   },
+   {
+    "className": "ability_life_drain",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 34,
+     "AbilityDuration": 2.5,
+     "MaxRange": 28,
+     "MoveSpeedReduction": 32,
+     "LifeDrainPerSecond": 24,
+     "LifeDrainHealthMult": 100
+    },
+    "description": "Create a tether that drains enemy health over time and heals you. Target must be in line of sight and within max range to drain. You can shoot and use other abilities during the drain, but your move speed is reduced. [AltCast] to give health to friendly Heroes."
+   },
+   {
+    "className": "ability_blood_shards",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 6,
+     "HealthToDamage": 23,
+     "NumBloodShards": 3,
+     "SpreadAngleDegrees": 6,
+     "MoveSpeedPenaltyPerStack": 12,
+     "VulnerabilityPerStack": 7,
+     "DebuffDuration": 9,
+     "SlowDuration": 4,
+     "MaxStacks": 5,
+     "SelfDamagePct": 9
+    },
+    "description": "Sacrifice some of your health to launch blood shards that apply a stack of Malice. Each stack slows the victim and increases the damage they take from you. The slow effect decreases over time."
+   },
+   {
+    "className": "ability_health_swap",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 220,
+     "AbilityDuration": 0.25,
+     "PostCastHoldTime": 0.2,
+     "InitialUpSpeed": 150,
+     "EnemyMinHealthPct": 30,
+     "MinHealthTakenPct": 30,
+     "MinDiffToCast": 0.1,
+     "EnemySlowPct": 56
+    },
+    "description": "Swaps health levels with an enemy target. There is a minimum health percentage that enemies can be brought down to and a minimum amount of health received based on victims current health."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.3,
+   "ESprintSpeed": 2.4,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 880,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51
+  }
+ },
+ {
+  "className": "hero_atlas",
+  "heroId": 6,
+  "nameEn": "Abrams",
+  "role": "Charges into close combat",
+  "abilities": [
+   {
+    "className": "citadel_ability_bull_heal",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 42,
+     "AbilityDuration": 4,
+     "Radius": 8,
+     "HealingFactor": 70,
+     "NonHeroHealingFactor": 35,
+     "DPS": 22
+    },
+    "description": "Drain health from nearby enemies, dealing Spirit DPS and Healing for a portion of the damage dealt."
+   },
+   {
+    "className": "citadel_ability_bull_charge",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 33,
+     "AbilityDuration": 1.4,
+     "Damage": 30,
+     "SpeedInitial": 18.75,
+     "ChargeSpeedMax": 30,
+     "ChargeDragVerticalOffset": 30,
+     "TossUpMagnitude": 0.5,
+     "SideMoveSpeedReduction": -65,
+     "TurnRateMax": 140,
+     "CameraTurnRateMax": 200,
+     "ChargeRadius": 2.2,
+     "CollidePlayersStopTime": 0.3,
+     "StunDuration": 0.3
+    },
+    "description": "Charge forward, Pulling enemies you hit. Pushing a hero into a wall applies Stun. If you collide with a hero you move faster during your charge."
+   },
+   {
+    "className": "citadel_ability_passive_beefy",
+    "slot": "Signature_3",
+    "props": {
+     "RegenIncomingDamagePercent": 13,
+     "RegenIncomingDamageDuration": 20,
+     "RegenDamageInterval": 1,
+     "BonusHealthRegen": 1,
+     "NonHeroHealPct": 40
+    },
+    "description": "Gain bonus defensive attributes. Taking damage grants temporary Regen for a portion of the damage taken."
+   },
+   {
+    "className": "citadel_ability_bull_leap",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 215,
+     "ImpactRadius": 9,
+     "ImpactHeight": 6,
+     "Damage": 100,
+     "StunDuration": 1.6,
+     "TossSpeed": 450
+    },
+    "description": "Leap high into the air before crashing into the ground, dealing Spirit Damage and applying Stun."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.4,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 800,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1.5,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51
+  }
+ },
+ {
+  "className": "hero_wraith",
+  "heroId": 7,
+  "nameEn": "Wraith",
+  "role": "Melts isolated targets",
+  "abilities": [
+   {
+    "className": "citadel_ability_card_toss",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 0.6,
+     "Damage": 45,
+     "Radius": 4,
+     "AbilityChargesConditionally": 1,
+     "ResourcePerCard": 100,
+     "BonusAbilityResource": 100,
+     "NonPlayerCardResourceScale": 0.35,
+     "CardResourcePerBulletHit": 4,
+     "CardResourcePerBulletCrit": 6,
+     "CardResourcePerLightMelee": 10,
+     "CardResourcePerHeavyMelee": 25,
+     "CardResourceGenPctScale": 85,
+     "ProjectileOriginHeightOffset": 50,
+     "ClubSlowPercent": 24,
+     "ClubSlowDuration": 3,
+     "DiamondResistShredDuration": 5,
+     "DiamondResistShred": -7,
+     "JokerExtraCardSearchRadius": 20,
+     "CooldownBetweenCards": 0.5,
+     "HeartHeal": 60,
+     "HeartHealNonHeroRatio": 0.5,
+     "SpadeDamageBonus": 60
+    },
+    "description": "Deal weapon damage to summon cards of a random suit. Each card can be thrown, dealing damage and applying a different effect depending of its suit. Cards thrown fly towards the enemy or point under your crosshair. Alt-cast to throw first card"
+   },
+   {
+    "className": "citadel_ability_projectmind",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 46,
+     "CameraDistance": 250,
+     "TrailInterval": 0.1
+    },
+    "description": "Teleport to the targeted location."
+   },
+   {
+    "className": "citadel_ability_wraith_rapidfire",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 45,
+     "AbilityDuration": 5,
+     "BonusFireRate": 20,
+     "MagicDamagePerBullet": 2
+    },
+    "description": "Temporarily boosts your fire rate and deal bonus Spirit Damage"
+   },
+   {
+    "className": "citadel_ability_psychic_lift",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 150,
+     "AbilityDuration": 2.25,
+     "LiftHeight": 80,
+     "Damage": 100,
+     "LiftChainRadius": 20,
+     "LiftDuration": 2,
+     "TossDistance": 13,
+     "SlowPercent": 32,
+     "TossUpStrength": 220
+    },
+    "description": "Lift an enemy hero into the air and then slam them towards the target location."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7.2,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 730,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_forge",
+  "heroId": 8,
+  "nameEn": "McGinnis",
+  "role": "Controls the battle with combat turrets",
+  "abilities": [
+   {
+    "className": "citadel_ability_shieldedsentry",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 18,
+     "ModelScale": 0.8,
+     "TrackingSpeed": 430,
+     "AttackConeAngle": 10,
+     "TurretDeployTime": 0.25,
+     "TurretBaseHealth": 100,
+     "TurretAttackRange": 30,
+     "TurretAttackFalloffStart": 20,
+     "TurretAttackFalloffEnd": 30,
+     "TurretAttackDelay": 0.2,
+     "TurretDPS": 24,
+     "TurretLifetime": 35,
+     "AttackSpeedMult": 100,
+     "TechResist": 35,
+     "MeleeResist": 35,
+     "NonHeroDamagePercentOutgoing": 50,
+     "BossDamagePercentOutgoing": 30,
+     "BossDamagePercentIncoming": 50
+    },
+    "description": ""
+   },
+   {
+    "className": "citadel_ability_mobile_resupply",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 50,
+     "AbilityDuration": 6.5,
+     "HealRadius": 6,
+     "ExternalBonusHealthRegen": 25,
+     "TurretHealMult": 1,
+     "HealInterval": 0.1
+    },
+    "description": "Deploy a spirit that provides Healing to nearby allies."
+   },
+   {
+    "className": "citadel_ability_fissure_wall",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 50,
+     "AbilityDuration": 6,
+     "MinRange": 5,
+     "WallImpactRange": 5,
+     "PushForce": 175,
+     "Damage": 60,
+     "NumWallSegments": 8,
+     "TimeBetweenSegments": 0.035,
+     "SegmentEmitTime": 0.1,
+     "TimeToMaxDistance": 1.8,
+     "SlowDuration": 2.5,
+     "SlowPercent": 16
+    },
+    "description": "Cast a wall that applies slow on enemies it passes through. Erupt the wall to divide the terrain in half and damage nearby enemies. After casting, press[Attack]or[Ability3]to erupt the wall early. Can be Destroyed with Melee Attacks"
+   },
+   {
+    "className": "citadel_ability_rocket_barrage",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 200,
+     "AbilityDuration": 8,
+     "DamagePerRocket": 21,
+     "GrenadesPerSecond": 6,
+     "IntervalRampUpTime": 0.3,
+     "IntervalRampUpStart": 0.35,
+     "DetonateTimer": 5,
+     "ExplosionFalloffDisabled": 1,
+     "ExplosionRadius": 4.5,
+     "TrackSpeedNear": 150,
+     "TrackSpeedFar": 100,
+     "TrackingTime": 0.4,
+     "MinDistance": 8.5,
+     "MaxSpread": 5,
+     "ProjectileIgnoreCollisionTime": 0.2,
+     "GroundDashReductionPercent": -35
+    },
+    "description": "Unleashes a volley of rockets that home in on a targeted location. {s:hero_name} is slowed and is still able to use stamina."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.7,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 780,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 2,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_chrono",
+  "heroId": 10,
+  "nameEn": "Paradox",
+  "role": "Manipulates Space and Time",
+  "abilities": [
+   {
+    "className": "citadel_ability_chrono_pulse_grenade",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 32,
+     "AbilityDuration": 3.2,
+     "Radius": 5.5,
+     "RadiusIncreasePerPulse": 1,
+     "PulseInterval": 0.8,
+     "PulseDamage": 35,
+     "DamageAmplificationPerStack": 4,
+     "DebuffDuration": 8,
+     "SlowPercent": 20,
+     "MovementSlowDuration": 0.2
+    },
+    "description": "Throw a grenade that begins pulsing when it lands. Each pulse expands the radius and applies Spirit Damage, time slow, and stacking Damage Amp for {s:hero_name} against the victim."
+   },
+   {
+    "className": "citadel_ability_chrono_time_wall",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 25,
+     "AbilityDuration": 5.5,
+     "TimeWallWidth": 8,
+     "TimeWallHeight": 4,
+     "TimeWallDepth": 0.5,
+     "TimeWallDepthVisualScale": 0.16,
+     "TimeWallTimeScale": 0.0001,
+     "TimeScaleDuration": 0.5,
+     "TimeWallTimeScaleFriendly": 2,
+     "FriendlyBulletDamageBonus": 30,
+     "MovementSlowPct": 64,
+     "AuraEffectDuration": 2,
+     "TimeWallFormationTime": 0.5
+    },
+    "description": "Create a time warping wall that stops time for all enemy projectiles and bullets that touch it and increases the speed and damage of friendly bullets. Enemies that touch the wall will be briefly slowed and silenced ."
+   },
+   {
+    "className": "citadel_ability_chrono_kinetic_carbine",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 28,
+     "SpeedChange": 25,
+     "SpeedBoostDuration": 3.5,
+     "MinBonusBulletDamage": 5,
+     "MaxBonusBulletDamage": 5,
+     "HeadshotBonus": 14,
+     "MaxSlowDuration": 0.4,
+     "BulletTimeScale": 0.01,
+     "ProjectileTimeScale": 0.01,
+     "TimeWarpRadius": 5,
+     "BonusBulletSpeed": 100,
+     "ShotCount": 1,
+     "MaxChargeDuration": 2.5,
+     "BulletRadiusOverride": 16,
+     "MoveSpeedWhileShootingPenaltyReduction": 100,
+     "MinSlowDuration": 0.25,
+     "TimeScaleDebuff": 90,
+     "AirMoveIncreasePercent": 20
+    },
+    "description": "Charge up a powerful shot of time energy, dealing Spirit Damage and applying a Time-Stop to enemies hit. The damage dealt increases with Weapon Damage. Move speed is increased while charging. While in the air and charging, [ADS] to timeslow your movement."
+   },
+   {
+    "className": "citadel_ability_chrono_swap",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 110,
+     "InitialFreezeTime": 0.25,
+     "MinSwapTime": 0.6,
+     "SwapTime": 1,
+     "DistanceToMaxTime": 30,
+     "SwapDamage": 150,
+     "InitialHeight": 350
+    },
+    "description": "Fire a projectile that swaps your position with the target enemy hero."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.7,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 730,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.62,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.43
+  }
+ },
+ {
+  "className": "hero_dynamo",
+  "heroId": 11,
+  "nameEn": "Dynamo",
+  "role": "Locks down the enemy team",
+  "abilities": [
+   {
+    "className": "citadel_ability_stomp",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 26,
+     "TechCleaveExpireTime": 0.2,
+     "Damage": 115,
+     "ClimbHeight": 1,
+     "DistanceAboveGround": 1,
+     "DropDownRate": 20,
+     "TossSpeed": 450,
+     "ImpactInterval": 0.1,
+     "StompRange": 16,
+     "StompWidth": 5.5,
+     "TossDuration": 1
+    },
+    "description": "Release an energy pulse that travels along the ground, dealing Spirit Damage and applying Knock Up."
+   },
+   {
+    "className": "citadel_ability_void_sphere",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 20,
+     "AbilityDuration": 1.4,
+     "AllyDistance": 13,
+     "TrailInterval": 0.01,
+     "StaminaRestore": 1
+    },
+    "description": "Briefly become untargetable while teleporting to the target location. Restores stamina upon use. [AltCast]: Bring nearby allies with you."
+   },
+   {
+    "className": "citadel_ability_nikuman",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 48,
+     "HealingPerSecond": 30,
+     "AuraLingerDuration": 1,
+     "ShareWithFriendsRadius": 8
+    },
+    "description": "While channeling, restore health over time to you and any allies nearby. You can dash and melee without breaking the channel."
+   },
+   {
+    "className": "citadel_ability_self_vacuum",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 250,
+     "VacuumRadius": 7,
+     "Speed": 200,
+     "TossSpeed": 350,
+     "TossAngle": 45,
+     "DPS": 75,
+     "CameraDistance": 400
+    },
+    "description": "Create a singularity in your hands, dealing pulling in nearby enemies."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.7,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 880,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1.75,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51
+  }
+ },
+ {
+  "className": "hero_kelvin",
+  "heroId": 12,
+  "nameEn": "Kelvin",
+  "role": "Freezes enemies in their tracks",
+  "abilities": [
+   {
+    "className": "ability_ice_grenade",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 30,
+     "Radius": 6.5,
+     "Damage": 60,
+     "SlowPercent": 32,
+     "SlowDuration": 4,
+     "HealAmount": 60
+    },
+    "description": "Throw a grenade that explodes in a cloud of freezing ice that Heals allies and applies Spirit Damage and move speed reduction to enemies."
+   },
+   {
+    "className": "ability_icepath",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 50,
+     "AbilityDuration": 8,
+     "IcePathInterval": 0.5,
+     "CameraDistance": 250,
+     "PopupForce": 30,
+     "MinHeight": 20,
+     "IcePathAuraDuration": 18,
+     "ModifierRadius": 5,
+     "IcePathShardRadius": 1.2,
+     "IcePathEdgeWidth": 0.7,
+     "IcePathPullInStrength": 20,
+     "MoveSpeedBonus": 2,
+     "SprintSpeedBonus": 2,
+     "SlowResistancePercent": 60,
+     "SlideScale": 50,
+     "MoveWhileShootingSpeedPenaltyReductionPercent": 100,
+     "MoveWhileZoomedSpeedPenaltyReductionPercent": 100
+    },
+    "description": "{s:hero_name} creates a floating trail of ice and snow that gives movement bonuses to him and his allies. Kelvin gains {s:SlowResistancePercent}% slow resistance for the duration. Enemies can also walk on the floating trail. Press [Roll] / [Crouch] to travel up or down while in Ice Path."
+   },
+   {
+    "className": "ability_icebeam",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 28,
+     "AbilityDuration": 5,
+     "ChannelSlowPercent": 8,
+     "DPS": 45,
+     "PathLength": 25,
+     "PathWidth": 1.1,
+     "CameraDistance": 250,
+     "MinSlowPercent": 24,
+     "MaxSlowPercent": 16,
+     "MaxFireRateSlowPercent": 20,
+     "MaxGroundDashReductionPercent": -18,
+     "MaxSlowTime": 2,
+     "IceBeamBuildupProcDuration": 2,
+     "SlowDuration": 0.6
+    },
+    "description": "Shoot freezing cold energy out in front of you, damaging targets and progressively reducing their movement and fire rate the longer you sustain the beam on them. You have reduced move speed while using Arctic Beam. The beam may also claim Souls."
+   },
+   {
+    "className": "ability_ice_dome",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 185,
+     "AbilityDuration": 5,
+     "Radius": 10,
+     "BlockerScaleFactor": 115,
+     "GrowTime": 0.2,
+     "EnemyDragSpeed": 1000,
+     "BonusHealthRegen": 90,
+     "SlowPercent": 28
+    },
+    "description": "Target yourself or a Hero to freeze the air and create an impenetrable dome around them. While in the dome, allies gain rapid Regen and enemies are slowed. Objectives becomes Invulnerable and Frozen under Frozen Shelter"
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.7,
+   "ESprintSpeed": 1.1,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 880,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.18181,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 0.75,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51
+  }
+ },
+ {
+  "className": "hero_haze",
+  "heroId": 13,
+  "nameEn": "Haze",
+  "role": "Sneaks in and sprays bullets",
+  "abilities": [
+   {
+    "className": "ability_sleep_dagger",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 30,
+     "Damage": 65,
+     "SleepDuration": 2.75,
+     "SleepWakeUpDelay": 0.1,
+     "MinimumSleepTime": 0.2,
+     "SleepMoveSpeed": 1.5,
+     "DoesNotBreakInvis": 1
+    },
+    "description": "Throw a dagger that damages and sleeps the target. Sleeping targets wake up shortly after being damaged. Throwing a Dagger does not break your invisibility. Sleep Dagger does not interrupt enemies' channeling abilities."
+   },
+   {
+    "className": "ability_smoke_bomb",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 33,
+     "AbilityDuration": 8,
+     "InvisAlertWhenFading": 1,
+     "InvisFadeToDuration": 1.5,
+     "SpottedRadius": 18,
+     "RevealOnDamageDuration": 1.5,
+     "RevealOnSpottedDuration": 0.5,
+     "FullInvisDistance": 50
+    },
+    "description": "Fade out of sight, becoming invisible and gaining sprint speed. Attacking removes invisibility, but using items does not. Close enemies can see through your invisibility."
+   },
+   {
+    "className": "ability_stacking_damage",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityDuration": 6,
+     "MaxStacks": 40,
+     "HeadshotStacks": 3,
+     "DamageBonusFixedPerStack": 0.2
+    },
+    "description": "Shooting a target increases your bullet damage on that target. Gain one stack per bullet hit, three if the hit is a headshot."
+   },
+   {
+    "className": "ability_bullet_flurry",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 165,
+     "AbilityDuration": 3.5,
+     "Radius": 16,
+     "RadiusMin": 0.75,
+     "TargetsPerTick": 1,
+     "BonusFireRate": 25,
+     "WeaponDamageBonus": 7,
+     "ProcChance": 100,
+     "EvasionPercent": 30,
+     "OverrideBulletRadius": 10
+    },
+    "description": "Enter a flurry, firing your weapon at nearby enemies with perfect accuracy and added Bullet Damage."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 8.2,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 730,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.62,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.43
+  }
+ },
+ {
+  "className": "hero_astro",
+  "heroId": 14,
+  "nameEn": "Holliday",
+  "role": "Bounces about dispensing trick shots",
+  "abilities": [
+   {
+    "className": "ability_explosive_barrel",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 28,
+     "Radius": 6,
+     "BarrelLifetime": 8,
+     "ImpactDamage": 40,
+     "DPS": 13.3333,
+     "BurnDuration": 3,
+     "BarrelRollSpeedMoveMin": 20,
+     "BarrelPitchMin": 2,
+     "BarrelPitchMax": 90,
+     "BarrelRollSpeedMoveAir": 10,
+     "BarrelLightMeleeForceForward": 1400,
+     "BarrelLightMeleeForceUp": 300,
+     "BarrelHeavyMeleeForceForward": 1800,
+     "BarrelHeavyMeleeForceUp": 300,
+     "BarrelScale": 1.3,
+     "TossSpeed": 140,
+     "ArmTime": 0.1,
+     "MinTimeBeforeDestroy": 0.1,
+     "TossDuration": 0.4
+    },
+    "description": "Throw a barrel that explodes after a delay, dealing Spirit Damage, setting enemies on fire and applying Knock Up. The barrel can be detonated early by being shot, melee'd, or detonated by another barrel. The burn stacks, so overlapping barrels burn for their combined damage. Can be Alt-Cast to place the barrel infront of {s:hero_name}."
+   },
+   {
+    "className": "ability_bounce_pad",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 41,
+     "AbilityDuration": 22,
+     "BounceVelocity": 750,
+     "UpFactor": 1.2,
+     "BarrelBounceVelocity": 800,
+     "BarrelUpFactor": 1,
+     "Scale": 1,
+     "PlaceDistance": 200,
+     "AirControlPercent": 100,
+     "AirControlAccelPercent": 50,
+     "MinAirTimeForStomp": 0.2,
+     "Radius": 9,
+     "VerticalDifferenceTolerance": 60,
+     "TossSpeed": 500,
+     "StompDamage": 60
+    },
+    "description": ""
+   },
+   {
+    "className": "ability_crackshot",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 20,
+     "ExplosionRadius": 2,
+     "Damage": 55,
+     "DebuffDuration": 2,
+     "FadingSlowPercent": 40,
+     "CrackshotNPCCDReduction": 50
+    },
+    "description": "Headshots deal bonus Damage and applies a Fading Move Speed penalty. This effect can only occur when off cooldown. Cooldown is reduced by {s:CrackshotNPCCDReduction}% on NPC hits. Crackshot ignores range damage fall-off and does not apply to objectives."
+   },
+   {
+    "className": "ability_gravity_lasso",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 130,
+     "AbilityDuration": 2.25,
+     "BouncePadExtendDuration": 1.25,
+     "LiftHeight": 7,
+     "LiftHorizontal": -30,
+     "FollowDampingFactor": 8,
+     "GrabExtraTargetsRadiusMult": 2,
+     "ExtraTargetConeAngle": 60,
+     "ExtraTargetHorizontalOffset": 30,
+     "FollowDistance": 60,
+     "CameraPreviewOffset": 25,
+     "CameraPreviewSpeed": 0.6,
+     "CameraPreviewDistance": 200,
+     "LassoTargetMaxSpeed": 55,
+     "LiftInitialDelay": 0.5,
+     "LiftInitialVelocityStart": 500,
+     "LiftInitialRisingSpeed": 100,
+     "Damage": 80
+    },
+    "description": "Throw out your lasso, dealing Spirit Damage, Pulling, and applying Stun. Using a Bounce Pad extends the duration of Spirit Lasso."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 8.2,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 780,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 2,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.62,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.43
+  }
+ },
+ {
+  "className": "hero_bebop",
+  "heroId": 15,
+  "nameEn": "Bebop",
+  "role": "Hooks an enemy for a knockout combo",
+  "abilities": [
+   {
+    "className": "citadel_ability_uppercut",
+    "slot": "Signature_1",
+    "props": {
+     "MeleeHalfAngle": 60,
+     "MeleeAttackLength": 6,
+     "AbilityCooldown": 22,
+     "EnemyHeroTossVelocity": 20,
+     "TossVelocity": 25,
+     "MeleeRadius": 2.5,
+     "ForceReductionOnAngleDown": 0.75,
+     "UppercutDamage": 0.01,
+     "LandingDamage": 75,
+     "OnLandDamageRadius": 14,
+     "BuffGunRangePercent": 100,
+     "BonusFireRate": -14,
+     "ExplodeDebuffDuration": 5,
+     "TossDuration": 0.5,
+     "TossDurationFriendly": 0.3
+    },
+    "description": "Deal Melee Damage to nearby enemies and apply Knock Back. When they land, they deal Spirit Damage and apply Reduced Fire Rate to other nearby enemies. Exploding Uppercut can be used on allies."
+   },
+   {
+    "className": "citadel_ability_sticky_bomb",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 18,
+     "AbilityDuration": 3.5,
+     "Radius": 8,
+     "FuseTime": 3.5,
+     "KillCheckWindow": 10,
+     "OnHitDiminish": 60,
+     "OnKillDiminish": 7,
+     "SelfDamagePercent": 20,
+     "Damage": 85,
+     "BonusDamagePctPerPlayerKilled": 2.5,
+     "BonusDamagePctPerPlayerHit": 1
+    },
+    "description": "Attach a bomb that explodes after a delay, dealing Spirit Damage to nearby enemies. If the bomb hits or kills a hero, you gain permanent bonus damage on Sticky Bomb. Stacks diminish by half after {s:OnHitDiminish} hits and {s:OnKillDiminish} kills"
+   },
+   {
+    "className": "citadel_ability_hook",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 23,
+     "HookingSlowSpeedLimit": 5,
+     "SlowPercent": 72,
+     "RestrictionDuration": 0.5,
+     "FriendlyHookIgnoreRange": 8,
+     "CancelHookDuration": 0.2,
+     "HookImpactDelay": 0.5
+    },
+    "description": "Launch out a mechanical hand that Pulls the first character it hits, reeling them in. Grapple Arm can be used on allies."
+   },
+   {
+    "className": "citadel_ability_bebop_laser_beam",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 120,
+     "DPS": 160,
+     "BeamLength": 70,
+     "BeamWidth": 2.9,
+     "BeamCloseRadius": 5,
+     "BeamEndRadius": 4,
+     "BeamCloseDamagePercent": 75,
+     "Interval": 0.1,
+     "TrackingSpeed": 55,
+     "ZoomTime": 0.1,
+     "ZoomBias": 0.5,
+     "FallSpeedMax": 1,
+     "AirSpeedMax": 70,
+     "SlowTargetDuration": 0.5,
+     "SlowPercent": 20,
+     "GroundDashReductionPercent": -36
+    },
+    "description": "Channel a powerful torrent of energy that deals Spirit Damage and applies Slow."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.45,
+   "ESprintSpeed": 4,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 63,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 880,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2.5,
+   "EStaminaRegenPerSecond": 0.181818,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51
+  }
+ },
+ {
+  "className": "hero_nano",
+  "heroId": 16,
+  "nameEn": "Calico",
+  "role": "Wreaks havoc from the sidelines",
+  "abilities": [
+   {
+    "className": "ability_nano_clustergrenade",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 14,
+     "Damage": 45,
+     "Radius": 3,
+     "TossSpeed": 400,
+     "GrenadeCount": 4,
+     "Lifetime": 0.75,
+     "GrenadeAngleVariance": 0.08,
+     "TimeBetweenGrenades": 0.05,
+     "MultiHitPenaltyPercentage": 65
+    },
+    "description": "Throw a cluster of bombs that detonate after a delay, dealing Spirit Damage. Enemies hit by multiple bombs take {s:MultiHitPenaltyPercentage}% damage."
+   },
+   {
+    "className": "ability_nano_dash",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 13,
+     "DashAngleThreshold": 89,
+     "DashSpeed": 2400,
+     "DashRadius": 2,
+     "ImpactDamage": 10,
+     "MoveSpeedPenaltyMaxSpeed": 200,
+     "CameraDistance": 550,
+     "SideMoveSpeedReduction": -90,
+     "SlashRadius": 4,
+     "SlashHeight": 2.5,
+     "HealAmount": 40,
+     "PostDashMaintainedVelocityRatio": 0.15,
+     "SlashForwardOffset": 1.5
+    },
+    "description": "Dash forward before slashing all enemies in a circle, dealing Melee Damage. If the ability hits at least one hero, Heal a small amount of health."
+   },
+   {
+    "className": "ability_nano_catform",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 30,
+     "BuffDuration": 15,
+     "InterruptCooldown": 6,
+     "SpeedBuildDuration": 4,
+     "EnemyDamageSpeedPenalty": 65,
+     "CatFormDamageDealtReduction": -100,
+     "MinBonusMoveSpeedPercent": 30,
+     "MaxBonusMoveSpeedPercent": 65
+    },
+    "description": "Turn to shadows and possess Ava. You gain Bonus Move Speed that increases over time, and become hidden on the minimap. Taking damage from an enemy hero resets your bonus move speed and puts Ava on a brief cooldown."
+   },
+   {
+    "className": "ability_nano_shadow_pulse",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 115,
+     "Radius": 7.5,
+     "Damage": 150,
+     "FallSpeedMax": 10,
+     "BonusMoveSpeedPercent": 20,
+     "AirSpeedMax": 100,
+     "AirDrag": 4,
+     "ZAcceleration": 800
+    },
+    "description": "Instantly turn to shadows, becoming untargetable, gaining Bonus Move Speed, and dealing Spirit Damage. After a delay, return from the shadows, dealing Spirit Damage again."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.8,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 63,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 730,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.62,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.43
+  }
+ },
+ {
+  "className": "hero_orion",
+  "heroId": 17,
+  "nameEn": "Grey Talon",
+  "role": "Delivers long range skill-shots",
+  "abilities": [
+   {
+    "className": "ability_charged_shot",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 17,
+     "TechCleaveExpireTime": 0.2,
+     "FallSpeedMax": 60,
+     "AirSpeedMax": 161.417,
+     "Damage": 80,
+     "CameraHeightOffset": 20,
+     "CameraHorizontalOffset": 15
+    },
+    "description": "Charge up a powerful shot that pierces through enemies. Hold [Ability1] or [Attack] to hold the shot."
+   },
+   {
+    "className": "ability_power_jump",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 25,
+     "AbilityDuration": 4,
+     "JumpPitch": -60,
+     "JumpSpeed": 27.5,
+     "AltJumpSpeed": 12,
+     "WeaponDamageBonus": 3,
+     "FallSpeedMax": 25,
+     "AirSpeedMax": 261.417,
+     "BulletSplitShot": 5,
+     "FxRadius": 4,
+     "AirMoveIncreasePercent": 25
+    },
+    "description": "Launches you high in the air, allowing you to glide slowly. While airborne, you gain Weapon Damage and multishot on your weapon. [AltCast]for reduced jump height. Press[Mantle]to cancel the glide."
+   },
+   {
+    "className": "ability_immobilize_trap",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 34,
+     "TetherRadius": 6,
+     "Radius": 6.5,
+     "TrapHeight": 2,
+     "Lifetime": 22,
+     "Damage": 25,
+     "TetherDuration": 2.25,
+     "TripTime": 0.5,
+     "ArmTime": 2,
+     "TripUpSpeed": 250,
+     "TripGravity": 0.4,
+     "SlowPercent": 24,
+     "ChargedShotHitRadiusScale": 30
+    },
+    "description": "Throw out a trap that begins to arm itself. Once armed, the trap will trigger when an enemy enters its radius, applying Curse and Movement Slow that interrupts, Silences, Disarms, and prevents item usage. Hit the trap with a Charged Shot to detonate early with increased radius."
+   },
+   {
+    "className": "ability_guided_arrow",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 125,
+     "ExplosionRadius": 12,
+     "Damage": 230,
+     "StunDuration": 0.75,
+     "BonusTechPowerPerKill": 8
+    },
+    "description": "After {s:AbilityCastDelay}s cast time, launch a spirit owl that you control and which explodes on impact, damaging and stunning enemies. Hold[MoveForward]to accelerate the owl. Press[Mantle]to release control. Gain permanent Spirit Power for each enemy hero killed with Guided Owl."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.3,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 780,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 4,
+   "EBaseHealthRegen": 1.5,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.62,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.43
+  }
+ },
+ {
+  "className": "hero_krill",
+  "heroId": 18,
+  "nameEn": "Mo & Krill",
+  "role": "Burrows underneath his enemies",
+  "abilities": [
+   {
+    "className": "ability_intimidate",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 13,
+     "Radius": 9,
+     "Damage": 50,
+     "DamageHealMultNonHero": 0.35,
+     "DamageHealMult": 1.2
+    },
+    "description": "Deal damage to nearby enemies and heal yourself based on the damage done. Heal is stronger against enemy heroes."
+   },
+   {
+    "className": "ability_burrow",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 40,
+     "DPS": 75,
+     "Radius": 5,
+     "BonusMoveSpeed": 5,
+     "SpeedLostDuration": 1,
+     "EnemyDamageSpeedPenalty": 0.5,
+     "SpinDuration": 1.5,
+     "SpinSlowPercent": 8,
+     "SpinSlowDuration": 0.3,
+     "TechResist": 30,
+     "BulletResist": 60,
+     "UpForce": 250,
+     "TossDuration": 1
+    },
+    "description": "Burrow underground, moving faster, and gaining spirit and bullet armor. Damage from enemy heroes will reduce the speed bonus. When you jump out, deal Spirit Damage, Slow, and Knock Up."
+   },
+   {
+    "className": "ability_throw_sand",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 40,
+     "AbilityDuration": 2.5,
+     "GrowthPerMeter": 0.5,
+     "InitialWidth": 5,
+     "HeightOffGround": 20,
+     "Damage": 40
+    },
+    "description": "Spray sand that disarms enemies in front of you and deals damage."
+   },
+   {
+    "className": "ability_ult_combo",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 150,
+     "DPS": 40,
+     "BonusHealthOnKill": 40
+    },
+    "description": "Hold the target in place, stunning them and dealing damage during the channel. If they die during, or within 3 seconds of Combo ending, you permanently gain max health."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 8,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 930,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 0.8,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51
+  }
+ },
+ {
+  "className": "hero_shiv",
+  "heroId": 19,
+  "nameEn": "Shiv",
+  "role": "Bleeds out foes, then goes in for a kill",
+  "abilities": [
+   {
+    "className": "citadel_ability_shiv_dagger",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 16,
+     "BleedTickRate": 1,
+     "MovementSlow": 28,
+     "BleedDPSPerStack": 10,
+     "BleedDuration": 5,
+     "FullRageCurrentHealthDamagePct": 3.5
+    },
+    "description": "Throw a knife that bleeds an enemy. Each additional hit adds a stack and refreshes the bleed duration, causing the bleed to increase per stack."
+   },
+   {
+    "className": "citadel_ability_shiv_dash",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 16,
+     "TechCleaveExpireTime": 0.35,
+     "DashAngleThreshold": 89,
+     "DashSpeed": 2400,
+     "DashRange": 12,
+     "DashRadius": 2.5,
+     "ImpactDamage": 75,
+     "MoveSpeedPenaltyMaxSpeed": 200,
+     "CameraDistance": 250,
+     "SideMoveSpeedReduction": -100,
+     "TechArmorDamageReduction": -6,
+     "DebuffDuration": 14
+    },
+    "description": "Perform a dash forward, damaging enemies along the path. Hit Enemies have their Spirit Resist reduced. This debuff can stack."
+   },
+   {
+    "className": "citadel_ability_shiv_defer_damage",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 25,
+     "DamagePctDeferred": 25,
+     "DeferredDamageDuration": 6,
+     "DeferClearPct": 30,
+     "DamagePctDeferredMaxRage": 15
+    },
+    "description": "Take only a portion of incoming damage immediately and defer the rest to be taken over time. Activate to clear a portion of the deferred damage."
+   },
+   {
+    "className": "citadel_ability_shiv_killing_blow",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 145,
+     "RageDrainRate": 0.25,
+     "RagePerWeaponDamage": 0.0158766,
+     "RagePerSpiritDamage": 0.01452864,
+     "RagePerLightMelee": 1.55664,
+     "RagePerHeavyMelee": 2.85384,
+     "BonusAbilityResource": 10,
+     "BuffDamage": 8,
+     "RageDrainDelayDuration": 12,
+     "Damage": 200,
+     "EnemyHealthPercent": 18,
+     "EnemyHealthPercentBuffer": 3,
+     "CameraDistance": 400,
+     "MoveSpeedToTarget": 30,
+     "MinTimeToTarget": 0.5,
+     "SlashRange": 90,
+     "RecastWindow": 16,
+     "FailedExecuteCooldownPenalty": 30
+    },
+    "description": ""
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.5,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 830,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.166667,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51
+  }
+ },
+ {
+  "className": "hero_tengu",
+  "heroId": 20,
+  "nameEn": "Ivy",
+  "role": "Sets up a power duo with a lucky ally",
+  "abilities": [
+   {
+    "className": "citadel_ability_tengu_urn",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 32,
+     "AbilityDuration": 4,
+     "Radius": 6,
+     "Height": 2,
+     "DPS": 40,
+     "SlowPercent": 28
+    },
+    "description": "Summon a patch of choking thorns that damage and slows enemies in its radius."
+   },
+   {
+    "className": "citadel_ability_tangotether",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 37,
+     "AbilityDuration": 12,
+     "BonusFireRate": 10,
+     "BulletLifestealPercent": 15,
+     "TetherSharedHealPct": 35,
+     "HealingPerGlub": 20,
+     "TotalTetherTargets": 1,
+     "MoveWhileShootingSpeedPenaltyReductionPercent": 100,
+     "MoveWhileZoomedSpeedPenaltyReductionPercent": 100
+    },
+    "description": "Connect with a nearby ally to gain bonuses, replicated healing, and ignore the move speed penalty while shooting. Receive 50% of Bonuses with no connection Connection requires line of sight."
+   },
+   {
+    "className": "citadel_ability_tengu_stone_form",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 40,
+     "AbilityDuration": 3,
+     "MoveSpeedMax": 8,
+     "LiftHeight": 180,
+     "LiftTime": 1,
+     "MaxHealthRegen": 6,
+     "Damage": 75,
+     "StunDuration": 0.75,
+     "Radius": 5.75
+    },
+    "description": "Turn yourself into impervious stone and smash into the ground, stunning and damaging enemies nearby. Heals you for a percentage of your max health."
+   },
+   {
+    "className": "citadel_ability_tengu_airlift",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 100,
+     "AbilityDuration": 21,
+     "CooldownReductionPctOnOthers": 30,
+     "InterruptCooldown": 3.5,
+     "AllyCastDelay": 0.1,
+     "ExplodeDamage": 115,
+     "OnLandDamageRadiusStart": 16,
+     "OnLandDamageRadius": 20,
+     "SilenceBombSpeed": 12,
+     "AllyOutgoingDamagePercent": -20,
+     "BuffDuration": 8,
+     "AirDropOutgoingDamagePercent": 20
+    },
+    "description": "Grab an ally and take flight with them. Drop your ally to cause an explosion, dealing Spirit Damage. You and your ally gain increased Outgoing Damage when flying ends. Cooldown reduced by {s:CooldownReductionPctOnOthers}% when used on allies. Taking damage briefly disables using the ability. While lifted, your ally cannot attack and deals {s:AllyOutgoingDamagePercent}% damage."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7.2,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 755,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 4,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.62,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.43
+  }
+ },
+ {
+  "className": "hero_warden",
+  "heroId": 25,
+  "nameEn": "Warden",
+  "role": "Weakens his enemies and chases them down",
+  "abilities": [
+   {
+    "className": "ability_warden_crowd_control",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 12,
+     "Radius": 5.5,
+     "Damage": 60,
+     "WeaponPowerDebuff": -25,
+     "SlowDuration": 3,
+     "DebuffDuration": 7,
+     "MoveSpeedSlowPct": 16,
+     "ForwardVelocity": 800,
+     "ProjectileLifetime": 60
+    },
+    "description": "Throw a flask that damages and reduces the weapon damage and move speed of enemies it hits."
+   },
+   {
+    "className": "ability_warden_high_alert",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 40,
+     "AbilityDuration": 5,
+     "MoveSpeedBonusPct": 15,
+     "CombatBarrier": 125
+    },
+    "description": "Gain a Barrier and bonus move speed."
+   },
+   {
+    "className": "ability_warden_lock_down",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 34,
+     "ImmobilizeDuration": 1.75,
+     "Damage": 110,
+     "EscapeRange": 20,
+     "EscapeTime": 2.8,
+     "AdditionalTargetRadius": 20
+    },
+    "description": "Curse an enemy hero. If they don't move away from their initial position within the escape time, they will be damaged and immobilized."
+   },
+   {
+    "className": "ability_warden_riot_protocol",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 180,
+     "AbilityDuration": 6,
+     "PulseInterval": 0.5,
+     "PulseDPS": 70,
+     "Radius": 12,
+     "HealthStealPctHero": 75,
+     "HealthStealPct": 10,
+     "ConeAngle": 115,
+     "BulletResist": 50,
+     "TechResist": 50
+    },
+    "description": "After charging for {s:AbilityCastDelay}s, release pulses that damage enemies and heal you based on the damage done. While channeling Last Stand you have greatly increased bullet and spirit resist."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.3,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 805,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_yamato",
+  "heroId": 27,
+  "nameEn": "Yamato",
+  "role": "Delivers charged attacks with finesse",
+  "abilities": [
+   {
+    "className": "citadel_ability_power_slash",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 12,
+     "SlashLength": 22,
+     "ShortChargeDamagePct": 30,
+     "MediumChargeDamagePct": 50,
+     "FullChargeDamage": 145,
+     "SlashRadius": 41,
+     "FallSpeedMax": 5,
+     "PowerUpStages": 3,
+     "SlashCollisionRadius": 4,
+     "BulletResist": 60
+    },
+    "description": "Channel to increase damage over {s:AbilityCastDelay} seconds, then release a fully-charged sword strike. Press[Ability1]or[Attack]to trigger the strike early, dealing partial damage."
+   },
+   {
+    "className": "citadel_ability_flying_strike",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 36,
+     "SlowDuration": 2.5,
+     "SlowPercent": 40
+    },
+    "description": "Throw a grappling hook to reel yourself towards an enemy, dealing Light Melee Damage and slowing the target when you arrive."
+   },
+   {
+    "className": "citadel_ability_healing_slash",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 16,
+     "Damage": 55,
+     "Radius": 13,
+     "HealFixedHealth": 55,
+     "DebuffDuration": 4,
+     "FireRateSlow": 30
+    },
+    "description": "Slash enemies in front of you, damaging them and slowing their fire rate. If any enemy heroes are hit, you heal."
+   },
+   {
+    "className": "citadel_ability_infinity_slash",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 150,
+     "AbilityDuration": 5,
+     "AbilitySpeedPct": 60,
+     "BulletResist": 30,
+     "TechResist": 30,
+     "MaxHealthRegen": 15,
+     "ShadowFormDurationOnKill": 2
+    },
+    "description": "Become infused with {s:hero_name}'s shadow soul. After an initial invincible transformation your abilities are refreshed and are 60% faster. You gain immunity to negative status effects and have greatly increased bullet and spirit resist. When you get a hero kill, you heal and the duration is extended."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 8.2,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 55,
+   "EHeavyMeleeDamage": 128,
+   "EMaxHealth": 730,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_lash",
+  "heroId": 31,
+  "nameEn": "Lash",
+  "role": "Dives down to stomp his foes",
+  "abilities": [
+   {
+    "className": "citadel_ability_lash_down_strike",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 18,
+     "Radius": 10,
+     "StrikeVelocity": 50,
+     "StompDamage": 60,
+     "StompDamagePerMeterPrimary": 5.5,
+     "StompDamagePerMeterSecondary": 4.2,
+     "StompDamagePrimaryRange": 25,
+     "MinAimAngle": 60,
+     "StompVerticalThreshold": 118
+    },
+    "description": "Stomp the ground beneath you, damaging enemies in front of you. If you perform Ground Strike while airborne, you quickly dive towards the ground. Damage grows slower after 25m."
+   },
+   {
+    "className": "citadel_ability_lash",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 35,
+     "JumpVelocity": 20,
+     "LashFriendlies": 1,
+     "JumpSlowResistance": 0.667
+    },
+    "description": "Pull yourself through the air toward a target. Using Grapple also resets your limit of air jumps and dashes."
+   },
+   {
+    "className": "ability_lash_flog",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 26,
+     "TargetingConeAngle": 40,
+     "HealPctVsNonHeroes": 16,
+     "HealPctVsHeroes": 40,
+     "Damage": 65
+    },
+    "description": "Strike enemies in front of you with your whip, Healing for a portion of the damage dealt."
+   },
+   {
+    "className": "citadel_ability_lash_ultimate",
+    "slot": "Signature_4",
+    "props": {
+     "TimeToGainLockonStack": 0.7,
+     "LockonConeAngle": 40,
+     "TimeToLoseLockonStack": 2,
+     "LosingLockGraceTime": 0.4,
+     "MaxLockonStacks": 1,
+     "AbilityCooldown": 170,
+     "ImpactDamage": 105,
+     "UpBoostSpeed": 400,
+     "LiftHeight": 6,
+     "BoostTime": 1,
+     "HangTime": 0.6,
+     "ThrowDistance": 14,
+     "SlamSpeed": 1600,
+     "ThrowStraightDuration": 1.5,
+     "SlowDuration": 4,
+     "SlowPercent": 40,
+     "ImpactRadius": 6,
+     "NotInConeLosesLock": 1
+    },
+    "description": "Focus on enemies to connect whips to them. After channeling, connected enemies are lifted and stunned then slammed into the ground. Your victims and any enemies in the landing zone will be damaged and slowed. Press[Attack]to throw connected enemies early. Enemies that are not in line of sight or go out of range during the latch time will not be grabbed."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7.2,
+   "ESprintSpeed": 2.1,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 780,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47,
+   "ETechArmorDamageReduction": 10
+  }
+ },
+ {
+  "className": "hero_viscous",
+  "heroId": 35,
+  "nameEn": "Viscous",
+  "role": "Rolls around deflecting bullets",
+  "abilities": [
+   {
+    "className": "viscous_goo_grenade",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 26,
+     "SlowPercent": 28,
+     "MaxBounces": 2,
+     "Damage": 55,
+     "Radius": 5,
+     "PuddleDuration": 10,
+     "DetonateCooldown": 0.12,
+     "SecondHitDamagePercentage": 0.5,
+     "ThirdHitDamagePercentage": 0.38,
+     "FourthHitDamagePercentage": 0.26,
+     "PuddleSlideBuff": 60
+    },
+    "description": "Throw a ball of goo that deals damage and leaves puddles of goo behind that apply movement slow to enemies in the radius."
+   },
+   {
+    "className": "viscous_restorative_goo",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 42,
+     "AbilityDuration": 3,
+     "CubeScale": 1.5,
+     "Friction": -80,
+     "BonusHealthRegen": 40,
+     "PushBackRadius": 50,
+     "PushBackForce": 250,
+     "LightMeleeForce": 300,
+     "HeavyMeleeForce": 700,
+     "BulletForce": 600,
+     "SlideForce": 70,
+     "BreakoutTime": 1,
+     "PostCubeBuffDuration": 8
+    },
+    "description": "Encase the target in a cube of restorative goo that protects from damage, and increases health regen. Target is unable to take any new actions while cubed. Can be used on self. Press [Mantle] to escape early."
+   },
+   {
+    "className": "viscous_telepunch",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 24,
+     "Damage": 20,
+     "Radius": 4,
+     "PunchHalfHeight": 5.5,
+     "TossSpeed": 625,
+     "TossSpeedWall": 750,
+     "TossSpeedUpWall": 500,
+     "TossGroundSideRatio": 0.7,
+     "PunchRollSlow": -36,
+     "PunchRollSlowDuration": 1,
+     "SlowPercent": 24,
+     "ImpactDuration": 3,
+     "FriendlyImpactDuration": 2,
+     "TossDuration": 0.6,
+     "PunchFriendlyAirControl": 30
+    },
+    "description": "Materialize a fist in the world that punches everyone in the area, applying Knock Up. Punching an enemy deals Melee Damage and applies Slow. You and your allies have increased Air Control."
+   },
+   {
+    "className": "viscous_goo_bowling_ball",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 150,
+     "AbilityDuration": 11,
+     "BallRadius": 1.4,
+     "BallHitRadius": 1.8,
+     "Damage": 110,
+     "BallOffset": 50,
+     "FrictionPercentage": -85,
+     "AccelerationPercentage": -60,
+     "MoveSpeedMax": 7,
+     "BreakablePropDamageRadius": 75,
+     "JumpForce": 500,
+     "ParticleRadiusMultiplier": 1.2,
+     "StunDuration": 0.5,
+     "KnockForce": 400,
+     "TechResist": 35,
+     "BulletResist": 35,
+     "AirJumpForce": 500,
+     "CastWhileRolling": 1
+    },
+    "description": "Morph into a large goo ball that deals damage and stuns enemies on impact. The ball grants large amounts of Bullet and Spirit resist, bounces off walls and can double jump."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7.2,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 63,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 780,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_synth",
+  "heroId": 50,
+  "nameEn": "Pocket",
+  "role": "Infiltrates and disrupts the backline",
+  "abilities": [
+   {
+    "className": "synth_barrage",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 32,
+     "DamagePerProjectile": 32,
+     "ProjectileAmount": 4,
+     "FallSpeedMax": 10,
+     "AirSpeedMax": 100,
+     "AirDrag": 0.3,
+     "Radius": 4.5,
+     "MoveSlowPercent": 24,
+     "SlowDuration": 1.5,
+     "AmpPercentPerStack": 6,
+     "AmpDuration": 15
+    },
+    "description": "Channel to start launching projectiles that deal Spirit Damage and apply Slow around their impact point. Projectiles that hit a hero grant {s:hero_name} Damage Amp that stacks. Casting while airborne will cause {s:hero_name} to float. Casting AirDash or Flying Cloaking will not cancel Barrage."
+   },
+   {
+    "className": "synth_plasma_flux",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 25,
+     "Radius": 5,
+     "Damage": 60,
+     "MaxLifetime": 3.8
+    },
+    "description": "Launch a sentient cloak that travels forward and damages enemies. You can press [Ability2] to teleport to its location."
+   },
+   {
+    "className": "synth_pulse",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 17,
+     "Radius": 12,
+     "Damage": 65,
+     "FallSpeedMax": 1
+    },
+    "description": "Escape into your suitcase. When the duration ends, deal Spirit Damage to nearby enemies. Duration can be ended early by performing any action."
+   },
+   {
+    "className": "synth_affliction",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 170,
+     "Radius": 9,
+     "DPS": 32,
+     "DamageInterval": 0.5,
+     "DebuffDuration": 10,
+     "CanBePurged": 1
+    },
+    "description": "Applies Spirit Icondamage over time to enemies nearby. Affliction's damage is non-lethal and does not apply item procs."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7.2,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 60,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 780,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47,
+   "ETechArmorDamageReduction": -15
+  }
+ },
+ {
+  "className": "hero_mirage",
+  "heroId": 52,
+  "nameEn": "Mirage",
+  "role": "Times his shots and catches fleeing targets",
+  "abilities": [
+   {
+    "className": "mirage_fire_beetles",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 35,
+     "OutgoingDamagePenaltyPercent": -20,
+     "DPS": 8,
+     "StealDuration": 5,
+     "MaxStacks": 100
+    },
+    "description": "Infest an enemy with fire scarabs, stealing life from them and causing them to deal reduced damage."
+   },
+   {
+    "className": "mirage_tornado",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 36,
+     "Radius": 4,
+     "OpenHeight": 8,
+     "Damage": 65,
+     "ProjectileThinkInterval": 0.01,
+     "DistanceAboveGround": 0.5,
+     "ClimbHeight": 1,
+     "DropDownRate": 10,
+     "TornadoSpeed": 24,
+     "EnemyLiftDuration": 0.2,
+     "LiftHeight": 3,
+     "MaxDeltaMovementControl": 2,
+     "HoldInPlaceDuration": 0.3,
+     "WhirlwindEvasionChance": 30,
+     "WhirlwindDuration": 4,
+     "SlowDuration": 3,
+     "SlowPercent": 24
+    },
+    "description": "Transform yourself into a whirlwind that travels forward, damaging enemies, slowing their move speed and lifting them up in the air. After emerging from the tornado you gain bullet evasion."
+   },
+   {
+    "className": "mirage_sand_phantom",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 2.75,
+     "ProcCooldown": 2.75,
+     "ProcDamageBase": 11,
+     "ProcChance": 100,
+     "ProcMaxRange": 40,
+     "VictimStackDuration": 5,
+     "RevealDuration": 6,
+     "MaxStacks": 4,
+     "DMarkMultiplierPerStack": 2
+    },
+    "description": "Active: Consume all Djinn Mark's to deal its damage now."
+   },
+   {
+    "className": "mirage_teleport",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 140,
+     "TeleportCompletedTime": 2,
+     "InterruptCooldown": 4,
+     "SearchRadius": 30
+    },
+    "description": "Target a location on the minimap. After a brief wait, teleport to that location. Taking damage during the wait period causes the teleport to be interrupted."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 730,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1.5,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_viper",
+  "heroId": 58,
+  "nameEn": "Vyper",
+  "role": "Slither in and assassinate enemies",
+  "abilities": [
+   {
+    "className": "ability_viper_debuffdagger",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 10,
+     "Damage": 50,
+     "SlowDuration": 2,
+     "SlowPercent": 28,
+     "DamagePerStack": 25,
+     "SlowPercentPerStack": 12,
+     "StackDuration": 10,
+     "MaxStacks": 3
+    },
+    "description": "Throw a dagger, dealing Spirit Damage and applying Slow. Every subsequent dagger against the same target stacks in Spirit Damage and Slow."
+   },
+   {
+    "className": "ability_viper_venom",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 28,
+     "VenomDuration": 3,
+     "VenomMinDamage": 20,
+     "VenomMaxDamage": 140,
+     "VenomMinDamageHealthPercentage": 100,
+     "VenomMaxDamageHealthPercentage": 30,
+     "VenomBuildupPerShot": 1,
+     "BuildUpDuration": 5
+    },
+    "description": "Inject a target with lethal venom. After a delay the venom triggers, dealing Spirit Damage. The damage is increased by the target's missing health. Lethal Venom will ignore Petrify's damage block."
+   },
+   {
+    "className": "ability_viper_snakedash",
+    "slot": "Signature_3",
+    "props": {
+     "SlideScale": 15
+    },
+    "description": "You have increased Slide Distance, can Slide up hills, and can turn faster while Sliding."
+   },
+   {
+    "className": "ability_viper_petrifybola",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 115,
+     "Damage": 50,
+     "PetrifyDamage": 180,
+     "Radius": 12,
+     "PetrifyDuration": 2.2,
+     "SlowDuration": 1.5,
+     "PetrifyDamageBreakThreshold": 200,
+     "SlowPercent": 40
+    },
+    "description": "Throw an explosive bola. On exploding, the bola Slows and Damages all enemies in the area. Direct hits deal Additional Damage and Petrify instead. Petrified units block all damage, but cannot take actions."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.9,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 780,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 4,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 0.7,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_magician",
+  "heroId": 60,
+  "nameEn": "Sinclair",
+  "role": "Misdirect and hex enemies",
+  "abilities": [
+   {
+    "className": "ability_magician_magicbolt",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 24,
+     "MaxDamage": 120,
+     "Radius": 3.25,
+     "RedirectVelocity": 1500,
+     "ProjectileLifetime": 4,
+     "InitialProjectileVelocity": 800,
+     "ProjectileRedirectCount": 1,
+     "CloneDamagePercentage": 50,
+     "MinDamage": 60,
+     "MaxDamageTime": 2,
+     "CloneBoltDelay": 0.1
+    },
+    "description": "Fire a bolt of magic that deals Damage, increasing as it travels. If you have an Assistant, they also cast Vexing Bolt at reduced damage. Press [Ability1] to redirect the bolt towards your crosshairs."
+   },
+   {
+    "className": "ability_magician_cloneturret",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 40,
+     "AbilityDuration": 6,
+     "Damage": 15,
+     "TurretBulletVerticalOffset": 2,
+     "TurretBulletTargetAngle": 20,
+     "TurretBulletTargetRadius": 500,
+     "TotalSwaps": 2,
+     "LeashRadius": 20
+    },
+    "description": "Summon an Assistant at the targeted location. The Assistant attacks whenever you fire your weapon, dealing Damage. While the Assistant is out, you can press [Ability2] to swap positions with your Assistant. Casting Spectral Assistant also reloads your weapon."
+   },
+   {
+    "className": "ability_magician_animalhexarea",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 26,
+     "DamageAmpPercentage": 15,
+     "Radius": 6.5,
+     "SelfBumpImpulse": 500,
+     "AirDampingDuration": 1,
+     "HexMoveSpeedLimit": 6,
+     "MoveSpeedBonusPct": 36,
+     "HexDuration": 2,
+     "DetonationDelay": 0.9
+    },
+    "description": "Hex a target area and transforming all enemies into a Rabbit for a limited duration. Rabbits are small and move faster, but take increased Damage and are unable to perform most actions. Hex does not interrupt abilities."
+   },
+   {
+    "className": "ability_magician_copyult",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 85,
+     "CopiedUltWindow": 12,
+     "CopyInternalCooldown": 0.5,
+     "CopyCooldownPercentage": 40
+    },
+    "description": "Copy the Ultimate of an enemy hero for a limited time. Reactivating the ability will use the Copied Ultimate instead. Copies will inherit this ability's upgrade points. Audience Participation will also copy the cooldown."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7.2,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 730,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_vampirebat",
+  "heroId": 63,
+  "nameEn": "Mina",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_vampirebat_steallife",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 16,
+     "Damage": 60,
+     "TargetingConeAngle": 60,
+     "TimeBetweenAttacks": 0.04,
+     "MissingHealthDamagePercentage": 6,
+     "MiniJumpVelocity": 200,
+     "RakeHealPerKill": 25,
+     "TrooperExecuteThreshold": 60,
+     "FallSpeedMax": 3,
+     "AirDrag": 0.2,
+     "FallingDrag": 20,
+     "MaxFloatTime": 4
+    },
+    "description": "Active: Slash with your umbrella, dealing Spirit Damage, increasing with their missing health. Receive a Heal for every target killed. Passive: Holding [ADS] causes you to briefly float. Rake executes non-heroes below {s:TrooperExecuteThreshold} health."
+   },
+   {
+    "className": "ability_vampirebat_batblink",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 32,
+     "AbilityDuration": 0.65,
+     "MaxRecasts": 1,
+     "RecastWindow": 4,
+     "ExitVelocity": 5,
+     "EndJumpVelocity": 200
+    },
+    "description": "Briefly disperse, becoming untargetable and flying to a target location. Can be recast within a brief window."
+   },
+   {
+    "className": "ability_vampirebat_lovebites",
+    "slot": "Signature_3",
+    "props": {
+     "MagicDamagePerBullet": 4,
+     "PerTargetCooldown": 10,
+     "BuildUpPerShot": 18.4,
+     "BuildUpDuration": 5,
+     "BonusDamage": 45,
+     "BuildUpPerBat": 20,
+     "BuildUpPerDagger": 30,
+     "BuildUpHeadshotBonus": 1.5,
+     "EffectivenessVolumeScaleMin": 0.5,
+     "EffectivenessVolumeScaleMax": 1
+    },
+    "description": "Your bullets apply additional Spirit Damage. Dealing damage your abilities builds up to a vicious bite, dealing a burst of Bonus Spirit Damage. Love Bites has a unique cooldown per target."
+   },
+   {
+    "className": "ability_vampirebat_batswarm",
+    "slot": "Signature_4",
+    "props": {
+     "TimeToGainLockonStack": 0.01,
+     "LockonConeAngle": 40,
+     "TimeToLoseLockonStack": 0.3,
+     "MaxLockonStacks": 1,
+     "StacksCanDecay": 1,
+     "AbilityCooldown": 150,
+     "BatSpawnRadius": 1.5,
+     "FallSpeedMax": 1,
+     "BatSpawnRandomVelocity": 300,
+     "AirDrag": 12,
+     "Damage": 4.6,
+     "JumpPitch": -60,
+     "JumpSpeed": 17,
+     "BatCount": 75,
+     "DebuffDuration": 1.25,
+     "BatSpawnRandomAngle": 0.15,
+     "BatCountPerWave": 1,
+     "BonusBatsMax": 50,
+     "BonusBatsPerProc": 2,
+     "CurrentHealthDamageCapToBosses": 20,
+     "BatPerSecond": 30,
+     "JumpCeilingCheckDistance": 11,
+     "NotInConeLosesLock": 1,
+     "TargetingConeAngle": 20,
+     "GroundAccelerationPercentage": -80,
+     "GroundFrictioNpercentage": -80,
+     "VerticalDrag": 1,
+     "BatEffectiveness": 0.2,
+     "MaxBatTargets": 2
+    },
+    "description": "Active: Unleash a cloud of bats that seek out targets, each dealing Spirit Damage and applying Silence. Passive: Triggering Love Bites against heroes permanently increases the number of bats released."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.5,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 660,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 2,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.238095,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.62,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.43,
+   "EDebuffResist": -8
+  }
+ },
+ {
+  "className": "hero_drifter",
+  "heroId": 64,
+  "nameEn": "Drifter",
+  "role": "",
+  "abilities": [
+   {
+    "className": "drifter_blood_blast",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 16,
+     "RangeForBonusDamage": 8,
+     "TargetingConeAngle": 50,
+     "ExtraSweepConeAngle": 60,
+     "ExtraSweepRange": 3,
+     "ExtraSweepOffsetBehindCaster": 80,
+     "BonusDamage": 40,
+     "FallSpeedMax": 1,
+     "AirSpeedMax": 70
+    },
+    "description": "Swipe at enemies in a cone ahead of you, dealing Spirit Damage. If the enemy is in close range, deal bonus Melee Damage."
+   },
+   {
+    "className": "drifter_shadow_mark",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 26,
+     "AbilityDuration": 5,
+     "DotHealthPercent": 2,
+     "TeleportBackOffsetFromTarget": 135,
+     "FallSpeedMax": 0.3,
+     "AirDrag": 3,
+     "VerticalDrag": 1
+    },
+    "description": "Send out a mark that bleeds the first target it hits, dealing Spirit DPS. While the enemy is bleeding you can re-activate Stalker's Mark to instantly appear behind their back."
+   },
+   {
+    "className": "ability_drifter_hunger",
+    "slot": "Signature_3",
+    "props": {
+     "IsolationRange": 20,
+     "AmpDamagePercent": 15,
+     "LowHealthThreshold": 30,
+     "InvisFadeToDuration": 0.3,
+     "SpottedRadius": 15,
+     "RevealOnSpottedDuration": 1.5,
+     "RevealOnDamageDuration": 0.25,
+     "DelayBeforeInvisStarts": 0.6,
+     "TrailDuration": 10,
+     "MaxTrailTargets": 2,
+     "TargetLingerDuration": 3,
+     "KillDuration": 300,
+     "WeaponDmgPerIsolationKill": 3,
+     "IsolationAssistPercentValue": 100
+    },
+    "description": "When enemy heroes are low on health you deal amplified damage against them. These enemies leave a lingering blood trail as they move."
+   },
+   {
+    "className": "drifter_darkness",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 145,
+     "AbilityDuration": 6.5,
+     "SmallVisionDistance": 15,
+     "DrifterNearbyRangeCheck": 40,
+     "DarkFactor": 1,
+     "PostProcessFadeInTime": 0.2,
+     "PostProcessFadeOutTime": 1,
+     "MinProjectileSpeed": 3000,
+     "MaxProjectileSpeed": 3000,
+     "DistanceForMaxProjSpeed": 200,
+     "BonusSprintSpeed": 2,
+     "BonusSprintAcceleration": 12,
+     "RevealDuration": 3,
+     "MaxTargets": 2,
+     "AuraLingerDuration": 0.001
+    },
+    "description": "Surround nearby enemy heroes in darkness, severely limiting their vision of other units. Affected enemies are briefly revealed to you and are considered isolated for the duration. You gain Bonus Sprint Speed."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.9,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 51.5,
+   "EHeavyMeleeDamage": 120,
+   "EMaxHealth": 755,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 3.5,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 0.55,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_priest",
+  "heroId": 65,
+  "nameEn": "Venator",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_priest_flashbang",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 25,
+     "Radius": 4.5,
+     "Damage": 35,
+     "CameraTurnRateMax": 15,
+     "BurnDuration": 3.5,
+     "DPS": 10,
+     "HealAmpRegenPenaltyPercent": -30,
+     "BounceGrenadeSpeed": 1100,
+     "BurnRadius": 4.5,
+     "BurnLingerDuration": 0.15,
+     "HealAmpReceivePenaltyPercent": -30,
+     "PreBounceLifetime": 15,
+     "BounceLifetime": 0.5
+    },
+    "description": "Fire a grenade that bounces before exploding, dealing Weapon Damage and setting enemies on fire. Burning targets deal Pure Damage to enemies in the area and suffer from reduced healing."
+   },
+   {
+    "className": "ability_priest_knockback",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 23,
+     "Damage": 60,
+     "BonusDamage": 30,
+     "StunDuration": 0.6,
+     "KnockbackSpeed": 1200,
+     "BonusKnockbackDistance": 3.5,
+     "TargetingConeAngle": 60,
+     "PushForce": 6,
+     "SelfPushForce": 500,
+     "MaxPushForceHorizontal": 1400,
+     "MaxPushForceVertical": 500,
+     "WallStunDistance": 7
+    },
+    "description": "Fire a blast with your shotgun, dealing Weapon Damage and pushing enemies back. Enemies near a wall receive Stun and take Bonus Weapon Damage."
+   },
+   {
+    "className": "ability_priest_beartrap",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 28,
+     "Radius": 2,
+     "TrapHeight": 2,
+     "Lifetime": 30,
+     "Damage": 80,
+     "ImmobilizeDuration": 1.25,
+     "ArmTime": 0.5,
+     "TripUpSpeed": 250,
+     "RevealDuration": 6,
+     "TetherRadius": 0.3,
+     "TetherDuration": 0.6
+    },
+    "description": "Kick a trap that arms after a brief delay. The trap springs on the first enemy it touches, dealing Spirit Damage, applying Immobilize, and revealing enemies for a duration afterwards."
+   },
+   {
+    "className": "ability_priest_weaponswap",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 160,
+     "AbilityDuration": 15,
+     "Damage": 120,
+     "ExecuteThreshold": 8,
+     "PushForce": 500,
+     "ExplodeRadius": 0.2,
+     "SwapEndDelay": 0.6,
+     "StakeCount": 3,
+     "BonusDamage": 115,
+     "BonusAmpToVampire": 5
+    },
+    "description": "Load your crossbow with 3 stakes, dealing massively increased Weapon Damage. The final stake is blessed, dealing bonus Pure Damage and executing low-health enemies."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.4,
+   "ESprintSpeed": 1,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 125,
+   "EMaxHealth": 820,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51
+  }
+ },
+ {
+  "className": "hero_frank",
+  "heroId": 66,
+  "nameEn": "Victor",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_frank_shocktarget2",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 2,
+     "Damage": 100,
+     "AbilityChargesConditionally": 1,
+     "BonusShocksDelay": 0.2,
+     "SpreadAngle": 40,
+     "BoltCount": 7,
+     "StoredDamageHealthPercentRequired": 40,
+     "SpreadRandomness": 0.005,
+     "BatteryGenerationPercent": 100
+    },
+    "description": "Taking any damage passively charges up your Pain Battery. Once full, activating the ability fires multiple shocking bolts, dealing Spirit Damage once per target."
+   },
+   {
+    "className": "ability_frank_selfzap",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 30,
+     "AbilityDuration": 4.5,
+     "BonusMoveSpeed": 3,
+     "CurrentHealthPercentDamage": 15,
+     "TotalHealthRegen": 100
+    },
+    "description": "Deal Spirit Damage to yourself. Then, gain bonus Regen and Bonus Move Speed, decaying over time."
+   },
+   {
+    "className": "ability_frank_painaura",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 2,
+     "AbilityDuration": 8,
+     "Radius": 8,
+     "MinDPS": 13,
+     "SelfDPS": 15,
+     "DebuffDuration": 0.5,
+     "ToggleOffDelay": 0.5,
+     "MaxDPS": 58,
+     "SelfDamagePercentage": 70
+    },
+    "description": "Unleash pain, dealing Spirit DPS to both enemies and yourself. The damage continues to increase the longer the ability is channeled, up to a maximum amount."
+   },
+   {
+    "className": "ability_frank_revive",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 240,
+     "Damage": 200,
+     "Radius": 18,
+     "HalfHeight": 15,
+     "InitialDelay": 0.5,
+     "RespawnDelay": 3,
+     "RespawnHealthPercent": 50,
+     "SlowPercent": 120,
+     "EnemyDashSlowPercent": -26,
+     "SlowDuration": 3,
+     "ZombieTickRate": 0.02,
+     "StunDuration": 1.5
+    },
+    "description": "Release a wave after taking lethal damage, applying a diminishing Slow. After a brief channel you reanimate, dealing Spirit Damage and applying Stun to nearby enemies."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.3,
+   "ESprintSpeed": 1.1,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 800,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1.5,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51,
+   "ETechArmorDamageReduction": 0
+  }
+ },
+ {
+  "className": "hero_bookworm",
+  "heroId": 67,
+  "nameEn": "Paige",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_bookworm_dragonfire",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 33,
+     "AbilityDuration": 5,
+     "DPS": 30,
+     "StartupDelay": 0.3,
+     "DebuffDuration": 1.5,
+     "DragonSearchRadius": 8.5,
+     "DragonConeRange": 5,
+     "DragonUpwardSpeed": 400,
+     "GroundFlameDuration": 3,
+     "Damage": 60,
+     "Radius": 4,
+     "DragonSearchTickRate": 0.1,
+     "GroundAuraSpacing": 2,
+     "AuraLingerDuration": 0.1,
+     "DragonTravelRange": 20,
+     "DragonRangePerSecond": 500
+    },
+    "description": "Conjure a dragon that appears at the target location before flying forward, dealing Spirit Damage and leaving a burning path in its trail."
+   },
+   {
+    "className": "ability_bookworm_knightbarrier",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 28,
+     "AbilityDuration": 5,
+     "CombatBarrier": 125,
+     "PushForce": 900,
+     "BaseAttackDamagePercent": 25,
+     "ShoveRadius": 6,
+     "BonusTargetRadius": 30,
+     "BonusSpiritDamagePercent": 15
+    },
+    "description": "Grant an ally a Combat Barrier. While the barrier holds, they gain Bonus Weapon Damage."
+   },
+   {
+    "className": "ability_bookworm_aoemagic",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 30,
+     "Damage": 90,
+     "Radius": 7.5,
+     "DetonationDelay": 1.25,
+     "ImmobilizeDuration": 1,
+     "SlowDuration": 0.5,
+     "SlowPercent": 36,
+     "Height": 8
+    },
+    "description": "Target an area with latent magic, applying Slow. The magic detonates after a delay, dealing Spirit Damage and applying Immobilize."
+   },
+   {
+    "className": "ability_bookworm_knightcharge",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 210,
+     "AbilityDuration": 13,
+     "Damage": 125,
+     "GroundStickHeight": 0.05,
+     "TossUpSpeed": 600,
+     "KnightChargeWidth": 1.7,
+     "KnightCount": 5,
+     "KnightPositionSpread": 1.8,
+     "BonusMoveSpeed": 5,
+     "BuffDuration": 9,
+     "AllyRadius": 4,
+     "AllyHeight": 20,
+     "KnightWhiskerLength": 300,
+     "KnightWhiskerSide": 50,
+     "KnightWhiskerStrength": 0.2,
+     "TossBackSpeed": 100,
+     "KnightPositionStagger": -4,
+     "StunDuration": 1,
+     "HealAmount": 125,
+     "KnightNavSearchDistance": 10,
+     "KnightChargeHeight": 3.5,
+     "GravityAcceleration": -1900,
+     "KnightMaxJumpHeight": 30,
+     "KnightMaxFallHeight": -35,
+     "KnightNavForwardDistance": 8,
+     "KnightJumpSpeed": 900,
+     "AirDrag": 0.8,
+     "FallSpeedMax": 20,
+     "WaveCount": 2,
+     "WavePositionStagger": -15,
+     "KnightBonusPerWave": -99,
+     "KnightCountInFirstWave": 5,
+     "CancelCooldownRefundPercentage": 50,
+     "TargetFindingDelay": 0.04,
+     "MaxAmp": 100,
+     "MaxAmpDistance": 250
+    },
+    "description": "Release a wave of spectral knights and steeds that charge across the entire city, Healing allies and dealing Spirit Damage to enemies. The strength of the Heal and Spirit Damage is amplified as the knights travel further."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.9,
+   "ESprintSpeed": 3.5,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 42,
+   "EHeavyMeleeDamage": 120,
+   "EMaxHealth": 680,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51
+  }
+ },
+ {
+  "className": "hero_doorman",
+  "heroId": 69,
+  "nameEn": "The Doorman",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_doorman_bomb",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 18,
+     "AbilityDuration": 4,
+     "Radius": 5.5,
+     "ExplosionDamage": 55,
+     "ProjectileFuse": 3,
+     "ProjectileDrag": 0.975,
+     "DebuffAccuracy": -40,
+     "ImpactDamage": 40,
+     "AccuracyDebuffFalloffBias": 0.3,
+     "SlowPercent": 28,
+     "EnableAura": 1
+    },
+    "description": "Throw out a call bell that deals Spirit Damage on impact. After a short delay it explodes, dealing additional Spirit Damage and causing affected enemies to suffer reduced weapon accuracy and movement Slow. Can be shot to detonate early."
+   },
+   {
+    "className": "ability_doorman_doorway",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 45,
+     "AbilityDuration": 15,
+     "DoorwayCloseCooldown": 8,
+     "DoorwayDistance": 65
+    },
+    "description": "Place two connected doors in the world. Players and most projectiles entering one door will exit out through the other. The doors will close at the end of the duration. The two doors must be placed within the doorway distance of each other."
+   },
+   {
+    "className": "ability_doorman_luggage_cart",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 30,
+     "AbilityDuration": 6,
+     "CartDamage": 60
+    },
+    "description": "Send out a luggage Cart that deals Spirit Damage and Pulls enemy heroes along its path. Can be alt cast with [AltCast] to target friendly heroes instead."
+   },
+   {
+    "className": "ability_doorman_hotel",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 140,
+     "AbilityDuration": 6.5,
+     "Damage": 75,
+     "LateCheckoutDamage": 125,
+     "TimeSlowDuration": 1,
+     "TimeSlowPercentage": 100
+    },
+    "description": "Send the target's physical body to be a guest at the Baroness Hotel. The guest is to promptly make their way to the exit elevator, where they'll be sent back to their original position. A stay at the Baroness Hotel is paid for in Spirit Damage. Failure to check-out on time costs additional Spirit Damage."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7.9,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 755,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 0.7,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.62,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.43
+  }
+ },
+ {
+  "className": "hero_punkgoat",
+  "heroId": 72,
+  "nameEn": "Billy",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_punkgoat_ult",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 35,
+     "CameraTurnRateMax": 2000,
+     "PlaceDistanceInFrontOfCaster": 6.2,
+     "Damage": 35,
+     "TossForce": 350,
+     "ExplodeDelay": 0.5,
+     "CountsAsLightMelee": 1,
+     "TossDuration": 0.4,
+     "PullDownDuration": 0.75,
+     "PullDownRange": 3,
+     "WaveThickness": 1,
+     "WaveStartRadius": 0.5,
+     "WaveEndRadius": 8
+    },
+    "description": "Slam your bat into the ground, Pulling enemies down and dealing Melee Damage. The slam creates a shockwave that deals Spirit Damage and applies Knock Up."
+   },
+   {
+    "className": "ability_punkgoat_goatflip",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 32,
+     "AbilityDuration": 0.3,
+     "ChargeRadius": 2.54,
+     "ChargeMultiHitRadius": 1.5,
+     "ChargeSpeed": 1200,
+     "ChargeStrikeDistance": 165,
+     "CameraTurnRateMax": 188,
+     "GoingUpSpeed": 430,
+     "GoingUpDistance": 3.1,
+     "GoingUpEnemyDistancePercent": 95,
+     "GoingBackAwaySpeed": -100,
+     "KnockAwaySpeed": 170,
+     "TimeBeforeGoUpForLagComp": 0.1,
+     "TimeGoingUpEnemy": 0.2,
+     "HoverGravityScale": 0.75,
+     "AirControlDebuffDuration": 1.5,
+     "AirControlDashReductionPct": -70,
+     "AirControlAccelPercent": 50,
+     "AirControlPercent": 50,
+     "WorldImpactRadius": 25,
+     "AllowRamMultiple": 1,
+     "NearbyHeroKillDistance": 10,
+     "ReduceCooldownOnHitPct": 50,
+     "Damage": 40
+    },
+    "description": "Charge head-first into an enemy and send them into the air along with Billy. Cooldown reduced by 50% on impact."
+   },
+   {
+    "className": "ability_punkgoat_blasted",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 27,
+     "AbilityDuration": 8,
+     "DurationPerHeavyMelee": 4.5,
+     "DurationPerLightMelee": 2.8,
+     "NonPlayerResourceScalePct": 25,
+     "LightMeleeScalePct": 40,
+     "MaxDuration": 35,
+     "BulletsReloadedPerLightMeleePct": 35,
+     "BulletsReloadedPerHeavyMeleePct": 100,
+     "BulletDamageAmp": 10,
+     "BulletDamageAmpDuration": 7,
+     "MaxHealthMelee": 70,
+     "HealthBoostDuration": 11,
+     "BlastedRateOnBulletPct": 50
+    },
+    "description": "Passive: Melee hits restore ammo and inflict wrecked on the victim for {s:BulletDamageAmpDuration}s."
+   },
+   {
+    "className": "ability_punkgoat_tether",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 175,
+     "AbilityDuration": 2.8,
+     "RopeLength": 2,
+     "RopeSnapNoLOSDuration": 0.5,
+     "RopeSnapDistance": 45,
+     "RopeSoftEdgeLength": 4.5,
+     "MoveSpeedSlowMaxPct": 35,
+     "MoveSpeedSlowMinPct": 25,
+     "Damage": 120,
+     "DPS": 45,
+     "PullForceMax": 2000,
+     "PullDistance": 4,
+     "PullDuration": 0.8,
+     "PullTrackCasterDuration": 0.5
+    },
+    "description": "Chain nearby enemies to you. Chained enemies cannot use movement abilities and receive a heavy Slow when they pull on the chain. After a delay, yank everyone towards Billy and deal Spirit Damage. The chain breaks if you lose line of sight for a short while."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 820,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 0.8,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_necro",
+  "heroId": 76,
+  "nameEn": "Graves",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_necro_hauntingskull",
+    "slot": "Signature_1",
+    "props": {
+     "SkullCount": 4,
+     "SkullLifetime": 10,
+     "TargetSearchRadius": 7,
+     "TargetSearchDelayMax": 1.25,
+     "Damage": 16,
+     "TargetSearchDelayMin": 1.5,
+     "SummonHealth": 20,
+     "SkullImmuneDuration": 0.15,
+     "SpawnRadius": 2,
+     "DelayBeforeRespawning": 1,
+     "TargetDashRadius": 15,
+     "SummonTakesDamage": 1,
+     "ResourceCost": 120,
+     "ResourceGenerationPercent": 100,
+     "ResourceRadius": 40,
+     "PickupsPerDeath": 1,
+     "PickupsPerHeroDeath": 5,
+     "AbilityChargesConditionally": 1,
+     "KillTime": 0.2,
+     "ResourcePerPickup": 10,
+     "PickupsPerBossDeath": 5,
+     "PickupsPerNeutralTrooperDeath": 3,
+     "SkullKillGold": 7,
+     "TargetSearchInitialDelayMin": 0.15,
+     "TargetSearchInitialDelayMax": 0.2,
+     "TargetSearchInitialStagger": 0.125
+    },
+    "description": "Passive: Collect death when anything dies nearby and store it in your Jar of Dead. Active: Throw a jar to summon Deadheads that repeatedly deal Spirit Damage to enemies. Deadheads follow you instead if there's no nearby enemies, and prioritize the target of your weapon."
+   },
+   {
+    "className": "ability_necro_zombiewall",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 34,
+     "AbilityDuration": 5,
+     "ZombieWallLength": 14,
+     "AuraRadius": 0.75,
+     "DebuffDuration": 0.5,
+     "GroundAuraSpacing": 1,
+     "SlowPercent": 40,
+     "ZombieWallHeight": 2.5,
+     "Damage": 90,
+     "ImmobilizeDuration": 1,
+     "GroundAuraPopDelay": 1.1,
+     "ZombieWallDeployTime": 0.6,
+     "TetherDuration": 1,
+     "TetherRadius": 0.1,
+     "SummonCount": 1
+    },
+    "description": "Unearth a line of grasping hands, summoning a Ghoul and leaving behind a rift. Enemies who pass through take Spirit Damage and receive Immobilize. Alt-Cast [AltCast] rotates the orientation of the wall."
+   },
+   {
+    "className": "ability_necro_fear",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityDuration": 4,
+     "MaxStolenAttackDamage": 25,
+     "ShootDurationForMax": 4,
+     "ProgressLossPerSecond": 1,
+     "TickInterval": 0.15,
+     "DelayBeforeLoss": 0.5,
+     "ProgressLossMultiplier": 2.3,
+     "MaxStolenSpiritResist": 10,
+     "MaxStolenTargets": 3,
+     "MeleeBuildUp": 0.2
+    },
+    "description": "Your weapon steals Weapon Damage and Spirit Resist over time, up to a maximum amount per target."
+   },
+   {
+    "className": "ability_necro_gravestone",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 140,
+     "AbilityDuration": 16,
+     "GrowTime": 0.1,
+     "BlockerScaleFactor": 1,
+     "KnockupSpeed": 240,
+     "KnockupRadius": 4,
+     "KnockupSideRatio": 1,
+     "GravestoneHealth": 100,
+     "AuraRadius": 8,
+     "SlowPercent": 64,
+     "SlowDuration": 1.25,
+     "PushForce": 300,
+     "MaxGravestones": 3,
+     "SummonInitialDelay": 0.3,
+     "SummonFrequency": 4,
+     "StackingDebuffTickRate": 0.25,
+     "Damage": 115,
+     "GravestoneTakesDamage": 1,
+     "MaxStacks": 40,
+     "StackDuration": 5,
+     "SlowPercentPerStack": 0.5,
+     "TechArmorDamageReductionPerStack": -0.5,
+     "ReplicateZombieCast": 1,
+     "SummonLifetime": 20,
+     "DecayTickRate": 0.1,
+     "DecayDuration": 1,
+     "SummonMeleeDamage": 40,
+     "SummonHealth": 180,
+     "BonusSpiritDamagePercentage": 15,
+     "SummonSearchRadius": 4,
+     "SummonMaxCount": 32,
+     "ExplodeDelay": 0.23,
+     "SpawnDuration": 1.5,
+     "ExplosionRadius": 6.5,
+     "BulletResist": 12.5,
+     "SummonBurstCount": 2,
+     "SummonBurstFrequency": 0.1,
+     "DamageSlowPercent": 20,
+     "DamageSlowDuration": 0.5
+    },
+    "description": ""
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7,
+   "ESprintSpeed": 2.2,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 730,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 2,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47,
+   "EBuildUpRate": -50,
+   "EBulletLifesteal": 8
+  }
+ },
+ {
+  "className": "hero_fencer",
+  "heroId": 77,
+  "nameEn": "Apollo",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_fencer_throwblade",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 12,
+     "SigilRadius": 6.5,
+     "Damage": 85,
+     "JumpVelocityHidden": 16,
+     "SlowDuration": 4,
+     "SlowPercent": 24,
+     "TraceToGroundDistance": 1000,
+     "FallSpeedMax": 1,
+     "AirSpeedMax": 70,
+     "AirDrag": 2
+    },
+    "description": "Draw a sigil sphere in front of you and then leap backwards as it explodes, damaging and slowing enemies caught in it."
+   },
+   {
+    "className": "ability_fencer_riposte",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 22,
+     "DashSpeed": 3000,
+     "DashRange": 35,
+     "SideMoveSpeed": -100,
+     "TurnRateMax": 10,
+     "DashRadius": 2.2,
+     "CounterattackAntiMashDelay": 0.2,
+     "ParryWindow": 0.3,
+     "DamageThreshold": 60,
+     "SlashConeAngle": 90,
+     "SlashRadius": 6,
+     "SlashHalfWidth": 1,
+     "SlowDuration": 4,
+     "SlowPercent": 40,
+     "AbilityLifestealPercentHero": 50,
+     "StunDuration": 0.8,
+     "LiftHeight": 240,
+     "MoveSpeedMax": 4,
+     "MeleeResistReduction": -25,
+     "MeleeResistReductionDuration": 3,
+     "DashGraceWindow": 1.3
+    },
+    "description": "Prepare to deflect the next incoming attack. On a successful deflection, briefly become invulnerable and target an enemy hero to dash towards them, stunning them and reducing their Melee Resist. Press [Ability2] to select a target. Does not trigger against trooper or neutral damage."
+   },
+   {
+    "className": "ability_fencer_lunge",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 26,
+     "AbilityDuration": 8,
+     "DashAngleThreshold": 89,
+     "DashSpeed": 1100,
+     "AttackingDashSpeed": 2200,
+     "DashRange": 5,
+     "AttackDashRange": 3,
+     "DashRadius": 1.85,
+     "HoldDurationMin": 0.25,
+     "PerfectHoldTimeStart": 0.525,
+     "PerfectWindowDuration": 0.25,
+     "HoldDurationMax": 1.1,
+     "BaseDamage": 25,
+     "MaxDamageBeforePerfect": 40,
+     "PerfectDamage": 65,
+     "PctTravelDistanceToDamageIn": 80,
+     "MaxProcBleedDamagePercent": 50,
+     "SlashRadius": 1.6,
+     "SlashLength": 13,
+     "SlashCollisionRadius": 4.05,
+     "MaxStacks": 2,
+     "MaxStabs": 3,
+     "RecastTime": 5,
+     "ParryCooldownReduction": 5
+    },
+    "description": "Perform a series of lunges in any direction, delivering piercing stabs ahead of you. Hold your ability key to time your attacks, dealing more damage the longer it's held. Releasing your attack during the perfect window deals maximum damage. Press [Ability3] to re-cast."
+   },
+   {
+    "className": "ability_fencer_ultimate",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 145,
+     "TechCleaveExpireTime": 0.35,
+     "DashAngleThreshold": 89,
+     "DashSpeed": 10000,
+     "DashRange": 27,
+     "DashRadius": 7,
+     "GapDistanceToWall": 180,
+     "TravelDistPctBeforeWallGapCheck": 70,
+     "DebuffDuration": 1.8,
+     "CasterLockDuration": 1.8,
+     "TimeScaleDebuff": 70,
+     "VacuumSpeed": 400,
+     "ImpactDamage": 70,
+     "DelayedDamage": 200,
+     "GroundDashReductionPercent": -26,
+     "MoveSpeedPenaltyMaxSpeed": 200,
+     "CameraDistance": 250,
+     "SideMoveSpeedReduction": -100,
+     "TurnRateMaxDuringCast": 999,
+     "FallSpeedMax": 1,
+     "AirSpeedMax": 70,
+     "LowHealthEnemyThresholdPct": 50,
+     "BonusDamagePercent": 60,
+     "IncomingDamageReductionPercent": 70,
+     "TimerSoundDuration": 1
+    },
+    "description": "Charge up and perform a long range slash. Struck enemies cannot take action or heal and are stuck in slow motion. When this effect expires, they suffer devastating damage, dealing bonus damage against half-health enemies. While in slow motion, Apollo is invulnerable and enemies take reduced damage. Hold [Ability4] or [Attack] to delay the cast."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7.2,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 63,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 770,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_familiar",
+  "heroId": 79,
+  "nameEn": "Rem",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_familiar_ability02",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 25,
+     "OrbsToFire": 1,
+     "Damage": 75,
+     "Radius": 5,
+     "EffectDuration": 3,
+     "FadingSlowPercent": 36,
+     "TossDuration": 0.4,
+     "TossForce": 300,
+     "CDReduceOnPillowHit": 5
+    },
+    "description": "Throw your trusty pillow inflicting Spirit Damage and heavy Knock Back. Landing hits reduces the cooldown of your other abilities."
+   },
+   {
+    "className": "ability_familiar_attach",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 40,
+     "AbilityDuration": 5.5,
+     "BonusMoveSpeed": 4,
+     "HopOutLockoutDuration": 0.3,
+     "HealthRegenDuration": 2,
+     "HealingPerSecond": 42,
+     "MissingHealthBurstPct": 15
+    },
+    "description": "Jump to an ally and nap alongside them. Both you and the ally receive a burst Heal based on missing health followed by lingering Regen. Hop between allies with [Ability2] to apply the heal, once per ally. You are knocked off if stunned by an ultimate ability. You can use items and all self-casts target your ally instead."
+   },
+   {
+    "className": "ability_familiar_helpinghands",
+    "slot": "Signature_3",
+    "props": {
+     "HelperDowntimeDuration": 15.1,
+     "HelperChoreCooldownDuration": 5,
+     "AuraRadius": 10,
+     "AuraSoftRadius": 10,
+     "AuraAttackHeight": 10,
+     "DPSPerSprite": 1,
+     "Damage": 20,
+     "BonusMoveSpeed": 3,
+     "ArmTime": 0.1,
+     "PatrolDamageCooldown": 10,
+     "HelpersPerPatrol": 4,
+     "HelperCount": 1,
+     "InfestHeal": 8,
+     "InfestHealInterval": 2,
+     "InfestDamageTakenPercent": 30,
+     "InfestBurstHealthPercent": 75,
+     "TechArmorGain": 12,
+     "PlayerInfestDuration": 8,
+     "NPCInfestDuration": 50
+    },
+    "description": "Signal a Helper to lend a hand. They can collect boxes, do Sinner's Sacrifices, or be sent to support allies and troopers. Follow a hero: Provides a short burst of Spirit Resist and fading Move Speed. Follow a trooper: Provides healing, damage, resists, and allows tagging along. When no hero is around, souls from trooper kills are split amongst the team. Can be cast during Tag Along. Helpers will take a nap for {s:HelperDowntimeDuration}s after following someone."
+   },
+   {
+    "className": "ability_familiar_ability01",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 200,
+     "SleepDuration": 4,
+     "Radius": 19,
+     "MinSleepTime": 0.5,
+     "SleepDamageThreshold": 100,
+     "SleepMoveSpeed": 1.5,
+     "AwakeDamage": 120,
+     "Height": 20,
+     "MoveSpeedAndDashSlowPct": 20,
+     "DamageResistPctWhileChanneling": 30
+    },
+    "description": "Cast your gaze forward, piercing walls and floors. Enemies in the gaze are slowed, have reduced dash distance, and cannot use movement abilities. When the channel ends they fall asleep before waking up to a splitting headache that deals heavy Spirit Damage."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 7.2,
+   "ESprintSpeed": 4,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 58,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 680,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 3,
+   "EBaseHealthRegen": 2,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 0.9,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 0.8,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.72,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.51,
+   "EMeleeResist": -5
+  }
+ },
+ {
+  "className": "hero_werewolf",
+  "heroId": 80,
+  "nameEn": "Silver",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_werewolf_unloadgun",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 25,
+     "AbilityDuration": 5,
+     "Damage": 40,
+     "DebuffDuration": 3,
+     "BulletEffectiveness": 0.1,
+     "BulletRadiusOverride": 7,
+     "SpreadPenaltyPerShot": 0.5,
+     "RecoilRecoverySpeed": 0.1,
+     "RecoilDelayFactor": 0.05,
+     "RecoilSpeed": 12,
+     "RecoilStrength": 12,
+     "MaxShots": 3,
+     "BonusFireRate": 300,
+     "AccuracyPercentage": -30,
+     "CurrentHealthDamagePercentage": 2.5,
+     "ProcChance": 100,
+     "LingerDuration": 0.1,
+     "NonPlayerBonusWeaponPower": 100
+    },
+    "description": "Instantly reload your gun. You gain Bonus Fire Rate and deal bonus Weapon Damage based on the target's health for a limited number of shots, but suffer from reduced accuracy. Deals bonus Weapon Damage against troopers and neutrals."
+   },
+   {
+    "className": "ability_werewolf_kickflip",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 21,
+     "LeapRadius": 1.7,
+     "CameraTurnRateMax": 188,
+     "EnemyPushForceAway": 300,
+     "SelfPushForceUp": 200,
+     "SlowDuration": 0.1,
+     "TimeScaleDebuff": 95,
+     "AirDrag": 0.8,
+     "FallSpeedMax": 20,
+     "EnemyPushForceUp": 300,
+     "SelfPushForceCameraAway": 600,
+     "SuccessInputWindow": 0.3,
+     "LeapForwardOffset": 2.5,
+     "BonusDamage": 25,
+     "MarkDuration": 3
+    },
+    "description": ""
+   },
+   {
+    "className": "ability_werewolf_netshot",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 23,
+     "Damage": 40,
+     "DebuffDuration": 1.5,
+     "SlowPercent": 16,
+     "GravityScale": 100
+    },
+    "description": "Throw a bola, dealing Spirit Damage, applying Slow and preventing movement abilities or stamina."
+   },
+   {
+    "className": "ability_werewolf_transformation",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 60,
+     "AbilityDuration": 15,
+     "BonusHealth": 125,
+     "CameraTurnRateMax": 188,
+     "BonusMoveSpeed": 1.5,
+     "AutoActivateHealthThreshold": 20,
+     "BonusDurationOnLightMelee": 0.5,
+     "BonusDurationOnHeavyMelee": 1.5,
+     "BonusDurationOnBullet": 0.15,
+     "BonusDurationPerHealthPercentLost": 0.1,
+     "HeadshotResist": -20,
+     "BonusFireRate": 60,
+     "RagePercentagePerSecondOutOfCombat": -3,
+     "MaxRage": 100,
+     "RagePerDamage": 0.255,
+     "ReadyDuration": 3,
+     "LowHealthFraction": 30,
+     "LowHealthRageBonus": 40,
+     "AbilityChargesConditionally": 1,
+     "MaxStacks": 15,
+     "StackDuration": 5,
+     "RagePercentagePerSecondInCombat": 1,
+     "MissingHealthPercentHeal": 30,
+     "EndingWarningSoundDuration": 3
+    },
+    "description": "Passive: Dealing damage generates bloodlust, increased at low health. At max bloodlust, you automatically cast Lycan Curse. Active: Instantly transform, gaining increased Max Health, and stacking Fire Rate on enemy heroes, and replacing your abilities and weapon with their ferocious versions."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.7,
+   "ESprintSpeed": 2.5,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 830,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 2,
+   "EBaseHealthRegen": 2.5,
+   "EStaminaRegenPerSecond": 0.222222,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 1,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.68,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.47
+  }
+ },
+ {
+  "className": "hero_unicorn",
+  "heroId": 81,
+  "nameEn": "Celeste",
+  "role": "",
+  "abilities": [
+   {
+    "className": "ability_unicorn_radiantblast",
+    "slot": "Signature_1",
+    "props": {
+     "AbilityCooldown": 20,
+     "AbilityDuration": 8,
+     "FlareDamage": 40,
+     "Damage": 15,
+     "TargetingConeAngle": 70,
+     "ExtraSweepRadius": 2,
+     "AbilityLifestealPercentHero": 18
+    },
+    "description": "Blast enemies in a cone in front of you with a flare of light. Blasted enemies take Spirit Damage when attacked by {s:hero_name} and provides her spirit lifesteal."
+   },
+   {
+    "className": "ability_unicorn_prismaticguard",
+    "slot": "Signature_2",
+    "props": {
+     "AbilityCooldown": 38,
+     "MaxLifetime": 4,
+     "BuffDuration": 4,
+     "ExplodeRadius": 14,
+     "DebuffDuration": 1.75,
+     "CombatBarrier": 100,
+     "BarrierDamagePercentage": 50
+    },
+    "description": "Surround yourself in a protective prism. If the barrier is destroyed, it silences nearby enemies and deals a portion of the barrier as damage."
+   },
+   {
+    "className": "ability_unicorn_luminousstrike",
+    "slot": "Signature_3",
+    "props": {
+     "AbilityCooldown": 33,
+     "ExplosionInterval": 0.7,
+     "PreExplosionDuration": 1.4,
+     "ExplosionRadius": 8,
+     "ImpactDamage": 55,
+     "ClimbHeight": 50,
+     "BuffMaxStacks": 6,
+     "BuffDuration": 30,
+     "MagicIncreasePerStack": 7,
+     "BuffDelay": 0.75,
+     "PostExplosionDuration": 0.8
+    },
+    "description": "Call down a beam of light from the sky. After a short duration, the beam will fully form, causing an explosion that deals Spirit Damage to all targets in the area. Celeste will receive a stacking buff that increases her spirit damage anytime this hits an enemy hero."
+   },
+   {
+    "className": "ability_unicorn_dazzlingorb",
+    "slot": "Signature_4",
+    "props": {
+     "AbilityCooldown": 160,
+     "Damage": 140,
+     "SlowDuration": 1.5,
+     "SlowPercent": 32,
+     "GroundDashReductionPercent": -22,
+     "MaxBounces": 8,
+     "BounceRadius": 15.5,
+     "PriorityBounceRadius": 13.5,
+     "BounceGrace": 3.25,
+     "NextTargetDuration": 4
+    },
+    "description": "Launch a deadly orb of light that deals Spirit Damage and applies Slow and reduces Dash Distance on impact. The orb then bounces to the enemies within range. If no target is found, the orb will linger for a short duration while continuing to look for targets. Prioritizes enemy heroes when picking targets."
+   }
+  ],
+  "startingStats": {
+   "EMaxMoveSpeed": 6.2,
+   "ESprintSpeed": 1.6,
+   "ECrouchSpeed": 4.75,
+   "EMoveAcceleration": 4,
+   "ELightMeleeDamage": 50,
+   "EHeavyMeleeDamage": 116,
+   "EMaxHealth": 690,
+   "EWeaponPower": 0,
+   "EReloadSpeed": 1,
+   "EWeaponPowerScale": 1,
+   "EProcBuildUpRateScale": 1,
+   "EStamina": 4,
+   "EBaseHealthRegen": 1,
+   "EStaminaRegenPerSecond": 0.18867,
+   "EAbilityResourceMax": 0,
+   "EAbilityResourceRegenPerSecond": 0,
+   "ECritDamageReceivedScale": 1,
+   "ETechDuration": 1,
+   "ETechRange": 1,
+   "ECritDamageBonusScale": 0.75,
+   "EHeroSpiritLifestealEffectiveness": 1,
+   "EHeroBulletLifestealEffectiveness": 1,
+   "EGroundDashDistanceInMeters": 10,
+   "EGroundDashDuration": 0.62,
+   "EAirDashDistanceInMeters": 8,
+   "EAirDashDuration": 0.43
+  }
+ }
+]

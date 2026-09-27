@@ -1,0 +1,13 @@
+{
+  "measuredAt": "2026-09-27T10:02:41.539Z",
+  "seconds": 45,
+  "samples": 21,
+  "platform": "linux",
+  "electron": "33.4.11",
+  "cpuPctAvg": 1.9571428571428573,
+  "cpuPctMax": 3.7,
+  "memMBAvg": 595.7142857142857,
+  "memMBMax": 612,
+  "gpuProcessCpuPctAvg": 0.3,
+  "note": "Summe aller Electron-Prozesse (app.getAppMetrics). Ohne laufendes Spiel gemessen – kein FPS-Einfluss messbar."
+}
