@@ -8,7 +8,7 @@
   - direkt gemessen, sobald die Bedeutung von „souls“ erkannt ist
   - sonst berechnet (Gesamt-Souls − Itemwert − Verkaufsverluste), angezeigt als „bezahlbar (berechnet)“ und nie als „sicher bezahlbar“
 - **Design:** Deadlock-Farbwelt aus den Panorama-Styles des Spiels, mitgelieferte OFL-Schriften (Barlow Condensed, Cinzel), neue Screenshots.
-- **Windows-Build:** Der Workflow baut zusätzlich die Variante „Auto“ mit ow-electron. Dieser Schritt ist als Versuch markiert; siehe CI-Ergebnis.
+- **Windows-Build:** Der Workflow baut zusätzlich die Variante „Auto“ mit ow-electron, unsigniert (`overwolf.requireSigning=false`). Overwolf-Signierung braucht registrierte App-Schlüssel. Ob die Spielevents in der unsignierten Installation per Dev Mode laden, ist **auf Windows noch zu prüfen**. Sicherer Weg: aus dem Quellcode `npm run start:ow` mit gesetztem `OW_DEV_KEY` starten.
 
 
 ## Mit echten Daten geprüft
