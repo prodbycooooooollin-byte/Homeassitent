@@ -43,6 +43,9 @@ WebSocket-Clients und den Auth-Dienst gegen eine nachgebaute TikTok-API.
   Runde mit Bestätigung; bei 1440×900 eine vollständige Solo-Partie bis zum Endergebnis, „Nochmal spielen“ und
   „Demo beenden“. Kein horizontales Überlaufen. TikTok-Zustände über `?tiktok=` (nicht verbunden, Warte auf
   Browser, verbunden, vorbereitet, läuft, abgelaufen, fehlgeschlagen inkl. „Ausblenden“, nicht verfügbar).
+- Neues Spiel-Design (Titelbildschirm, Lobby-Plätze, HUD): erneut bei 1920×1080, 1440×900 und 1280×720 geprüft,
+  vollständige Solo-Partie bis zum Endergebnis bei 1280×720; Electron (Linux, Xvfb): Theme-Speicherung, Solo-Runde,
+  Verlassen – ohne Konsolenfehler.
 - `apps/desktop/test/solo-demo.test.ts`: Solo-Demo komplett bis RESULTS (15 Runden, je 10 Tippchancen, keine offenen
   Timer), Neustart, Verlassen, Medientest/Bereit-Regeln, keine Lösung vor der Auflösung, Rundenzahl/Dauer-Schätzung.
 - Lastmessung: 50 Räume, 200 Spieler, 1 000 Runden (siehe SERVER.md).
