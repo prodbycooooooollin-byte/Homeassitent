@@ -62,6 +62,10 @@ pub struct FakeSpotify {
     pub progress_ms: u64,
     pub queue: Vec<String>,
     pub add_mode: AddMode,
+    /// Wiedergabekontext (`{"type": "playlist", "uri": …}`), falls gesetzt.
+    pub context: Option<Value>,
+    /// Antwort auf GET /playlists/{id}: (Name, public).
+    pub playlist: Option<(String, Option<bool>)>,
 }
 
 impl Default for FakeSpotify {
@@ -83,6 +87,8 @@ impl Default for FakeSpotify {
             progress_ms: 10_000,
             queue: vec![],
             add_mode: AddMode::Ok,
+            context: None,
+            playlist: None,
         }
     }
 }
@@ -156,9 +162,14 @@ impl FakeSpotify {
                     "currently_playing_type": "track",
                     "device": {"id": format!("dev-{}", self.device), "name": self.device, "type": "Computer", "is_active": true, "is_restricted": false, "volume_percent": 60},
                     "item": self.current.as_deref().map(track_json).unwrap_or(Value::Null),
+                    "context": self.context.clone().unwrap_or(Value::Null),
                     "actions": {"disallows": {}}
                 })))
             }
+            (Method::Get, r) if r.starts_with("/playlists/") => match &self.playlist {
+                Some((name, public)) => Ok(HttpResponse::json(200, json!({"name": name, "public": public}))),
+                None => Ok(HttpResponse::json(404, json!({"error": {"status": 404, "message": "Not found"}}))),
+            },
             (Method::Get, "/me/player/devices") => Ok(HttpResponse::json(200, json!({"devices": [
                 {"id": format!("dev-{}", self.device), "name": self.device, "type": "Computer", "is_active": !self.no_session, "is_restricted": false, "volume_percent": 60}
             ]}))),
@@ -218,6 +229,8 @@ pub struct FakeTwitch {
     pub creates: u32,
     pub reward_patches: u32,
     pub redemption_patches: Vec<(String, String)>,
+    /// Gesendete Chatnachrichten (POST /chat/messages).
+    pub chat: Vec<String>,
     pub fail_patch: bool,
     pub not_affiliate: bool,
     pub offline: bool,
@@ -258,6 +271,10 @@ impl FakeTwitch {
         match (req.method, path.as_str()) {
             (Method::Get, "/oauth2/validate") => Ok(HttpResponse::json(200, json!({"client_id": "c", "login": "streamer", "user_id": "100", "scopes": self.scopes, "expires_in": 3600}))),
             (Method::Post, "/eventsub/subscriptions") => Ok(HttpResponse::json(202, json!({"data": []}))),
+            (Method::Post, "/chat/messages") => {
+                self.chat.push(body["message"].as_str().unwrap_or("").to_string());
+                Ok(HttpResponse::json(200, json!({"data": [{"message_id": format!("m{}", self.chat.len()), "is_sent": true}]})))
+            }
             (Method::Get, "/streams") => Ok(HttpResponse::json(200, json!({"data": []}))),
             (Method::Post, "/channel_points/custom_rewards") => {
                 if self.not_affiliate {

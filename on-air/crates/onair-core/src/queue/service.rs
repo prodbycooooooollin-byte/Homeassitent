@@ -93,6 +93,16 @@ impl QueueService {
         let _ = self.notifier.set(n);
     }
 
+    /// Chatnachricht über den Twitch-Dienst – nur, wenn Antworten im Chat eingeschaltet sind.
+    pub fn chat(&self, text: String, reply_to: Option<String>) {
+        if text.trim().is_empty() || !cfg::read(&self.settings).commands.reply_in_chat {
+            return;
+        }
+        if let Some(n) = self.notifier.get() {
+            n.notify(text, reply_to);
+        }
+    }
+
     pub fn set_gate(&self, g: Gate) {
         let _ = self.gate.set(g);
     }
@@ -866,10 +876,8 @@ impl QueueService {
             }
             let reply_to = r.chat_message_id.clone();
             let outcome = self.decide(r, resolved).await;
-            if let Some(n) = self.notifier.get() {
-                if let Some(text) = super::super::twitch::commands::reply_for_outcome(&cfg::read(&self.settings).commands.replies, &outcome) {
-                    n.notify(text, reply_to);
-                }
+            if let Some(text) = super::super::twitch::commands::reply_for_outcome(&cfg::read(&self.settings).commands.replies, &outcome) {
+                self.chat(text, reply_to);
             }
         }
     }

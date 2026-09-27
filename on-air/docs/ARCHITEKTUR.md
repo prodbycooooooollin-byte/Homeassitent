@@ -89,6 +89,7 @@ received ─► pending_review ─(Freigabe / Spotify wieder erreichbar)─► a
 - Lesend: `/widget/{minimal|glass|queue}`, `/api/state`, `/api/events` (SSE mit 5-s-Herzschlag).
 - Schreibend: `POST /api/control/{skip|open_requests|close_requests}` – standardmäßig aus; verlangt `X-OnAir-Token` (Vergleich in konstanter Zeit) und lehnt Anfragen mit `Origin`-Header ab.
 - Widgets blenden aus, wenn Daten älter als die konfigurierte Frist sind oder der Server > 12 s schweigt; `EventSource` verbindet nach App-Neustart selbstständig neu.
+- OBS-Dock: `GET /dock` (Seite ohne Geheimnis, eigene CSP), `GET /api/dock/state`, `POST /api/dock/{skip|play_pause|open_requests|close_requests|approve|reject|remove|extend_plan}`. Schlüssel = Steuer-Token aus dem Credential Store, steht im URL-Fragment (`#k=…`, nie an den Server/in Logs) und wird nur im Header `X-OnAir-Dock` gesendet; ein `Origin` muss die eigene Herkunft sein. Unabhängig vom Schalter „Fernsteuerung“.
 
 ## Speicherung
 

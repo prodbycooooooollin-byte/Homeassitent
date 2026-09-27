@@ -7,7 +7,11 @@
 //!   nicht in OBS-URLs oder Logs landet).
 //! - `Host`-Prüfung gegen DNS-Rebinding; keine CORS-Header, damit fremde Webseiten
 //!   Antworten nicht lesen können.
+//! - OBS-Dock (`/dock`): Steuerseite für „Benutzerdefinierte Browser-Docks“. Der Schlüssel
+//!   steht im URL-Fragment (`#k=…`, wird nie an den Server gesendet oder geloggt) und geht
+//!   nur im Header `X-OnAir-Dock` mit; Anfragen fremder Herkunft werden abgelehnt.
 
+mod dock;
 mod widget;
 
 use crate::settings::{OverlaySettings, WidgetStyle};
@@ -72,8 +76,24 @@ pub enum ControlAction {
     CloseRequests,
 }
 
+/// Aktionen des OBS-Docks.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DockAction {
+    Skip,
+    PlayPause,
+    OpenRequests,
+    CloseRequests,
+    Approve(String),
+    Reject(String),
+    Remove(String),
+    ExtendPlan(i64),
+}
+
 pub trait ControlHandler: Send + Sync + 'static {
     fn handle(&self, action: ControlAction) -> futures_util::future::BoxFuture<'static, Result<(), String>>;
+    /// Zustand für das OBS-Dock (nur Anzeige- und Steuerdaten, keine Zugangsdaten).
+    fn dock_state(&self) -> futures_util::future::BoxFuture<'static, serde_json::Value>;
+    fn dock_action(&self, action: DockAction) -> futures_util::future::BoxFuture<'static, Result<(), String>>;
 }
 
 #[derive(Clone)]
@@ -127,6 +147,9 @@ pub async fn start(
         .route("/api/state", get(api_state))
         .route("/api/events", get(api_events))
         .route("/api/control/{action}", post(api_control))
+        .route("/dock", get(dock_page))
+        .route("/api/dock/state", get(api_dock_state))
+        .route("/api/dock/{action}", post(api_dock_action))
         .layer(axum::middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state);
     let (tx, rx) = oneshot::channel::<()>();
@@ -271,6 +294,68 @@ async fn api_control(State(st): State<AppState>, Path(action): Path<String>, hea
         _ => return (StatusCode::NOT_FOUND, "unknown").into_response(),
     };
     match st.control.handle(action).await {
+        Ok(()) => (StatusCode::OK, "ok").into_response(),
+        Err(e) => (StatusCode::CONFLICT, e).into_response(),
+    }
+}
+
+async fn dock_page() -> Response {
+    let mut resp = Html(dock::DOCK_HTML).into_response();
+    resp.headers_mut().insert(
+        "Content-Security-Policy",
+        HeaderValue::from_static("default-src 'none'; img-src https://i.scdn.co https://*.spotifycdn.com data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'"),
+    );
+    resp
+}
+
+/// Dock-Anfragen: gültiger Schlüssel im Header; falls ein Origin mitkommt, nur der eigene.
+fn dock_authorized(st: &AppState, headers: &HeaderMap) -> Result<(), StatusCode> {
+    if let Some(origin) = headers.get("origin").and_then(|o| o.to_str().ok()) {
+        let own = [format!("http://127.0.0.1:{}", st.port), format!("http://localhost:{}", st.port)];
+        if !own.iter().any(|o| o == origin) {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+    let key = headers.get("x-onair-dock").and_then(|v| v.to_str().ok()).unwrap_or("");
+    if st.control_token.is_empty() || !constant_time_eq(key.as_bytes(), st.control_token.as_bytes()) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(())
+}
+
+async fn api_dock_state(State(st): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(code) = dock_authorized(&st, &headers) {
+        return code.into_response();
+    }
+    Json(st.control.dock_state().await).into_response()
+}
+
+#[derive(Deserialize, Default)]
+struct DockBody {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    minutes: i64,
+}
+
+async fn api_dock_action(State(st): State<AppState>, Path(action): Path<String>, headers: HeaderMap, body: Option<Json<DockBody>>) -> Response {
+    if let Err(code) = dock_authorized(&st, &headers) {
+        return code.into_response();
+    }
+    let b = body.map(|Json(b)| b).unwrap_or_default();
+    let id = || b.id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(64).collect::<String>();
+    let action = match action.as_str() {
+        "skip" => DockAction::Skip,
+        "play_pause" => DockAction::PlayPause,
+        "open_requests" => DockAction::OpenRequests,
+        "close_requests" => DockAction::CloseRequests,
+        "approve" => DockAction::Approve(id()),
+        "reject" => DockAction::Reject(id()),
+        "remove" => DockAction::Remove(id()),
+        "extend_plan" => DockAction::ExtendPlan(b.minutes.clamp(1, 240)),
+        _ => return (StatusCode::NOT_FOUND, "unknown").into_response(),
+    };
+    match st.control.dock_action(action).await {
         Ok(()) => (StatusCode::OK, "ok").into_response(),
         Err(e) => (StatusCode::CONFLICT, e).into_response(),
     }

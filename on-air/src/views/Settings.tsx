@@ -254,7 +254,7 @@ function Rules({ draft, update }: { draft: Settings; update: Update }) {
   );
 }
 
-const CMDS = ["sr", "song", "queue", "remove", "skip", "voteskip"] as const;
+const CMDS = ["sr", "song", "queue", "remove", "skip", "voteskip", "playlist"] as const;
 
 function Commands({ draft, update }: { draft: Settings; update: Update }) {
   const c = draft.commands;
@@ -287,6 +287,19 @@ function Commands({ draft, update }: { draft: Settings; update: Update }) {
                     <Field label={t("s.cmd.role")}><RoleSelect label={t("s.cmd.role")} value={cfg.min_role} onChange={(v) => setCmd(k, { min_role: v })} /></Field>
                     <Field label={t("s.cmd.cooldown")}><Num label={t("s.cmd.cooldown")} value={cfg.cooldown_s} min={0} max={3600} onChange={(v) => setCmd(k, { cooldown_s: v })} width={100} /></Field>
                   </div>
+                  {k === "playlist" && (
+                    <div className="col" style={{ gap: 6 }}>
+                      <Field label={t("s.cmd.playlist_fallback")}>
+                        <input
+                          className="input"
+                          placeholder="https://open.spotify.com/playlist/…"
+                          value={c.playlist_fallback_url}
+                          onChange={(e) => update((s) => ({ ...s, commands: { ...s.commands, playlist_fallback_url: e.target.value.trim() } }))}
+                        />
+                      </Field>
+                      <span className="subtle small">{t("s.cmd.playlist_hint")}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );

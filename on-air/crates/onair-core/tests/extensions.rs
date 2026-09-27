@@ -216,6 +216,10 @@ async fn redemptions_are_deduplicated_and_settled() {
     rt.channel_points.on_add(ev).await; // doppelte Zustellung
     let mine: Vec<_> = rt.queue.store.pending().into_iter().filter(|r| r.source == Source::ChannelPoints).collect();
     assert_eq!(mine.len(), 1, "genau ein Wunsch");
+    // Rückmeldung im Chat – genau eine, obwohl die Einlösung doppelt zugestellt wurde.
+    wait_for("Chatantwort", || h.twitch.lock().unwrap().chat.iter().any(|m| m.starts_with("@User7") && m.contains("Platz")), Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert_eq!(h.twitch.lock().unwrap().chat.iter().filter(|m| m.starts_with("@User7")).count(), 1, "genau eine Chatantwort");
     let rid = mine[0].id.clone();
     // Übergeben, aber noch nicht gespielt → noch nicht erfüllt.
     wait_for("übergeben", || rt.queue.store.get(&rid).map(|r| r.status == RequestStatus::HandedOff).unwrap_or(false), Duration::from_secs(20)).await;
@@ -232,6 +236,7 @@ async fn redemptions_are_deduplicated_and_settled() {
     rt.channel_points.on_add(red("red-b", &reward, "8", "https://youtube.com/watch?v=x")).await;
     let b = rt.queue.store.by_redemption("red-b").unwrap();
     assert_eq!(b.status, RequestStatus::Rejected);
+    wait_for("Ablehnung im Chat", || h.twitch.lock().unwrap().chat.iter().any(|m| m.starts_with("@User8") && m.contains("erstattet")), Duration::from_secs(10)).await;
     rt.channel_points.kick();
     tokio::time::sleep(Duration::from_secs(3)).await;
     assert_eq!(rt.queue.store.by_redemption("red-b").unwrap().redemption.unwrap().status, RedemptionStatus::Unfulfilled, "nicht voreilig als erstattet anzeigen");
@@ -417,4 +422,28 @@ async fn update_preparation_pauses_and_can_be_cancelled() {
     assert!(accepted(&o), "{o:?}");
     rt.channel_points.kick();
     wait_for("wieder aktiv", || rt.channel_points.status().confirmed_paused == Some(false), Duration::from_secs(60)).await;
+}
+
+// OBS-Dock: Zustand enthält Wiedergabe, Requests mit Aktionen und Annahmestatus – keine Tokens.
+#[tokio::test(start_paused = true)]
+async fn dock_state_lists_requests_without_secrets() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, false)).await;
+    ready(&rt).await;
+    let o = rt.queue.submit_query("dock song", viewer(3), Source::Chat, Some("d1"), None).await;
+    assert!(accepted(&o), "{o:?}");
+    let v = rt.dock_state();
+    assert_eq!(v["requests"]["open"], true);
+    assert_eq!(v["requests"]["manual_open"], true);
+    let q = v["queue"].as_array().unwrap();
+    assert!(q.iter().any(|i| i["requester"] == "viewer3" && i["removable"] == true), "{v}");
+    assert!(v["now"].is_object(), "Wiedergabe sichtbar: {v}");
+    let raw = v.to_string();
+    assert!(!raw.contains(rt.control_token()), "kein Schlüssel im Dock-Zustand");
+    assert!(!raw.to_lowercase().contains("access_token"));
+    // Manuelle Pause wird angezeigt, Grund benannt.
+    rt.set_requests_open(false).await.unwrap();
+    let v = rt.dock_state();
+    assert_eq!(v["requests"]["open"], false);
+    assert!(v["requests"]["blocks"].as_array().unwrap().iter().any(|b| b == "manual_pause"), "{v}");
 }

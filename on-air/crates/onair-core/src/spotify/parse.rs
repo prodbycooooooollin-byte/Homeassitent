@@ -1,7 +1,7 @@
 //! Tolerantes Parsen der Spotify-Antworten. Fehlende Felder (z. B. nach den
 //! Development-Mode-Änderungen vom Februar 2026) führen nicht zu Fehlern.
 
-use crate::model::{Actions, Device, EpisodeInfo, Playback, Provider, Track};
+use crate::model::{Actions, Device, EpisodeInfo, Playback, PlaybackContext, Provider, Track};
 use serde_json::Value;
 
 pub fn parse_track(v: &Value) -> Option<Track> {
@@ -80,5 +80,17 @@ pub fn parse_playback(v: &Value, fetched_at_ms: i64) -> Playback {
             can_resume: not("resuming"),
         },
         fetched_at_ms,
+        context: parse_context(&v["context"]),
     }
+}
+
+pub fn parse_context(v: &Value) -> Option<PlaybackContext> {
+    if v.is_null() {
+        return None;
+    }
+    Some(PlaybackContext {
+        kind: v["type"].as_str()?.to_string(),
+        uri: v["uri"].as_str()?.to_string(),
+        url: v["external_urls"]["spotify"].as_str().map(str::to_string),
+    })
 }

@@ -528,3 +528,98 @@ async fn concurrent_requests_respect_user_limit() {
     }
     assert_eq!(accepted, 1);
 }
+
+// !playlist: Link zur laufenden Playlist mit Namen; privat → Hinweis; ohne Playlist → Standard-Link.
+#[tokio::test(start_paused = true)]
+async fn playlist_command_shares_current_playlist() {
+    use onair_core::twitch::eventsub::ChatEvent;
+    use onair_core::twitch::service::{handle_chat_for_test, TwitchDeps, TwitchService};
+    let h = Harness::new();
+    {
+        let mut f = h.fake.lock().unwrap();
+        f.context = Some(serde_json::json!({"type": "playlist", "uri": "spotify:playlist:abc123", "external_urls": {"spotify": "https://open.spotify.com/playlist/abc123"}}));
+        f.playlist = Some(("Stream Vibes".into(), Some(true)));
+    }
+    let mut s = open_settings();
+    s.commands.playlist.cooldown_s = 0;
+    s.commands.min_reply_interval_ms = 0;
+    let rt = start_runtime(&h, Db::in_memory().unwrap(), s).await;
+    let has_ctx = |rt: &Runtime, want: bool| matches!(&rt.spotify_state.borrow().playback, PlaybackView::Active(p) if p.context.is_some() == want);
+    wait_for("Kontext", || has_ctx(&rt, true), Duration::from_secs(20)).await;
+
+    let sent = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let sent2 = sent.clone();
+    let twitch_http = onair_core::http::FakeTransport::new(move |r| {
+        if r.url.ends_with("/chat/messages") {
+            if let onair_core::http::Body::Json(v) = &r.body {
+                sent2.lock().unwrap().push(v["message"].as_str().unwrap_or("").to_string());
+            }
+            return Ok(onair_core::http::HttpResponse::json(200, serde_json::json!({"data": [{"message_id": "sent", "is_sent": true}]})));
+        }
+        Ok(onair_core::http::HttpResponse::new(404))
+    });
+    let tw_tokens = onair_core::auth::TokenManager::load(
+        "tw",
+        Arc::new(onair_core::twitch::auth::TwitchTokenEndpoint { http: twitch_http.clone(), client_id: Arc::new(|| "c".into()), id_base: "http://x".into() }),
+        Arc::new(onair_core::secrets::MemorySecretStore::default()),
+        h.clock.clone(),
+    );
+    tw_tokens
+        .install(onair_core::auth::TokenSet { access_token: "tw".into(), refresh_token: Some("r".into()), expires_at_ms: h.clock.now_ms() + 3_600_000, scope: "user:read:chat user:write:chat".into(), authorized_at_ms: 0 })
+        .unwrap();
+    let (mut svc, _handle) = TwitchService::new(TwitchDeps {
+        http: twitch_http.clone(),
+        tokens: tw_tokens,
+        client_id: Arc::new(|| "c".into()),
+        id_base: "http://x".into(),
+        helix_base: "http://helix".into(),
+        ws_url: "ws://127.0.0.1:9".into(),
+        queue: rt.queue.clone(),
+        spotify: rt.spotify.clone(),
+        spotify_state: rt.spotify_state.clone(),
+        spotify_cmd: rt.spotify_cmd.clone(),
+        settings: rt.settings.clone(),
+        activity: rt.activity.clone(),
+        bus: rt.bus.clone(),
+        clock: h.clock.clone(),
+        cp_reward: tokio::sync::watch::channel(None).1,
+        redemptions_tx: tokio::sync::mpsc::unbounded_channel().0,
+    });
+    svc.set_identity_for_test(onair_core::twitch::auth::Identity { user_id: "100".into(), login: "streamer".into(), scopes: vec![] });
+    svc.spawn_chat_sender_for_test();
+    let mut n = 0;
+    let mut ask = |text: &str| {
+        n += 1;
+        ChatEvent { message_id: format!("m{n}"), broadcaster_id: "100".into(), user_id: "300".into(), user_login: "fan".into(), user_name: "Fan".into(), text: text.into(), badges: vec![], reward_id: None }
+    };
+    let last = |sent: &Arc<std::sync::Mutex<Vec<String>>>| sent.lock().unwrap().last().cloned().unwrap_or_default();
+
+    handle_chat_for_test(&svc, ask("!playlist")).await;
+    wait_for("Antwort 1", || !sent.lock().unwrap().is_empty(), Duration::from_secs(10)).await;
+    assert_eq!(last(&sent), "@Fan Aktuelle Playlist „Stream Vibes“: https://open.spotify.com/playlist/abc123");
+
+    // Alias und private Playlist.
+    h.fake.lock().unwrap().playlist = Some(("Geheim".into(), Some(false)));
+    handle_chat_for_test(&svc, ask("!pl")).await;
+    wait_for("Antwort 2", || sent.lock().unwrap().len() == 2, Duration::from_secs(10)).await;
+    assert!(last(&sent).contains("privat"), "{}", last(&sent));
+
+    // Name nicht abrufbar → Link trotzdem.
+    h.fake.lock().unwrap().playlist = None;
+    handle_chat_for_test(&svc, ask("!playlist")).await;
+    wait_for("Antwort 3", || sent.lock().unwrap().len() == 3, Duration::from_secs(10)).await;
+    assert_eq!(last(&sent), "@Fan Aktuelle Playlist: https://open.spotify.com/playlist/abc123");
+
+    // Keine Playlist → ohne Standard-Link Hinweis, mit Standard-Link dieser.
+    h.fake.lock().unwrap().context = None;
+    wait_for("ohne Kontext", || has_ctx(&rt, false), Duration::from_secs(20)).await;
+    handle_chat_for_test(&svc, ask("!playlist")).await;
+    wait_for("Antwort 4", || sent.lock().unwrap().len() == 4, Duration::from_secs(10)).await;
+    assert!(last(&sent).contains("keine Playlist"), "{}", last(&sent));
+    let mut s = rt.settings.read().unwrap().clone();
+    s.commands.playlist_fallback_url = "https://open.spotify.com/playlist/fallback1".into();
+    rt.update_settings(s).await.unwrap();
+    handle_chat_for_test(&svc, ask("!playlist")).await;
+    wait_for("Antwort 5", || sent.lock().unwrap().len() == 5, Duration::from_secs(10)).await;
+    assert_eq!(last(&sent), "@Fan Aktuelle Playlist: https://open.spotify.com/playlist/fallback1");
+}

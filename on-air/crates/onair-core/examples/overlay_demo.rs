@@ -3,13 +3,35 @@
 //!
 //! cargo run -p onair-core --example overlay_demo -- 43899
 
-use onair_core::overlay::{self, ControlAction, ControlHandler, NowPlaying, OverlayData, QueueItem};
+use onair_core::overlay::{self, ControlAction, ControlHandler, DockAction, NowPlaying, OverlayData, QueueItem};
 use onair_core::settings::OverlaySettings;
 use std::sync::Arc;
 
 struct Noop;
 impl ControlHandler for Noop {
     fn handle(&self, _a: ControlAction) -> futures_util::future::BoxFuture<'static, Result<(), String>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn dock_state(&self) -> futures_util::future::BoxFuture<'static, serde_json::Value> {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+        Box::pin(async move {
+            serde_json::json!({
+                "now": { "title": "Demo: Mitternachtslicht", "artists": ["Nordwind"], "image_url": null, "duration_ms": 214000,
+                         "progress_ms": 60000, "is_playing": true, "fetched_at_ms": now, "requester": "nachteule_92" },
+                "playback_label": null, "controls": true,
+                "requests": { "open": true, "manual_open": true, "via": "über !sr + Kanalpunkte", "blocks": [] },
+                "queue": [
+                    { "id": "a", "title": "Glass Harbour", "artists": ["Lena Holm"], "requester": "Lumi", "source": "chat", "status": "handed_off", "review": false, "removable": false },
+                    { "id": "b", "title": "Low Tide", "artists": ["Kairo Beach"], "requester": "kalle", "source": "channel_points", "status": "accepted", "review": false, "removable": true },
+                    { "id": "c", "title": "Sonnenkabel", "artists": ["Frequenz 7"], "requester": "Mara", "source": "chat", "status": "pending_review", "review": true, "removable": true }
+                ],
+                "plan": { "end_at_ms": now + 45 * 60000, "free_ms": 18 * 60000 },
+                "server_time_ms": now
+            })
+        })
+    }
+    fn dock_action(&self, a: DockAction) -> futures_util::future::BoxFuture<'static, Result<(), String>> {
+        eprintln!("Dock-Aktion: {a:?}");
         Box::pin(async { Ok(()) })
     }
 }
@@ -37,7 +59,8 @@ async fn main() {
         styles: OverlaySettings::default(),
     };
     let (tx, rx) = tokio::sync::watch::channel(data);
-    let srv = overlay::start(port, rx, String::new(), Arc::new(Noop)).await.expect("start");
+    // Dock im Demo: http://127.0.0.1:<port>/dock#k=demo-key
+    let srv = overlay::start(port, rx, "demo-key".into(), Arc::new(Noop)).await.expect("start");
     println!("Overlay-Demo auf http://127.0.0.1:{}/", srv.port);
     // Zeitstempel frisch halten, damit das Widget nicht ausblendet.
     loop {

@@ -22,7 +22,8 @@ Weitere Ansichten (Browser-Vorschau mit Beispieldaten): [docs/screenshots](docs/
   `Retry-After`, Backoff mit Zufallsanteil, Circuit Breaker, Standby-Erkennung, Abgleich statt Blind-Wiederholung
 - Eigene, dauerhafte Request-Warteschlange (SQLite) mit Moderation, fairer Reihenfolge,
   Limits, Cooldowns, Sperrlisten, Explicit-Filter und sparsamer Übergabe an Spotify
-- Twitch-Chatbefehle `!sr`, `!song`, `!queue`, `!remove`, `!skip`, `!voteskip` (konfigurierbar)
+- Twitch-Chatbefehle `!sr`, `!song`, `!queue`, `!remove`, `!skip`, `!voteskip`, `!playlist` (konfigurierbar)
+- **OBS-Dock**: ON AIR direkt in OBS steuern (Now Playing, Requests pausieren, Skip, Freigeben/Ablehnen)
 - Optional **Kanalpunkte-Requests** über eine eigene, von ON AIR verwaltete Belohnung –
   Erfüllen erst nach beobachtetem Start, Ablehnen erstattet die Punkte
 - **Streamplanung**: Requests nur annehmen, solange sie vor dem Streamende noch passen
@@ -58,7 +59,7 @@ Installer auf `windows-latest` und lädt ihn als Artefakt `on-air-windows-instal
 ## Tests
 
 ```bash
-cargo test -p onair-core   # 66 Rust-Tests inkl. Abnahmekriterien (simuliert)
+cargo test -p onair-core   # 72 Rust-Tests inkl. Abnahmekriterien (simuliert)
 npm run typecheck
 npx playwright test        # 42 UI-Tests (Layout, Zustände, Bedienung)
 ```

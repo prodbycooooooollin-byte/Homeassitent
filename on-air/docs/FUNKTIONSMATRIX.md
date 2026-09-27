@@ -29,6 +29,8 @@ Suchergebnissen zu den offiziellen Seiten, dem Spotify-Developer-Blog, der
 | Live-Status (Update-Hinweis) | Helix `GET /streams?user_id=` | – | Nur Hinweis; unbekannt, wenn Twitch nicht verbunden. | – |
 | App-Updates | GitHub Releases (`latest.json` im Release `on-air-stable`), optional `tauri-plugin-updater` | – | Download ohne Anmeldung nur aus öffentlichem Repository. Standard: Herkunft + SHA-256; mit hinterlegtem Schlüssel zusätzlich Signatur. | eigener Release-Server |
 | OBS-Anzeige | lokaler HTTP-Server (Browser Source), SSE | – | Nur `127.0.0.1`. Metadaten ≠ Senderechte an der Musik. | Now-Playing-Textdatei |
+| OBS-Dock | lokaler HTTP-Server (`/dock`, OBS „Benutzerdefinierte Browser-Docks“) | – | Nur `127.0.0.1`; Schlüssel im URL-Fragment, Aktionen nur von eigener Herkunft. | App-Fenster / Kompaktmodus |
+| `!playlist` | Wiedergabekontext aus `GET /me/player`, Name über `GET /playlists/{id}?fields=name,public` | – (Nutzertoken) | Nur Playlist-/Album-Kontext; Name ggf. nicht abrufbar (dann nur Link); private Playlists werden nicht geteilt; kein Download möglich. | Standard-Link in den Einstellungen |
 
 ## Quellen
 

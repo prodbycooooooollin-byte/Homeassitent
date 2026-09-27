@@ -427,6 +427,36 @@ impl Shared {
         }
     }
 
+    /// `!playlist`: Link zur gerade laufenden Playlist (bzw. zum Album), sonst Standard-Link.
+    async fn playlist_reply(&self, user: &str) -> String {
+        let s = cfg::read(&self.deps.settings).commands.clone();
+        let r = &s.replies;
+        let u = ("user", user.to_string());
+        let (ctx, album) = match &self.deps.spotify_state.borrow().playback {
+            PlaybackView::Active(p) => (p.context.clone(), p.track.as_ref().and_then(|t| t.album.clone())),
+            _ => (None, None),
+        };
+        let fallback = || match commands::playlist_link(Some(s.playlist_fallback_url.trim().to_string())) {
+            Some(url) => commands::fill(&r.playlist_link, &[u.clone(), ("url", url)]),
+            None => commands::fill(&r.no_playlist, std::slice::from_ref(&u)),
+        };
+        let Some(ctx) = ctx else { return fallback() };
+        let Some(url) = ctx.link() else { return fallback() };
+        match ctx.kind.as_str() {
+            "playlist" => {
+                let Some(id) = ctx.id() else { return fallback() };
+                match tokio::time::timeout(Duration::from_secs(4), self.deps.spotify.playlist_info(id)).await {
+                    Ok(Ok((_, Some(false)))) => commands::fill(&r.playlist_private, &[u]),
+                    Ok(Ok((name, _))) => commands::fill(&r.playlist, &[u, ("name", name), ("url", url)]),
+                    // Name nicht abrufbar (Rechte, Netz): Link trotzdem teilen.
+                    _ => commands::fill(&r.playlist_link, &[u, ("url", url)]),
+                }
+            }
+            "album" => commands::fill(&r.playlist_album, &[u, ("name", album.unwrap_or_default()), ("url", url)]),
+            _ => fallback(),
+        }
+    }
+
     async fn handle_chat(self: Arc<Self>, ev: ChatEvent) {
         if self.sent_ids.lock().unwrap().contains(&ev.message_id) {
             return;
@@ -476,6 +506,10 @@ impl Shared {
                     }
                     _ => replies.nothing_playing.clone(),
                 };
+                self.reply(text, Some(ev.message_id));
+            }
+            CommandKind::Playlist => {
+                let text = self.playlist_reply(&ev.user_name).await;
                 self.reply(text, Some(ev.message_id));
             }
             CommandKind::Queue => {

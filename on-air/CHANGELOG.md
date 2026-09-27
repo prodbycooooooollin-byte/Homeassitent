@@ -10,6 +10,9 @@
 - Automatische Updates (Standard: an): im Hintergrund prüfen und laden, in einem sicheren Moment mit 30-Sekunden-Countdown installieren – nie während eines Livestreams oder einer Streamplanung.
 - Automatische Releases bei jedem Push; Updates funktionieren ohne Einrichtung (Herkunft + SHA-256), optional zusätzlich signiert (`scripts/setup-updater.mjs`).
 - Immersiver Installer `ON-AIR-Setup_<version>.exe` mit eigener Oberfläche; gebrandeter klassischer Installer.
+- OBS-Dock: ON AIR als andockbares Fenster in OBS (Now Playing, Requests pausieren, Skip, Freigeben/Ablehnen/Entfernen, Streamplanung +15).
+- Neuer Chatbefehl `!playlist` (Alias `!pl`): Link zur gerade laufenden Spotify-Playlist bzw. zum Album, optionaler Standard-Link.
+- Behoben: Kanalpunkte-Wünsche bekamen keine Rückmeldung im Chat – jetzt dieselbe Antwort wie bei `!sr`, bei Ablehnung mit Erstattungshinweis.
 - Behoben: Kompaktmodus öffnete unter Windows ein graues, nicht schließbares Fenster und legte danach die App lahm (Pause-Knopf ohne Wirkung, leere Widget-Vorschau).
 - Behoben: Verbindungsübersicht lag hinter dem Player und meldete „Alles verbunden“, obwohl Spotify nicht verbunden war.
 

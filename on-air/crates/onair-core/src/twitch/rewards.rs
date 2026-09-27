@@ -568,6 +568,11 @@ impl ChannelPointsService {
         let outcome = self.d.queue.submit_redemption(&e.user_input, requester, &e.reward_id, &e.id).await;
         if !matches!(outcome, crate::queue::SubmitOutcome::Duplicate) {
             self.d.activity.info("channel_points.redeemed", format!("Kanalpunkte-Wunsch von {}", e.user_name), json!({ "user": e.user_name }));
+            // Rückmeldung im Chat wie bei !sr (Einlösungen haben keine Chatnachricht zum Antworten).
+            let replies = cfg::read(&self.d.settings).commands.replies.clone();
+            if let Some(text) = crate::twitch::commands::reply_for_redemption(&replies, &outcome, &e.user_name) {
+                self.d.queue.chat(text, None);
+            }
         }
         self.publish();
         self.kick();

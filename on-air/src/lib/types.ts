@@ -227,6 +227,12 @@ export interface Replies {
   skipped: string;
   voteskip_progress: string;
   no_permission: string;
+  playlist: string;
+  playlist_link: string;
+  playlist_album: string;
+  playlist_private: string;
+  no_playlist: string;
+  points_refund: string;
 }
 
 export interface Settings {
@@ -248,6 +254,8 @@ export interface Settings {
     skip: CommandCfg;
     voteskip: CommandCfg;
     voteskip_needed: number;
+    playlist: CommandCfg;
+    playlist_fallback_url: string;
     replies: Replies;
     min_reply_interval_ms: number;
   };

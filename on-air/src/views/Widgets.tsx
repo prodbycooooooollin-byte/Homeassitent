@@ -1,4 +1,4 @@
-import { Copy, Eye, FileText, KeyRound, RotateCcw } from "lucide-react";
+import { Copy, Eye, FileText, KeyRound, PanelRight, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Field, Notice, Segmented, SettingRow, Toggle, toast, toastError } from "../components/ui";
 import { api, copyText, isTauri, pickNowPlayingPath } from "../lib/api";
@@ -176,6 +176,33 @@ export function WidgetsView({ snap }: { snap: AppSnapshot }) {
           <Field label={t("w.file_template")} hint={t("w.file_template_hint")}>
             <input className="input" value={draft.nowplaying_file.template} onChange={(e) => update((s) => ({ ...s, nowplaying_file: { ...s.nowplaying_file, template: e.target.value } }))} />
           </Field>
+        </div>
+        <div className="card card-pad col" style={{ gap: 12 }} id="obs-dock">
+          <h3><PanelRight size={15} style={{ verticalAlign: -2 }} /> {t("w.dock")}</h3>
+          <p className="muted small">{t("w.dock_desc")}</p>
+          <ol className="small muted" style={{ paddingLeft: 18, display: "grid", gap: 4 }}>
+            <li>{t("w.dock_step1")}</li>
+            <li>{t("w.dock_step2")}</li>
+            <li>{t("w.dock_step3")}</li>
+          </ol>
+          <code className="mono small subtle" style={{ wordBreak: "break-all" }}>http://127.0.0.1:{snap.overlay.port}/dock#k=••••••••</code>
+          <div>
+            <button
+              className="btn btn-sm btn-primary"
+              disabled={!snap.overlay.running}
+              onClick={async () => {
+                try {
+                  const key = await api.controlToken();
+                  if (await copyText(`http://127.0.0.1:${snap.overlay.port}/dock#k=${key}`)) toast(t("w.dock_copied"));
+                } catch (e) {
+                  toastError(e);
+                }
+              }}
+            >
+              <Copy size={14} /> {t("w.dock_copy")}
+            </button>
+          </div>
+          <span className="subtle small">{snap.overlay.running ? t("w.dock_secret") : t("w.preview_unavailable")}</span>
         </div>
         <div className="card card-pad col" style={{ gap: 12 }}>
           <div className="row" style={{ justifyContent: "space-between" }}>

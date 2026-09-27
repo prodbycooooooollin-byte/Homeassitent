@@ -121,6 +121,16 @@ pub struct Replies {
     pub skipped: String,
     pub voteskip_progress: String,
     pub no_permission: String,
+    /// `!playlist`: Playlist mit Namen.
+    pub playlist: String,
+    /// `!playlist`: Link ohne Namen (Name nicht abrufbar oder Standard-Link).
+    pub playlist_link: String,
+    /// `!playlist`, wenn gerade ein Album läuft.
+    pub playlist_album: String,
+    pub playlist_private: String,
+    pub no_playlist: String,
+    /// An Antworten auf abgelehnte Kanalpunkte-Wünsche angehängt.
+    pub points_refund: String,
 }
 
 impl Default for Replies {
@@ -141,6 +151,12 @@ impl Default for Replies {
             skipped: "Übersprungen.".into(),
             voteskip_progress: "Skip-Abstimmung: {votes}/{needed}".into(),
             no_permission: "".into(),
+            playlist: "@{user} Aktuelle Playlist „{name}“: {url}".into(),
+            playlist_link: "@{user} Aktuelle Playlist: {url}".into(),
+            playlist_album: "@{user} Gerade läuft das Album „{name}“: {url}".into(),
+            playlist_private: "@{user} Die aktuelle Playlist ist privat und kann nicht geteilt werden.".into(),
+            no_playlist: "@{user} Gerade läuft keine Playlist.".into(),
+            points_refund: " Deine Kanalpunkte werden erstattet.".into(),
         }
     }
 }
@@ -157,6 +173,10 @@ pub struct CommandSettings {
     pub skip: CommandCfg,
     pub voteskip: CommandCfg,
     pub voteskip_needed: u32,
+    /// Zeigt Zuschauern die aktuell laufende Spotify-Playlist (Link zum Öffnen/Speichern).
+    pub playlist: CommandCfg,
+    /// Link, der gezeigt wird, wenn gerade keine Playlist läuft (leer = keiner).
+    pub playlist_fallback_url: String,
     pub replies: Replies,
     /// Max. eine Chatnachricht pro Intervall (ms); darüber hinaus wird verworfen.
     pub min_reply_interval_ms: u64,
@@ -174,6 +194,8 @@ impl Default for CommandSettings {
             skip: CommandCfg::new("skip", Role::Moderator, 3),
             voteskip: CommandCfg::new("voteskip", Role::Everyone, 0),
             voteskip_needed: 5,
+            playlist: CommandCfg { aliases: vec!["pl".into()], ..CommandCfg::new("playlist", Role::Everyone, 20) },
+            playlist_fallback_url: String::new(),
             replies: Replies::default(),
             min_reply_interval_ms: 1_200,
         }

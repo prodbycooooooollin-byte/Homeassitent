@@ -291,6 +291,18 @@ impl SpotifyClient {
         parse::parse_track(&v).ok_or(ApiError::Decode { message: "Track".into() })
     }
 
+    /// Name und Sichtbarkeit einer Playlist (für `!playlist`). `public` fehlt, wenn Spotify
+    /// es nicht liefert.
+    pub async fn playlist_info(&self, id: &str) -> Result<(String, Option<bool>), ApiError> {
+        if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(ApiError::BadRequest { message: "ungültige Playlist-ID".into() });
+        }
+        let r = self.get(&format!("/playlists/{id}?fields=name,public")).await?;
+        let v = r.json_body().unwrap_or_default();
+        let name = v["name"].as_str().ok_or(ApiError::Decode { message: "Playlist".into() })?.to_string();
+        Ok((name, v["public"].as_bool()))
+    }
+
     fn device_q(device_id: Option<&str>, first: bool) -> String {
         match device_id {
             Some(d) => format!("{}device_id={}", if first { "?" } else { "&" }, urlencoding::encode(d)),

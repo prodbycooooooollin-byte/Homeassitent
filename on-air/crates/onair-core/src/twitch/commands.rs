@@ -12,6 +12,7 @@ pub enum CommandKind {
     Remove,
     Skip,
     VoteSkip,
+    Playlist,
 }
 
 impl CommandKind {
@@ -23,15 +24,17 @@ impl CommandKind {
             CommandKind::Remove => &s.remove,
             CommandKind::Skip => &s.skip,
             CommandKind::VoteSkip => &s.voteskip,
+            CommandKind::Playlist => &s.playlist,
         }
     }
-    const ALL: [CommandKind; 6] = [
+    const ALL: [CommandKind; 7] = [
         CommandKind::Sr,
         CommandKind::Song,
         CommandKind::Queue,
         CommandKind::Remove,
         CommandKind::Skip,
         CommandKind::VoteSkip,
+        CommandKind::Playlist,
     ];
 }
 
@@ -167,6 +170,22 @@ pub fn reply_for_outcome(r: &Replies, o: &SubmitOutcome) -> Option<String> {
         }
     }
     Some(sanitize_chat(&fill(tmpl, &vars)))
+}
+
+/// Chat-Antwort auf eine Kanalpunkte-Einlösung: dieselben Texte wie bei `!sr`, immer mit
+/// Nennung der Person; bei Ablehnung mit Hinweis auf die Erstattung.
+pub fn reply_for_redemption(r: &Replies, o: &SubmitOutcome, user: &str) -> Option<String> {
+    let base = reply_for_outcome(r, o)?;
+    let mut text = if base.contains("{user}") { base.replace("{user}", user) } else { base };
+    if matches!(o, SubmitOutcome::Rejected { .. }) && !r.points_refund.trim().is_empty() {
+        text.push_str(&r.points_refund);
+    }
+    Some(sanitize_chat(&text))
+}
+
+/// Öffentlicher Link zur laufenden Playlist bzw. zum Album für `!playlist`.
+pub fn playlist_link(url: Option<String>) -> Option<String> {
+    url.filter(|u| u.starts_with("https://open.spotify.com/"))
 }
 
 #[cfg(test)]

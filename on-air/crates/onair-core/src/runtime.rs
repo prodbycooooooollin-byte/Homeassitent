@@ -16,7 +16,7 @@ use crate::error::ApiError;
 use crate::events::{AppEvent, EventBus, Topic};
 use crate::http::SharedTransport;
 use crate::model::{Device, PlaybackView, Track};
-use crate::overlay::{self, ControlAction, ControlHandler, NowPlaying, OverlayData, OverlayServer, QueueItem};
+use crate::overlay::{self, ControlAction, ControlHandler, DockAction, NowPlaying, OverlayData, OverlayServer, QueueItem};
 use crate::queue::service::QueueService;
 use crate::queue::store::{BlockEntry, HistoryEntry, QueueStore};
 use crate::queue::{RequestStatus, Requester, SongRequest, Source, SubmitOutcome};
@@ -852,6 +852,80 @@ impl Runtime {
         self.queue.store.history(search, limit.min(500))
     }
 
+    /// Zustand für das OBS-Dock: nur, was zum Steuern nötig ist – keine Zugangsdaten.
+    pub fn dock_state(&self) -> serde_json::Value {
+        use crate::queue::RequestStatus as S;
+        let sp = self.spotify_state.borrow().clone();
+        let queue = self.queue.store.pending();
+        let playing_req = queue.iter().find(|r| r.status == S::Playing);
+        let (now, label) = match &sp.playback {
+            PlaybackView::Active(p) => match (&p.track, &p.episode) {
+                (Some(t), _) => (
+                    Some(json!({
+                        "title": t.title, "artists": t.artists, "image_url": t.image_url, "duration_ms": t.duration_ms,
+                        "progress_ms": p.progress_ms, "is_playing": p.is_playing, "fetched_at_ms": p.fetched_at_ms,
+                        "requester": playing_req.filter(|r| r.track.as_ref().map(|x| &x.uri) == Some(&t.uri)).map(|r| r.requester.name.clone()),
+                    })),
+                    None,
+                ),
+                (None, Some(e)) => (None, Some(format!("Podcast: {}", e.title))),
+                _ if p.item_type.as_deref() == Some("ad") => (None, Some("Werbung".to_string())),
+                _ => (None, Some("Unbekannter Titel".to_string())),
+            },
+            _ if !matches!(sp.auth, crate::auth::AuthStatus::SignedIn { .. }) => (None, Some("Spotify nicht verbunden".to_string())),
+            _ => (None, Some("Gerade läuft nichts".to_string())),
+        };
+        let controls = sp.is_online() && matches!(&sp.playback, PlaybackView::Active(p) if p.item_type.as_deref() != Some("ad"));
+        let settings = cfg::read(&self.settings).clone();
+        let acc = self.acceptance();
+        let mut via = vec![];
+        if acc.chat.open {
+            via.push(format!("{}{}", settings.commands.prefix, settings.commands.sr.name));
+        }
+        if acc.channel_points.open {
+            via.push("Kanalpunkte".to_string());
+        }
+        let mut blocks: Vec<String> = vec![];
+        for g in [&acc.chat, &acc.channel_points] {
+            if !g.configured {
+                continue;
+            }
+            for b in &g.blocks {
+                if let Some(code) = serde_json::to_value(b).ok().and_then(|v| v["code"].as_str().map(str::to_string)) {
+                    if !blocks.contains(&code) {
+                        blocks.push(code);
+                    }
+                }
+            }
+        }
+        let items: Vec<serde_json::Value> = queue
+            .iter()
+            .filter(|r| r.status != S::Playing)
+            .map(|r| {
+                json!({
+                    "id": r.id,
+                    "title": r.track.as_ref().map(|t| t.title.clone()).unwrap_or_else(|| r.query.clone()),
+                    "artists": r.track.as_ref().map(|t| t.artists.clone()).unwrap_or_default(),
+                    "requester": r.requester.name,
+                    "source": r.source.as_str(),
+                    "status": r.status.as_str(),
+                    "review": r.status == S::PendingReview,
+                    "removable": matches!(r.status, S::Accepted | S::PendingReview),
+                })
+            })
+            .collect();
+        let plan = self.queue.plan_status();
+        json!({
+            "now": now,
+            "playback_label": label,
+            "controls": controls,
+            "requests": { "open": acc.any_open, "manual_open": settings.requests.open, "via": if via.is_empty() { String::new() } else { format!("über {}", via.join(" + ")) }, "blocks": blocks },
+            "queue": items,
+            "plan": if plan.active { json!({ "end_at_ms": plan.end_at_ms, "free_ms": plan.free_ms }) } else { serde_json::Value::Null },
+            "server_time_ms": self.clock.now_ms(),
+        })
+    }
+
     pub fn control_token(&self) -> &str {
         &self.control_token
     }
@@ -995,6 +1069,32 @@ impl ControlHandler for Control {
                 ControlAction::Skip => rt.transport("next").await.map_err(|e| e.code().to_string()),
                 ControlAction::OpenRequests => rt.set_requests_open(true).await,
                 ControlAction::CloseRequests => rt.set_requests_open(false).await,
+            }
+        })
+    }
+
+    fn dock_state(&self) -> futures_util::future::BoxFuture<'static, serde_json::Value> {
+        let weak = self.0.clone();
+        Box::pin(async move { weak.upgrade().map(|rt| rt.dock_state()).unwrap_or(serde_json::Value::Null) })
+    }
+
+    fn dock_action(&self, action: DockAction) -> futures_util::future::BoxFuture<'static, Result<(), String>> {
+        let weak = self.0.clone();
+        Box::pin(async move {
+            let rt = weak.upgrade().ok_or("beendet")?;
+            let q = &rt.queue;
+            match action {
+                DockAction::Skip => rt.transport("next").await.map_err(|e| e.code().to_string()),
+                DockAction::PlayPause => {
+                    let playing = matches!(&rt.spotify_state.borrow().playback, PlaybackView::Active(p) if p.is_playing);
+                    rt.transport(if playing { "pause" } else { "resume" }).await.map_err(|e| e.code().to_string())
+                }
+                DockAction::OpenRequests => rt.set_requests_open(true).await,
+                DockAction::CloseRequests => rt.set_requests_open(false).await,
+                DockAction::Approve(id) => q.approve(&id).await,
+                DockAction::Reject(id) => q.reject_manual(&id, "rejected_by_streamer"),
+                DockAction::Remove(id) => q.reject_manual(&id, "removed_by_streamer"),
+                DockAction::ExtendPlan(m) => rt.plan_extend(m),
             }
         })
     }

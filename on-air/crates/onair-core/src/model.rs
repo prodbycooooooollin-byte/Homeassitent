@@ -73,6 +73,39 @@ pub struct Playback {
     pub actions: Actions,
     /// Zeitpunkt der bestätigten Antwort (lokale Wanduhr) – Grundlage der Interpolation.
     pub fetched_at_ms: i64,
+    /// Wiedergabekontext (Playlist, Album, Künstler), falls Spotify ihn liefert.
+    #[serde(default)]
+    pub context: Option<PlaybackContext>,
+}
+
+/// Woraus gerade gespielt wird – z. B. für den Chatbefehl `!playlist`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaybackContext {
+    /// `playlist` | `album` | `artist` | `show` | …
+    pub kind: String,
+    pub uri: String,
+    pub url: Option<String>,
+}
+
+impl PlaybackContext {
+    /// Öffentlicher Link; aus der URI abgeleitet, falls Spotify keinen liefert.
+    pub fn link(&self) -> Option<String> {
+        if let Some(u) = self.url.as_ref().filter(|u| u.starts_with("https://open.spotify.com/")) {
+            return Some(u.clone());
+        }
+        let mut parts = self.uri.split(':');
+        match (parts.next(), parts.next(), parts.next()) {
+            (Some("spotify"), Some(kind), Some(id)) if !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric()) => {
+                Some(format!("https://open.spotify.com/{kind}/{id}"))
+            }
+            _ => None,
+        }
+    }
+
+    /// Spotify-ID aus der URI (nur alphanumerisch).
+    pub fn id(&self) -> Option<&str> {
+        self.uri.rsplit(':').next().filter(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric()))
+    }
 }
 
 /// Anzeigezustand der Wiedergabe. „Nichts läuft“ ist ein legitimer Zustand, kein Logout.

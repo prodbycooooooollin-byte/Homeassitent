@@ -66,6 +66,24 @@ Die Widgets verbinden sich nach einem Neustart von ON AIR selbstständig wieder 
 blenden sich bei veralteten Daten aus. Die Anzeige von Metadaten erteilt keine Rechte
 zur Ausstrahlung der Musik.
 
+### OBS-Dock (ON AIR in OBS steuern)
+
+1. In ON AIR unter **Widgets → OBS-Dock** auf **Dock-URL kopieren** klicken.
+2. In OBS: **Docks → Benutzerdefinierte Browser-Docks …**, Name „ON AIR“, URL einfügen, übernehmen.
+3. Das Dock lässt sich frei andocken. Es zeigt Now Playing und die nächsten Requests und kann
+   Requests pausieren/öffnen, pausieren/fortsetzen, überspringen, Wünsche freigeben/ablehnen/entfernen
+   und die Streamplanung um 15 Minuten verlängern.
+
+Die Dock-URL enthält einen geheimen Schlüssel (nur auf diesem PC nutzbar) – nicht im Stream zeigen.
+
+### `!playlist`
+
+Zuschauer schreiben `!playlist` (Alias `!pl`) und bekommen den Link zur gerade laufenden
+Spotify-Playlist (mit Namen), bei einem Album den Album-Link. Spotify erlaubt kein Herunterladen –
+der Link öffnet die Playlist zum Folgen oder Speichern. Private Playlists werden nicht geteilt.
+Optional lässt sich unter *Einstellungen → Chatbefehle* ein Standard-Link hinterlegen, der gilt,
+wenn gerade keine Playlist läuft.
+
 ## Streamplanung
 
 In der Übersicht unter *Streamplanung* die verbleibende Streamzeit wählen (15/30/60/90 Min)
