@@ -18,9 +18,14 @@
   - Tab-Spalten der Gegner
   - welche Seite dein Team ist (angenommen: Porträts auf deiner Bildhälfte)
   - die echte Souls-Anzeige im Match; ob dort ein anderer Zusatztext steht, ist unbekannt. Bisher wurden nur die Ziffern 0, 1, 2, 4, 6 und 9 gesehen.
-  - Aufnahme unter Windows (`desktopCapturer`), Rechenlast neben dem Spiel, exklusives Vollbild
+  - Aufnahme-Stream unter Windows, Rechenlast neben dem Spiel, exklusives Vollbild
 - **Schwächen:** Bei mehreren Porträts wird dein Hero erst per Tab-Abgleich erkannt; bis dahin kannst du ihn unter *Verbindung* auswählen. Gegner-Items sind so aktuell wie dein letzter Tab-Druck. Schaden gegen dich wird nicht erkannt.
 - **Release:** nur noch ein Installer und eine portable EXE. Die Overwolf-Variante entfällt.
+- **Ruckeln (Rückmeldung des Nutzers, Windows):** Die erste Fassung nahm alle 1,5 s per `desktopCapturer.getSources` einen Voll-Screenshot auf. Dabei stockte das Spiel bei jeder Aufnahme, Umsehen war nicht möglich. Jetzt gilt:
+  - Ein dauerhafter Stream (2 Bilder/s) in einem unsichtbaren Fenster liefert die Bilder; kopiert werden nur die HUD-Bereiche.
+  - Die Prozesse der App laufen mit niedriger Priorität, und die Aufnahme stoppt, wenn Deadlock nicht läuft.
+  - Unter Linux/Xvfb über den echten Bildschirm-Stream geprüft: Hero und alle Items erkannt.
+  - **Ob das Ruckeln unter Windows damit weg ist, ist noch nicht bestätigt.** Falls nicht: Aufnahme-Takt auf 3 s stellen oder die Erkennung ausschalten und melden.
 
 
 ## 0.2.0 (überholt, zur Nachvollziehbarkeit)

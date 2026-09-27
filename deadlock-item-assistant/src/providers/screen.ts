@@ -12,6 +12,8 @@ import { Provider, type ProviderState } from './provider';
 export interface FrameSource {
   /** aktuelles Bild des Spielmonitors, null = nicht verfügbar */
   grab(): Promise<Raster | null>;
+  /** Aufnahme beenden (z. B. wenn Deadlock nicht läuft) */
+  release?(): void;
 }
 
 export interface ScreenOptions {
@@ -60,6 +62,7 @@ export class ScreenProvider extends Provider {
         this.runningCheckedAt = t0;
       }
       if (this.running === false) {
+        this.opts.source.release?.();
         this.setIf('waiting', 'warte auf Deadlock');
       } else {
         this.ocr ??= await this.opts.createOcr();
@@ -108,6 +111,7 @@ export class ScreenProvider extends Provider {
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.opts.source.release?.();
     const o = this.ocr;
     this.ocr = null;
     void o?.close().catch(() => undefined);

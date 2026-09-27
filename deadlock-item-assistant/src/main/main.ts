@@ -1,6 +1,7 @@
 import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, nativeImage, screen, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { Controller } from './controller';
 import { type AppSettings, loadSettings, saveSettings } from './settings';
@@ -52,15 +53,67 @@ function nativeToRaster(img: Electron.NativeImage): Raster | null {
   return fromBGRA(width, height, img.toBitmap());
 }
 
+// Ein unsichtbares Fenster hält einen gedrosselten Bildschirm-Stream (2 Bilder/s) offen und liefert
+// auf Anfrage nur die HUD-Bereiche. Wiederholte Voll-Screenshots (desktopCapturer.getSources mit
+// Vorschaubild) ließen das Spiel bei jeder Aufnahme stocken – deshalb nicht mehr verwendet.
+let capWin: BrowserWindow | null = null;
+let capStarted: string | null = null;
+let capSeq = 0;
+const capPending = new Map<number, (r: CapResult) => void>();
+type CapResult = { id: number; error?: string; width?: number; height?: number; regions?: { x: number; y: number; w: number; h: number; data: Uint8ClampedArray }[] };
+ipcMain.on('cap-result', (_e, r: CapResult) => { capPending.get(r.id)?.(r); capPending.delete(r.id); });
+
+function lowerPriority(pid: number) {
+  try { os.setPriority(pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* nicht kritisch */ }
+}
+
+async function ensureCapture(): Promise<void> {
+  const d = targetDisplay();
+  const width = Math.round(d.size.width * d.scaleFactor), height = Math.round(d.size.height * d.scaleFactor);
+  if (!capWin || capWin.isDestroyed()) {
+    capWin = new BrowserWindow({
+      show: false, width: 200, height: 100, skipTaskbar: true, focusable: false,
+      webPreferences: { preload: path.join(__dirname, 'capturePreload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
+    });
+    await capWin.loadFile(path.join(__dirname, '..', 'renderer', 'capture.html'));
+    lowerPriority(capWin.webContents.getOSProcessId());
+    capStarted = null;
+  }
+  const key = `${d.id}:${width}x${height}`;
+  if (capStarted === key) return;
+  // Quelle einmalig bestimmen – ohne Vorschaubild (0×0), damit nichts aufgenommen wird
+  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
+  const src = sources.find((s) => s.display_id === String(d.id)) ?? sources[0];
+  if (!src) throw new Error('kein Bildschirm gefunden');
+  capWin.webContents.send('cap-start', { sourceId: src.id, width, height, fps: 2 });
+  capStarted = key;
+}
+
 const screenSource: FrameSource = {
   async grab() {
     // Nur für Tests: festes Bild statt Bildschirm (DIA_SCREEN_FILE)
     if (process.env.DIA_SCREEN_FILE) return nativeToRaster(nativeImage.createFromPath(process.env.DIA_SCREEN_FILE));
-    const d = targetDisplay();
-    const size = { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor) };
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
-    const src = sources.find((s) => s.display_id === String(d.id)) ?? sources[0];
-    return src ? nativeToRaster(src.thumbnail) : null;
+    await ensureCapture();
+    const id = ++capSeq;
+    const r = await new Promise<CapResult>((resolve) => {
+      capPending.set(id, resolve);
+      capWin!.webContents.send('cap-grab', { id });
+      setTimeout(() => { if (capPending.delete(id)) resolve({ id, error: 'Zeitüberschreitung' }); }, 3000);
+    });
+    if (!r.regions || !r.width || !r.height) {
+      if (r.error && r.error !== 'noch kein Bild') throw new Error(r.error);
+      return null;
+    }
+    // Nur die HUD-Bereiche sind gefüllt; der Rest bleibt schwarz
+    const out: Raster = { w: r.width, h: r.height, data: new Uint8Array(r.width * r.height * 4) };
+    for (const q of r.regions) {
+      for (let y = 0; y < q.h; y++) out.data.set(q.data.subarray(y * q.w * 4, (y + 1) * q.w * 4), ((q.y + y) * r.width + q.x) * 4);
+    }
+    return out;
+  },
+  release() {
+    if (capWin && !capWin.isDestroyed() && capStarted) capWin.webContents.send('cap-stop');
+    capStarted = null;
   },
 };
 
@@ -284,6 +337,8 @@ app.whenReady().then(() => {
   if (process.argv.includes('--demo')) settings.source = 'demo';
   else if (settings.source === 'demo') settings.source = 'auto';
   controller = new Controller(dataDir, app.getPath('userData'), settings, schedulePush);
+  // Die App soll dem Spiel nie Rechenzeit wegnehmen
+  lowerPriority(process.pid);
   initScreen();
   createOverlay();
   registerHotkeys();
@@ -318,12 +373,12 @@ async function captureForVerification(dir: string) {
     // Automatik-Modus ohne laufendes Spiel (Wartezustand) festhalten
     handle({ type: 'settings', patch: { source: 'auto' } });
     // Mit Testbild (DIA_SCREEN_FILE): Texterkennung laden und einige Bilder auswerten lassen
-    await wait(process.env.DIA_SCREEN_FILE ? 9000 : 2500);
+    await wait(Number(process.env.DIA_CAPTURE_WAIT) || (process.env.DIA_SCREEN_FILE ? 9000 : 2500));
     control?.webContents.send('select-tab', 'connect');
     await wait(1200);
     await shot(control, 'control-connect-auto');
     await shot(overlay, process.env.DIA_SCREEN_FILE ? 'overlay-screen' : 'overlay-auto-waiting');
-    if (process.env.DIA_SCREEN_FILE) {
+    if (process.env.DIA_SCREEN_FILE || process.env.DIA_SCREEN_ONLY) {
       handle({ type: 'toggle-details' });
       await wait(1500);
       await shot(overlay, 'overlay-screen-expanded');

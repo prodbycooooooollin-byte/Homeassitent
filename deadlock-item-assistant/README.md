@@ -112,7 +112,7 @@ Im normalen Modus reicht das Overlay alle Mausaktionen an das Spiel durch und ni
 - **Hotkeys:** globale Hotkeys.
 - **Pflege:** Eine Codebasis für Logik, Tests und UI. Das Muster ist identisch zum `lol-build-assistant` in diesem Repository.
 - **Kein zusätzlicher Client:** kein Overwolf, keine Pflicht-Monetarisierung.
-- **Bildschirmaufnahme:** `desktopCapturer` im Hauptprozess; Auswertung in reinem TypeScript, Zahlen mit tesseract.js (WebAssembly, lokal).
+- **Bildschirmaufnahme:** ein dauerhafter, auf 2 Bilder/s gedrosselter Stream in einem unsichtbaren Fenster; kopiert werden nur die HUD-Bereiche. Die App läuft mit niedriger Prozesspriorität. Auswertung in reinem TypeScript, Zahlen mit tesseract.js (WebAssembly, lokal).
 
 ```
 src/gamedata   KV3-Parser, Extraktion aus Spieldateien, Katalog, Effekte, Hero-Signale, Namensabgleich
