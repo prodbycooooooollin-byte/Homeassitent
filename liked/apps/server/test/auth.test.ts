@@ -203,11 +203,17 @@ describe('TikTok-URL-Verifizierung', () => {
     expect(parseTikTokVerification({ TIKTOK_VERIFY_FILE: 'tiktokAbC123.txt' } as never).tiktokVerificationStatus).toBe('missing_content');
     expect(parseTikTokVerification({ TIKTOK_VERIFY_CONTENT: 'x' } as never).tiktokVerificationStatus).toBe('missing_file');
     expect(parseTikTokVerification({} as never).tiktokVerificationStatus).toBe('not_set');
+    expect(parseTikTokVerification({ TIKTOK_VERIFY_FILE_2: 'tiktokTerms1234.txt', TIKTOK_VERIFY_CONTENT_2: 'sig=2' } as never, '_2').tiktokVerification)
+      .toEqual({ file: 'tiktokTerms1234.txt', content: 'sig=2' });
     expect(parseTikTokVerification({ TIKTOK_VERIFY_FILE: 'bad name.txt', TIKTOK_VERIFY_CONTENT: 'x' } as never).tiktokVerificationStatus).toBe('invalid_file');
   });
 
   it('liefert die Verifizierungsdatei unter dem Callback-Präfix und im Root aus', async () => {
-    const s = await startServer({ tiktokVerification: { file: 'tiktokAbCdEf123456.txt', content: 'tiktok-developers-site-verification=XYZ' } });
+    const s = await startServer({
+      tiktokVerification: { file: 'tiktokAbCdEf123456.txt', content: 'tiktok-developers-site-verification=XYZ' },
+      tiktokVerificationExtra: [{ file: 'tiktokTerms1234.txt', content: 'sig=terms', status: 'ok' }]
+    });
+    expect(await fetch(`${s.url}/terms/tiktokTerms1234.txt`).then((r) => r.text())).toBe('sig=terms');
     server = s.server;
     for (const path of ['/auth/tiktok/callback/tiktokAbCdEf123456.txt', '/tiktokAbCdEf123456.txt']) {
       const r = await fetch(`${s.url}${path}`);

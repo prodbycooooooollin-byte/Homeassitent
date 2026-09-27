@@ -54,8 +54,10 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
       const url = new URL(req.url ?? '/', 'http://localhost');
       const ip = clientIp(req);
       // TikTok-Verifizierung: Datei unter jedem Pfad-Präfix ausliefern (z. B. /auth/tiktok/callback/<datei>).
-      const verify = config.tiktokVerification;
-      if (verify && (req.method === 'GET' || req.method === 'HEAD') && url.pathname.endsWith(`/${verify.file}`)) {
+      const verify = [config.tiktokVerification, ...(config.tiktokVerificationExtra ?? []).filter((v) => v.status === 'ok')].find(
+        (v) => v && url.pathname.endsWith(`/${v.file}`)
+      );
+      if (verify && (req.method === 'GET' || req.method === 'HEAD')) {
         res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(req.method === 'HEAD' ? undefined : verify.content);
         return;
@@ -77,7 +79,8 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
             tiktokOfficialAdapter: auth ? 'configured' : 'not_configured',
             // Öffentlicher Dateiname (kein Secret) – hilft beim Prüfen der TikTok-Verifizierung.
             tiktokVerifyFile: config.tiktokVerification?.file ?? null,
-            tiktokVerifyStatus: config.tiktokVerificationStatus
+            tiktokVerifyStatus: config.tiktokVerificationStatus,
+            tiktokVerifyExtra: (config.tiktokVerificationExtra ?? []).map((v) => ({ file: v.file || null, status: v.status }))
           })
         );
         return;

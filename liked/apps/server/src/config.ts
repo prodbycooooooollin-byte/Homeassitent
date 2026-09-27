@@ -30,6 +30,8 @@ export interface ServerConfig {
   tiktokVerification: { file: string; content: string } | null;
   /** Warum keine Verifizierung aktiv ist (für /healthz, ohne Inhalte). */
   tiktokVerificationStatus: 'ok' | 'not_set' | 'missing_file' | 'missing_content' | 'invalid_file';
+  /** Weitere Prüfdateien (TIKTOK_VERIFY_FILE_2/_CONTENT_2 … _9), z. B. für /terms/ und /privacy/. */
+  tiktokVerificationExtra: { file: string; content: string; status: string }[];
   /** Betreiberangaben für Datenschutzerklärung und Nutzungsbedingungen. */
   operator: { name: string | null; contact: string | null };
 }
@@ -65,6 +67,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     // Eine echte Runde dauert ≥ 15 s; diese Limits bremsen nur Missbrauch.
     rateLimits: { perSocket: [80, 15], perEvent: [20, 4], joinPerIp: [10, 1 / 6] },
     ...parseTikTokVerification(env),
+    tiktokVerificationExtra: [2, 3, 4, 5, 6, 7, 8, 9]
+      .map((n) => parseTikTokVerification(env, `_${n}`))
+      .filter((v) => v.tiktokVerificationStatus !== 'not_set')
+      .map((v) => ({ file: v.tiktokVerification?.file ?? '', content: v.tiktokVerification?.content ?? '', status: v.tiktokVerificationStatus })),
     operator: { name: env.OPERATOR_NAME?.trim() || null, contact: env.OPERATOR_CONTACT?.trim() || null }
   };
 }
@@ -83,10 +89,10 @@ function scaleTimings(scale: number): Timings {
  * Tolerantes Einlesen der TikTok-Verifizierung: akzeptiert auch eine eingefügte URL oder einen Pfad
  * als Dateinamen sowie Anführungszeichen/Leerzeichen um die Werte.
  */
-export function parseTikTokVerification(env: NodeJS.ProcessEnv): Pick<ServerConfig, 'tiktokVerification' | 'tiktokVerificationStatus'> {
+export function parseTikTokVerification(env: NodeJS.ProcessEnv, suffix = ''): Pick<ServerConfig, 'tiktokVerification' | 'tiktokVerificationStatus'> {
   const clean = (v?: string) => (v ?? '').trim().replace(/^["']|["']$/g, '').trim();
-  const rawFile = clean(env.TIKTOK_VERIFY_FILE);
-  const content = clean(env.TIKTOK_VERIFY_CONTENT);
+  const rawFile = clean(env[`TIKTOK_VERIFY_FILE${suffix}`]);
+  const content = clean(env[`TIKTOK_VERIFY_CONTENT${suffix}`]);
   if (!rawFile && !content) return { tiktokVerification: null, tiktokVerificationStatus: 'not_set' };
   if (!rawFile) return { tiktokVerification: null, tiktokVerificationStatus: 'missing_file' };
   if (!content) return { tiktokVerification: null, tiktokVerificationStatus: 'missing_content' };

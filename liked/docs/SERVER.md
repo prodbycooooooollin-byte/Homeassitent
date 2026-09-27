@@ -97,7 +97,7 @@ In der Desktop-App trägt jeder Spieler unter *Einstellungen → Server* die Adr
 | `TIKTOK_REDIRECT_URI` | muss exakt in der TikTok-App eingetragen sein | `PUBLIC_URL/auth/tiktok/callback` |
 | `TIKTOK_SCOPES` | angefragte Scopes | `user.info.basic,portability.activity.ongoing` |
 | `TOKEN_ENCRYPTION_KEY` | 32 Byte base64, Pflicht mit TikTok | – |
-| `TIKTOK_VERIFY_FILE`, `TIKTOK_VERIFY_CONTENT` | TikTok-URL-Verifizierung: Dateiname und Inhalt der von TikTok heruntergeladenen Datei; wird unter jedem Pfad-Präfix ausgeliefert | – |
+| `TIKTOK_VERIFY_FILE`, `TIKTOK_VERIFY_CONTENT` (+ `_2` … `_9`) | TikTok-URL-Verifizierung: Dateiname und Inhalt je heruntergeladener Datei; wird unter jedem Pfad-Präfix ausgeliefert | – |
 | `OPERATOR_NAME`, `OPERATOR_CONTACT` | Betreiber (Name, E-Mail) für `/privacy` und `/terms` – für die TikTok-App-Einreichung nötig | – |
 | `TIMINGS_SCALE` | **nur Test/Entwicklung**: verkürzt Auflösung/Zwischenstand | `1` |
 
