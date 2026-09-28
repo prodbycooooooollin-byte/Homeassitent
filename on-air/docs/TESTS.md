@@ -39,7 +39,7 @@ oder „600 s Sperre“ in Sekundenbruchteilen – die Zeitlogik ist dieselbe wi
 | Limits bei gleichzeitigen Requests | `concurrent_requests_respect_user_limit` | ✅ |
 | Overlay: Loopback, Host-Prüfung, Token, keine Secrets | `tests/overlay.rs` | ✅ |
 | OBS-Dock: Schlüssel Pflicht, fremde Herkunft abgelehnt, Schlüssel nie in der Seite | `tests/overlay.rs` → `dock_requires_key_and_own_origin` | ✅ |
-| `!playlist`: Name, privat, Name nicht abrufbar, Standard-Link | `playlist_command_shares_current_playlist` | ✅ |
+| `!playlist`: Name, privat, Name nicht abrufbar, Standard-Link; eigene Befehle mit Platzhaltern, Alias, Rolle | `playlist_command_shares_current_playlist` | ✅ |
 | UI: kleines Fenster, lange Namen, 100/125/150/200 %, 1280×720, 1920×1080 | `tests-ui/layout.spec.ts` (42 Tests) | ✅ in Chromium, **nicht** in WebView2 geprüft |
 
 ## Erweiterung 0.2 – simuliert
@@ -57,6 +57,11 @@ oder „600 s Sperre“ in Sekundenbruchteilen – die Zeitlogik ist dieselbe wi
 | Prognose folgt Pause, Skip und Spulen; Pause wird als Unsicherheit benannt | `plan_follows_pause_skip_and_seek` (+ Unit-Test `paid_requests_held_back_when_plan_uncertain`) | ✅ |
 | Chatantwort auf Kanalpunkte-Einlösung (einmal trotz Doppelzustellung; Ablehnung mit Erstattungshinweis) | `redemptions_are_deduplicated_and_settled` | ✅ |
 | OBS-Dock-Zustand: Requests mit Aktionen, Pausegrund, keine Schlüssel | `dock_state_lists_requests_without_secrets` | ✅ |
+| Fremde Kanalpunkte-Belohnung wird gemeldet (nicht still ignoriert), übernommen → Wünsche kommen an, kein falsches „erstattet“ | `foreign_reward_is_reported_and_can_be_used` | ✅ |
+| Streamer löst selbst ein → Pro-Person-Limit greift nicht | `broadcaster_redemption_bypasses_user_limit` | ✅ |
+| Sammel-Playlist: anlegen, jeder Song einmal, keine abgelehnten/App-Wünsche, gelöschte Playlist neu | `request_playlist_collects_each_song_once` | ✅ |
+| Sammel-Playlist: alte Anmeldung ohne Rechte → Hinweis, Wunsch bleibt vorgemerkt | `request_playlist_requires_playlist_scope` | ✅ |
+| Sammel-Playlist: volle Playlist → „Teil 2“ | `request_playlist_rolls_over_when_full` | ✅ |
 | Update-Vorbereitung pausiert Requests/Belohnung, sichert DB; Abbruch stellt Annahme wieder her | `update_preparation_pauses_and_can_be_cancelled` | ✅ |
 
 Unit-Tests dazu: Budgetformel und Unsicherheitscodes (`plan.rs`), Sperrgründe inkl.

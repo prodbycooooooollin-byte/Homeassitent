@@ -3,12 +3,12 @@
 
 use onair_core::auth::{TokenManager, TokenSet};
 use onair_core::clock::{Clock, SharedClock};
-use onair_core::http::{FakeTransport, HttpRequest, HttpResponse, Method, TransportError};
+use onair_core::http::{Body, FakeTransport, HttpRequest, HttpResponse, Method, TransportError};
 use onair_core::secrets::MemorySecretStore;
 use onair_core::spotify::auth::SpotifyTokenEndpoint;
 use onair_core::spotify::SpotifyClient;
 use serde_json::{json, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub const ACCOUNTS: &str = "http://fake-accounts";
@@ -66,6 +66,10 @@ pub struct FakeSpotify {
     pub context: Option<Value>,
     /// Antwort auf GET /playlists/{id}: (Name, public).
     pub playlist: Option<(String, Option<bool>)>,
+    /// Von der App angelegte Playlists: (ID, Name, public).
+    pub created_playlists: Vec<(String, String, bool)>,
+    /// Inhalt der Playlists (POST /playlists/{id}/items).
+    pub playlist_items: HashMap<String, Vec<String>>,
 }
 
 impl Default for FakeSpotify {
@@ -89,6 +93,8 @@ impl Default for FakeSpotify {
             add_mode: AddMode::Ok,
             context: None,
             playlist: None,
+            created_playlists: vec![],
+            playlist_items: HashMap::new(),
         }
     }
 }
@@ -129,7 +135,7 @@ impl FakeSpotify {
                     self.token_n += 1;
                     let t = format!("at-{}", self.token_n);
                     self.valid_tokens.insert(t.clone());
-                    let mut body = json!({"access_token": t, "expires_in": 3600, "scope": "user-read-playback-state user-modify-playback-state user-read-currently-playing"});
+                    let mut body = json!({"access_token": t, "expires_in": 3600, "scope": "user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-modify-private playlist-modify-public"});
                     if self.refresh_mode == RefreshMode::Ok {
                         body["refresh_token"] = json!(format!("rt-{}", self.token_n));
                     }
@@ -165,6 +171,24 @@ impl FakeSpotify {
                     "context": self.context.clone().unwrap_or(Value::Null),
                     "actions": {"disallows": {}}
                 })))
+            }
+            (Method::Post, "/me/playlists") => {
+                let Body::Json(b) = &req.body else { return Ok(HttpResponse::new(400)) };
+                let id = format!("pl{}", self.created_playlists.len() + 1);
+                self.created_playlists.push((id.clone(), b["name"].as_str().unwrap_or("").into(), b["public"].as_bool().unwrap_or(true)));
+                self.playlist_items.insert(id.clone(), vec![]);
+                Ok(HttpResponse::json(201, json!({"id": id, "external_urls": {"spotify": format!("https://open.spotify.com/playlist/{id}")}})))
+            }
+            (Method::Post, r) if r.starts_with("/playlists/") && r.ends_with("/items") => {
+                let id = r.trim_start_matches("/playlists/").trim_end_matches("/items").to_string();
+                let Body::Json(b) = &req.body else { return Ok(HttpResponse::new(400)) };
+                match self.playlist_items.get_mut(&id) {
+                    Some(items) => {
+                        items.extend(b["uris"].as_array().unwrap().iter().map(|u| u.as_str().unwrap().to_string()));
+                        Ok(HttpResponse::json(201, json!({"snapshot_id": "s"})))
+                    }
+                    None => Ok(HttpResponse::json(404, json!({"error": {"status": 404, "message": "Resource not found"}}))),
+                }
             }
             (Method::Get, r) if r.starts_with("/playlists/") => match &self.playlist {
                 Some((name, public)) => Ok(HttpResponse::json(200, json!({"name": name, "public": public}))),
@@ -377,7 +401,7 @@ impl Harness {
             access_token: "at-0".into(),
             refresh_token: Some("rt-0".into()),
             expires_at_ms: now + expires_in_ms,
-            scope: "user-read-playback-state user-modify-playback-state user-read-currently-playing".into(),
+            scope: "user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-modify-private playlist-modify-public".into(),
             authorized_at_ms: now,
         };
         onair_core::secrets::SecretStore::save(&*self.secrets, key, &serde_json::to_string(&set).unwrap()).unwrap();

@@ -5,12 +5,18 @@ pub mod service;
 
 pub use client::SpotifyClient;
 
-/// Scopes: nur, was die Kernfunktionen benötigen.
+/// Scopes: nur, was die Funktionen benötigen. Die Playlist-Rechte braucht nur die
+/// optionale Sammel-Playlist (sie schreibt ausschließlich in von ON AIR angelegte Playlists).
 pub const SCOPES: &[&str] = &[
     "user-read-playback-state",
     "user-modify-playback-state",
     "user-read-currently-playing",
+    "playlist-modify-private",
+    "playlist-modify-public",
 ];
+
+/// Rechte für die Sammel-Playlist (ältere Anmeldungen haben sie nicht → neu verbinden).
+pub const PLAYLIST_SCOPES: &[&str] = &["playlist-modify-private", "playlist-modify-public"];
 
 pub const DEFAULT_REDIRECT_PORT: u16 = 43821;
 pub const REDIRECT_PATH: &str = "/callback";

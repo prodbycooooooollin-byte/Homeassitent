@@ -53,6 +53,7 @@ export function PlanPanel({ snap, full }: { snap: AppSnapshot; full?: boolean })
   const [bufferMin, setBufferMin] = useState(Math.round(snap.plan_config.buffer_ms / 60_000));
   const [finish, setFinish] = useState(false);
   const [dismissedOver, setDismissedOver] = useState<number | null>(null);
+  const [custom, setCustom] = useState(false);
   const cfg = snap.plan_config;
   const active = snap.plan.active;
   const plan = active ? live(snap.plan, now) : snap.plan;
@@ -72,16 +73,19 @@ export function PlanPanel({ snap, full }: { snap: AppSnapshot; full?: boolean })
           </div>
           <CalendarClock size={20} className="subtle" />
         </div>
-        <p className="muted small">{t("plan.intro")}</p>
+        {full && <p className="muted small">{t("plan.intro")}</p>}
         <div className="row wrap" style={{ gap: 6 }} role="group" aria-label={t("plan.quick")}>
-          <span className="subtle small" style={{ marginRight: 2 }}>{t("plan.quick")}</span>
+          {full && <span className="subtle small" style={{ marginRight: 2 }}>{t("plan.quick")}</span>}
           {QUICK.map((m) => (
             <button key={m} className="chip-btn" onClick={() => start(Date.now() + m * 60_000)}>
               {t("plan.minutes", { n: m })}
             </button>
           ))}
         </div>
-        <div className="row wrap" style={{ gap: 8 }}>
+        {!full && !custom && (
+          <button className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => setCustom(true)}>{t("plan.custom_end")}</button>
+        )}
+        {(full || custom) && <div className="row wrap" style={{ gap: 8 }}>
           <label className="row small muted" style={{ gap: 6 }}>
             {t("plan.end_time")}
             <input className="input" type="time" style={{ width: 120 }} value={endInput} onChange={(e) => setEndInput(e.target.value)} aria-label={t("plan.end_time")} />
@@ -92,7 +96,7 @@ export function PlanPanel({ snap, full }: { snap: AppSnapshot; full?: boolean })
             <span>Min</span>
           </label>
           <button className="btn btn-sm" disabled={!endInput} onClick={() => start(nextOccurrence(endInput, Date.now()))}>{t("plan.start")}</button>
-        </div>
+        </div>}
         {endInput && nextOccurrence(endInput, now) && isTomorrow(nextOccurrence(endInput, now)!, now) && (
           <span className="subtle small">{t("plan.end")}: {new Date(nextOccurrence(endInput, now)!).toLocaleString(getLang() === "en" ? "en-GB" : "de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} ({t("plan.tomorrow")})</span>
         )}

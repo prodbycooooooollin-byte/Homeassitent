@@ -19,10 +19,10 @@ export function BrandMark({ size = 26 }: { size?: number }) {
   );
 }
 
-export function Toggle({ checked, onChange, label, disabled, id }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; disabled?: boolean; id?: string }) {
+export function Toggle({ checked, onChange, label, disabled, id, ariaLabel }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; disabled?: boolean; id?: string; ariaLabel?: string }) {
   return (
     <label className="toggle">
-      <input id={id} type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <input id={id} type="checkbox" role="switch" aria-label={ariaLabel} checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span className="track" aria-hidden="true" />
       {label && <span>{label}</span>}
     </label>

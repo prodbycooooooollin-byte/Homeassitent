@@ -94,6 +94,21 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE requests ADD COLUMN redemption_error TEXT;
     CREATE UNIQUE INDEX idx_requests_redemption ON requests(redemption_id) WHERE redemption_id IS NOT NULL;
     "#,
+    // v3: Sammel-Playlist – welche Titel schon drin sind, welche Requests erledigt sind
+    r#"
+    CREATE TABLE archive_tracks (
+        track_uri TEXT PRIMARY KEY,
+        playlist_id TEXT NOT NULL,
+        added_at INTEGER NOT NULL
+    );
+    -- state: added | duplicate
+    CREATE TABLE archive_requests (
+        request_id TEXT PRIMARY KEY,
+        track_uri TEXT NOT NULL,
+        state TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+    );
+    "#,
 ];
 
 pub fn schema_version() -> i64 {

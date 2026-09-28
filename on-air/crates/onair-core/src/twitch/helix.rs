@@ -38,6 +38,8 @@ pub struct RewardInfo {
 pub struct RedemptionInfo {
     pub id: String,
     pub reward_id: String,
+    /// Titel der Belohnung (für Hinweise zu fremden Belohnungen).
+    pub reward_title: String,
     pub user_id: String,
     pub user_login: String,
     pub user_name: String,
@@ -69,6 +71,7 @@ pub fn parse_redemption(v: &Value) -> Option<RedemptionInfo> {
     Some(RedemptionInfo {
         id: v["id"].as_str()?.to_string(),
         reward_id: v["reward"]["id"].as_str().unwrap_or("").into(),
+        reward_title: v["reward"]["title"].as_str().unwrap_or("").into(),
         user_id: v["user_id"].as_str().unwrap_or("").into(),
         user_login: v["user_login"].as_str().unwrap_or("").into(),
         user_name: v["user_name"].as_str().unwrap_or("").into(),

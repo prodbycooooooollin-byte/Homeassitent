@@ -103,6 +103,7 @@ pub struct AppSnapshot {
     pub plan: PlanStatus,
     pub plan_config: PlanConfig,
     pub channel_points: ChannelPointsStatus,
+    pub request_playlist: crate::archive::ArchiveStatus,
     pub update_pause: bool,
 }
 
@@ -128,6 +129,8 @@ pub struct Runtime {
     pub plan: SharedPlan,
     pub channel_points: Arc<ChannelPointsService>,
     cp_status: watch::Receiver<ChannelPointsStatus>,
+    /// Sammel-Playlist aller Songwünsche.
+    pub archive: Arc<crate::archive::ArchiveService>,
     helix: Helix,
     update_pause: AtomicBool,
     last_acceptance: Mutex<Option<Acceptance>>,
@@ -252,6 +255,15 @@ impl Runtime {
             }
         };
         let (overlay_tx, _) = watch::channel(OverlayData::empty(cfg::read(&settings).overlay.clone()));
+        let archive = crate::archive::ArchiveService::new(crate::archive::ArchiveDeps {
+            db: cfg.db.clone(),
+            spotify: spotify.clone(),
+            spotify_state: sp_handle.state.clone(),
+            settings: settings.clone(),
+            activity: activity.clone(),
+            bus: bus.clone(),
+            clock: cfg.clock.clone(),
+        });
 
         let rt = Arc::new(Self {
             db: cfg.db.clone(),
@@ -275,6 +287,7 @@ impl Runtime {
             plan,
             channel_points,
             cp_status,
+            archive,
             helix,
             update_pause: AtomicBool::new(false),
             last_acceptance: Mutex::new(None),
@@ -325,6 +338,7 @@ impl Runtime {
             tokio::spawn(observe_spotify(Arc::downgrade(&rt))),
             tokio::spawn(overlay_feeder(Arc::downgrade(&rt))),
             tokio::spawn(rt.channel_points.clone().run(redemptions_rx)),
+            tokio::spawn(rt.archive.clone().run()),
             tokio::spawn(acceptance_watcher(Arc::downgrade(&rt))),
         ];
         let weak = Arc::downgrade(&rt);
@@ -440,6 +454,7 @@ impl Runtime {
             plan: self.queue.plan_status(),
             plan_config: self.queue.plan_config(),
             channel_points: self.cp_status.borrow().clone(),
+            request_playlist: self.archive.status(),
             update_pause: self.update_pause.load(Ordering::SeqCst),
         }
     }
@@ -758,6 +773,9 @@ impl Runtime {
             self.restart_overlay().await;
         }
         self.update_poll_config();
+        if new.request_playlist != old.request_playlist {
+            self.archive.kick();
+        }
         self.bus.changed(Topic::Settings);
         self.bus.changed(Topic::Overlay);
         if let Some(rt) = self.arc() {

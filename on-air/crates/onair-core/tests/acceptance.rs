@@ -622,4 +622,23 @@ async fn playlist_command_shares_current_playlist() {
     handle_chat_for_test(&svc, ask("!playlist")).await;
     wait_for("Antwort 5", || sent.lock().unwrap().len() == 5, Duration::from_secs(10)).await;
     assert_eq!(last(&sent), "@Fan Aktuelle Playlist: https://open.spotify.com/playlist/fallback1");
+
+    // Eigene Befehle: Platzhalter, Alias, Rolle; eingebaute Befehle gehen vor.
+    let mut s = rt.settings.read().unwrap().clone();
+    s.commands.custom = vec![
+        onair_core::settings::CustomCommand { id: "hug".into(), name: "!Hug".into(), aliases: vec!["knuddel".into()], cooldown_s: 0, reply: "{user} umarmt {touser} ♥".into(), ..Default::default() },
+        onair_core::settings::CustomCommand { id: "mod".into(), name: "modinfo".into(), min_role: onair_core::settings::Role::Moderator, reply: "geheim".into(), ..Default::default() },
+    ];
+    s.commands.replies.no_permission = String::new();
+    rt.update_settings(s).await.unwrap();
+    assert_eq!(rt.settings.read().unwrap().commands.custom[0].name, "hug", "Name normalisiert");
+    handle_chat_for_test(&svc, ask("!hug @Tom")).await;
+    wait_for("Antwort 6", || sent.lock().unwrap().len() == 6, Duration::from_secs(10)).await;
+    assert_eq!(last(&sent), "Fan umarmt Tom ♥");
+    handle_chat_for_test(&svc, ask("!knuddel")).await;
+    wait_for("Antwort 7", || sent.lock().unwrap().len() == 7, Duration::from_secs(10)).await;
+    assert_eq!(last(&sent), "Fan umarmt Fan ♥");
+    handle_chat_for_test(&svc, ask("!modinfo")).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert_eq!(sent.lock().unwrap().len(), 7, "ohne Rolle keine Antwort");
 }

@@ -49,7 +49,7 @@ function defaults(): Settings {
       prefix: "!", reply_in_chat: true,
       sr: cmd("sr", "everyone", 0, ["songrequest"]), song: cmd("song", "everyone", 10), queue: cmd("queue", "everyone", 15),
       remove: cmd("remove", "everyone", 0, ["wrongsong"]), skip: cmd("skip", "moderator", 3), voteskip: cmd("voteskip", "everyone", 0),
-      voteskip_needed: 5, min_reply_interval_ms: 1200,
+      voteskip_needed: 5, min_reply_interval_ms: 1200, custom: [],
       playlist: cmd("playlist", "everyone", 20, ["pl"]), playlist_fallback_url: "",
       replies: {
         accepted: "@{user} „{title}“ von {artist} ist auf Platz {position}.", pending_review: "@{user} „{title}“ wartet auf Freigabe.",
@@ -64,8 +64,9 @@ function defaults(): Settings {
     overlay: { port: 43822, stale_after_s: 20, minimal: style({}), glass: style({ background_opacity: 0.55, show_progress: true }), queue: style({ background_opacity: 0.7, width: 420, queue_count: 4 }), control_enabled: false },
     nowplaying_file: { enabled: false, path: "", template: "{artist} – {title}" },
     profiles: [], active_profile: null, hotkey_skip: "", compact_on_top: true,
-    channel_points: { enabled: false, title: "Song wünschen", cost: 500, prompt: "Spotify-Link oder Titel und Interpret", global_cooldown_s: 0, max_per_stream: 0, max_per_user_per_stream: 0, mode: "auto" },
+    channel_points: { enabled: false, title: "Song wünschen", cost: 500, prompt: "Spotify-Link oder Titel und Interpret", global_cooldown_s: 0, max_per_stream: 0, max_per_user_per_stream: 0, mode: "auto", external_reward: null },
     updates: { check_on_start: true, auto_install: true },
+    request_playlist: { enabled: false, name: "ON AIR – Songwünsche", public: false, include_app: false },
   };
 }
 
@@ -79,7 +80,7 @@ export function createMockBackend(): Backend {
     settings.spotify.client_id = "";
     settings.twitch.client_id = "";
   }
-  const cpOn = ["cp", "plan", "overplanned", "full", "ended"].includes(scenario);
+  const cpOn = ["cp", "cp-foreign", "plan", "overplanned", "full", "ended"].includes(scenario);
   settings.channel_points.enabled = cpOn;
   const red = (id: string, status: "unfulfilled" | "fulfilled" | "canceled" | "review" | "conflict" = "unfulfilled") => ({ reward_id: "rw-1", redemption_id: id, status, target: null, last_error: null });
   let reqN = 0;
@@ -221,7 +222,13 @@ export function createMockBackend(): Backend {
         desired_enabled: settings.channel_points.enabled, desired_paused: !acceptance.channel_points.open, confirmed_enabled: cpOn ? true : null,
         confirmed_paused: cpOn ? !acceptance.channel_points.open : null, in_sync: true, last_error: null, reconciled: true,
         open: queue.filter((r) => r.redemption).length, needs_review: recent.filter((r) => r.redemption?.status === "review").length,
+        external: settings.channel_points.enabled && !!settings.channel_points.external_reward,
+        last_redemption_ms: cpOn ? start - 4 * 60_000 : null,
+        foreign_reward: scenario === "cp-foreign" && !settings.channel_points.external_reward ? { id: "rw-own", title: "Song Request", user: "Kira", at_ms: start - 60_000 } : null,
       },
+      request_playlist: settings.request_playlist.enabled
+        ? { enabled: true, scope_ok: scenario !== "rp-scope", playlists: [{ id: "pl1", url: "https://open.spotify.com/playlist/pl1", name: settings.request_playlist.name, count: 1287 }], total: 1287, pending: 0, last_added_ms: start - 3 * 60_000, last_error: null }
+        : { enabled: false, scope_ok: true, playlists: [], total: 0, pending: 0, last_added_ms: null, last_error: null },
       update_pause: false,
     };
   };

@@ -22,10 +22,11 @@ Weitere Ansichten (Browser-Vorschau mit Beispieldaten): [docs/screenshots](docs/
   `Retry-After`, Backoff mit Zufallsanteil, Circuit Breaker, Standby-Erkennung, Abgleich statt Blind-Wiederholung
 - Eigene, dauerhafte Request-Warteschlange (SQLite) mit Moderation, fairer Reihenfolge,
   Limits, Cooldowns, Sperrlisten, Explicit-Filter und sparsamer Übergabe an Spotify
-- Twitch-Chatbefehle `!sr`, `!song`, `!queue`, `!remove`, `!skip`, `!voteskip`, `!playlist` (konfigurierbar)
+- Twitch-Chatbefehle `!sr`, `!song`, `!queue`, `!remove`, `!skip`, `!voteskip`, `!playlist` (konfigurierbar) plus **eigene Befehle** mit Vorlagen und Platzhaltern
 - **OBS-Dock**: ON AIR direkt in OBS steuern (Now Playing, Requests pausieren, Skip, Freigeben/Ablehnen)
 - Optional **Kanalpunkte-Requests** über eine eigene, von ON AIR verwaltete Belohnung –
   Erfüllen erst nach beobachtetem Start, Ablehnen erstattet die Punkte
+- **Sammel-Playlist**: jeder angenommene Songwunsch landet automatisch (einmal) in einer Spotify-Playlist
 - **Streamplanung**: Requests nur annehmen, solange sie vor dem Streamende noch passen
 - **Immersiver Installer** (`ON-AIR-Setup_<version>.exe`) im ON-AIR-Design
 - **Automatische Updates ohne Einrichtung** – jeder Push erzeugt ein Release; die App installiert nur in einem ruhigen

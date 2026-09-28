@@ -244,6 +244,16 @@ impl QueueService {
 
     /// Request aus einer Kanalpunkte-Einlösung. Dedupliziert über die Redemption-ID.
     pub async fn submit_redemption(&self, query: &str, requester: Requester, reward_id: &str, redemption_id: &str) -> SubmitOutcome {
+        self.submit_points(query, requester, Some(reward_id), redemption_id).await
+    }
+
+    /// Einlösung einer nicht von ON AIR angelegten Belohnung: Wunsch wird angenommen, die
+    /// Einlösung aber nicht auf Twitch abgewickelt (Twitch erlaubt das nur dem Ersteller).
+    pub async fn submit_unmanaged_redemption(&self, query: &str, requester: Requester, redemption_id: &str) -> SubmitOutcome {
+        self.submit_points(query, requester, None, redemption_id).await
+    }
+
+    async fn submit_points(&self, query: &str, requester: Requester, reward_id: Option<&str>, redemption_id: &str) -> SubmitOutcome {
         if self.store.by_redemption(redemption_id).is_some() {
             return SubmitOutcome::Duplicate;
         }
@@ -267,7 +277,7 @@ impl QueueService {
             observed_at: None,
             finished_at: None,
             chat_message_id: None,
-            redemption: Some(super::Redemption {
+            redemption: reward_id.map(|reward_id| super::Redemption {
                 reward_id: reward_id.into(),
                 redemption_id: redemption_id.into(),
                 status: super::RedemptionStatus::Unfulfilled,

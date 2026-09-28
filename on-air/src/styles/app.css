@@ -185,7 +185,7 @@ a { color: var(--accent); }
 .divider { height: 1px; background: var(--border); }
 
 /* Übersicht: Hauptspalte (Player + Steuerung) und Seitenspalte (nächste Wünsche, Aktivität) */
-.ov-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(360px, 32%, 500px); gap: var(--s5); align-items: start; }
+.ov-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 30%, 440px); gap: var(--s5); align-items: start; }
 .ov-main { display: flex; flex-direction: column; gap: var(--s5); min-width: 0; container-type: inline-size; }
 .ov-side { display: flex; flex-direction: column; gap: var(--s5); min-width: 0; }
 .ov-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s5); align-items: start; }
@@ -497,3 +497,11 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 [data-motion="reduced"] *, [data-motion="reduced"] *::before, [data-motion="reduced"] *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+
+/* Eigene Befehle */
+.cc-item { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md, 12px); background: var(--surface-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { height: 26px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2, var(--text)); font-size: 12px; cursor: pointer; }
+.chip:hover { background: var(--surface-3); color: var(--text); }
+.cc-preview { padding: 8px 12px; border-radius: var(--r-sm); background: var(--surface); border: 1px dashed var(--border-strong); overflow-wrap: anywhere; }
+.empty-hint { display: flex; align-items: center; gap: 8px; padding: 14px; border: 1px dashed var(--border-strong); border-radius: var(--r-sm); }

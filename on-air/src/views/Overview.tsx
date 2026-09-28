@@ -12,6 +12,8 @@ import type { AppSnapshot } from "../lib/types";
 import { ActivePaths } from "./Queue";
 import { StatusNotices } from "./StatusNotices";
 
+const SHOWN = 6;
+
 export function Overview({ snap, go, onConnectSpotify }: { snap: AppSnapshot; go: (r: string) => void; onConnectSpotify: () => void }) {
   const [adding, setAdding] = useState(false);
   const upcoming = snap.queue.filter((r) => r.status !== "playing");
@@ -21,24 +23,18 @@ export function Overview({ snap, go, onConnectSpotify }: { snap: AppSnapshot; go
       <div className="ov-layout">
         <div className="ov-main">
           <NowPlayingCard snap={snap} onConnect={onConnectSpotify} />
-          <div className="ov-pair">
-            <RequestControl snap={snap} onOpenSettings={(s) => go(s)} />
-            <PlanPanel snap={snap} />
-          </div>
-        </div>
-        <aside className="ov-side">
-          <section className="card" aria-labelledby="next-h">
+          <section className="card ov-queue" aria-labelledby="next-h">
             <div className="card-head">
               <div className="row" style={{ gap: 8 }}>
                 <span className="eyebrow" id="next-h">{t("q.next_up")}</span>
                 {upcoming.length > 0 && <span className="badge">{upcoming.length}</span>}
               </div>
               <div className="row" style={{ gap: 4 }}>
-                <button className="btn btn-sm btn-icon" onClick={() => setAdding(true)} aria-label={t("q.add")} title={t("q.add")}><Plus size={15} /></button>
-                {upcoming.length > 7 && <button className="btn btn-ghost btn-sm" onClick={() => go("queue")}>{t("q.view_all")}</button>}
+                {upcoming.length > SHOWN && <button className="btn btn-ghost btn-sm" onClick={() => go("queue")}>{t("q.view_all")}</button>}
+                <button className="btn btn-sm" onClick={() => setAdding(true)}><Plus size={15} /> {t("q.add")}</button>
               </div>
             </div>
-            <div style={{ paddingTop: 6, paddingBottom: 6 }}>
+            <div style={{ paddingTop: 4, paddingBottom: 6 }}>
               {upcoming.length === 0 ? (
                 <div className="empty-inline">
                   <span className="e-icon"><ListMusic size={19} /></span>
@@ -48,13 +44,17 @@ export function Overview({ snap, go, onConnectSpotify }: { snap: AppSnapshot; go
                   </div>
                 </div>
               ) : (
-                <RequestList items={upcoming.slice(0, 7)} compact etas={snap.plan.etas} />
+                <RequestList items={upcoming.slice(0, SHOWN)} compact etas={snap.plan.etas} />
               )}
             </div>
           </section>
+        </div>
+        <aside className="ov-side">
+          <RequestControl snap={snap} onOpenSettings={(s) => go(s)} />
+          <PlanPanel snap={snap} />
           <section className="card" aria-labelledby="act-h">
             <div className="card-head"><span className="eyebrow" id="act-h">{t("act.title")}</span></div>
-            <ActivityLog items={snap.activity} limit={5} />
+            <ActivityLog items={snap.activity} limit={4} />
           </section>
         </aside>
       </div>

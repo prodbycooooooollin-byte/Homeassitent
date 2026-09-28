@@ -1,13 +1,16 @@
 import { CalendarClock, Copy, Database, Download, ExternalLink, FolderOpen, Layers, ListChecks, LogOut, MessageSquare, Monitor, Music2, Palette, Plug, RefreshCw, Save, Sparkles, Stethoscope, Trash2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
+import { CustomCommands } from "../components/CustomCommands";
 import { DiagnosticsDialog } from "../components/Dialogs";
+import { RequestPlaylistCard } from "../components/RequestPlaylist";
 import { PlanPanel } from "../components/PlanPanel";
 import { UpdatePanel } from "../components/UpdatePanel";
 import { useUpdateInfo } from "../lib/updates";
 import { SpotifyLoginStatus, startSpotifyLogin, startTwitchLogin, useSpotifyLogin } from "../components/Login";
 import { Dialog, Field, Notice, Segmented, SettingRow, Toggle, toast, toastError } from "../components/ui";
 import { api, autostart, copyText, isTauri, openTextFile, saveTextFile } from "../lib/api";
-import { t } from "../lib/i18n";
+import { getLang, t } from "../lib/i18n";
+import { relative } from "../lib/format";
 import { spotifyStatus, twitchStatus } from "../lib/status";
 import { refresh, useNow } from "../lib/store";
 import { useSettingsDraft } from "../lib/useSettings";
@@ -68,7 +71,7 @@ export function SettingsView({ snap, initial }: { snap: AppSnapshot; initial?: S
           <h1>{sec === "updates" ? t("up.title") : current.label()}</h1>
           {sec === "connections" && <Connections snap={snap} draft={draft} update={update} />}
           {sec === "playback" && <Playback draft={draft} update={update} />}
-          {sec === "requests" && <Rules draft={draft} update={update} />}
+          {sec === "requests" && <div className="col" style={{ gap: 16 }}><Rules draft={draft} update={update} /><RequestPlaylistCard snap={snap} draft={draft} update={update} /></div>}
           {sec === "channel_points" && <ChannelPoints snap={snap} draft={draft} update={update} />}
           {sec === "plan" && <PlanPanel snap={snap} full />}
           {sec === "commands" && <Commands draft={draft} update={update} />}
@@ -112,6 +115,7 @@ function ChannelPoints({ snap, draft, update }: { snap: AppSnapshot; draft: Sett
   const state = (enabled: boolean | null, paused: boolean | null) =>
     enabled === null ? t("cp.unknown") : !enabled ? t("cp.disabled") : paused ? t("cp.paused") : t("cp.active");
   const err = st.last_error;
+  const now = useNow();
   return (
     <div className="col" style={{ gap: 16 }}>
       <section className="card card-pad">
@@ -119,6 +123,20 @@ function ChannelPoints({ snap, draft, update }: { snap: AppSnapshot; draft: Sett
           <Toggle checked={cp.enabled} disabled={!twitchOk && !cp.enabled} onChange={(v) => set({ enabled: v })} />
         </SettingRow>
         {!twitchOk && <p className="small" style={{ color: "var(--warn)" }}>{t("cp.twitch_required")}</p>}
+        {cp.enabled && cp.external_reward && (
+          <Notice tone="info" title={t("cp.external_title", { title: cp.external_reward.title })} actions={<button className="btn btn-sm" onClick={() => set({ external_reward: null })}>{t("cp.use_managed")}</button>}>
+            {t("cp.external_desc")}
+          </Notice>
+        )}
+        {cp.enabled && !cp.external_reward && st.foreign_reward && (
+          <Notice
+            tone="warn"
+            title={t("cp.foreign_title", { title: st.foreign_reward.title })}
+            actions={<button className="btn btn-sm btn-primary" onClick={() => set({ external_reward: { id: st.foreign_reward!.id, title: st.foreign_reward!.title } })}>{t("cp.use_foreign", { title: st.foreign_reward.title })}</button>}
+          >
+            {t("cp.foreign_desc", { title: st.foreign_reward.title, user: st.foreign_reward.user })}
+          </Notice>
+        )}
         {twitchOk && cp.enabled && !st.scope_ok && (
           <Notice tone="warn" title={t("tech.missing_scope")} actions={<button className="btn btn-sm btn-primary" onClick={() => void startTwitchLogin()}>{t("rc.grant_scope")}</button>}>
             {t("cp.scope_missing")}
@@ -149,6 +167,7 @@ function ChannelPoints({ snap, draft, update }: { snap: AppSnapshot; draft: Sett
           <div className="kpi"><div className="v" style={{ fontSize: 15 }}>{st.reward_id ? state(st.confirmed_enabled, st.confirmed_paused) : t("cp.not_created")}</div><div className="l">{t("cp.confirmed")}</div></div>
           <div className="kpi"><div className="v" style={{ fontSize: 15, color: st.in_sync ? "var(--positive)" : "var(--warn)" }}>{st.in_sync ? t("cp.in_sync") : t("cp.pending")}</div><div className="l">Sync</div></div>
           <div className="kpi"><div className="v">{st.open}</div><div className="l">{t("cp.open_redemptions", { n: "" }).replace(":", "").trim()}</div></div>
+          <div className="kpi"><div className="v" style={{ fontSize: 15 }}>{st.last_redemption_ms ? relative(st.last_redemption_ms, now, getLang()) : t("cp.never")}</div><div className="l">{t("cp.last_redemption")}</div></div>
         </div>
         {err && <Notice tone={st.reward_id ? "warn" : "error"} code={err.code === "reward_title_taken" ? undefined : err.code} title={err.code.startsWith("reward_title") || err.code === "not_affiliate" ? t(`tech.${err.code}` as never) : undefined} technical={err.details}>{err.code === "reward_title_taken" ? t("cp.foreign_note") : undefined}</Notice>}
       </section>
@@ -306,6 +325,7 @@ function Commands({ draft, update }: { draft: Settings; update: Update }) {
           })}
         </div>
       </section>
+      <CustomCommands draft={draft} update={update} />
       <section className="card card-pad col" style={{ gap: 12 }}>
         <h2>{t("s.cmd.replies")}</h2>
         <p className="muted small">{t("s.cmd.replies_hint")}</p>

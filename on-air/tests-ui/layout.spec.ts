@@ -114,11 +114,11 @@ for (const [w, h] of [[1280, 720], [1920, 1080]] as const) {
     await inViewport(page, ".hero");
     await inViewport(page, "#next-h");
     await inViewport(page, "#rc-h");
-    // Bei 1080p steht die Streamplanung neben der Request-Steuerung, bei 720p direkt darunter.
+    // Bei 1080p steht die Streamplanung unter der Request-Steuerung sichtbar, bei 720p darunter.
     if (h >= 1080) await inViewport(page, "#plan-h");
     else await expect(page.locator("#plan-h")).toBeAttached();
     // Keine abgeschnittenen Kopfzeilen-Aktionen in der Seitenleiste.
-    const head = page.locator(".ov-side .card-head").first();
+    const head = page.locator(".ov-queue .card-head").first();
     const clipped = await head.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     expect(clipped).toBe(false);
   });
@@ -255,5 +255,57 @@ test("Automatisches Update: Countdown auch im Kompaktfenster", async ({ page }) 
   await page.setViewportSize({ width: 380, height: 560 });
   await page.goto("/?state=autoupdate#/compact");
   await inViewport(page, ".auto-update-banner button:has-text('Nicht jetzt')");
+  await noHorizontalOverflow(page);
+});
+
+// Absicherung: Umschalten eines Chatbefehls darf das Dokument nicht verschieben (graues Fenster).
+// Hinweis: Der ursprüngliche Fehler trat in der WebView der App auf, nicht in Chromium – dieser
+// Test prüft das gewünschte Verhalten, reproduziert den alten Fehler aber nicht.
+test("Chatbefehle umschalten verschiebt die App nicht", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/#/settings");
+  await page.locator(".settings-nav").getByRole("button", { name: "Chatbefehle" }).click();
+  const switches = page.locator(".settings-section .list").getByRole("switch");
+  for (const i of [3, 4, 0]) {
+    // Wie ein Nutzer: auf den sichtbaren Schalter (Label) klicken.
+    const label = switches.nth(i).locator("xpath=..");
+    const before = await switches.nth(i).isChecked();
+    await label.click();
+    await expect(switches.nth(i)).toBeChecked({ checked: !before });
+    await label.click();
+    expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
+    await inViewport(page, ".topbar");
+  }
+});
+
+test("eigene Befehle: Vorlage einfügen, Vorschau, Konflikt-Hinweis", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/#/settings");
+  await page.locator(".settings-nav").getByRole("button", { name: "Chatbefehle" }).click();
+  await page.selectOption('select[aria-label="Vorlage hinzufügen …"]', "hug");
+  const item = page.getByTestId("custom-command").first();
+  await expect(item.locator(".cc-preview")).toContainText("Kira umarmt Tom");
+  await item.locator("input.input").first().fill("song");
+  await expect(item).toContainText("eingebauter Befehl");
+  await noHorizontalOverflow(page);
+  expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
+});
+
+test("fremde Kanalpunkte-Belohnung: Hinweis und Übernahme", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/?state=cp-foreign#/settings");
+  await page.locator(".settings-nav").getByRole("button", { name: "Kanalpunkte" }).click();
+  await expect(page.getByText("Einlösung von „Song Request“ ignoriert")).toBeVisible();
+  await page.getByRole("button", { name: "„Song Request“ verwenden" }).click();
+  await expect(page.getByText("Bestehende Belohnung „Song Request“ wird verwendet")).toBeVisible();
+});
+
+test("Sammel-Playlist: Einstellungen und Status", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/#/settings");
+  await page.locator(".settings-nav").getByRole("button", { name: "Requests" }).click();
+  await page.getByRole("switch", { name: "Wünsche in Playlist sammeln" }).dispatchEvent("click");
+  await expect(page.getByText("Songs gesammelt")).toBeVisible();
+  await expect(page.getByRole("button", { name: "In Spotify öffnen" })).toBeVisible();
   await noHorizontalOverflow(page);
 });

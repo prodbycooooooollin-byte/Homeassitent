@@ -412,14 +412,19 @@ impl Shared {
         let _ = self.chat_tx.try_send((commands::sanitize_chat(&text), reply_to));
     }
 
-    /// Einlösungen der verwalteten Belohnung abonnieren (nur mit passender Berechtigung).
+    /// Alle Einlösungen des Kanals abonnieren (nur mit passender Berechtigung). Bewusst ohne
+    /// Filter auf die verwaltete Belohnung: Einlösungen fremder Belohnungen werden so sichtbar
+    /// gemeldet statt still verschluckt, und eine bestehende Belohnung kann verwendet werden.
     async fn subscribe_redemptions(&self, session_id: &str, identity: &Identity) {
-        let Some(reward_id) = self.deps.cp_reward.borrow().clone() else { return };
+        if self.deps.cp_reward.borrow().is_none() {
+            return;
+        }
         if !identity.scopes.iter().any(|s| s == super::CHANNEL_POINTS_SCOPE) {
+            self.deps.activity.warn("channel_points.subscribe_failed", "Kanalpunkte: Twitch-Berechtigung fehlt – bitte Twitch neu verbinden", json!({}));
             return;
         }
         for kind in ["channel.channel_points_custom_reward_redemption.add", "channel.channel_points_custom_reward_redemption.update"] {
-            let cond = json!({ "broadcaster_user_id": identity.user_id, "reward_id": reward_id });
+            let cond = json!({ "broadcaster_user_id": identity.user_id });
             if let Err(e) = self.helix.subscribe(kind, cond, session_id).await {
                 tracing::warn!(target: "twitch", code = e.code(), kind, "Kanalpunkte-Abo fehlgeschlagen");
                 self.deps.activity.warn("channel_points.subscribe_failed", "Kanalpunkte-Einlösungen konnten nicht abonniert werden", json!({ "code": e.code() }));
@@ -467,9 +472,15 @@ impl Shared {
             return;
         }
         let settings = cfg::read(&self.deps.settings).commands.clone();
-        let Some((kind, args)) = commands::parse(&ev.text, &settings) else { return };
         let is_broadcaster = ev.user_id == ev.broadcaster_id;
         let role = commands::role_from_badges(&ev.badges, is_broadcaster);
+        let Some((kind, args)) = commands::parse(&ev.text, &settings) else {
+            if let Some((c, args)) = commands::parse_custom(&ev.text, &settings) {
+                let c = c.clone();
+                self.handle_custom(&ev, role, &c, args, &settings);
+            }
+            return;
+        };
         let c = kind.cfg(&settings);
         if role < c.min_role {
             if !settings.replies.no_permission.is_empty() {
@@ -478,7 +489,7 @@ impl Shared {
             return;
         }
         let now = self.deps.clock.now_ms();
-        if self.cooldowns.lock().unwrap().check(kind, &ev.user_id, role, c.cooldown_s, now).is_err() {
+        if self.cooldowns.lock().unwrap().check(&format!("{kind:?}"), &ev.user_id, role, c.cooldown_s, now).is_err() {
             return; // Still ignorieren – Cooldown-Hinweise würden den Chat fluten.
         }
         let requester = Requester { id: format!("twitch:{}", ev.user_id), name: ev.user_name.clone(), role };
@@ -568,6 +579,45 @@ impl Shared {
                     );
                 }
             }
+        }
+    }
+
+    /// Eigener Befehl: Rolle und Cooldown prüfen, Platzhalter füllen, antworten.
+    fn handle_custom(&self, ev: &ChatEvent, role: Role, c: &crate::settings::CustomCommand, args: String, settings: &crate::settings::CommandSettings) {
+        if role < c.min_role {
+            if !settings.replies.no_permission.is_empty() {
+                self.reply(commands::fill(&settings.replies.no_permission, &[("user", ev.user_name.clone())]), Some(ev.message_id.clone()));
+            }
+            return;
+        }
+        let now = self.deps.clock.now_ms();
+        if self.cooldowns.lock().unwrap().check(&format!("custom:{}", c.id), &ev.user_id, role, c.cooldown_s, now).is_err() {
+            return;
+        }
+        let ctx = self.custom_ctx(&ev.user_name, args, settings);
+        let text = commands::render_custom(&c.reply, &ctx, &mut rand::rng());
+        self.reply(text, c.as_reply.then(|| ev.message_id.clone()));
+    }
+
+    fn custom_ctx(&self, user: &str, args: String, settings: &crate::settings::CommandSettings) -> commands::CustomCtx {
+        let (track, playlist) = match &self.deps.spotify_state.borrow().playback {
+            PlaybackView::Active(p) => (p.track.clone(), p.context.as_ref().and_then(|c| c.link())),
+            _ => (None, None),
+        };
+        let pending = self.deps.queue.store.pending();
+        let playing = track.as_ref().and_then(|t| pending.iter().find(|r| r.status == crate::queue::RequestStatus::Playing && r.track.as_ref().is_some_and(|x| x.uri == t.uri)));
+        let waiting: Vec<_> = pending.iter().filter(|r| r.status != crate::queue::RequestStatus::Playing).collect();
+        commands::CustomCtx {
+            user: user.to_string(),
+            args,
+            channel: self.identity.lock().unwrap().as_ref().map(|i| i.login.clone()).unwrap_or_default(),
+            title: track.as_ref().map(|t| t.title.clone()),
+            artist: track.as_ref().map(|t| t.artist_line()),
+            link: track.as_ref().and_then(|t| t.external_url.clone().filter(|u| u.starts_with("https://open.spotify.com/")).or_else(|| (!t.id.is_empty()).then(|| format!("https://open.spotify.com/track/{}", t.id)))),
+            requester: playing.map(|r| r.requester.name.clone()),
+            queue_count: waiting.len(),
+            next: waiting.iter().find_map(|r| r.track.as_ref().map(|t| format!("{} – {}", t.title, t.artist_line()))),
+            playlist: playlist.or_else(|| commands::playlist_link(Some(settings.playlist_fallback_url.trim().to_string()))),
         }
     }
 

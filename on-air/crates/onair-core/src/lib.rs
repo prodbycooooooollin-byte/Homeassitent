@@ -15,6 +15,7 @@
 
 pub mod acceptance;
 pub mod activity;
+pub mod archive;
 pub mod auth;
 pub mod backoff;
 pub mod clock;

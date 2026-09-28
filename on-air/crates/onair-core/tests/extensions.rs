@@ -89,6 +89,7 @@ fn red(id: &str, reward: &str, user: &str, input: &str) -> RedemptionInfo {
     RedemptionInfo {
         id: id.into(),
         reward_id: reward.into(),
+        reward_title: "Song wünschen".into(),
         user_id: user.into(),
         user_login: format!("u{user}"),
         user_name: format!("User{user}"),
@@ -246,6 +247,68 @@ async fn redemptions_are_deduplicated_and_settled() {
     wait_for("lokal", || rt.queue.store.by_redemption("red-b").unwrap().redemption.unwrap().status == RedemptionStatus::Canceled, Duration::from_secs(10)).await;
     let patches = h.twitch.lock().unwrap().redemption_patches.iter().filter(|(i, _)| i == "red-b").count();
     assert_eq!(patches, 1, "genau eine erfolgreiche Abwicklung");
+}
+
+// Fremde Belohnung: nicht still verschluckt, sondern gemeldet; übernommen → Wünsche kommen an.
+#[tokio::test(start_paused = true)]
+async fn foreign_reward_is_reported_and_can_be_used() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    let _ours = reward_ready(&rt).await;
+    let mut ev = red("red-f1", "foreign-1", "7", "good song");
+    ev.reward_title = "Song Request".into();
+    rt.channel_points.on_add(ev).await;
+    assert!(rt.queue.store.by_source_event("cp:red-f1").is_none(), "fremde Einlösung nicht verarbeitet");
+    let st = rt.channel_points.status();
+    let f = st.foreign_reward.expect("Hinweis auf fremde Belohnung");
+    assert_eq!((f.id.as_str(), f.title.as_str()), ("foreign-1", "Song Request"));
+    assert!(st.last_redemption_ms.is_some());
+    assert!(rt.activity.recent(20).iter().any(|a| a.message.contains("„Song Request“") && a.message.contains("ignoriert")));
+    // Belohnungen ohne Texteingabe (z. B. „Hydrate“) lösen keinen Hinweis aus.
+    let mut hyd = red("red-h", "hydrate", "7", "");
+    hyd.reward_title = "Hydrate".into();
+    rt.channel_points.on_add(hyd).await;
+    assert_eq!(rt.channel_points.status().foreign_reward.unwrap().id, "foreign-1");
+
+    // Übernehmen: bestehende Belohnung verwenden.
+    let mut s = onair_core::settings::read(&rt.settings).clone();
+    s.channel_points.external_reward = Some(onair_core::settings::ExternalReward { id: "foreign-1".into(), title: "Song Request".into() });
+    rt.update_settings(s).await.unwrap();
+    wait_for("verwaltete Belohnung deaktiviert", || rt.channel_points.status().confirmed_enabled == Some(false), Duration::from_secs(30)).await;
+    assert!(rt.channel_points.status().external);
+    let mut ev = red("red-f2", "foreign-1", "8", "good song");
+    ev.reward_title = "Song Request".into();
+    rt.channel_points.on_add(ev).await;
+    let r = rt.queue.store.by_source_event("cp:red-f2").expect("Wunsch angekommen");
+    assert_ne!(r.status, RequestStatus::Rejected, "{:?}", r.reason);
+    assert!(r.redemption.is_none(), "fremde Einlösung wird nicht auf Twitch abgewickelt");
+    wait_for("Chatantwort", || h.twitch.lock().unwrap().chat.iter().any(|m| m.starts_with("@User8") && m.contains("Platz")), Duration::from_secs(10)).await;
+    // Ablehnung ohne falsches „erstattet“.
+    let mut bad = red("red-f3", "foreign-1", "9", "https://youtube.com/watch?v=x");
+    bad.reward_title = "Song Request".into();
+    rt.channel_points.on_add(bad).await;
+    wait_for("Ablehnung im Chat", || h.twitch.lock().unwrap().chat.iter().any(|m| m.starts_with("@User9")), Duration::from_secs(10)).await;
+    assert!(!h.twitch.lock().unwrap().chat.iter().any(|m| m.starts_with("@User9") && m.contains("erstattet")));
+    assert!(rt.activity.recent(20).iter().any(|a| a.message.contains("Erstattung nur manuell")));
+}
+
+// Wer als Streamer selbst einlöst, wird nicht durch das Pro-Person-Limit blockiert.
+#[tokio::test(start_paused = true)]
+async fn broadcaster_redemption_bypasses_user_limit() {
+    let h = Harness::new();
+    let mut s = settings(true, true);
+    s.requests.per_user_limit = 1;
+    let rt = start(&h, Db::in_memory().unwrap(), s).await;
+    ready(&rt).await;
+    let reward = reward_ready(&rt).await;
+    for (i, q) in ["good song", "good song 2", "points song"].iter().enumerate() {
+        let id = format!("red-own-{i}");
+        h.twitch.lock().unwrap().add_redemption(&id, &reward, "100", q);
+        rt.channel_points.on_add(red(&id, &reward, "100", q)).await;
+        let r = rt.queue.store.by_redemption(&id).unwrap();
+        assert_ne!(r.status, RequestStatus::Rejected, "{i}: {:?}", r.reason);
+    }
 }
 
 // Unterbrechung: Neustart verliert keine Zuordnung; verpasste Einlösungen werden übernommen.
@@ -446,4 +509,117 @@ async fn dock_state_lists_requests_without_secrets() {
     let v = rt.dock_state();
     assert_eq!(v["requests"]["open"], false);
     assert!(v["requests"]["blocks"].as_array().unwrap().iter().any(|b| b == "manual_pause"), "{v}");
+}
+
+// Sammel-Playlist: angenommene Wünsche landen genau einmal in einer von ON AIR angelegten
+// Playlist; abgelehnte und App-Wünsche nicht; gelöschte Playlist wird neu angelegt.
+#[tokio::test(start_paused = true)]
+async fn request_playlist_collects_each_song_once() {
+    let h = Harness::new();
+    let mut s = settings(true, false);
+    s.request_playlist.enabled = true;
+    s.request_playlist.name = "Wunsch-Archiv".into();
+    s.requests.allow_duplicates = true;
+    let rt = start(&h, Db::in_memory().unwrap(), s).await;
+    ready(&rt).await;
+    let items = |h: &Harness| -> Vec<String> { h.fake.lock().unwrap().playlist_items.get("pl1").cloned().unwrap_or_default() };
+
+    let a = rt.queue.submit_query("erster song", viewer(1), Source::Chat, Some("a1"), None).await;
+    assert!(accepted(&a), "{a:?}");
+    rt.archive.kick();
+    wait_for("Playlist angelegt und befüllt", || items(&h).len() == 1, Duration::from_secs(60)).await;
+    {
+        let f = h.fake.lock().unwrap();
+        assert_eq!(f.created_playlists, vec![("pl1".to_string(), "Wunsch-Archiv".to_string(), false)]);
+    }
+    // Derselbe Song nochmal, ein abgelehnter Wunsch und ein App-Wunsch → nichts Neues.
+    let again = rt.queue.submit_query("erster song", viewer(2), Source::Chat, Some("a2"), None).await;
+    assert!(accepted(&again), "{again:?}");
+    let bad = rt.queue.submit_query("https://youtube.com/watch?v=x", viewer(3), Source::Chat, Some("a3"), None).await;
+    assert_eq!(rejected_code(&bad), "invalid_link");
+    let app = rt.queue.submit_query("app song", viewer(4), Source::App, None, None).await;
+    assert!(accepted(&app), "{app:?}");
+    let b = rt.queue.submit_query("zweiter song", viewer(5), Source::Chat, Some("a4"), None).await;
+    assert!(accepted(&b), "{b:?}");
+    rt.archive.kick();
+    wait_for("zweiter Song", || items(&h).len() == 2, Duration::from_secs(60)).await;
+    tokio::time::sleep(Duration::from_secs(40)).await;
+    assert_eq!(items(&h).len(), 2, "keine Duplikate, keine abgelehnten oder App-Wünsche: {:?}", items(&h));
+    let st = rt.archive.status();
+    assert_eq!((st.total, st.pending, st.playlists.len(), st.playlists[0].count), (2, 0, 1, 2));
+    assert!(st.last_error.is_none());
+
+    // Playlist auf Spotify gelöscht → neue anlegen, Song landet dort.
+    h.fake.lock().unwrap().playlist_items.remove("pl1");
+    let c = rt.queue.submit_query("dritter song", viewer(6), Source::Chat, Some("a5"), None).await;
+    assert!(accepted(&c), "{c:?}");
+    rt.archive.kick();
+    wait_for("neue Playlist", || h.fake.lock().unwrap().playlist_items.get("pl2").map(|v| v.len()) == Some(1), Duration::from_secs(60)).await;
+    assert_eq!(h.fake.lock().unwrap().created_playlists[1].1, "Wunsch-Archiv · Teil 2");
+    assert!(rt.activity.recent(30).iter().any(|a| a.kind == "archive.gone"));
+}
+
+// Ältere Spotify-Anmeldung ohne Playlist-Rechte: klarer Hinweis statt stiller Fehler.
+#[tokio::test(start_paused = true)]
+async fn request_playlist_requires_playlist_scope() {
+    let h = Harness::new();
+    let mut s = settings(true, false);
+    s.request_playlist.enabled = true;
+    let db = Db::in_memory().unwrap();
+    s.save(&db).unwrap();
+    // Token ohne Playlist-Rechte installieren (wie bei einer Anmeldung vor dieser Version).
+    let _ = h.tokens(SPOTIFY_SECRET_KEY, 3_600_000);
+    h.twitch_tokens();
+    let tm = h.tokens(SPOTIFY_SECRET_KEY, 3_600_000);
+    tm.install(onair_core::auth::TokenSet {
+        access_token: "at-0".into(),
+        refresh_token: Some("rt".into()),
+        expires_at_ms: h.clock.now_ms() + 3_600_000,
+        scope: "user-read-playback-state user-modify-playback-state user-read-currently-playing".into(),
+        authorized_at_ms: 0,
+    })
+    .unwrap();
+    let rt = Runtime::start(RuntimeConfig {
+        db,
+        data_dir: None,
+        secrets: h.secrets.clone(),
+        http: h.transport.clone(),
+        clock: h.clock.clone(),
+        endpoints: endpoints(),
+        start_overlay: false,
+        app_version: "test".into(),
+    })
+    .await;
+    ready(&rt).await;
+    let a = rt.queue.submit_query("erster song", viewer(1), Source::Chat, Some("a1"), None).await;
+    assert!(accepted(&a));
+    rt.archive.kick();
+    wait_for("Hinweis", || rt.archive.status().last_error.map(|e| e.code) == Some("missing_scope".into()), Duration::from_secs(30)).await;
+    let st = rt.archive.status();
+    assert!(!st.scope_ok);
+    assert_eq!(st.pending, 1, "Wunsch bleibt vorgemerkt");
+    assert!(h.fake.lock().unwrap().created_playlists.is_empty());
+}
+
+// Volle Playlist (Spotify-Grenze 10.000) → automatisch „Teil 2“.
+#[tokio::test(start_paused = true)]
+async fn request_playlist_rolls_over_when_full() {
+    use onair_core::archive::{ArchivePlaylist, ArchiveState, PLAYLIST_LIMIT};
+    let h = Harness::new();
+    let mut s = settings(true, false);
+    s.request_playlist.enabled = true;
+    s.request_playlist.name = "Archiv".into();
+    let db = Db::in_memory().unwrap();
+    let full = ArchiveState { playlists: vec![ArchivePlaylist { id: "old1".into(), url: "https://open.spotify.com/playlist/old1".into(), name: "Archiv".into(), count: PLAYLIST_LIMIT }], since_ms: Some(0) };
+    db.set_setting(ArchiveState::KEY, &serde_json::to_string(&full).unwrap()).unwrap();
+    h.fake.lock().unwrap().playlist_items.insert("old1".into(), vec![]);
+    let rt = start(&h, db, s).await;
+    ready(&rt).await;
+    let a = rt.queue.submit_query("neuer song", viewer(1), Source::Chat, Some("a1"), None).await;
+    assert!(accepted(&a));
+    rt.archive.kick();
+    wait_for("Teil 2", || h.fake.lock().unwrap().playlist_items.get("pl1").map(|v| v.len()) == Some(1), Duration::from_secs(60)).await;
+    let f = h.fake.lock().unwrap();
+    assert_eq!(f.created_playlists[0].1, "Archiv · Teil 2");
+    assert!(f.playlist_items["old1"].is_empty(), "volle Playlist unangetastet");
 }

@@ -46,8 +46,35 @@ erneuert ON AIR sie automatisch.
 2. ON AIR legt die Belohnung „Song wünschen“ selbst an (Titel, Kosten, Eingabehinweis und
    Limits sind einstellbar). Eine **von Hand** im Twitch-Dashboard angelegte Belohnung kann
    ON AIR nicht verwalten – Twitch erlaubt Erfüllen/Stornieren nur für Belohnungen derselben Client-ID.
+   Wird eine solche Belohnung (mit Texteingabe) eingelöst, zeigt ON AIR das unter *Kanalpunkte*
+   und im Aktivitätsprotokoll an und bietet **„… verwenden“** an: Wünsche daraus landen dann in
+   der Warteschlange; abgelehnte Wünsche musst du auf Twitch selbst erstatten, und die Belohnung
+   wird nicht automatisch pausiert.
 3. Chat und Kanalpunkte sind unabhängig schaltbar; „Requests annehmen“ in der Übersicht
    pausiert beide, ohne ihre Einstellungen zu ändern.
+4. **Kommt ein Kanalpunkte-Wunsch nicht an?** Jede Einlösung steht mit Ergebnis im
+   Aktivitätsprotokoll (angenommen, wartet auf Freigabe, abgelehnt mit Grund, fremde Belohnung
+   ignoriert). „Letzte Einlösung“ unter *Kanalpunkte* zeigt, ob überhaupt etwas von Twitch ankommt.
+   Wer als Streamer selbst einlöst, gilt als Broadcaster (Limits wie „max. offene Wünsche pro
+   Person“ gelten dann nicht).
+
+### Eigene Chatbefehle
+
+*Einstellungen → Chatbefehle → Eigene Befehle*: Vorlage wählen (Discord, Socials, Anleitung
+Songwunsch, Link zum Song, Nächster Song, Wer hat's gewünscht, Lurk, Umarmen, Würfeln, 8-Ball,
+Love-Meter) oder leer anlegen. Jeder Befehl hat Name, Aliasse, Mindestrolle, Cooldown und eine
+Antwort mit Platzhaltern: `{user}`, `{touser}`, `{args}`, `{channel}`, `{song}`, `{title}`,
+`{artist}`, `{link}`, `{requester}`, `{next}`, `{queue_count}`, `{playlist}`, `{random:1-6}`,
+`{pick:a|b|c}`. Eingebaute Befehle haben bei gleichem Namen Vorrang (die App weist darauf hin).
+
+### Sammel-Playlist (optional)
+
+*Einstellungen → Requests → Sammel-Playlist*: Jeder angenommene Songwunsch ab dem Einschalten
+landet einmal in einer Spotify-Playlist, die ON AIR selbst anlegt (Name und Sichtbarkeit
+einstellbar, App-Wünsche optional). Spotify erlaubt 10.000 Titel pro Playlist – danach legt ON AIR
+automatisch „… · Teil 2“ an. Dafür braucht ON AIR die Spotify-Rechte `playlist-modify-private`
+und `playlist-modify-public`; Anmeldungen aus älteren Versionen haben sie nicht – die App bittet
+dann einmal um „Spotify neu verbinden“, vorgemerkte Wünsche werden danach nachgetragen.
 
 ## 3. Wiedergabegerät
 

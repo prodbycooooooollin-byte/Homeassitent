@@ -152,6 +152,17 @@ export interface Activity {
   corr: string | null;
 }
 
+export interface CustomCommand {
+  id: string;
+  enabled: boolean;
+  name: string;
+  aliases: string[];
+  min_role: Role;
+  cooldown_s: number;
+  reply: string;
+  as_reply: boolean;
+}
+
 export interface CommandCfg {
   enabled: boolean;
   name: string;
@@ -258,6 +269,7 @@ export interface Settings {
     playlist_fallback_url: string;
     replies: Replies;
     min_reply_interval_ms: number;
+    custom: CustomCommand[];
   };
   overlay: OverlaySettings;
   nowplaying_file: { enabled: boolean; path: string; template: string };
@@ -267,6 +279,18 @@ export interface Settings {
   compact_on_top: boolean;
   channel_points: ChannelPointsSettings;
   updates: { check_on_start: boolean; auto_install: boolean };
+  request_playlist: { enabled: boolean; name: string; public: boolean; include_app: boolean };
+}
+
+export interface ArchivePlaylist { id: string; url: string; name: string; count: number }
+export interface RequestPlaylistStatus {
+  enabled: boolean;
+  scope_ok: boolean;
+  playlists: ArchivePlaylist[];
+  total: number;
+  pending: number;
+  last_added_ms: number | null;
+  last_error: ErrorInfo | null;
 }
 
 export interface ChannelPointsSettings {
@@ -278,6 +302,7 @@ export interface ChannelPointsSettings {
   max_per_stream: number;
   max_per_user_per_stream: number;
   mode: "auto" | "moderation";
+  external_reward: { id: string; title: string } | null;
 }
 
 export type Block =
@@ -339,6 +364,9 @@ export interface ChannelPointsStatus {
   reconciled: boolean;
   open: number;
   needs_review: number;
+  external: boolean;
+  last_redemption_ms: number | null;
+  foreign_reward: { id: string; title: string; user: string; at_ms: number } | null;
 }
 
 export type UpdateState =
@@ -406,6 +434,7 @@ export interface AppSnapshot {
   plan: PlanStatus;
   plan_config: PlanConfig;
   channel_points: ChannelPointsStatus;
+  request_playlist: RequestPlaylistStatus;
   update_pause: boolean;
 }
 

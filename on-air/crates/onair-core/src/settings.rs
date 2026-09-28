@@ -180,6 +180,38 @@ pub struct CommandSettings {
     pub replies: Replies,
     /// Max. eine Chatnachricht pro Intervall (ms); darüber hinaus wird verworfen.
     pub min_reply_interval_ms: u64,
+    /// Eigene Befehle mit Textantwort und Platzhaltern (siehe `commands::render_custom`).
+    pub custom: Vec<CustomCommand>,
+}
+
+/// Eigener Chatbefehl: antwortet mit einem Text, in dem Platzhalter ersetzt werden.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CustomCommand {
+    pub id: String,
+    pub enabled: bool,
+    pub name: String,
+    pub aliases: Vec<String>,
+    pub min_role: Role,
+    pub cooldown_s: u32,
+    pub reply: String,
+    /// Als Antwort auf die Nachricht senden (sonst als normale Chatnachricht).
+    pub as_reply: bool,
+}
+
+impl Default for CustomCommand {
+    fn default() -> Self {
+        Self { id: String::new(), enabled: true, name: String::new(), aliases: vec![], min_role: Role::Everyone, cooldown_s: 10, reply: String::new(), as_reply: false }
+    }
+}
+
+pub const MAX_CUSTOM_COMMANDS: usize = 50;
+
+/// Befehlsname normalisieren: ohne Präfix, Kleinbuchstaben, keine Leerzeichen.
+pub fn command_word(raw: &str, prefix: &str) -> String {
+    let t = raw.trim();
+    let t = t.strip_prefix(prefix).unwrap_or(t).trim_start_matches('!');
+    t.split_whitespace().next().unwrap_or("").to_lowercase().chars().take(30).collect()
 }
 
 impl Default for CommandSettings {
@@ -198,6 +230,7 @@ impl Default for CommandSettings {
             playlist_fallback_url: String::new(),
             replies: Replies::default(),
             min_reply_interval_ms: 1_200,
+            custom: vec![],
         }
     }
 }
@@ -331,6 +364,23 @@ pub struct ChannelPointsSettings {
     pub max_per_stream: u32,
     pub max_per_user_per_stream: u32,
     pub mode: AcceptMode,
+    /// Statt der verwalteten Belohnung eine bestehende, selbst angelegte verwenden.
+    /// Twitch erlaubt Apps nur für selbst angelegte Belohnungen Pausieren und Erstatten –
+    /// bei fremden Belohnungen werden Wünsche angenommen, Erstattungen gehen nur manuell.
+    pub external_reward: Option<ExternalReward>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalReward {
+    pub id: String,
+    pub title: String,
+}
+
+impl ChannelPointsSettings {
+    /// Von ON AIR verwaltete Belohnung gewünscht?
+    pub fn managed(&self) -> bool {
+        self.enabled && self.external_reward.is_none()
+    }
 }
 
 impl Default for ChannelPointsSettings {
@@ -344,7 +394,25 @@ impl Default for ChannelPointsSettings {
             max_per_stream: 0,
             max_per_user_per_stream: 0,
             mode: AcceptMode::Auto,
+            external_reward: None,
         }
+    }
+}
+
+/// Sammel-Playlist: Jeder angenommene Songwunsch landet (einmal) in einer Spotify-Playlist.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RequestPlaylistSettings {
+    pub enabled: bool,
+    pub name: String,
+    pub public: bool,
+    /// Auch Songs, die du selbst in der App hinzufügst (sonst nur Chat und Kanalpunkte).
+    pub include_app: bool,
+}
+
+impl Default for RequestPlaylistSettings {
+    fn default() -> Self {
+        Self { enabled: false, name: "ON AIR – Songwünsche".into(), public: false, include_app: false }
     }
 }
 
@@ -394,6 +462,7 @@ pub struct Settings {
     pub compact_on_top: bool,
     pub channel_points: ChannelPointsSettings,
     pub updates: UpdateSettings,
+    pub request_playlist: RequestPlaylistSettings,
 }
 
 impl Default for Settings {
@@ -416,6 +485,7 @@ impl Default for Settings {
             compact_on_top: true,
             channel_points: ChannelPointsSettings::default(),
             updates: UpdateSettings::default(),
+            request_playlist: RequestPlaylistSettings::default(),
         }
     }
 }
@@ -457,6 +527,24 @@ impl Settings {
         cp.global_cooldown_s = cp.global_cooldown_s.min(7 * 86_400);
         if self.commands.prefix.trim().is_empty() {
             self.commands.prefix = "!".into();
+        }
+        let rp = &mut self.request_playlist;
+        rp.name = rp.name.trim().chars().take(100).collect();
+        if rp.name.is_empty() {
+            rp.name = RequestPlaylistSettings::default().name;
+        }
+        let prefix = self.commands.prefix.clone();
+        let mut seen = std::collections::HashSet::new();
+        self.commands.custom.truncate(MAX_CUSTOM_COMMANDS);
+        for (i, c) in self.commands.custom.iter_mut().enumerate() {
+            c.name = command_word(&c.name, &prefix);
+            c.aliases = c.aliases.iter().map(|a| command_word(a, &prefix)).filter(|a| !a.is_empty() && *a != c.name).take(5).collect();
+            c.reply = c.reply.chars().take(450).collect();
+            c.cooldown_s = c.cooldown_s.min(3600);
+            if c.id.trim().is_empty() || !seen.insert(c.id.clone()) {
+                c.id = format!("c{i}-{}", c.name);
+                seen.insert(c.id.clone());
+            }
         }
         self
     }

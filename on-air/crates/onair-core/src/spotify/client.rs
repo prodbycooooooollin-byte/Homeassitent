@@ -303,6 +303,35 @@ impl SpotifyClient {
         Ok((name, v["public"].as_bool()))
     }
 
+    /// Legt eine Playlist im Konto an (Web API seit 02/2026: `POST /me/playlists`).
+    /// Liefert (ID, Link).
+    pub async fn create_playlist(&self, name: &str, public: bool, description: &str) -> Result<(String, String), ApiError> {
+        let body = serde_json::json!({ "name": name, "public": public, "description": description });
+        let req = HttpRequest::new(Method::Post, format!("{}/me/playlists", self.api_base)).json(body);
+        // Nicht wiederholen: eine zweite Anfrage könnte eine zweite Playlist anlegen.
+        let r = self.call(req).await?;
+        let v = r.json_body().unwrap_or_default();
+        let id = v["id"].as_str().filter(|i| !i.is_empty()).ok_or(ApiError::Decode { message: "Playlist".into() })?.to_string();
+        let url = v["external_urls"]["spotify"].as_str().map(str::to_string).unwrap_or_else(|| format!("https://open.spotify.com/playlist/{id}"));
+        Ok((id, url))
+    }
+
+    /// Fügt bis zu 100 Titel an (Web API seit 02/2026: `POST /playlists/{id}/items`).
+    pub async fn add_playlist_items(&self, playlist_id: &str, uris: &[String]) -> Result<(), ApiError> {
+        if playlist_id.is_empty() || !playlist_id.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(ApiError::BadRequest { message: "ungültige Playlist-ID".into() });
+        }
+        let uris: Vec<&String> = uris.iter().take(100).collect();
+        let req = HttpRequest::new(Method::Post, format!("{}/playlists/{playlist_id}/items", self.api_base)).json(serde_json::json!({ "uris": uris }));
+        match self.call(req.clone()).await {
+            Err(ApiError::Network { possibly_delivered: false, .. }) => {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                self.call(req).await.map(|_| ())
+            }
+            other => other.map(|_| ()),
+        }
+    }
+
     fn device_q(device_id: Option<&str>, first: bool) -> String {
         match device_id {
             Some(d) => format!("{}device_id={}", if first { "?" } else { "&" }, urlencoding::encode(d)),

@@ -345,6 +345,10 @@ impl QueueStore {
         )
     }
 
+    pub fn by_source_event(&self, event: &str) -> Option<SongRequest> {
+        self.query("WHERE source_event = ?1", params![event]).into_iter().next()
+    }
+
     pub fn by_redemption(&self, redemption_id: &str) -> Option<SongRequest> {
         self.query("WHERE redemption_id = ?1", params![redemption_id]).into_iter().next()
     }

@@ -63,6 +63,21 @@ pub struct ChannelPointsStatus {
     /// Einlösungen, deren Abwicklung noch aussteht bzw. eine Entscheidung braucht.
     pub open: usize,
     pub needs_review: usize,
+    /// Eine bestehende (nicht von ON AIR angelegte) Belohnung wird verwendet.
+    pub external: bool,
+    /// Zuletzt empfangene Einlösung – egal welcher Belohnung (Diagnose: kommt überhaupt etwas an?).
+    pub last_redemption_ms: Option<i64>,
+    /// Zuletzt eingelöste fremde Belohnung mit Texteingabe (vermutlich ein Songwunsch),
+    /// die ON AIR nicht verarbeitet – die UI bietet an, sie zu verwenden.
+    pub foreign_reward: Option<ForeignReward>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ForeignReward {
+    pub id: String,
+    pub title: String,
+    pub user: String,
+    pub at_ms: i64,
 }
 
 /// Technischer Sperrgrund für das Annahme-Gate (z. B. fehlende Berechtigung).
@@ -102,6 +117,8 @@ pub struct ChannelPointsService {
     /// Soll die Belohnung pausiert sein? (vom Annahme-Gate der Runtime)
     desired_paused: OnceLock<Arc<dyn Fn() -> bool + Send + Sync>>,
     sync_lock: tokio::sync::Mutex<()>,
+    last_redemption_ms: Mutex<Option<i64>>,
+    foreign: Mutex<Option<ForeignReward>>,
 }
 
 fn reward_body(c: &ChannelPointsSettings, enabled: bool, paused: bool) -> serde_json::Value {
@@ -146,7 +163,10 @@ impl ChannelPointsService {
     /// `reward_tx`: meldet dem Twitch-Dienst, welche Belohnung abonniert werden soll.
     pub fn new(d: ChannelPointsDeps, reward_tx: watch::Sender<Option<String>>) -> (Arc<Self>, watch::Receiver<ChannelPointsStatus>) {
         let state: RewardState = d.db.get_setting(RewardState::KEY).and_then(|r| serde_json::from_str(&r).ok()).unwrap_or_default();
-        let configured = cfg::read(&d.settings).channel_points.enabled;
+        let (configured, external) = {
+            let c = &cfg::read(&d.settings).channel_points;
+            (c.managed(), c.enabled && c.external_reward.is_some())
+        };
         let (status_tx, status_rx) = watch::channel(ChannelPointsStatus {
             configured,
             scope_ok: false,
@@ -160,6 +180,9 @@ impl ChannelPointsService {
             reconciled: false,
             open: 0,
             needs_review: 0,
+            external,
+            last_redemption_ms: None,
+            foreign_reward: None,
         });
         let svc = Arc::new(Self {
             d,
@@ -171,6 +194,8 @@ impl ChannelPointsService {
             status_tx,
             desired_paused: OnceLock::new(),
             sync_lock: tokio::sync::Mutex::new(()),
+            last_redemption_ms: Mutex::new(None),
+            foreign: Mutex::new(None),
         });
         (svc, status_rx)
     }
@@ -215,7 +240,9 @@ impl ChannelPointsService {
     fn desired(&self) -> (bool, bool, ChannelPointsSettings) {
         let c = cfg::read(&self.d.settings).channel_points.clone();
         let paused = self.desired_paused.get().map(|f| f()).unwrap_or(true) || !self.is_reconciled();
-        (c.enabled, c.enabled && paused, c)
+        // Mit einer bestehenden Belohnung wird die verwaltete deaktiviert (nicht gelöscht).
+        let enabled = c.managed();
+        (enabled, enabled && paused, c)
     }
 
     fn set_error(&self, e: Option<(&str, String)>) {
@@ -228,7 +255,7 @@ impl ChannelPointsService {
     }
 
     fn compute_status(&self) -> ChannelPointsStatus {
-        let (enabled, paused, _) = self.desired();
+        let (enabled, paused, c) = self.desired();
         let st = self.state.lock().unwrap().clone();
         let scope_ok = self.identity().map(|(_, s)| s).unwrap_or(false);
         let open = self.d.queue.store.open_redemptions();
@@ -253,6 +280,9 @@ impl ChannelPointsService {
             reconciled: self.is_reconciled(),
             open: open.len(),
             needs_review,
+            external: c.enabled && c.external_reward.is_some(),
+            last_redemption_ms: *self.last_redemption_ms.lock().unwrap(),
+            foreign_reward: self.foreign.lock().unwrap().clone(),
         }
     }
 
@@ -268,8 +298,9 @@ impl ChannelPointsService {
                 false
             }
         });
-        // Abo nur mit Berechtigung und bekannter Belohnung.
-        let sub = if scope_ok { st.reward_id.clone() } else { None };
+        // Abo aller Einlösungen des Kanals, sobald die Berechtigung da ist – so bleiben
+        // auch Einlösungen fremder Belohnungen sichtbar (Diagnose, Übernahme).
+        let sub = scope_ok.then(|| st.reward_id.clone().unwrap_or_else(|| "*".into()));
         self.reward_tx.send_if_modified(|r| {
             if *r != sub {
                 *r = sub;
@@ -560,22 +591,81 @@ impl ChannelPointsService {
     }
 
     pub async fn on_add(&self, e: RedemptionInfo) {
+        let now = self.now();
+        *self.last_redemption_ms.lock().unwrap() = Some(now);
         let ours = self.state.lock().unwrap().reward_id.clone();
-        if ours.as_deref() != Some(e.reward_id.as_str()) {
+        let c = cfg::read(&self.d.settings).channel_points.clone();
+        let managed = ours.as_deref() == Some(e.reward_id.as_str());
+        let external = c.enabled && c.external_reward.as_ref().is_some_and(|x| x.id == e.reward_id);
+        if !managed && !external {
+            self.note_foreign(&e, &c);
+            self.publish();
             return;
         }
-        let requester = Requester { id: format!("twitch:{}", e.user_id), name: e.user_name.clone(), role: Role::Everyone };
-        let outcome = self.d.queue.submit_redemption(&e.user_input, requester, &e.reward_id, &e.id).await;
+        // Wer selbst testet, ist Broadcaster (Limits/Cooldowns gelten dann wie im Chat nicht).
+        let own = self.identity().is_some_and(|(id, _)| id == e.user_id);
+        let role = if own { Role::Broadcaster } else { Role::Everyone };
+        let requester = Requester { id: format!("twitch:{}", e.user_id), name: e.user_name.clone(), role };
+        let outcome = if managed {
+            self.d.queue.submit_redemption(&e.user_input, requester, &e.reward_id, &e.id).await
+        } else {
+            self.d.queue.submit_unmanaged_redemption(&e.user_input, requester, &e.id).await
+        };
         if !matches!(outcome, crate::queue::SubmitOutcome::Duplicate) {
-            self.d.activity.info("channel_points.redeemed", format!("Kanalpunkte-Wunsch von {}", e.user_name), json!({ "user": e.user_name }));
+            self.log_outcome(&e, &outcome, managed);
             // Rückmeldung im Chat wie bei !sr (Einlösungen haben keine Chatnachricht zum Antworten).
             let replies = cfg::read(&self.d.settings).commands.replies.clone();
-            if let Some(text) = crate::twitch::commands::reply_for_redemption(&replies, &outcome, &e.user_name) {
+            if let Some(text) = crate::twitch::commands::reply_for_redemption(&replies, &outcome, &e.user_name, managed) {
                 self.d.queue.chat(text, None);
             }
         }
         self.publish();
         self.kick();
+    }
+
+    /// Jede Einlösung hinterlässt einen nachvollziehbaren Eintrag – auch Ablehnungen.
+    fn log_outcome(&self, e: &RedemptionInfo, outcome: &crate::queue::SubmitOutcome, managed: bool) {
+        use crate::queue::SubmitOutcome as O;
+        let meta = json!({ "user": e.user_name, "reward": e.reward_title });
+        let who = &e.user_name;
+        match outcome {
+            O::Accepted { request, position } => {
+                let song = request.track.as_ref().map(|t| format!("„{}“", t.title)).unwrap_or_else(|| format!("„{}“", request.query));
+                self.d.activity.success("channel_points.redeemed", format!("Kanalpunkte-Wunsch von {who}: {song} (Platz {position})"), meta);
+            }
+            O::PendingReview { .. } => self.d.activity.info("channel_points.redeemed", format!("Kanalpunkte-Wunsch von {who} wartet auf Freigabe"), meta),
+            O::PendingOffline { .. } => {
+                self.d.activity.info("channel_points.redeemed", format!("Kanalpunkte-Wunsch von {who} gespeichert – wird verarbeitet, sobald Spotify verbunden ist"), meta)
+            }
+            O::Rejected { text, .. } => {
+                let tail = if managed { "Punkte werden erstattet" } else { "Erstattung nur manuell auf Twitch möglich" };
+                self.d.activity.warn("channel_points.rejected", format!("Kanalpunkte-Wunsch von {who} abgelehnt: {text} – {tail}"), meta);
+            }
+            O::Duplicate => {}
+        }
+    }
+
+    /// Einlösung einer anderen Belohnung. Belohnungen ohne Texteingabe (z. B. „Hydrate“)
+    /// sind uninteressant; mit Texteingabe ist es vermutlich eine selbst angelegte
+    /// Songwunsch-Belohnung → einmal pro Belohnung und Sitzung darauf hinweisen.
+    fn note_foreign(&self, e: &RedemptionInfo, c: &ChannelPointsSettings) {
+        if e.user_input.trim().is_empty() || !c.enabled {
+            return;
+        }
+        let mut f = self.foreign.lock().unwrap();
+        let first = f.as_ref().is_none_or(|x| x.id != e.reward_id);
+        *f = Some(ForeignReward { id: e.reward_id.clone(), title: e.reward_title.clone(), user: e.user_name.clone(), at_ms: self.now() });
+        drop(f);
+        if first {
+            self.d.activity.warn(
+                "channel_points.foreign",
+                format!(
+                    "Einlösung von „{}“ ignoriert: Die Belohnung „{}“ wurde nicht von ON AIR angelegt. In Einstellungen → Kanalpunkte kannst du sie für Songwünsche verwenden.",
+                    e.user_name, e.reward_title
+                ),
+                json!({ "reward": e.reward_title }),
+            );
+        }
     }
 
     pub async fn on_update(&self, e: RedemptionInfo) {
