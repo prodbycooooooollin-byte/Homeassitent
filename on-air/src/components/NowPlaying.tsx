@@ -92,56 +92,58 @@ export function NowPlayingCard({ snap, onConnect }: { snap: AppSnapshot; onConne
   return (
     <HeroFrame cover={cover}>
       <div className="stage-body">
-        <div className="stage-text">
-          <span className="stage-kicker">{kicker}{track?.explicit ? <Badge title={t("q.explicit_label")}>{t("q.explicit")}</Badge> : null}</span>
-          <h2 className="stage-title" title={title} style={{ ["--lw" as string]: Math.max(6, ...title.split(/\s+/).map((w) => w.length)) }}>{title}</h2>
-          <div className="stage-artist ellipsis" title={sub}>{sub}</div>
-          {kind === "track" && track!.album ? <div className="stage-album ellipsis">{track!.album}</div> : null}
-          {requester && (
-            <div className="stage-req">
-              <Avatar name={requester} size={36} />
-              <span>{t("np.requested_from")} <b>{requester}</b></span>
-              {requestSource === "channel_points" ? <Sparkles size={14} className="subtle" aria-label={t("rc.points")} /> : null}
+        <div className="stage-main">
+          <div className="stage-text">
+            <span className="stage-kicker">{kicker}{track?.explicit ? <Badge title={t("q.explicit_label")}>{t("q.explicit")}</Badge> : null}</span>
+            <h2 className="stage-title" title={title} style={{ ["--lw" as string]: Math.max(6, ...title.split(/\s+/).map((w) => w.length)) }}>{title}</h2>
+            <div className="stage-artist ellipsis" title={sub}>{sub}</div>
+            {kind === "track" && track!.album ? <div className="stage-album ellipsis">{track!.album}</div> : null}
+            {requester && (
+              <div className="stage-req">
+                <Avatar name={requester} size={36} />
+                <span>{t("np.requested_from")} <b>{requester}</b></span>
+                {requestSource === "channel_points" ? <Sparkles size={14} className="subtle" aria-label={t("rc.points")} /> : null}
+              </div>
+            )}
+          </div>
+          <div className="stage-transport">
+            <div className="stage-buttons">
+              <button className="icon-btn lg" aria-label={t("np.prev")} title={controls && pb.actions.can_skip_prev ? t("np.prev") : disabledReason} disabled={!controls || !pb.actions.can_skip_prev} onClick={() => api.transport("previous").catch(toastError)}><SkipBack size={22} /></button>
+              {pb.is_playing ? (
+                <button className="play-btn" aria-label={t("np.pause")} title={controls ? t("np.pause") : disabledReason} disabled={!controls || !pb.actions.can_pause} onClick={() => api.transport("pause").catch(toastError)}><Pause size={26} /></button>
+              ) : (
+                <button className="play-btn" aria-label={t("np.play")} title={controls ? t("np.play") : disabledReason} disabled={!controls || !pb.actions.can_resume} onClick={() => api.transport("resume").catch(toastError)}><Play size={26} /></button>
+              )}
+              <button className="icon-btn lg" aria-label={t("np.next")} title={controls && pb.actions.can_skip_next ? t("np.next") : disabledReason} disabled={!controls || !pb.actions.can_skip_next} onClick={() => api.transport("next").catch(toastError)}><SkipForward size={22} /></button>
             </div>
-          )}
+            <div className="stage-progress">
+              {stale ? (
+                <div className="row small" style={{ color: "var(--warn)", gap: 6 }}><Info size={14} /> {t("np.stale_hint", { time: clockTime(pb.fetched_at_ms, getLang()) })}</div>
+              ) : kind !== "ad" && dur > 0 ? (
+                <>
+                  <div className="bar" role="progressbar" aria-label={`${duration(progress)} / ${duration(dur)}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+                    <i style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }} />
+                  </div>
+                  <div className="stage-times num"><span>{duration(progress)}</span><span>{duration(dur)}</span></div>
+                </>
+              ) : null}
+            </div>
+            <div className="stage-extra">
+              {pb.device && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setDevicesOpen(true)} disabled={!usable} title={t("sp.choose_device")}>
+                  <MonitorSpeaker size={16} /> <span className="ellipsis" style={{ maxWidth: 150 }}>{pb.device.name}</span>
+                </button>
+              )}
+              {link && (
+                <a className="icon-btn" href={link} title={t("np.open_link")} aria-label={t("np.open_link")} onClick={(e) => { e.preventDefault(); void api.openExternal(link).catch(toastError); }}>
+                  <ExternalLink size={17} />
+                </a>
+              )}
+            </div>
+          </div>
         </div>
         <div className="stage-cover">
           {kind === "ad" ? <div className="cover-ph"><Megaphone size={48} /></div> : <Cover url={cover} alt={track?.album ?? ep?.show ?? ""} />}
-        </div>
-      </div>
-      <div className="stage-transport">
-        <div className="stage-buttons">
-          <button className="icon-btn lg" aria-label={t("np.prev")} title={controls && pb.actions.can_skip_prev ? t("np.prev") : disabledReason} disabled={!controls || !pb.actions.can_skip_prev} onClick={() => api.transport("previous").catch(toastError)}><SkipBack size={22} /></button>
-          {pb.is_playing ? (
-            <button className="play-btn" aria-label={t("np.pause")} title={controls ? t("np.pause") : disabledReason} disabled={!controls || !pb.actions.can_pause} onClick={() => api.transport("pause").catch(toastError)}><Pause size={26} /></button>
-          ) : (
-            <button className="play-btn" aria-label={t("np.play")} title={controls ? t("np.play") : disabledReason} disabled={!controls || !pb.actions.can_resume} onClick={() => api.transport("resume").catch(toastError)}><Play size={26} /></button>
-          )}
-          <button className="icon-btn lg" aria-label={t("np.next")} title={controls && pb.actions.can_skip_next ? t("np.next") : disabledReason} disabled={!controls || !pb.actions.can_skip_next} onClick={() => api.transport("next").catch(toastError)}><SkipForward size={22} /></button>
-        </div>
-        <div className="stage-progress">
-          {stale ? (
-            <div className="row small" style={{ color: "var(--warn)", gap: 6 }}><Info size={14} /> {t("np.stale_hint", { time: clockTime(pb.fetched_at_ms, getLang()) })}</div>
-          ) : kind !== "ad" && dur > 0 ? (
-            <>
-              <div className="bar" role="progressbar" aria-label={`${duration(progress)} / ${duration(dur)}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-                <i style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }} />
-              </div>
-              <div className="stage-times num"><span>{duration(progress)}</span><span>{duration(dur)}</span></div>
-            </>
-          ) : null}
-        </div>
-        <div className="stage-extra">
-          {pb.device && (
-            <button className="btn btn-ghost btn-sm" onClick={() => setDevicesOpen(true)} disabled={!usable} title={t("sp.choose_device")}>
-              <MonitorSpeaker size={16} /> <span className="ellipsis" style={{ maxWidth: 150 }}>{pb.device.name}</span>
-            </button>
-          )}
-          {link && (
-            <a className="icon-btn" href={link} title={t("np.open_link")} aria-label={t("np.open_link")} onClick={(e) => { e.preventDefault(); void api.openExternal(link).catch(toastError); }}>
-              <ExternalLink size={17} />
-            </a>
-          )}
         </div>
       </div>
       {devicesOpen && <DevicesDialog onClose={() => setDevicesOpen(false)} />}
