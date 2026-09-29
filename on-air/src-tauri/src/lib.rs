@@ -185,25 +185,40 @@ fn spawn_emitter(app: AppHandle, rt: Arc<Runtime>) {
             // Kurz sammeln, dann einen Snapshot senden.
             tokio::time::sleep(Duration::from_millis(120)).await;
             while rx.try_recv().is_ok() {}
-            let snap = rt.snapshot().await;
-            let _ = app.emit("onair://snapshot", &snap);
+            // Ist kein Fenster sichtbar (App im Tray), wird kein Snapshot gebaut und gesendet –
+            // das spart Datenbankabfragen, Serialisierung und Zeichnen im Hintergrund. Beim
+            // Wieder-Anzeigen holt sich die Oberfläche den aktuellen Stand selbst.
+            let visible = app
+                .webview_windows()
+                .values()
+                .any(|w| w.is_visible().unwrap_or(true) && !w.is_minimized().unwrap_or(false));
+            let (open, tip) = if visible {
+                let snap = rt.snapshot().await;
+                let _ = app.emit("onair://snapshot", &snap);
+                (snap.settings.requests.open, tray_tip(&snap.spotify))
+            } else {
+                let open = onair_core::settings::read(&rt.settings).requests.open;
+                let sp = rt.spotify_state.borrow().clone();
+                (open, tray_tip(&sp))
+            };
             if let Some(items) = app.try_state::<TrayItems>() {
-                let _ = items.toggle.set_text(if snap.settings.requests.open { "Requests pausieren" } else { "Requests öffnen" });
+                let _ = items.toggle.set_text(if open { "Requests pausieren" } else { "Requests öffnen" });
             }
             if let Some(tray) = app.tray_by_id("main") {
-                let tip = match &snap.spotify.playback {
-                    onair_core::model::PlaybackView::Active(p) if snap.spotify.is_online() => p
-                        .track
-                        .as_ref()
-                        .map(|t| format!("ON AIR – {} – {}", t.artist_line(), t.title))
-                        .unwrap_or_else(|| "ON AIR".into()),
-                    _ => "ON AIR".into(),
-                };
-                let tip: String = tip.chars().take(120).collect();
                 let _ = tray.set_tooltip(Some(tip));
             }
         }
     });
+}
+
+fn tray_tip(sp: &onair_core::spotify::service::SpotifyState) -> String {
+    let tip = match &sp.playback {
+        onair_core::model::PlaybackView::Active(p) if sp.is_online() => {
+            p.track.as_ref().map(|t| format!("ON AIR – {} – {}", t.artist_line(), t.title)).unwrap_or_else(|| "ON AIR".into())
+        }
+        _ => "ON AIR".into(),
+    };
+    tip.chars().take(120).collect()
 }
 
 pub fn run() {
@@ -348,6 +363,7 @@ pub fn run() {
             commands::plan_set_buffer,
             commands::plan_stop,
             commands::redemption_decide,
+            commands::channel_points_resync,
             commands::update_info,
             commands::update_check,
             commands::update_download,

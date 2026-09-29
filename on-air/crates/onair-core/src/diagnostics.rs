@@ -97,7 +97,12 @@ async fn spotify_checks(rt: &Runtime) -> Vec<Check> {
             return out;
         }
         AuthStatus::SignedIn { scope, authorized_at_ms } => {
-            let missing: Vec<_> = crate::spotify::SCOPES.iter().filter(|x| !scope.split(' ').any(|s| s == **x)).collect();
+            // Nur die Kernrechte sind Pflicht; Playlist-Rechte braucht nur die optionale Sammel-Playlist.
+            let missing: Vec<_> = crate::spotify::SCOPES
+                .iter()
+                .filter(|x| !crate::spotify::PLAYLIST_SCOPES.contains(x))
+                .filter(|x| !scope.split(' ').any(|s| s == **x))
+                .collect();
             if missing.is_empty() {
                 // Refresh Tokens laufen 6 Monate ab ursprünglicher Autorisierung (Stand 2026).
                 let age_days = (rt.clock.now_ms() - authorized_at_ms) / 86_400_000;

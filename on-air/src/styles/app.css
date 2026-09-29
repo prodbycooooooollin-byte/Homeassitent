@@ -122,7 +122,6 @@ a { color: var(--accent); }
   position: relative; display: flex; flex-direction: column; gap: 2px; min-height: 0;
   padding: var(--s5) var(--s3) var(--s4);
   background: var(--panel); border-right: 1px solid var(--border);
-  backdrop-filter: blur(22px) saturate(1.2);
 }
 .sidebar::before {
   content: ""; position: absolute; inset: 0 0 auto 0; height: 220px; pointer-events: none;
@@ -153,9 +152,10 @@ a { color: var(--accent); }
 .topbar {
   height: var(--top-h); flex: none; display: flex; align-items: center; gap: var(--s3);
   padding: 0 var(--s7); border-bottom: 1px solid var(--border);
-  background: var(--glass); backdrop-filter: blur(18px) saturate(1.15);
-  /* backdrop-filter erzeugt einen eigenen Stapelkontext – ohne z-index lägen
-     Popover der Kopfzeile hinter später gezeichneten Karten (z. B. Player mit isolation). */
+  /* Kein backdrop-filter: hinter der Kopfzeile liegt nichts, der Weichzeichner kostete auf
+     schwachen oder software-gerenderten Systemen nur Leistung. z-index: Popover der Kopfzeile
+     liegen über später gezeichneten Karten (z. B. Player mit isolation). */
+  background: var(--glass);
   position: relative; z-index: 20;
 }
 .topbar-title { font-size: 15px; font-weight: 640; letter-spacing: -0.01em; }
@@ -194,7 +194,7 @@ a { color: var(--accent); }
 
 /* ---------- Player ---------- */
 .hero { position: relative; overflow: hidden; border-radius: var(--r-xl); border: 1px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow-2); isolation: isolate; }
-.hero-bg { position: absolute; inset: -40px; z-index: -2; background-size: cover; background-position: center; filter: blur(46px) saturate(1.25); opacity: .55; transform: scale(1.1); transition: opacity var(--dur-slow) var(--ease); }
+.hero-bg { position: absolute; inset: -40px; z-index: -2; background-size: cover; background-position: center; filter: blur(46px) saturate(1.25); opacity: .55; transform: scale(1.1); will-change: transform; /* eigene Ebene: der teure Weichzeichner wird einmal gerastert, nicht bei jeder Textänderung */ transition: opacity var(--dur-slow) var(--ease); }
 .hero-bg.none { background: radial-gradient(520px 320px at 20% 20%, rgba(185, 167, 255, 0.2), transparent 70%), radial-gradient(420px 260px at 90% 90%, rgba(125, 217, 180, 0.08), transparent 70%); filter: none; opacity: 1; }
 .hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--hero-veil); }
 .hero-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s7); align-items: end; padding: var(--s7); }
@@ -208,7 +208,9 @@ a { color: var(--accent); }
 .progress { display: grid; grid-template-columns: 46px minmax(0, 1fr) 46px; align-items: center; gap: 12px; margin-top: var(--s5); font-variant-numeric: tabular-nums; }
 .bar { height: 5px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
 [data-theme="light"] .bar { background: rgba(24, 20, 36, 0.12); }
-.bar > i { display: block; height: 100%; background: var(--text); border-radius: 5px; transition: width 900ms linear; }
+/* Fortschritt per transform (nur Compositor, kein Layout pro Frame) – eine Breiten-Animation
+   hätte ununterbrochen das Layout neu berechnet und spürbar CPU gekostet. */
+.bar > i { display: block; height: 100%; background: var(--text); transform-origin: 0 50%; transition: transform 900ms linear; will-change: transform; }
 .transport { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s4); flex-wrap: wrap; }
 .play-btn { width: 54px; height: 54px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: var(--accent); color: var(--accent-ink); box-shadow: 0 10px 26px rgba(185, 167, 255, 0.28); transition: transform var(--dur) var(--ease), background var(--dur); }
 .play-btn:hover:not(:disabled) { background: var(--accent-2); transform: scale(1.03); }
@@ -439,7 +441,7 @@ details.tech pre { white-space: pre-wrap; word-break: break-word; margin: 6px 0 
 @keyframes slidein { from { transform: translateX(24px); opacity: 0; } }
 
 /* ---------- Dialog ---------- */
-.backdrop { position: fixed; inset: 0; background: rgba(6, 5, 9, 0.58); backdrop-filter: blur(4px); display: grid; place-items: center; z-index: 50; padding: var(--s4); animation: fade var(--dur) var(--ease); }
+.backdrop { position: fixed; inset: 0; background: rgba(6, 5, 9, 0.66); display: grid; place-items: center; z-index: 50; padding: var(--s4); animation: fade var(--dur) var(--ease); }
 .dialog { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-xl); box-shadow: 0 30px 80px rgba(0,0,0,.45); animation: pop var(--dur-slow) var(--ease); }
 .dialog.wide { width: min(820px, 100%); }
 .dialog-head { padding: var(--s5) var(--s6) 0; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
@@ -505,3 +507,6 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .chip:hover { background: var(--surface-3); color: var(--text); }
 .cc-preview { padding: 8px 12px; border-radius: var(--r-sm); background: var(--surface); border: 1px dashed var(--border-strong); overflow-wrap: anywhere; }
 .empty-hint { display: flex; align-items: center; gap: 8px; padding: 14px; border: 1px dashed var(--border-strong); border-radius: var(--r-sm); }
+
+/* Verborgenes Fenster (Tray): keine Animationen weiterlaufen lassen. */
+html.is-hidden *, html.is-hidden *::before, html.is-hidden *::after { animation-play-state: paused !important; }

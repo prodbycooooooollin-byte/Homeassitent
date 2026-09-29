@@ -1,6 +1,7 @@
 import { MessageSquare, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { api } from "../lib/api";
+import { errorLine } from "../lib/errors";
 import { gateText, rewardSyncText } from "../lib/acceptance";
 import { t } from "../lib/i18n";
 import { refresh } from "../lib/store";
@@ -60,6 +61,12 @@ export function RequestControl({ snap, onOpenSettings }: { snap: AppSnapshot; on
           <span className="subtle small ellipsis">{t("rc.points_desc", { title: draft.channel_points.title, cost: draft.channel_points.cost.toLocaleString() })}</span>
           <span className={`why-line ${a.channel_points.open ? "ok" : a.channel_points.configured ? "warn" : ""}`}>{gateText(a.channel_points)}</span>
           {reward && <span className={`why-line ${reward.pending ? "warn" : ""}`}>{reward.text}</span>}
+          {reward?.pending && snap.channel_points.last_error && (
+            <div className="col" style={{ gap: 4, marginTop: 4 }}>
+              <span className="small" style={{ color: "var(--warn)" }}>{errorLine(snap.channel_points.last_error.code)}</span>
+              <button className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => api.channelPointsResync().then(refresh, toastError)}>{t("cp.resync")}</button>
+            </div>
+          )}
           {snap.channel_points.needs_review > 0 && (
             <button className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start", marginTop: 4, color: "var(--warn)" }} onClick={() => onOpenSettings?.("queue")}>
               {t("rc.review", { n: snap.channel_points.needs_review })}

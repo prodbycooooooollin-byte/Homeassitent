@@ -703,3 +703,41 @@ async fn playlist_command_shares_current_playlist() {
     tokio::time::sleep(Duration::from_secs(2)).await;
     assert_eq!(sent.lock().unwrap().len(), 7, "ohne Rolle keine Antwort");
 }
+
+// Anmeldespeicher beim Start kurz nicht lesbar (z. B. direkt nach Update/Anmeldung):
+// kein dauerhaftes „abgemeldet“ – die Tokens werden nachgeladen.
+#[tokio::test(start_paused = true)]
+async fn tokens_are_reloaded_when_secret_store_was_unavailable() {
+    use onair_core::secrets::SecretStore;
+    struct Flaky {
+        inner: onair_core::secrets::MemorySecretStore,
+        fail: std::sync::atomic::AtomicU32,
+    }
+    impl SecretStore for Flaky {
+        fn load(&self, key: &str) -> Result<Option<String>, String> {
+            if self.fail.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+                self.fail.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                return Err("Anmeldespeicher blockiert".into());
+            }
+            self.inner.load(key)
+        }
+        fn save(&self, key: &str, value: &str) -> Result<(), String> {
+            self.inner.save(key, value)
+        }
+        fn delete(&self, key: &str) -> Result<(), String> {
+            self.inner.delete(key)
+        }
+    }
+    let h = Harness::new();
+    let set = onair_core::auth::TokenSet { access_token: "at-0".into(), refresh_token: Some("rt".into()), expires_at_ms: h.clock.now_ms() + 3_600_000, scope: "x".into(), authorized_at_ms: 0 };
+    let store = Arc::new(Flaky { inner: Default::default(), fail: std::sync::atomic::AtomicU32::new(5) });
+    store.inner.save("sp", &serde_json::to_string(&set).unwrap()).unwrap();
+    let endpoint = Arc::new(onair_core::spotify::auth::SpotifyTokenEndpoint { http: h.transport.clone(), client_id: Arc::new(|| "client".into()), accounts_base: ACCOUNTS.into() });
+    let tm = onair_core::auth::TokenManager::load("sp", endpoint, store.clone(), h.clock.clone());
+    assert!(!matches!(tm.status(), onair_core::auth::AuthStatus::SignedIn { .. }), "Start: Speicher blockiert");
+    tm.retry_load(); // schlägt noch fehl (5 → 3 nach Start, → 2)
+    tm.retry_load();
+    tm.retry_load();
+    tm.retry_load();
+    assert!(matches!(tm.status(), onair_core::auth::AuthStatus::SignedIn { .. }), "nachgeladen");
+}

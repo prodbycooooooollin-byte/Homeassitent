@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AutoUpdateBanner } from "./components/UpdatePanel";
 import { TwitchCodeDialog, startSpotifyLogin } from "./components/Login";
 import { EmptyState, ToastHost } from "./components/ui";
@@ -101,10 +102,12 @@ export function App() {
     <>
       {banner}
       <Shell snap={snap} route={route === "history" ? "queue" : route} go={go}>
-        {route === "overview" && <Overview snap={snap} go={(r) => go(r as Route)} onConnectSpotify={connectSpotify} />}
-        {(route === "queue" || route === "history") && <QueueView snap={snap} initialTab={route === "history" ? "history" : "queue"} />}
-        {route === "widgets" && <WidgetsView snap={snap} />}
-        {route === "settings" && <SettingsView snap={snap} />}
+        <ErrorBoundary scope={route} resetKey={route}>
+          {route === "overview" && <Overview snap={snap} go={(r) => go(r as Route)} onConnectSpotify={connectSpotify} />}
+          {(route === "queue" || route === "history") && <QueueView snap={snap} initialTab={route === "history" ? "history" : "queue"} />}
+          {route === "widgets" && <WidgetsView snap={snap} />}
+          {route === "settings" && <SettingsView snap={snap} />}
+        </ErrorBoundary>
       </Shell>
       {!snap.settings.onboarding_done && !onbDismissed && <Onboarding snap={snap} onDone={() => setOnbDismissed(true)} />}
       <TwitchCodeDialog snap={snap} />

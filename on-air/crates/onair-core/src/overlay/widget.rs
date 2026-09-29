@@ -22,7 +22,7 @@ body{font-family:var(--font);color:var(--text);font-size:calc(16px*var(--scale))
 #root.show{opacity:1;transform:none}
 .noanim #root,.noanim .swap{transition:none!important}
 .card{border-radius:var(--radius);background:rgba(var(--bg),var(--bgo));padding:calc(12px*var(--scale))}
-.glass .card{border:1px solid rgba(255,255,255,.09);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.glass .card{border:1px solid rgba(255,255,255,.09);box-shadow:0 10px 30px rgba(0,0,0,.25)}
 .minimal .card{padding:0;background:transparent}
 .minimal .t,.minimal .a{text-shadow:0 1px 3px rgba(0,0,0,.65),0 0 12px rgba(0,0,0,.35)}
 .row{display:flex;align-items:center;gap:calc(12px*var(--scale));min-width:0}
@@ -33,7 +33,7 @@ body{font-family:var(--font);color:var(--text);font-size:calc(16px*var(--scale))
 .a{color:var(--muted);font-size:.9em;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .req{color:var(--accent);font-size:.78em;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bar{height:3px;border-radius:3px;background:rgba(255,255,255,.14);margin-top:8px;overflow:hidden}
-.bar>i{display:block;height:100%;width:0;background:var(--accent);border-radius:3px}
+.bar>i{display:block;height:100%;background:var(--accent);transform-origin:0 50%;transform:scaleX(0)}
 .swap{transition:opacity .18s ease}
 .swap.out{opacity:0}
 .label{font-size:.7em;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:10px 0 6px}
@@ -56,7 +56,8 @@ const root=document.getElementById("root");
 if(PREVIEW){const b=document.createElement("div");b.className="badge";b.textContent="VORSCHAU · BEISPIELDATEN";document.body.appendChild(b);}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function hexToRgb(h){const m=/^#?([0-9a-f]{6})$/i.exec(h||"");if(!m)return"16,17,20";const n=parseInt(m[1],16);return[(n>>16)&255,(n>>8)&255,n&255].join(",");}
-function applyStyle(s){if(!s)return;const r=document.documentElement.style;
+let styleKey="";
+function applyStyle(s){if(!s)return;const sk=JSON.stringify(s);if(sk===styleKey)return;styleKey=sk;const r=document.documentElement.style;
  r.setProperty("--text",s.text_color);r.setProperty("--muted",s.secondary_color);r.setProperty("--accent",s.accent_color);
  r.setProperty("--bg",hexToRgb(s.background_color));r.setProperty("--bgo",String(s.background_opacity));
  r.setProperty("--radius",s.radius+"px");r.setProperty("--w",s.width+"px");r.setProperty("--scale",String(s.font_scale||1));r.setProperty("--font",s.font_family);
@@ -97,7 +98,7 @@ function tick(){
  const p=document.getElementById("p"); if(!p||!st||!st.now)return;
  const n=st.now; let pr=n.progress_ms+(n.is_playing?Math.max(0,nowAge(n)):0);
  if(n.duration_ms>0)pr=Math.min(pr,n.duration_ms);
- p.style.width=(n.duration_ms?100*pr/n.duration_ms:0)+"%";}
+ p.style.transform="scaleX("+(n.duration_ms?Math.min(1,pr/n.duration_ms):0)+")";}
 function onData(d){
  lastMsg=Date.now(); offset=d.server_time_ms-Date.now();
  st=PREVIEW?Object.assign({},SAMPLE,{style:d.style,stale_after_ms:d.stale_after_ms,now:Object.assign({},SAMPLE.now,{fetched_at_ms:d.server_time_ms})}):d;

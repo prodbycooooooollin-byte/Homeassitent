@@ -30,7 +30,7 @@ pub const DOCK_HTML: &str = r##"<!doctype html>
   .a { color: var(--text2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .req { color: var(--accent); font-size: 11.5px; }
   .prog { height: 3px; border-radius: 2px; background: rgba(255,255,255,.1); margin-top: 6px; overflow: hidden; }
-  .prog i { display: block; height: 100%; background: var(--accent); width: 0; }
+  .prog i { display: block; height: 100%; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); }
   .ctl { grid-column: 1 / -1; display: flex; gap: 6px; }
   .ctl button { flex: 1; padding: 6px 0; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
   button svg { width: 15px; height: 15px; flex: none; }
@@ -115,8 +115,20 @@ pub const DOCK_HTML: &str = r##"<!doctype html>
   $("skip").innerHTML = I.skip + "<span>Skip</span>";
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+  // Fortschritt allein (jede Sekunde) – der Rest wird nur bei neuen Daten neu aufgebaut.
+  function progress() {
+    const n = st && st.now;
+    if (!n) return;
+    const since = Math.max(0, st.server_time_ms - n.fetched_at_ms) + Math.max(0, Date.now() - st._recv);
+    const p = Math.min(n.duration_ms || 1, n.progress_ms + (n.is_playing ? since : 0));
+    $("prog").style.transform = "scaleX(" + (n.duration_ms ? Math.min(1, p / n.duration_ms) : 0) + ")";
+  }
+  let lastKey = "";
   function render() {
     const s = st;
+    const k = JSON.stringify(s, (key, v) => (key === "server_time_ms" || key === "_recv" || key === "progress_ms" || key === "fetched_at_ms" ? undefined : v));
+    if (k === lastKey) { progress(); return; }
+    lastKey = k;
     const r = s.requests;
     $("req").className = "bar " + (r.open ? "ok" : r.manual_open ? "warn" : "");
     $("req-lbl").textContent = r.open ? "Requests offen" : r.manual_open ? "Automatisch pausiert" : "Requests pausiert";
@@ -128,13 +140,11 @@ pub const DOCK_HTML: &str = r##"<!doctype html>
       $("requester").textContent = n.requester ? "Wunsch von " + n.requester : "";
       $("cover").style.backgroundImage = n.image_url ? 'url("' + n.image_url + '")' : "none";
       // Fortschritt seit der letzten bestätigten Spotify-Antwort weiterzählen.
-      const since = Math.max(0, s.server_time_ms - n.fetched_at_ms) + Math.max(0, Date.now() - s._recv);
-      const p = Math.min(n.duration_ms || 1, n.progress_ms + (n.is_playing ? since : 0));
-      $("prog").style.width = (n.duration_ms ? (100 * p / n.duration_ms) : 0) + "%";
+      progress();
       $("pp").innerHTML = n.is_playing ? I.pause + "<span>Pause</span>" : I.play + "<span>Weiter</span>";
     } else {
       $("title").textContent = s.playback_label || "Gerade läuft nichts"; $("artist").textContent = ""; $("requester").textContent = "";
-      $("cover").style.backgroundImage = "none"; $("prog").style.width = "0"; $("pp").innerHTML = I.play + "<span>Wiedergabe</span>";
+      $("cover").style.backgroundImage = "none"; $("prog").style.transform = "scaleX(0)"; $("pp").innerHTML = I.play + "<span>Wiedergabe</span>";
     }
     $("pp").disabled = $("skip").disabled = !s.controls;
     const pl = s.plan;
@@ -169,8 +179,10 @@ pub const DOCK_HTML: &str = r##"<!doctype html>
   $("plan-ext").onclick = () => act("extend_plan", { minutes: 15 });
   $("list").onclick = (e) => { const b = e.target.closest("button[data-a]"); if (b) act(b.dataset.a, { id: b.dataset.id }); };
   refresh();
-  setInterval(refresh, 1500);
-  setInterval(() => { if (st) render(); }, 500);
+  // Sparsam: Daten alle 2,5 s, Fortschritt jede Sekunde; nichts, solange das Dock verborgen ist.
+  setInterval(() => { if (!document.hidden) refresh(); }, 2500);
+  setInterval(() => { if (st && !document.hidden) progress(); }, 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 })();
 </script>
 </body>

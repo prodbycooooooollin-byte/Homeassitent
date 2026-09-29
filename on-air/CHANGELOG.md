@@ -16,6 +16,11 @@
 - Sammel-Playlist: jeder angenommene Songwunsch landet einmal in einer Spotify-Playlist (automatisch „Teil 2“ nach 10.000 Songs).
 - Übersicht aufgeräumt: „Als Nächstes“ breit unter dem Player, Steuerung, Planung und Aktivität in einer schmalen Spalte.
 - Kanalpunkte: Jede Einlösung steht mit Ergebnis im Aktivitätsprotokoll; Einlösungen fremder (von Hand angelegter) Belohnungen werden angezeigt statt still ignoriert und können übernommen werden; wer als Streamer selbst einlöst, gilt als Broadcaster.
+- Stabilität: Kanalpunkte-Belohnung blieb dauerhaft pausiert („nicht synchron“), wenn der Abgleich offener Einlösungen mit Twitch dauerhaft scheiterte – jetzt nach drei Versuchen freigegeben; Belohnungen einer anderen Twitch-App-ID werden losgelassen statt endlos zu scheitern; „Erneut synchronisieren“ mit verständlicher Fehlerbeschreibung.
+- Stabilität: Wünsche werden nicht mehr mit „technisch nicht möglich“ verworfen, wenn Spotify kurz nicht verbunden ist (werden gespeichert und nachgeholt) oder die Kanalpunkte-Einrichtung hakt; konkrete Gründe im Chat.
+- Stabilität: Die Pause vor einem Update hebt sich nach 3 Minuten selbst auf, falls das Update nicht stattfand; nicht lesbarer Windows-Anmeldespeicher beim Start führt nicht mehr zu dauerhaftem „abgemeldet“; Fehlergrenzen verhindern eine leere App bei Darstellungsfehlern.
+- Kompatibilität: Zertifikate des Systems werden zusätzlich genutzt (Antivirus mit HTTPS-Prüfung, Firmennetze).
+- Leistung: Übersicht braucht rund 90 % weniger CPU (Fortschrittsbalken ohne Layout-Neuberechnung, ein gemeinsamer Takt, keine Arbeit bei verborgenem Fenster, keine Weichzeichner ohne Wirkung); OBS-Widget und -Dock ebenfalls sparsamer.
 - Behoben: Ein an Spotify übergebener Song, der nie als laufend erkannt wurde, hing dauerhaft in „In Spotify“ und blockierte alle weiteren Wünsche. Jetzt: Abgleich mit Spotifys Queue nach 90 s, Erkennung von Spotify-Relinking (andere Fassung desselben Songs) und ein Knopf „Als erledigt markieren“.
 - Behoben: Umschalten eines Chatbefehls in den Einstellungen machte die App grau (Dokument verschob sich).
 - Behoben: Kanalpunkte-Wünsche bekamen keine Rückmeldung im Chat – jetzt dieselbe Antwort wie bei `!sr`, bei Ablehnung mit Erstattungshinweis.

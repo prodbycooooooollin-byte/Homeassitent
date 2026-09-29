@@ -123,6 +123,7 @@ export const api = {
   planSetBuffer: (bufferMs: number) => call<void>("plan_set_buffer", { bufferMs }),
   planStop: () => call<void>("plan_stop"),
   redemptionDecide: (id: string, fulfill: boolean) => call<void>("redemption_decide", { id, fulfill }),
+  channelPointsResync: () => call<void>("channel_points_resync"),
 
   updateInfo: () => call<UpdateInfo>("update_info"),
   updateCheck: () => call<UpdateInfo>("update_check"),

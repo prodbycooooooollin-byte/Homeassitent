@@ -119,7 +119,12 @@ pub struct ChannelPointsService {
     sync_lock: tokio::sync::Mutex<()>,
     last_redemption_ms: Mutex<Option<i64>>,
     foreign: Mutex<Option<ForeignReward>>,
+    /// Fehlgeschlagene Abgleiche in Folge. Nach `MAX_RECONCILE_FAILURES` wird ohne Abgleich
+    /// freigegeben – sonst bliebe die Belohnung bei einem dauerhaften Twitch-Fehler für immer pausiert.
+    reconcile_failures: std::sync::atomic::AtomicU32,
 }
+
+const MAX_RECONCILE_FAILURES: u32 = 3;
 
 fn reward_body(c: &ChannelPointsSettings, enabled: bool, paused: bool) -> serde_json::Value {
     json!({
@@ -196,6 +201,7 @@ impl ChannelPointsService {
             sync_lock: tokio::sync::Mutex::new(()),
             last_redemption_ms: Mutex::new(None),
             foreign: Mutex::new(None),
+            reconcile_failures: std::sync::atomic::AtomicU32::new(0),
         });
         (svc, status_rx)
     }
@@ -361,7 +367,19 @@ impl ChannelPointsService {
         let mut ok = self.sync_reward(&broadcaster).await;
         if ok && self.state.lock().unwrap().reward_id.is_some() && !self.is_reconciled() {
             ok = self.reconcile(&broadcaster).await;
+            if !ok {
+                let n = self.reconcile_failures.fetch_add(1, Ordering::SeqCst) + 1;
+                if n >= MAX_RECONCILE_FAILURES {
+                    self.d.activity.warn(
+                        "channel_points.reconcile_skipped",
+                        "Offene Kanalpunkte-Einlösungen konnten nicht abgeglichen werden – die Belohnung wird trotzdem freigegeben",
+                        json!({ "attempts": n }),
+                    );
+                    ok = true;
+                }
+            }
             if ok {
+                self.reconcile_failures.store(0, Ordering::SeqCst);
                 self.reconciled.store(true, Ordering::SeqCst);
                 // Nach dem Abgleich darf die Belohnung wieder freigegeben werden.
                 ok = self.sync_reward(&broadcaster).await;
@@ -429,6 +447,17 @@ impl ChannelPointsService {
                                 };
                                 self.d.activity.info("channel_points.synced", text, json!({ "enabled": info.is_enabled, "paused": info.is_paused }));
                             }
+                        }
+                        // Belohnung wurde mit einer anderen Client-ID angelegt (z. B. nach Wechsel der
+                        // Twitch-App-ID): nicht mehr verwaltbar → loslassen statt endlos zu scheitern.
+                        Err(ApiError::Forbidden { message, .. }) if message.to_lowercase().contains("client") => {
+                            self.d.activity.warn(
+                                "channel_points.foreign_client",
+                                "Die bisherige Kanalpunkte-Belohnung gehört zu einer anderen Twitch-App-ID und kann nicht mehr verwaltet werden",
+                                json!({}),
+                            );
+                            *self.state.lock().unwrap() = RewardState::default();
+                            self.save_state();
                         }
                         Ok(None) => {
                             // Extern gelöscht: Verwaltung beenden, ggf. neu anlegen.

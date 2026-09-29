@@ -97,7 +97,12 @@ impl Rejection {
             ),
             Rejection::PlanUncertain => "die Restzeit lässt sich gerade nicht sicher berechnen – bitte gleich nochmal".into(),
             Rejection::UpdatePause => "Requests sind kurz pausiert".into(),
-            Rejection::Technical { .. } => "Requests sind gerade technisch nicht möglich".into(),
+            Rejection::Technical { detail } => match detail.as_str() {
+                "spotify_not_connected" => "Spotify ist beim Streamer gerade nicht verbunden".into(),
+                "missing_scope" => "Kanalpunkte sind noch nicht fertig eingerichtet".into(),
+                "not_affiliate" => "Kanalpunkte gibt es nur für Affiliates und Partner".into(),
+                d => format!("Requests sind gerade technisch nicht möglich ({d})"),
+            },
             Rejection::CanceledOnTwitch => "auf Twitch storniert".into(),
         }
     }

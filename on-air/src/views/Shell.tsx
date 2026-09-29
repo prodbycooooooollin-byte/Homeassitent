@@ -78,7 +78,7 @@ function RequestState({ snap }: { snap: AppSnapshot }) {
 type ConnRow = { key: string; label: string; st: StatusDesc; action?: ReactNode };
 
 function ConnectionSummary({ snap, onDiag, go }: { snap: AppSnapshot; onDiag: (k: "spotify" | "twitch" | "overlay" | "all") => void; go: (r: Route) => void }) {
-  const now = useNow();
+  const now = useNow(5000);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {

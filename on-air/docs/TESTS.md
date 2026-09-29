@@ -66,6 +66,11 @@ oder „600 s Sperre“ in Sekundenbruchteilen – die Zeitlogik ist dieselbe wi
 | Song noch in Spotifys Queue → bleibt übergeben | `handoff_still_in_spotify_queue_is_kept` (acceptance.rs) | ✅ |
 | Spotify-Relinking (andere ID, `linked_from`) wird als laufend erkannt | `relinked_track_is_recognized_as_playing` (acceptance.rs) | ✅ |
 | Hängenden Eintrag von Hand als erledigt markieren | `handed_off_request_can_be_dismissed` (acceptance.rs) | ✅ |
+| Abgleich offener Einlösungen scheitert dauerhaft → Belohnung wird trotzdem freigegeben | `reward_is_released_when_reconcile_keeps_failing` | ✅ |
+| Kanalpunkte-Einrichtung hakt → eintreffende Einlösung wird trotzdem verarbeitet | `redemption_is_not_rejected_for_reward_sync_problems` | ✅ |
+| Spotify abgemeldet → Chat-Wunsch gespeichert statt verworfen | `requests_are_kept_while_spotify_is_signed_out` | ✅ |
+| Update nicht erfolgt → Update-Pause hebt sich selbst auf | `update_pause_expires_when_update_did_not_happen` | ✅ |
+| Anmeldespeicher beim Start blockiert → Tokens werden nachgeladen | `tokens_are_reloaded_when_secret_store_was_unavailable` (acceptance.rs) | ✅ |
 | Update-Vorbereitung pausiert Requests/Belohnung, sichert DB; Abbruch stellt Annahme wieder her | `update_preparation_pauses_and_can_be_cancelled` | ✅ |
 
 Unit-Tests dazu: Budgetformel und Unsicherheitscodes (`plan.rs`), Sperrgründe inkl.

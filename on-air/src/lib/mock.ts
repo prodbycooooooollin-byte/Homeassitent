@@ -328,6 +328,7 @@ export function createMockBackend(): Backend {
     plan_extend: (a) => { planCfg.end_at_ms = Math.max(now(), planCfg.end_at_ms ?? now()) + Number(a.minutes) * 60_000; planCfg.enabled = true; },
     plan_set_buffer: (a) => { planCfg.buffer_ms = Number(a.bufferMs); },
     plan_stop: () => { planCfg.enabled = false; log("Streamplanung beendet"); },
+    channel_points_resync: () => undefined,
     redemption_decide: (a) => {
       const r = [...queue, ...recent].find((x) => x.id === a.id);
       if (r?.redemption) r.redemption = { ...r.redemption, status: a.fulfill ? "fulfilled" : "canceled" };

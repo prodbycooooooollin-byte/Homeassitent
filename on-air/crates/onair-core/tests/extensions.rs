@@ -623,3 +623,54 @@ async fn request_playlist_rolls_over_when_full() {
     assert_eq!(f.created_playlists[0].1, "Archiv · Teil 2");
     assert!(f.playlist_items["old1"].is_empty(), "volle Playlist unangetastet");
 }
+
+// Gescheitertes Update: Läuft die App nach der Update-Pause weiter, öffnet sie Requests von selbst.
+#[tokio::test(start_paused = true)]
+async fn update_pause_expires_when_update_did_not_happen() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, false)).await;
+    ready(&rt).await;
+    let _ = rt.prepare_for_update().await;
+    let o = rt.queue.submit_query("during update", viewer(1), Source::Chat, Some("x1"), None).await;
+    assert_eq!(rejected_code(&o), "update_pause");
+    tokio::time::sleep(Duration::from_millis(onair_core::runtime::UPDATE_PAUSE_MAX_MS as u64 + 1_000)).await;
+    let o = rt.queue.submit_query("after expiry", viewer(1), Source::Chat, Some("x2"), None).await;
+    assert!(accepted(&o), "{o:?}");
+    assert!(rt.activity.recent(30).iter().any(|a| a.kind == "update.pause_expired"));
+}
+
+// Spotify nicht verbunden: Chat-Wünsche werden gespeichert statt mit „technisch nicht möglich“ verworfen.
+#[tokio::test(start_paused = true)]
+async fn requests_are_kept_while_spotify_is_signed_out() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, false)).await;
+    ready(&rt).await;
+    rt.spotify_logout();
+    let o = rt.queue.submit_query("while signed out", viewer(1), Source::Chat, Some("s1"), None).await;
+    assert!(matches!(o, SubmitOutcome::PendingOffline { .. }), "{o:?}");
+}
+
+// Kanalpunkte-Einrichtung unvollständig (z. B. Berechtigung fehlt): eine trotzdem eintreffende
+// Einlösung wird verarbeitet statt mit „technisch nicht möglich“ abgelehnt.
+#[tokio::test(start_paused = true)]
+async fn redemption_is_not_rejected_for_reward_sync_problems() {
+    let h = Harness::new();
+    h.twitch.lock().unwrap().scopes = vec!["user:read:chat".into(), "user:write:chat".into()];
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    wait_for("Sperrgrund", || rt.channel_points.technical_now().is_some(), Duration::from_secs(30)).await;
+    let o = rt.queue.submit_redemption("points song", viewer(2), "rw-x", "red-t1").await;
+    assert!(accepted(&o), "{o:?}");
+}
+
+// Abgleich offener Einlösungen scheitert dauerhaft: Die Belohnung darf nicht für immer
+// pausiert („nicht synchron“) bleiben.
+#[tokio::test(start_paused = true)]
+async fn reward_is_released_when_reconcile_keeps_failing() {
+    let h = Harness::new();
+    h.twitch.lock().unwrap().fail_redemption_list = true;
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    wait_for("freigegeben", || { let s = rt.channel_points.status(); s.reconciled && s.confirmed_paused == Some(false) }, Duration::from_secs(900)).await;
+    assert!(rt.activity.recent(50).iter().any(|a| a.kind == "channel_points.reconcile_skipped"));
+}

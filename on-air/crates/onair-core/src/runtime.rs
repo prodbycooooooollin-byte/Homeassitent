@@ -107,6 +107,9 @@ pub struct AppSnapshot {
     pub update_pause: bool,
 }
 
+/// Höchstdauer der Update-Pause (siehe `update_pause_active`).
+pub const UPDATE_PAUSE_MAX_MS: i64 = 180_000;
+
 pub struct Runtime {
     pub db: Db,
     pub settings: SharedSettings,
@@ -133,6 +136,9 @@ pub struct Runtime {
     pub archive: Arc<crate::archive::ArchiveService>,
     helix: Helix,
     update_pause: AtomicBool,
+    /// Seit wann die Update-Pause gilt – sie läuft nach `UPDATE_PAUSE_MAX_MS` von selbst ab,
+    /// damit ein gescheitertes Update Requests nie dauerhaft sperrt.
+    update_pause_since: Mutex<Option<i64>>,
     last_acceptance: Mutex<Option<Acceptance>>,
     poll_tx: watch::Sender<PollConfig>,
     overlay_tx: watch::Sender<OverlayData>,
@@ -290,6 +296,7 @@ impl Runtime {
             archive,
             helix,
             update_pause: AtomicBool::new(false),
+            update_pause_since: Mutex::new(None),
             last_acceptance: Mutex::new(None),
             poll_tx,
             overlay_tx,
@@ -316,9 +323,20 @@ impl Runtime {
                 Source::ChannelPoints => &a.channel_points,
                 _ => &a.chat,
             };
-            // „Abgleich läuft“ hält nur die Belohnung auf Twitch pausiert; bereits
-            // getätigte (verpasste) Einlösungen werden regulär verarbeitet.
-            match gate.blocks.iter().find(|b| !matches!(b, Block::Reconciling)) {
+            // Nicht jeder Sperrgrund rechtfertigt eine Ablehnung eines bereits eingetroffenen Wunschs:
+            // - „Abgleich läuft“ hält nur die Belohnung auf Twitch pausiert; bereits getätigte
+            //   (verpasste) Einlösungen werden regulär verarbeitet.
+            // - Spotify nicht verbunden: Der Wunsch wird gespeichert und geprüft, sobald Spotify
+            //   wieder verbunden ist – statt ihn mit „technisch nicht möglich“ zu verwerfen.
+            // - Synchronisationsprobleme der Kanalpunkte-Belohnung: Eine eintreffende Einlösung
+            //   beweist, dass die Belohnung funktioniert; der Streamer sieht das Problem in der App.
+            let rejects = |b: &&Block| match b {
+                Block::Reconciling => false,
+                Block::Technical { detail } if detail == "spotify_not_connected" => false,
+                Block::Technical { .. } => source != Source::ChannelPoints,
+                _ => true,
+            };
+            match gate.blocks.iter().find(rejects) {
                 None => Ok(()),
                 Some(b) => Err(block_to_rejection(b)),
             }
@@ -455,7 +473,7 @@ impl Runtime {
             plan_config: self.queue.plan_config(),
             channel_points: self.cp_status.borrow().clone(),
             request_playlist: self.archive.status(),
-            update_pause: self.update_pause.load(Ordering::SeqCst),
+            update_pause: self.update_pause_active(),
         }
     }
 
@@ -616,6 +634,21 @@ impl Runtime {
     // Annahme-Gate, Streamplanung, Kanalpunkte, Update-Pause
     // ------------------------------------------------------------------
 
+    /// Update-Pause aktiv? Läuft die App nach `UPDATE_PAUSE_MAX_MS` noch, ist das Update
+    /// gescheitert (sonst wäre sie beendet worden) → Pause aufheben statt Requests zu sperren.
+    fn update_pause_active(&self) -> bool {
+        if !self.update_pause.load(Ordering::SeqCst) {
+            return false;
+        }
+        let since = *self.update_pause_since.lock().unwrap();
+        if since.is_some_and(|t| self.clock.now_ms() - t > UPDATE_PAUSE_MAX_MS) {
+            self.activity.warn("update.pause_expired", "Update wurde nicht abgeschlossen – Requests sind wieder geöffnet", json!({}));
+            self.cancel_update_pause();
+            return false;
+        }
+        true
+    }
+
     fn acceptance_inputs(&self, with_cp_state: bool) -> acceptance::Inputs {
         let s = cfg::read(&self.settings).clone();
         let sp_signed = matches!(self.spotify_state.borrow().auth, crate::auth::AuthStatus::SignedIn { .. });
@@ -624,7 +657,7 @@ impl Runtime {
             manual_open: s.requests.open,
             chat_enabled: s.requests.chat_enabled,
             cp_enabled: s.channel_points.enabled,
-            update_pause: self.update_pause.load(Ordering::SeqCst),
+            update_pause: self.update_pause_active(),
             spotify_signed_in: sp_signed,
             twitch_chat_connected: matches!(tw.link, crate::twitch::service::TwitchLink::Connected),
             cp_technical: if with_cp_state { self.channel_points.technical_now() } else { None },
@@ -701,6 +734,12 @@ impl Runtime {
     }
 
     /// Entscheidung zu einer Kanalpunkte-Einlösung (Prüfung/Konflikt).
+    /// „Erneut synchronisieren“: Kanalpunkte-Abgleich sofort anstoßen (statt auf den Backoff zu warten).
+    pub fn channel_points_resync(&self) {
+        self.activity.info("channel_points.resync", "Kanalpunkte werden erneut mit Twitch abgeglichen", json!({}));
+        self.channel_points.kick();
+    }
+
     pub fn redemption_decide(&self, request_id: &str, fulfill: bool) -> Result<(), String> {
         self.channel_points.decide(request_id, fulfill)
     }
@@ -725,6 +764,7 @@ impl Runtime {
     /// Übergaben abwarten, Datenbank sichern. Liefert einen ehrlichen Bericht.
     pub async fn prepare_for_update(&self) -> UpdatePrep {
         self.update_pause.store(true, Ordering::SeqCst);
+        *self.update_pause_since.lock().unwrap() = Some(self.clock.now_ms());
         self.bus.changed(Topic::Queue);
         self.activity.info("update.preparing", "Update wird vorbereitet – neue Requests sind kurz pausiert", json!({}));
         let reward_paused = if cfg::read(&self.settings).channel_points.enabled {
@@ -739,6 +779,7 @@ impl Runtime {
 
     /// Update abgebrochen: Pause wieder aufheben.
     pub fn cancel_update_pause(&self) {
+        *self.update_pause_since.lock().unwrap() = None;
         if self.update_pause.swap(false, Ordering::SeqCst) {
             self.bus.changed(Topic::Queue);
             self.channel_points.kick();
@@ -1061,6 +1102,9 @@ async fn acceptance_watcher(weak: Weak<Runtime>) {
     loop {
         iv.tick().await;
         let Some(rt) = weak.upgrade() else { return };
+        // War der Anmeldespeicher beim Start nicht lesbar, hier erneut versuchen.
+        rt.spotify_tokens.retry_load();
+        rt.twitch_tokens.retry_load();
         let a = rt.acceptance();
         let prev = rt.last_acceptance.lock().unwrap().replace(a.clone());
         let Some(prev) = prev else { continue };

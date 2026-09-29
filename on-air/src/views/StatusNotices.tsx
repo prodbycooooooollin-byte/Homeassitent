@@ -10,7 +10,7 @@ import { api } from "../lib/api";
 
 /** Zeigt nur bei echten Problemen einen Hinweis – mit konkreter nächster Handlung. */
 export function StatusNotices({ snap, onConnectSpotify }: { snap: AppSnapshot; onConnectSpotify: () => void }) {
-  const now = useNow();
+  const now = useNow(5000);
   const [diag, setDiag] = useState<null | "spotify" | "twitch">(null);
   const [devices, setDevices] = useState(false);
   const sp = spotifyStatus(snap, now);

@@ -38,6 +38,8 @@ const DE: Record<string, Entry> = {
   connecting: { title: "Verbindet", action: "Einen Moment." },
   disabled: { title: "Nicht aktiv", action: "Optional: Twitch unter Einstellungen verbinden." },
   access_denied: { title: "Zugriff abgelehnt", action: "Erneut starten und bei Twitch bestätigen." },
+  reward_title_taken: { title: "Belohnungsname schon vergeben", action: "Auf Twitch gibt es schon eine Belohnung mit diesem Namen, die ON AIR nicht verwalten darf. Anderen Namen wählen oder sie unter Kanalpunkte „verwenden“." },
+  not_affiliate: { title: "Kanalpunkte nicht verfügbar", action: "Kanalpunkte gibt es nur für Affiliates und Partner." },
   error: { title: "Fehler", action: "Technische Details prüfen." },
   ok: { title: "OK", action: "" },
 };
@@ -77,6 +79,8 @@ const EN: Record<string, Entry> = {
   connecting: { title: "Connecting", action: "One moment." },
   disabled: { title: "Not active", action: "Optional: connect Twitch in settings." },
   access_denied: { title: "Access denied", action: "Start again and confirm on Twitch." },
+  reward_title_taken: { title: "Reward name already taken", action: "A reward with this name exists on Twitch that ON AIR may not manage. Choose another name or “use” it under Channel points." },
+  not_affiliate: { title: "Channel points unavailable", action: "Channel points are only available to affiliates and partners." },
   error: { title: "Error", action: "Check the technical details." },
   ok: { title: "OK", action: "" },
 };
@@ -84,4 +88,10 @@ const EN: Record<string, Entry> = {
 export function describeError(code: string): Entry {
   const dict = getLang() === "en" ? EN : DE;
   return dict[code] ?? dict.error;
+}
+
+/** Einzeilige Beschreibung mit nächstem Schritt, z. B. für Hinweise unter einem Status. */
+export function errorLine(code: string): string {
+  const e = describeError(code);
+  return e.action ? `${e.title} – ${e.action}` : e.title;
 }

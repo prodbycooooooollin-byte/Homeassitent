@@ -109,7 +109,7 @@ export function NowPlayingCard({ snap, onConnect }: { snap: AppSnapshot; onConne
           ) : kind !== "ad" && dur > 0 ? (
             <div className="progress small muted" aria-label={`${duration(progress)} / ${duration(dur)}`}>
               <span>{duration(progress)}</span>
-              <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}><i style={{ width: `${pct}%` }} /></div>
+              <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}><i style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }} /></div>
               <span style={{ textAlign: "right" }}>{duration(dur)}</span>
             </div>
           ) : null}

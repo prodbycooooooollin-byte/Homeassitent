@@ -313,6 +313,11 @@ pub fn plan_stop(state: State<'_, AppState>) -> R<()> {
 // ---------------- Kanalpunkte ----------------
 
 #[tauri::command]
+pub fn channel_points_resync(state: State<'_, AppState>) {
+    state.rt.channel_points_resync();
+}
+
+#[tauri::command]
 pub fn redemption_decide(state: State<'_, AppState>, id: String, fulfill: bool) -> R<()> {
     state.rt.redemption_decide(&id, fulfill).map_err(Into::into)
 }

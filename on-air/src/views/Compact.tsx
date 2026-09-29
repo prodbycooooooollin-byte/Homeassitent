@@ -49,7 +49,7 @@ export function CompactView({ snap }: { snap: AppSnapshot }) {
             <div className="small" style={{ color: "var(--warn)" }} title={t("np.stale_hint", { time: clockTime(info.pb.fetched_at_ms, getLang()) })}>{t("np.stale", { time: clockTime(info.pb.fetched_at_ms, getLang()) })}</div>
           ) : info && kind !== "ad" && info.dur > 0 ? (
             <div className="row small subtle" style={{ gap: 8, fontVariantNumeric: "tabular-nums" }}>
-              <div className="bar grow"><i style={{ width: `${pct}%` }} /></div>
+              <div className="bar grow"><i style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }} /></div>
               <span>{info.pb.is_playing ? duration(info.progress) : t("np.paused")}</span>
             </div>
           ) : null}

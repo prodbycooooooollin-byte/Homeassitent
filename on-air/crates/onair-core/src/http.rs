@@ -135,7 +135,11 @@ impl ReqwestTransport {
             .pool_idle_timeout(Duration::from_secs(60))
             .user_agent(concat!("ON-AIR/", env!("CARGO_PKG_VERSION")))
             .build()
-            .expect("reqwest client");
+            // Nie wegen des HTTP-Clients abstürzen (z. B. unlesbarer Zertifikatsspeicher).
+            .unwrap_or_else(|e| {
+                tracing::warn!(target: "http", error = %e, "HTTP-Client mit Standardeinstellungen");
+                reqwest::Client::new()
+            });
         Self { client }
     }
 }

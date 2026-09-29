@@ -11,7 +11,7 @@ type Update = (fn: (s: Settings) => Settings) => void;
 
 /** Sammel-Playlist: jeder angenommene Songwunsch landet einmal in einer Spotify-Playlist. */
 export function RequestPlaylistCard({ snap, draft, update }: { snap: AppSnapshot; draft: Settings; update: Update }) {
-  const now = useNow();
+  const now = useNow(5000);
   const c = draft.request_playlist;
   const st = snap.request_playlist;
   const set = (patch: Partial<Settings["request_playlist"]>) => update((s) => ({ ...s, request_playlist: { ...s.request_playlist, ...patch } }));

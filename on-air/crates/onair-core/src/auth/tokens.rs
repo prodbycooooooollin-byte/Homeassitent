@@ -61,6 +61,9 @@ struct Inner {
     tokens: Option<TokenSet>,
     epoch: u64,
     reauth_reason: Option<String>,
+    /// Secret Store war beim Start nicht lesbar (z. B. Anmeldespeicher kurz blockiert) →
+    /// später erneut versuchen statt dauerhaft „abgemeldet“.
+    load_failed: bool,
 }
 
 pub struct TokenManager {
@@ -83,24 +86,34 @@ impl TokenManager {
         store: Arc<dyn SecretStore>,
         clock: SharedClock,
     ) -> Arc<Self> {
-        let tokens = match store.load(key) {
-            Ok(Some(raw)) => match serde_json::from_str::<TokenSet>(&raw) {
-                Ok(t) => Some(t),
-                Err(_) => {
-                    tracing::warn!(target: "auth", key, "gespeicherte Tokens nicht lesbar – abgemeldet");
-                    None
+        let mut load_failed = false;
+        let mut tokens = None;
+        // Der Anmeldespeicher des Systems kann direkt nach Anmeldung/Update kurz blockiert sein.
+        for attempt in 0..3 {
+            match store.load(key) {
+                Ok(Some(raw)) => {
+                    match serde_json::from_str::<TokenSet>(&raw) {
+                        Ok(t) => tokens = Some(t),
+                        Err(_) => tracing::warn!(target: "auth", key, "gespeicherte Tokens nicht lesbar – abgemeldet"),
+                    }
+                    load_failed = false;
+                    break;
                 }
-            },
-            Ok(None) => None,
-            Err(e) => {
-                tracing::warn!(target: "auth", key, error = %e, "Secret Store nicht lesbar");
-                None
+                Ok(None) => {
+                    load_failed = false;
+                    break;
+                }
+                Err(e) => {
+                    tracing::warn!(target: "auth", key, attempt, error = %e, "Secret Store nicht lesbar");
+                    load_failed = true;
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                }
             }
-        };
+        }
         let (status_tx, _) = watch::channel(AuthStatus::SignedOut);
         let tm = Arc::new(Self {
             key: key.to_string(),
-            inner: Mutex::new(Inner { tokens, epoch: 1, reauth_reason: None }),
+            inner: Mutex::new(Inner { tokens, epoch: 1, reauth_reason: None, load_failed }),
             refresh_lock: tokio::sync::Mutex::new(()),
             endpoint,
             store,
@@ -190,6 +203,7 @@ impl TokenManager {
 
     /// Gültiges Access Token (ggf. nach rechtzeitigem Refresh mit Sicherheitspuffer).
     pub async fn access_token(&self) -> Result<AccessToken, ApiError> {
+        self.retry_load();
         {
             let s = self.inner.lock().unwrap();
             match &s.tokens {
@@ -207,6 +221,23 @@ impl TokenManager {
     /// bereits erneuert, wird ohne weiteren Refresh das neue Token geliefert.
     pub async fn on_unauthorized(&self, rejected: &AccessToken) -> Result<AccessToken, ApiError> {
         self.refresh_if_needed(Some(rejected)).await
+    }
+
+    /// Beim Start nicht lesbarer Secret Store: bei Bedarf erneut laden.
+    pub fn retry_load(&self) {
+        let mut s = self.inner.lock().unwrap();
+        if !s.load_failed || s.tokens.is_some() {
+            return;
+        }
+        if let Ok(raw) = self.store.load(&self.key) {
+            s.load_failed = false;
+            s.tokens = raw.and_then(|r| serde_json::from_str::<TokenSet>(&r).ok());
+            if s.tokens.is_some() {
+                tracing::info!(target: "auth", key = %self.key, "Tokens nachträglich geladen");
+            }
+            drop(s);
+            self.publish();
+        }
     }
 
     fn missing_error(s: &Inner) -> ApiError {

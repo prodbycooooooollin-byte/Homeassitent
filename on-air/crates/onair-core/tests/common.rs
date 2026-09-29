@@ -268,6 +268,8 @@ pub struct FakeTwitch {
     /// Gesendete Chatnachrichten (POST /chat/messages).
     pub chat: Vec<String>,
     pub fail_patch: bool,
+    /// GET …/redemptions schlägt dauerhaft fehl (403), z. B. fremde Client-ID.
+    pub fail_redemption_list: bool,
     pub not_affiliate: bool,
     pub offline: bool,
     pub scopes: Vec<String>,
@@ -349,6 +351,9 @@ impl FakeTwitch {
             (Method::Get, "/channel_points/custom_rewards") => {
                 let list: Vec<Value> = self.rewards.iter().filter(|(_, _, m)| *m).map(|(_, r, _)| r.clone()).collect();
                 Ok(HttpResponse::json(200, json!({"data": list})))
+            }
+            (Method::Get, "/channel_points/custom_rewards/redemptions") if self.fail_redemption_list => {
+                Ok(HttpResponse::json(403, json!({"message": "The ID in header Client-Id must match the client ID used to create the custom reward."})))
             }
             (Method::Get, "/channel_points/custom_rewards/redemptions") => {
                 let reward = get("reward_id").unwrap_or_default();
