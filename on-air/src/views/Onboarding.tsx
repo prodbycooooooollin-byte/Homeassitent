@@ -1,4 +1,5 @@
 import { CheckCircle2, Copy, ExternalLink, MonitorSpeaker } from "lucide-react";
+import { WindowControls } from "../components/WindowControls";
 import { useState } from "react";
 import { SpotifyLoginStatus, startSpotifyLogin, startTwitchLogin, useSpotifyLogin } from "../components/Login";
 import { Rich } from "../components/Rich";
@@ -24,6 +25,8 @@ export function Onboarding({ snap, onDone }: { snap: AppSnapshot; onDone: () => 
   };
   return (
     <div className="onb" role="dialog" aria-modal="true" aria-labelledby="onb-title">
+      {/* Fenster ohne Systemrahmen: auch hier verschieben, minimieren und schließen können. */}
+      <div className="onb-titlebar" data-tauri-drag-region><WindowControls /></div>
       <div className="onb-card card card-pad col" style={{ gap: 20 }}>
         <div className="row" style={{ gap: 12 }}>
           <BrandMark size={34} />

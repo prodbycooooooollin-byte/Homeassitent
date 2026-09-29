@@ -310,3 +310,20 @@ test("Sammel-Playlist: Einstellungen und Status", async ({ page }) => {
   await expect(page.getByRole("button", { name: "In Spotify öffnen" })).toBeVisible();
   await noHorizontalOverflow(page);
 });
+
+test("Als Nächstes: feste Kartenbreite, seitlich scrollbar per Mausrad und Pfeil", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/?state=full#/overview");
+  const row = page.locator(".upnext-row");
+  const card = page.locator(".upnext-card").first();
+  const w = (await card.boundingBox())!.width;
+  expect(w).toBeGreaterThanOrEqual(290);
+  expect(w).toBeLessThanOrEqual(390);
+  expect(await row.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await row.hover();
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => row.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  await page.locator(".strip-nav.prev").click();
+  await expect.poll(() => row.evaluate((el) => el.scrollLeft)).toBe(0);
+  await noHorizontalOverflow(page);
+});

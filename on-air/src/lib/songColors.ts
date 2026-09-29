@@ -32,16 +32,22 @@ export function songVars(c: CoverColors, light: boolean): Record<string, string>
         "--song-accent-2": `hsl(${hh} ${Math.round(s * 0.8)}% 30%)`,
         "--song-glow": `hsl(${hh} ${Math.round(s)}% 58% / 0.28)`,
         "--song-tint": `hsl(${hh} ${Math.round(s)}% 70% / 0.18)`,
+        "--song-deep": `hsl(${hh} ${Math.round(s * 0.7)}% 20%)`,
+        "--song-mid": `hsl(${hh} ${Math.round(s * 0.75)}% 34%)`,
+        "--song-ink": "#FFFFFF",
       }
     : {
         "--song-accent": `hsl(${hh} ${Math.round(s * 0.85)}% 80%)`,
         "--song-accent-2": `hsl(${hh} ${Math.round(s * 0.85)}% 87%)`,
         "--song-glow": `hsl(${hh} ${Math.round(s)}% 52% / 0.38)`,
         "--song-tint": `hsl(${hh} ${Math.round(s)}% 38% / 0.24)`,
+        "--song-deep": `hsl(${hh} ${Math.round(s * 0.6)}% 11%)`,
+        "--song-mid": `hsl(${hh} ${Math.round(s * 0.7)}% 27%)`,
+        "--song-ink": `hsl(${hh} ${Math.round(s * 0.35)}% 96%)`,
       };
 }
 
-const KEYS = ["--song-accent", "--song-accent-2", "--song-glow", "--song-tint"];
+const KEYS = ["--song-accent", "--song-accent-2", "--song-glow", "--song-tint", "--song-deep", "--song-mid", "--song-ink"];
 
 function clear() {
   const el = document.documentElement;

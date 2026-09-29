@@ -10,6 +10,7 @@ import { useNow } from "../lib/store";
 import { useSettingsDraft } from "../lib/useSettings";
 import type { AppSnapshot } from "../lib/types";
 import { RequestSwitch } from "./Shell";
+import { WindowControls } from "../components/WindowControls";
 
 /** Kompaktmodus für einen zweiten Monitor: Titel, nächste Songs, Skip, Request-Schalter. */
 export function CompactView({ snap }: { snap: AppSnapshot }) {
@@ -32,13 +33,14 @@ export function CompactView({ snap }: { snap: AppSnapshot }) {
   const acc = snap.acceptance;
   return (
     <div className="compact">
-      <div className="compact-top">
+      <div className="compact-top" data-tauri-drag-region>
         <span className={`status-dot tone-${sp.tone}`} title={`${t("sp.label")}: ${sp.short}`}><span className="dot" /></span>
         <span className="small muted ellipsis grow" title={`${t("sp.label")}: ${sp.short} · ${t("tw.label")}: ${tw.short}`}>{sp.short}</span>
         <RequestSwitch open={snap.settings.requests.open} effectiveOpen={acc.any_open} compact />
         <button className="icon-btn sm" aria-pressed={draft.compact_on_top} title={t("compact.on_top")} aria-label={t("compact.on_top")} onClick={() => { const v = !draft.compact_on_top; update((s) => ({ ...s, compact_on_top: v })); void setAlwaysOnTop(v); }}>
           <Pin size={15} fill={draft.compact_on_top ? "currentColor" : "none"} />
         </button>
+        <WindowControls maximizable={false} />
       </div>
       <div className="compact-np">
         {kind === "ad" ? <div className="cover cover-ph" style={{ width: 64, height: 64 }}><Megaphone size={24} /></div> : <Cover url={track?.image_url ?? ep?.image_url} size={64} className="cover" />}

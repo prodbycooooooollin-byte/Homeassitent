@@ -81,7 +81,10 @@ pub(crate) fn open_compact(app: &AppHandle) -> tauri::Result<()> {
         .inner_size(380.0, 560.0)
         .min_inner_size(320.0, 380.0)
         .always_on_top(on_top)
-        .background_color(tauri::window::Color(16, 17, 20, 255))
+        // Eigene, schlanke Titelleiste im App-Design statt des Windows-Rahmens.
+        .decorations(false)
+        .shadow(true)
+        .background_color(tauri::window::Color(7, 11, 22, 255))
         .build()?;
     Ok(())
 }

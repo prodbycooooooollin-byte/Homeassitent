@@ -12,22 +12,25 @@
       {
         "label": "main",
         "title": "ON AIR Setup",
-        "width": 940,
-        "height": 600,
+        "width": 1040,
+        "height": 660,
         "resizable": false,
         "maximizable": false,
         "decorations": false,
         "center": true,
         "visible": false,
-        "backgroundColor": "#0d0c11"
+        "backgroundColor": "#050912"
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost"
     }
   },
   "bundle": {
     "active": false,
-    "icon": ["../src-tauri/icons/icon.ico", "../src-tauri/icons/icon.png"]
+    "icon": [
+      "../src-tauri/icons/icon.ico",
+      "../src-tauri/icons/icon.png"
+    ]
   }
 }

@@ -1,6 +1,7 @@
 import { Clock, Coins, Music2, Pause, PictureInPicture2, Play, Settings, Stethoscope } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Avatar } from "../components/Avatar";
+import { WindowControls } from "../components/WindowControls";
 import { DiagnosticsDialog } from "../components/Dialogs";
 import { startSpotifyLogin, startTwitchLogin } from "../components/Login";
 import { BrandMark, Dialog, Toggle, toastError } from "../components/ui";
@@ -238,12 +239,12 @@ export function Shell({ snap, route, go, children }: { snap: AppSnapshot; route:
   const profile = snap.spotify_profile?.display_name ?? snap.spotify_profile?.id ?? null;
   return (
     <div className="app">
-      <header className="topnav">
+      <header className="topnav" data-tauri-drag-region>
         <button className="brand" onClick={() => go("overview")} aria-label="ON AIR">
           <BrandMark size={30} />
           <b>ON AIR</b>
         </button>
-        <nav className="navtabs" aria-label="Navigation">
+        <nav className="navtabs" aria-label="Navigation" data-tauri-drag-region>
           {nav.map((n) => (
             <button key={n.id} className="navtab" aria-current={route === n.id ? "page" : undefined} onClick={() => go(n.id)}>
               {n.label}
@@ -251,7 +252,7 @@ export function Shell({ snap, route, go, children }: { snap: AppSnapshot; route:
             </button>
           ))}
         </nav>
-        <div className="topnav-right">
+        <div className="topnav-right" data-tauri-drag-region>
           <ConnectionSummary snap={snap} onDiag={setDiag} go={go} />
           <button className="icon-btn" onClick={() => api.openCompact().catch(toastError)} title={t("nav.compact")} aria-label={t("nav.compact")}><PictureInPicture2 size={18} /></button>
           <button className="icon-btn" onClick={() => setDiag("all")} title={t("nav.diagnostics")} aria-label={t("nav.diagnostics")}><Stethoscope size={18} /></button>
@@ -262,6 +263,7 @@ export function Shell({ snap, route, go, children }: { snap: AppSnapshot; route:
             <Settings size={21} />
             {updateReady && <span className="gear-dot" aria-label={t("up.badge")} />}
           </button>
+          <WindowControls />
         </div>
       </header>
       <main className="content" id="main">{children}</main>

@@ -16,6 +16,10 @@
 - Sammel-Playlist: jeder angenommene Songwunsch landet einmal in einer Spotify-Playlist (automatisch „Teil 2“ nach 10.000 Songs).
 - Übersicht aufgeräumt: „Als Nächstes“ breit unter dem Player, Steuerung, Planung und Aktivität in einer schmalen Spalte.
 - Kanalpunkte: Jede Einlösung steht mit Ergebnis im Aktivitätsprotokoll; Einlösungen fremder (von Hand angelegter) Belohnungen werden angezeigt statt still ignoriert und können übernommen werden; wer als Streamer selbst einlöst, gilt als Broadcaster.
+- „Als Nächstes“ als echtes Karussell: feste Kartenbreite (auch bei wenigen Songs), seitlich scrollbar per Mausrad, Ziehen und Pfeilen, weiche Ränder.
+- Die ganze „Jetzt läuft“-Bühne (Fläche, Titel, Steuerung, Fortschritt, Cover-Schein) in den Farben des Songs.
+- Eigene Titelleiste im App-Design statt der Windows-Standardleiste (Minimieren, Maximieren, Schließen; Ziehen und Doppelklick) – auch im Kompaktfenster und im Einrichtungsassistenten.
+- Installer neu: Intro, Klangwellen, große Prozentanzeige mit Funktionstour, Studiolicht-Finale.
 - Live-Seite passt sich dem Song an: Akzent-, Schein- und Hintergrundfarbe aus dem Cover, weich überblendet (abschaltbar unter Erscheinungsbild).
 - Titelwechsel, Pause und Weiterspielen werden schneller erkannt: Abfrage alle 1,5 s (vorher 3 s), im Pausezustand alle 2 s (vorher 8 s), gezielt zum Titelende.
 - Neues Design „Nachtblau“ für alle Seiten: Navigation oben (Live, Warteschlange, Overlays, Verlauf), große „Jetzt läuft“-Bühne mit dünner Display-Schrift und Cover, „Als Nächstes“ als Kartenleiste, Statusleiste unten (Requests, Kanalpunkte, Streamende, Spotify/Twitch); OBS-Dock in denselben Farben.

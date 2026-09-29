@@ -9,8 +9,10 @@ prüfen sie und installieren sie in einem ruhigen Moment. Es ist **keine Einrich
 Aus dem neuesten Release `ON AIR 0.2.x` die Datei **`ON-AIR-Setup_<version>.exe`** herunterladen
 und starten. Das ist der immersive Installer:
 
-- eigene Oberfläche im ON-AIR-Design (rahmenloses Fenster, animierter Fortschritt, „Studio-Lampe“,
-  die beim Abschluss angeht);
+- immersive Oberfläche im Nachtblau der App: Intro mit großem Wortzeichen über animierten
+  Klangwellen, riesige Prozentanzeige mit wechselnden Funktionskarten während der Installation,
+  zum Abschluss geht das rote „ON AIR“-Studiolicht an (Schriften lokal eingebettet, Bewegung
+  respektiert „weniger Animationen“);
 - Optionen: Desktop-Verknüpfung, danach starten;
 - erkennt eine vorhandene Installation und bietet „Jetzt aktualisieren“ bzw. „Reparieren“ an;
 - weist darauf hin, wenn ON AIR gerade läuft (wird für die Installation kurz beendet);

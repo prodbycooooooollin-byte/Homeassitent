@@ -1,5 +1,5 @@
-import { Check, CheckCheck, ListMusic, Plus, Sparkles, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { Check, CheckCheck, ChevronLeft, ChevronRight, ListMusic, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityLog } from "../components/Activity";
 import { Avatar } from "../components/Avatar";
 import { SearchDialog } from "../components/Dialogs";
@@ -16,7 +16,80 @@ import type { AppSnapshot, SongRequest } from "../lib/types";
 import { ActivePaths } from "./Queue";
 import { StatusNotices } from "./StatusNotices";
 
-const SHOWN = 8;
+const SHOWN = 30;
+
+/**
+ * Horizontales Karussell: feste Kartenbreite, seitlich scrollbar per Mausrad, Ziehen, Pfeilen
+ * und Tastatur; Ränder laufen weich aus, Pfeile erscheinen nur, wenn es weitergeht.
+ */
+function Strip({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edge, setEdge] = useState({ start: true, end: true });
+  const drag = useRef<{ x: number; left: number; moved: boolean } | null>(null);
+  const update = () => {
+    const el = ref.current;
+    if (!el) return;
+    setEdge({ start: el.scrollLeft < 4, end: el.scrollLeft + el.clientWidth >= el.scrollWidth - 4 });
+  };
+  useEffect(() => {
+    update();
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    // Mausrad (vertikal) scrollt die Leiste seitlich – nur wenn sie überhaupt scrollen kann.
+    const wheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      const atStart = el.scrollLeft <= 0 && e.deltaY < 0;
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1 && e.deltaY > 0;
+      if (atStart || atEnd) return; // am Rand: Seite normal weiterscrollen
+      e.preventDefault();
+      el.scrollBy({ left: e.deltaY * 1.2 });
+    };
+    el.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("wheel", wheel);
+    };
+  }, []);
+  const page = (dir: -1 | 1) => ref.current?.scrollBy({ left: dir * ref.current.clientWidth * 0.8, behavior: "smooth" });
+  return (
+    <div className={`strip ${edge.start ? "at-start" : ""} ${edge.end ? "at-end" : ""}`}>
+      <button className="strip-nav prev" aria-label={t("common.back")} onClick={() => page(-1)} tabIndex={-1}><ChevronLeft size={20} /></button>
+      <div
+        ref={ref}
+        className="upnext-row"
+        role="list"
+        onScroll={update}
+        onPointerDown={(e) => {
+          if (e.pointerType !== "mouse" || (e.target as HTMLElement).closest("button")) return;
+          drag.current = { x: e.clientX, left: ref.current!.scrollLeft, moved: false };
+        }}
+        onPointerMove={(e) => {
+          const d = drag.current;
+          if (!d || !ref.current) return;
+          const dx = e.clientX - d.x;
+          if (Math.abs(dx) > 4) {
+            d.moved = true;
+            ref.current.classList.add("dragging");
+            ref.current.scrollLeft = d.left - dx;
+          }
+        }}
+        onPointerUp={() => {
+          drag.current = null;
+          ref.current?.classList.remove("dragging");
+        }}
+        onPointerLeave={() => {
+          drag.current = null;
+          ref.current?.classList.remove("dragging");
+        }}
+      >
+        {children}
+      </div>
+      <button className="strip-nav next" aria-label={t("common.next")} onClick={() => page(1)} tabIndex={-1}><ChevronRight size={20} /></button>
+    </div>
+  );
+}
 const act = (action: string, id: string) => api.queueAction(action, id).catch(toastError);
 
 /** Karte in der „Als Nächstes“-Leiste (wie im Referenzdesign: Nummer, Cover, Titel, Wünschende*r, Dauer). */
@@ -28,7 +101,7 @@ function UpNextCard({ r, n, first }: { r: SongRequest; n: number; first: boolean
   const movable = r.status === "accepted" || r.status === "pending_review";
   const inSpotify = r.status === "handed_off";
   return (
-    <div className={`upnext-card ${first ? "active" : ""} state-${r.status}`}>
+    <div className={`upnext-card ${first ? "active" : ""} state-${r.status}`} role="listitem">
       <span className="upnext-n num">{String(n).padStart(2, "0")}</span>
       <div className="upnext-coverbox">
         <Cover url={r.track?.image_url} className="upnext-cover" />
@@ -84,9 +157,9 @@ export function Overview({ snap, go, onConnectSpotify }: { snap: AppSnapshot; go
             </div>
           </div>
         ) : (
-          <div className="upnext-row">
+          <Strip>
             {upcoming.slice(0, SHOWN).map((r, i) => <UpNextCard key={r.id} r={r} n={i + 2} first={i === 0} />)}
-          </div>
+          </Strip>
         )}
       </section>
       <section className="live-controls" aria-label={t("ov.controls")}>

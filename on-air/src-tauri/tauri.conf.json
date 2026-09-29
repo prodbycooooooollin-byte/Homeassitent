@@ -21,7 +21,9 @@
         "minHeight": 520,
         "visible": false,
         "center": true,
-        "backgroundColor": "#070B16"
+        "backgroundColor": "#070B16",
+        "decorations": false,
+        "shadow": true
       }
     ],
     "security": {
