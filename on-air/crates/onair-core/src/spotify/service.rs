@@ -90,7 +90,10 @@ pub struct PollConfig {
 
 impl Default for PollConfig {
     fn default() -> Self {
-        Self { playing_ms: 3_000, paused_ms: 8_000, idle_ms: 15_000, low_demand: false }
+        // Spotify bietet Drittanbietern keine Push-Benachrichtigung – nur Abfragen. Kurze
+        // Intervalle, damit Titelwechsel, Pause und Weiterspielen schnell sichtbar sind; im
+        // Hintergrund (niemand schaut zu) deutlich seltener.
+        Self { playing_ms: 1_500, paused_ms: 2_000, idle_ms: 5_000, low_demand: false }
     }
 }
 
@@ -272,17 +275,72 @@ impl SpotifyService {
 
 /// Adaptives Polling: kurz vor Titelende gezielt nachfragen, bei Pause/Leerlauf seltener.
 pub fn next_poll_delay(pb: &Option<crate::model::Playback>, cfg: &PollConfig) -> Duration {
-    let factor = if cfg.low_demand { 2 } else { 1 };
+    // Hintergrund: Wiedergabe halb so oft, Pause/Leerlauf viermal seltener.
+    let (play_f, idle_f) = if cfg.low_demand { (2, 4) } else { (1, 1) };
     let ms = match pb {
-        None => cfg.idle_ms,
-        Some(p) if !p.is_playing => cfg.paused_ms,
+        None => cfg.idle_ms * idle_f,
+        Some(p) if !p.is_playing => cfg.paused_ms * idle_f,
         Some(p) => {
+            let regular = cfg.playing_ms * play_f;
             let remaining = p.track.as_ref().map(|t| t.duration_ms.saturating_sub(p.progress_ms));
             match remaining {
-                Some(r) if r + 400 < cfg.playing_ms * factor => (r + 400).max(1_000) / factor,
-                _ => cfg.playing_ms,
+                // Titelende steht bevor: genau dann nachfragen (+ kleiner Puffer), damit der
+                // nächste Titel sofort erscheint.
+                Some(r) if r + END_MARGIN_MS < regular => (r + END_MARGIN_MS).max(300),
+                _ => regular,
             }
         }
     };
-    Duration::from_millis(ms * factor)
+    Duration::from_millis(ms)
+}
+
+/// Puffer nach dem errechneten Titelende, bis Spotify den nächsten Titel meldet.
+const END_MARGIN_MS: u64 = 250;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Actions, Playback, Provider, Track};
+
+    fn pb(playing: bool, progress: u64, duration: u64) -> Option<Playback> {
+        Some(Playback {
+            is_playing: playing,
+            track: Some(Track {
+                provider: Provider::Spotify,
+                id: "t".into(),
+                uri: "spotify:track:t".into(),
+                title: "T".into(),
+                artists: vec![],
+                album: None,
+                image_url: None,
+                duration_ms: duration,
+                explicit: false,
+                external_url: None,
+            }),
+            episode: None,
+            item_type: None,
+            progress_ms: progress,
+            device: None,
+            shuffle: false,
+            repeat: "off".into(),
+            actions: Actions::default(),
+            fetched_at_ms: 0,
+            context: None,
+        })
+    }
+
+    #[test]
+    fn poll_timing_is_quick_while_watched_and_hits_track_end() {
+        let cfg = PollConfig::default();
+        let ms = |p: &Option<Playback>, c: &PollConfig| next_poll_delay(p, c).as_millis() as u64;
+        assert_eq!(ms(&pb(true, 10_000, 200_000), &cfg), 1_500, "läuft");
+        assert_eq!(ms(&pb(false, 10_000, 200_000), &cfg), 2_000, "pausiert – Weiterspielen schnell erkennen");
+        assert_eq!(ms(&None, &cfg), 5_000, "keine Wiedergabe");
+        assert_eq!(ms(&pb(true, 199_000, 200_000), &cfg), 1_250, "genau zum Titelende");
+        assert_eq!(ms(&pb(true, 199_990, 200_000), &cfg), 300, "nie im Dauerfeuer");
+        let bg = PollConfig { low_demand: true, ..cfg };
+        assert_eq!(ms(&pb(true, 10_000, 200_000), &bg), 3_000, "Hintergrund seltener");
+        assert_eq!(ms(&pb(false, 10_000, 200_000), &bg), 8_000);
+        assert_eq!(ms(&None, &bg), 20_000);
+    }
 }

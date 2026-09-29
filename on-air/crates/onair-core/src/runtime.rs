@@ -132,6 +132,8 @@ pub struct Runtime {
     pub plan: SharedPlan,
     pub channel_points: Arc<ChannelPointsService>,
     cp_status: watch::Receiver<ChannelPointsStatus>,
+    /// Farben der Cover (Live-Seite passt sich dem Song an).
+    palette: crate::palette::PaletteCache,
     /// Sammel-Playlist aller Songwünsche.
     pub archive: Arc<crate::archive::ArchiveService>,
     helix: Helix,
@@ -294,6 +296,7 @@ impl Runtime {
             channel_points,
             cp_status,
             archive,
+            palette: Default::default(),
             helix,
             update_pause: AtomicBool::new(false),
             update_pause_since: Mutex::new(None),
@@ -734,6 +737,11 @@ impl Runtime {
     }
 
     /// Entscheidung zu einer Kanalpunkte-Einlösung (Prüfung/Konflikt).
+    /// Farben eines Covers (nur Spotify-Bildserver, zwischengespeichert).
+    pub async fn cover_colors(&self, url: &str) -> Result<crate::palette::CoverColors, String> {
+        self.palette.colors(&self.http, url).await
+    }
+
     /// „Erneut synchronisieren“: Kanalpunkte-Abgleich sofort anstoßen (statt auf den Backoff zu warten).
     pub fn channel_points_resync(&self) {
         self.activity.info("channel_points.resync", "Kanalpunkte werden erneut mit Twitch abgeglichen", json!({}));

@@ -152,6 +152,8 @@ export interface Activity {
   corr: string | null;
 }
 
+export interface CoverColors { vibrant: [number, number, number]; average: [number, number, number]; muted: boolean }
+
 export interface CustomCommand {
   id: string;
   enabled: boolean;
@@ -250,6 +252,7 @@ export interface Settings {
   language: "de" | "en";
   theme: "dark" | "light" | "system";
   reduced_motion: boolean;
+  adaptive_colors: boolean;
   close_behavior: "ask" | "tray" | "quit";
   onboarding_done: boolean;
   spotify: { client_id: string; redirect_port: number; poll_playing_ms: number };

@@ -16,6 +16,8 @@
 - Sammel-Playlist: jeder angenommene Songwunsch landet einmal in einer Spotify-Playlist (automatisch „Teil 2“ nach 10.000 Songs).
 - Übersicht aufgeräumt: „Als Nächstes“ breit unter dem Player, Steuerung, Planung und Aktivität in einer schmalen Spalte.
 - Kanalpunkte: Jede Einlösung steht mit Ergebnis im Aktivitätsprotokoll; Einlösungen fremder (von Hand angelegter) Belohnungen werden angezeigt statt still ignoriert und können übernommen werden; wer als Streamer selbst einlöst, gilt als Broadcaster.
+- Live-Seite passt sich dem Song an: Akzent-, Schein- und Hintergrundfarbe aus dem Cover, weich überblendet (abschaltbar unter Erscheinungsbild).
+- Titelwechsel, Pause und Weiterspielen werden schneller erkannt: Abfrage alle 1,5 s (vorher 3 s), im Pausezustand alle 2 s (vorher 8 s), gezielt zum Titelende.
 - Neues Design „Nachtblau“ für alle Seiten: Navigation oben (Live, Warteschlange, Overlays, Verlauf), große „Jetzt läuft“-Bühne mit dünner Display-Schrift und Cover, „Als Nächstes“ als Kartenleiste, Statusleiste unten (Requests, Kanalpunkte, Streamende, Spotify/Twitch); OBS-Dock in denselben Farben.
 - Stabilität: Kanalpunkte-Belohnung blieb dauerhaft pausiert („nicht synchron“), wenn der Abgleich offener Einlösungen mit Twitch dauerhaft scheiterte – jetzt nach drei Versuchen freigegeben; Belohnungen einer anderen Twitch-App-ID werden losgelassen statt endlos zu scheitern; „Erneut synchronisieren“ mit verständlicher Fehlerbeschreibung.
 - Stabilität: Wünsche werden nicht mehr mit „technisch nicht möglich“ verworfen, wenn Spotify kurz nicht verbunden ist (werden gespeichert und nachgeholt) oder die Kanalpunkte-Einrichtung hakt; konkrete Gründe im Chat.

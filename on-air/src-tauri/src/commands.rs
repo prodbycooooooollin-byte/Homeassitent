@@ -313,6 +313,11 @@ pub fn plan_stop(state: State<'_, AppState>) -> R<()> {
 // ---------------- Kanalpunkte ----------------
 
 #[tauri::command]
+pub async fn cover_colors(state: State<'_, AppState>, url: String) -> R<onair_core::palette::CoverColors> {
+    state.rt.cover_colors(&url).await.map_err(Into::into)
+}
+
+#[tauri::command]
 pub fn channel_points_resync(state: State<'_, AppState>) {
     state.rt.channel_points_resync();
 }

@@ -338,7 +338,7 @@ pub struct SpotifySettings {
 
 impl Default for SpotifySettings {
     fn default() -> Self {
-        Self { client_id: String::new(), redirect_port: crate::spotify::DEFAULT_REDIRECT_PORT, poll_playing_ms: 3_000 }
+        Self { client_id: String::new(), redirect_port: crate::spotify::DEFAULT_REDIRECT_PORT, poll_playing_ms: 1_500 }
     }
 }
 
@@ -446,6 +446,8 @@ pub struct Settings {
     pub language: String,
     pub theme: Theme,
     pub reduced_motion: bool,
+    /// Live-Seite färbt sich passend zum Cover des laufenden Titels.
+    pub adaptive_colors: bool,
     pub close_behavior: CloseBehavior,
     pub onboarding_done: bool,
     pub spotify: SpotifySettings,
@@ -471,6 +473,7 @@ impl Default for Settings {
             language: "de".into(),
             theme: Theme::Dark,
             reduced_motion: false,
+            adaptive_colors: true,
             close_behavior: CloseBehavior::Ask,
             onboarding_done: false,
             spotify: SpotifySettings::default(),
@@ -510,7 +513,11 @@ impl Settings {
         r.handoff_ahead = r.handoff_ahead.clamp(1, 5);
         r.max_queue = r.max_queue.clamp(1, 500);
         r.max_duration_s = r.max_duration_s.clamp(30, 7200);
-        self.spotify.poll_playing_ms = self.spotify.poll_playing_ms.clamp(1_500, 30_000);
+        // 3000 war der frühere Standard → auf den neuen, schnelleren Standard heben.
+        if self.spotify.poll_playing_ms == 3_000 {
+            self.spotify.poll_playing_ms = 1_500;
+        }
+        self.spotify.poll_playing_ms = self.spotify.poll_playing_ms.clamp(1_000, 30_000);
         self.overlay.stale_after_s = self.overlay.stale_after_s.clamp(5, 600);
         if self.overlay.port < 1024 {
             self.overlay.port = OverlaySettings::default().port;

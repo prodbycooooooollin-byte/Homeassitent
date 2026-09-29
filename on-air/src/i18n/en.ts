@@ -340,6 +340,8 @@ export const en: Record<DictKey, string> = {
   "s.app.theme_dark": "Dark",
   "s.app.theme_light": "Light",
   "s.app.theme_system": "System",
+  "s.app.adaptive": "Match colors to the song",
+  "s.app.adaptive_hint": "The Live page takes accent and background colors from the cover of the current track.",
   "s.app.motion": "Reduce motion",
   "s.app.close": "When closing the window",
   "s.app.close_ask": "Ask",

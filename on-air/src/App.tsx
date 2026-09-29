@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSongColors } from "./lib/songColors";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AutoUpdateBanner } from "./components/UpdatePanel";
 import { TwitchCodeDialog, startSpotifyLogin } from "./components/Login";
@@ -48,6 +49,7 @@ export function App() {
   const [preview, setPreview] = useState(false);
   const [onbDismissed, setOnbDismissed] = useState(false);
   useTheme(snap);
+  useSongColors(snap);
   if (snap) setLang(snap.settings.language);
 
   useEffect(() => {

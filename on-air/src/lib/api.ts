@@ -2,6 +2,7 @@
 // klar gekennzeichnetes Beispiel-Backend geladen – nie im Desktop-Build aktiv.
 
 import type {
+  CoverColors,
   AppSnapshot,
   BlockEntry,
   Check,
@@ -124,6 +125,7 @@ export const api = {
   planStop: () => call<void>("plan_stop"),
   redemptionDecide: (id: string, fulfill: boolean) => call<void>("redemption_decide", { id, fulfill }),
   channelPointsResync: () => call<void>("channel_points_resync"),
+  coverColors: (url: string) => call<CoverColors>("cover_colors", { url }),
 
   updateInfo: () => call<UpdateInfo>("update_info"),
   updateCheck: () => call<UpdateInfo>("update_check"),

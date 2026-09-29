@@ -587,3 +587,25 @@ html.is-hidden *, html.is-hidden *::before, html.is-hidden *::after { animation-
   .play-btn { width: 54px; height: 54px; }
   .content { padding-top: var(--s4); }
 }
+
+/* ---------- Song-Farben (Live-Seite passt sich dem Cover an) ----------
+   Registrierte Farb-Properties lassen sich per CSS überblenden; ohne Song-Farben gelten die
+   Standardwerte der Palette. */
+@property --song-accent { syntax: "<color>"; inherits: true; initial-value: #C9D7F5; }
+@property --song-accent-2 { syntax: "<color>"; inherits: true; initial-value: #DCE5FA; }
+@property --song-glow { syntax: "<color>"; inherits: true; initial-value: rgba(120, 150, 215, 0.35); }
+@property --song-tint { syntax: "<color>"; inherits: true; initial-value: rgba(96, 128, 200, 0.16); }
+:root { transition: --song-accent 1.2s ease, --song-accent-2 1.2s ease, --song-glow 1.2s ease, --song-tint 1.2s ease; }
+[data-motion="reduced"] { transition: none; }
+[data-theme="light"]:not([data-song]) { --song-accent: #3B5B9A; --song-accent-2: #2E4B85; --song-glow: rgba(90, 120, 190, 0.25); --song-tint: rgba(96, 128, 200, 0.12); }
+:root[data-song] {
+  --accent: var(--song-accent);
+  --accent-2: var(--song-accent-2);
+  --accent-soft: color-mix(in srgb, var(--song-accent) 14%, transparent);
+  --accent-line: color-mix(in srgb, var(--song-accent) 40%, transparent);
+  --glow: var(--song-glow);
+}
+:root[data-song] body { background-image: radial-gradient(1000px 640px at 70% 18%, var(--song-tint), transparent 62%), var(--bg-grad); }
+:root[data-song] .play-btn { box-shadow: 0 14px 44px var(--song-glow); }
+:root[data-song] .upnext-card.active { border-color: color-mix(in srgb, var(--song-accent) 28%, var(--border-strong)); background: color-mix(in srgb, var(--song-tint) 60%, var(--surface-2)); }
+:root[data-song] .navtab[aria-current="page"] { background: color-mix(in srgb, var(--song-tint) 70%, var(--surface-3)); }

@@ -94,7 +94,7 @@ function Playback({ draft, update }: { draft: Settings; update: Update }) {
           label={t("s.poll")}
           value={String(draft.spotify.poll_playing_ms)}
           onChange={(v) => update((s) => ({ ...s, spotify: { ...s.spotify, poll_playing_ms: Number(v) } }))}
-          options={[2000, 3000, 5000, 8000].map((ms) => ({ value: String(ms), label: `${ms / 1000} s` }))}
+          options={[1000, 1500, 2500, 5000].map((ms) => ({ value: String(ms), label: `${(ms / 1000).toLocaleString(getLang() === "en" ? "en" : "de")} s` }))}
         />
       </SettingRow>
       <SettingRow title={t("s.rules.ahead")} desc={t("s.rules.ahead_hint")}>
@@ -387,6 +387,7 @@ function Appearance({ draft, update }: { draft: Settings; update: Update }) {
       <SettingRow title={t("s.app.theme")}>
         <Segmented label={t("s.app.theme")} value={draft.theme} onChange={(v) => update((s) => ({ ...s, theme: v }))} options={[{ value: "dark", label: t("s.app.theme_dark") }, { value: "light", label: t("s.app.theme_light") }, { value: "system", label: t("s.app.theme_system") }]} />
       </SettingRow>
+      <SettingRow title={t("s.app.adaptive")} desc={t("s.app.adaptive_hint")}><Toggle checked={draft.adaptive_colors} onChange={(v) => update((s) => ({ ...s, adaptive_colors: v }))} ariaLabel={t("s.app.adaptive")} /></SettingRow>
       <SettingRow title={t("s.app.motion")}><Toggle checked={draft.reduced_motion} onChange={(v) => update((s) => ({ ...s, reduced_motion: v }))} /></SettingRow>
       <SettingRow title={t("s.app.compact_top")}><Toggle checked={draft.compact_on_top} onChange={(v) => update((s) => ({ ...s, compact_on_top: v }))} /></SettingRow>
     </section>

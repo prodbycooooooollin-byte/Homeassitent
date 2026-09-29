@@ -364,6 +364,7 @@ pub fn run() {
             commands::plan_stop,
             commands::redemption_decide,
             commands::channel_points_resync,
+            commands::cover_colors,
             commands::update_info,
             commands::update_check,
             commands::update_download,

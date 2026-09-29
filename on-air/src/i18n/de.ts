@@ -338,6 +338,8 @@ export const de = {
   "s.app.theme_dark": "Dunkel",
   "s.app.theme_light": "Hell",
   "s.app.theme_system": "System",
+  "s.app.adaptive": "Farben an den Song anpassen",
+  "s.app.adaptive_hint": "Die Live-Seite übernimmt Akzent- und Hintergrundfarbe aus dem Cover des laufenden Titels.",
   "s.app.motion": "Bewegung reduzieren",
   "s.app.close": "Beim Schließen des Fensters",
   "s.app.close_ask": "Nachfragen",

@@ -26,6 +26,7 @@ pub mod http;
 pub mod model;
 pub mod nowplaying_file;
 pub mod overlay;
+pub mod palette;
 pub mod plan;
 pub mod queue;
 pub mod runtime;

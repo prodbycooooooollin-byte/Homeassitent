@@ -41,7 +41,7 @@ function defaults(): Settings {
     hide_when_paused: false, animate: true, queue_count: 3, ...o,
   });
   return {
-    language: "de", theme: "dark", reduced_motion: false, close_behavior: "ask", onboarding_done: true,
+    language: "de", theme: "dark", reduced_motion: false, adaptive_colors: true, close_behavior: "ask", onboarding_done: true,
     spotify: { client_id: "beispiel-client-id", redirect_port: 43821, poll_playing_ms: 3000 },
     twitch: { client_id: "beispiel-twitch-id", enabled: true },
     requests: { open: true, chat_enabled: true, mode: "auto", min_role: "everyone", max_queue: 25, per_user_limit: 2, user_cooldown_s: 120, global_cooldown_s: 0, max_duration_s: 600, block_explicit: false, allow_duplicates: false, fair_order: true, privileged_bypass: true, handoff_ahead: 1 },
@@ -329,6 +329,14 @@ export function createMockBackend(): Backend {
     plan_set_buffer: (a) => { planCfg.buffer_ms = Number(a.bufferMs); },
     plan_stop: () => { planCfg.enabled = false; log("Streamplanung beendet"); },
     channel_points_resync: () => undefined,
+    // Vorschau: Farben aus der Beispiel-URL ableiten (die Beispielcover sind Farbverläufe).
+    cover_colors: (a) => {
+      const hex = [...decodeURIComponent(String(a.url)).matchAll(/#([0-9a-fA-F]{6})/g)].map((m) => m[1]);
+      const rgb = (h: string) => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)] as [number, number, number];
+      const v = rgb(hex[1] ?? "6080C8");
+      const av = rgb(hex[0] ?? "20304A");
+      return { vibrant: v, average: av, muted: false };
+    },
     redemption_decide: (a) => {
       const r = [...queue, ...recent].find((x) => x.id === a.id);
       if (r?.redemption) r.redemption = { ...r.redemption, status: a.fulfill ? "fulfilled" : "canceled" };
