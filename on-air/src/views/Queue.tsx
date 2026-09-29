@@ -50,7 +50,7 @@ function Section({ label, hint, items, etas }: { label: string; hint?: string; i
 }
 
 export function QueueView({ snap, initialTab }: { snap: AppSnapshot; initialTab?: "queue" | "history" }) {
-  const [tab, setTab] = useState<"queue" | "history">(initialTab ?? "queue");
+  const tab: "queue" | "history" = initialTab ?? "queue";
   const [adding, setAdding] = useState(false);
   const [moderation, setModeration] = useState(false);
   const q = snap.queue;
@@ -67,7 +67,7 @@ export function QueueView({ snap, initialTab }: { snap: AppSnapshot; initialTab?
     <div className="page">
       <div className="page-head">
         <div className="col" style={{ gap: 4 }}>
-          <h1>{t("q.title")}</h1>
+          <h1>{tab === "history" ? t("nav.history") : t("q.title")}</h1>
           <div className="muted small num">
             {t("q.stats.pending")}: {upcoming} · {t("q.stats.accepted")}: {(s.accepted ?? 0) + (s.handed_off ?? 0) + (s.playing ?? 0) + (s.completed ?? 0)} · {t("q.stats.rejected")}: {s.rejected ?? 0}
           </div>
@@ -77,10 +77,7 @@ export function QueueView({ snap, initialTab }: { snap: AppSnapshot; initialTab?
           <button className="btn btn-primary" onClick={() => setAdding(true)}><Plus size={16} /> {t("q.add")}</button>
         </div>
       </div>
-      <div className="tabs" role="tablist">
-        <button role="tab" aria-selected={tab === "queue"} onClick={() => setTab("queue")}>{t("q.tab_queue")}</button>
-        <button role="tab" aria-selected={tab === "history"} onClick={() => setTab("history")}>{t("q.tab_history")}</button>
-      </div>
+      {/* Warteschlange und Verlauf wählt die Navigation oben. */}
       {tab === "history" ? (
         <HistoryView snap={snap} embedded />
       ) : (

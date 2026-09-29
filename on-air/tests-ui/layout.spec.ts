@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 // Simuliert Windows-Skalierung 100/125/150/200 % über deviceScaleFactor und
 // verkleinert das Fenster auf die Mindestgröße der App (720×520).
 const SCALES = [1, 1.25, 1.5, 2];
-// „history“ ist seit dem Redesign ein Tab der Warteschlange; die alte Route bleibt als Alias erhalten.
+// Seit dem Nachtblau-Design: Navigation oben (Live, Warteschlange, Overlays, Verlauf), Statusleiste unten.
 const ROUTES = ["overview", "queue", "widgets", "history", "settings"];
 
 async function noHorizontalOverflow(page: Page) {
@@ -32,10 +32,11 @@ for (const scale of SCALES) {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto(`/#/${route}`);
-        await expect(page.locator(".topbar")).toBeVisible();
+        await expect(page.locator(".topnav")).toBeVisible();
+        await expect(page.locator(".statusbar")).toBeVisible();
         await noHorizontalOverflow(page);
-        await inViewport(page, ".req-switch");
-        await inViewport(page, ".nav-item[aria-current='page']");
+        await inViewport(page, ".sb-req");
+        await inViewport(page, ".topnav [aria-current='page']");
         expect(errors).toEqual([]);
       });
     }
@@ -69,9 +70,9 @@ test("Kompaktmodus auf zweitem Monitor", async ({ page }) => {
 
 test("Tastaturbedienung: Request-Schalter per Tab und Enter", async ({ page }) => {
   await page.goto("/#/overview");
-  const sw = page.locator(".req-switch");
+  const sw = page.locator(".sb-req");
   await expect(sw).toHaveAttribute("aria-pressed", "true");
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < 80; i++) {
     await page.keyboard.press("Tab");
     if (await sw.evaluate((el) => el === document.activeElement)) break;
   }
@@ -113,12 +114,12 @@ for (const [w, h] of [[1280, 720], [1920, 1080]] as const) {
     await noHorizontalOverflow(page);
     await inViewport(page, ".hero");
     await inViewport(page, "#next-h");
-    await inViewport(page, "#rc-h");
-    // Bei 1080p steht die Streamplanung unter der Request-Steuerung sichtbar, bei 720p darunter.
-    if (h >= 1080) await inViewport(page, "#plan-h");
-    else await expect(page.locator("#plan-h")).toBeAttached();
-    // Keine abgeschnittenen Kopfzeilen-Aktionen in der Seitenleiste.
-    const head = page.locator(".ov-queue .card-head").first();
+    // Requests pausieren/öffnen steht immer in der Statusleiste; Details (Steuerung, Planung) darunter.
+    await inViewport(page, ".sb-req");
+    await expect(page.locator("#rc-h")).toBeAttached();
+    await expect(page.locator("#plan-h")).toBeAttached();
+    // Keine abgeschnittenen Aktionen in der Kopfzeile von „Als Nächstes“.
+    const head = page.locator(".upnext-head").first();
     const clipped = await head.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     expect(clipped).toBe(false);
   });
@@ -133,7 +134,7 @@ test("globale Pause überlagert beide Wege, ohne deren Einstellungen zu ändern"
   await expect(chat).toBeChecked();
   await expect(cp).toBeChecked();
   await rc.getByRole("switch", { name: "Requests annehmen" }).dispatchEvent("click");
-  await expect(page.locator(".topbar")).toContainText("Requests pausiert");
+  await expect(page.locator(".statusbar")).toContainText("Requests pausiert");
   await expect(chat).toBeChecked();
   await expect(cp).toBeChecked();
   await expect(rc.locator(".why-line.ok")).toHaveCount(0);
@@ -144,8 +145,8 @@ test("Wege einzeln: nur Kanalpunkte aktiv", async ({ page }) => {
   await page.goto("/?state=cp#/overview");
   const rc = page.locator("section[aria-labelledby='rc-h']");
   await rc.getByRole("switch", { name: "Chatrequests" }).dispatchEvent("click");
-  await expect(page.locator(".topbar")).toContainText("Kanalpunkte");
-  await expect(page.locator(".topbar")).not.toContainText("!sr");
+  await expect(page.locator(".statusbar")).toContainText("Kanalpunkte");
+  await expect(page.locator(".statusbar")).not.toContainText("!sr");
 });
 
 test("Streamplanung: Schnellwahl startet Budget, +15 hebt manuelle Pause nicht auf", async ({ page }) => {
@@ -158,15 +159,15 @@ test("Streamplanung: Schnellwahl startet Budget, +15 hebt manuelle Pause nicht a
   await rc.getByRole("switch", { name: "Requests annehmen" }).dispatchEvent("click");
   await plan.getByRole("button", { name: "+15 Minuten" }).click();
   await expect(rc.getByRole("switch", { name: "Requests annehmen" })).not.toBeChecked();
-  await expect(page.locator(".topbar")).toContainText("Requests pausiert");
+  await expect(page.locator(".statusbar")).toContainText("Requests pausiert");
   await plan.getByRole("button", { name: "Planung beenden" }).click();
   await expect(plan.locator(".budget")).toHaveCount(0);
 });
 
 test("abgelaufenes Streamende bleibt geschlossen und wird benannt", async ({ page }) => {
   await page.goto("/?state=ended#/overview");
-  await expect(page.locator(".topbar")).toContainText("Automatisch pausiert");
-  await expect(page.locator(".topbar")).toContainText("Streamende erreicht");
+  await expect(page.locator(".statusbar")).toContainText("Automatisch pausiert");
+  await expect(page.locator(".statusbar")).toContainText("Streamende erreicht");
 });
 
 test("Überplanung bietet Entscheidungen an", async ({ page }) => {
@@ -244,7 +245,7 @@ test("Automatisches Update: Countdown sichtbar, „Nicht jetzt“ setzt für die
   await expect(banner.getByRole("button", { name: "Jetzt installieren" })).toBeVisible();
   await banner.getByRole("button", { name: "Nicht jetzt" }).click();
   await expect(banner).toHaveCount(0);
-  await page.locator(".nav-item", { hasText: "Einstellungen" }).click();
+  await page.getByRole("button", { name: "Einstellungen", exact: true }).click();
   await page.locator(".settings-nav").getByRole("button", { name: "Updates" }).click();
   await expect(page.locator(".content")).toContainText("bis zum nächsten Start ausgesetzt");
   // Automatik bleibt eingeschaltet – nur diese Sitzung ist ausgesetzt.
@@ -274,7 +275,7 @@ test("Chatbefehle umschalten verschiebt die App nicht", async ({ page }) => {
     await expect(switches.nth(i)).toBeChecked({ checked: !before });
     await label.click();
     expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
-    await inViewport(page, ".topbar");
+    await inViewport(page, ".topnav");
   }
 });
 

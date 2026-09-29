@@ -8,8 +8,8 @@ pub const DOCK_HTML: &str = r##"<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ON AIR</title>
 <style>
-  :root { --bg:#141319; --card:#1d1b24; --card2:#24222d; --line:rgba(255,255,255,.08); --text:#f1eef8; --text2:#b4aec4; --text3:#857f96;
-          --accent:#b9a7ff; --mint:#7dd9b4; --warn:#e9bc6b; --danger:#f08a8a; color-scheme: dark; }
+  :root { --bg:#070b16; --card:#0e1528; --card2:#1b2642; --line:rgba(160,185,235,.1); --text:#eef2fb; --text2:#aab6cf; --text3:#7482a0;
+          --accent:#c9d7f5; --mint:#7fd3a2; --warn:#e9c06f; --danger:#f07f86; color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; }
   html, body { background: var(--bg); color: var(--text); font: 13px/1.4 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; }
   body { padding: 10px; display: flex; flex-direction: column; gap: 10px; min-height: 100vh; }

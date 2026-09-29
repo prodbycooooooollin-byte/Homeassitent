@@ -1,6 +1,19 @@
 // Deutsche Texte (Standard). Schlüssel müssen in en.ts identisch vorhanden sein.
 export const de = {
   "nav.overview": "Übersicht",
+  "nav.live": "Live",
+  "nav.overlays": "Overlays",
+  "nav.account": "Konto",
+  "sb.label": "Statusleiste",
+  "sb.points": "Kanalpunkte",
+  "sb.stream_end": "Streamende",
+  "sb.plan": "Streamende planen",
+  "np.now_playing": "Jetzt läuft",
+  "np.requested_from": "Gewünscht von",
+  "np.up_next": "Als Nächstes",
+  "np.songs": "{n} Songs",
+  "np.song_one": "1 Song",
+  "ov.controls": "Steuerung",
   "nav.queue": "Warteschlange",
   "nav.widgets": "Widgets",
   "nav.history": "Verlauf",
@@ -163,7 +176,7 @@ export const de = {
   "act.title": "Aktivität",
   "act.empty": "Noch keine Ereignisse.",
 
-  "w.title": "Widgets",
+  "w.title": "Overlays",
   "w.subtitle": "Browser-Quellen für OBS. Die Widgets laufen lokal und erhalten nur Titel, Interpret, Cover und Namen – niemals Zugangsdaten.",
   "w.minimal": "Minimal",
   "w.minimal_desc": "Cover, Titel und Interpret auf transparentem Hintergrund",

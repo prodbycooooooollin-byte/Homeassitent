@@ -7,6 +7,7 @@ import { isSpotifyUsable } from "../lib/status";
 import { useNow } from "../lib/store";
 import type { AppSnapshot, Device } from "../lib/types";
 import { Badge, Cover, Dialog, EmptyState, Notice, toastError } from "./ui";
+import { Avatar } from "./Avatar";
 
 export const STALE_MS = 20_000;
 
@@ -28,7 +29,7 @@ export function playbackInfo(s: AppSnapshot, now: number) {
 
 function HeroFrame({ cover, children }: { cover?: string | null; children: React.ReactNode }) {
   return (
-    <section className="hero" aria-label={t("np.title_region")}>
+    <section className="hero stage" aria-label={t("np.title_region")}>
       <div className={`hero-bg ${cover ? "" : "none"}`} style={cover ? { backgroundImage: `url("${cover}")` } : undefined} aria-hidden="true" />
       {children}
     </section>
@@ -59,10 +60,10 @@ export function NowPlayingCard({ snap, onConnect }: { snap: AppSnapshot; onConne
     const unknown = snap.spotify.playback.state === "unknown";
     return (
       <HeroFrame>
-        <div className="hero-body">
-          <div className="hero-cover"><div className="cover-ph"><MonitorSpeaker size={36} /></div></div>
-          <div className="col" style={{ gap: 6 }}>
-            <span className="hero-state">{unknown ? t("np.unknown") : t("np.inactive")}</span>
+        <div className="stage-body">
+          <div className="stage-text">
+            <span className="stage-kicker">{t("np.now_playing")}</span>
+            <h2 className="stage-title">{unknown ? t("np.unknown") : t("np.inactive")}</h2>
             {!unknown && <span className="muted">{t("np.nothing_hint")}</span>}
             {!unknown && (
               <div className="transport">
@@ -71,6 +72,7 @@ export function NowPlayingCard({ snap, onConnect }: { snap: AppSnapshot; onConne
               </div>
             )}
           </div>
+          <div className="stage-cover"><div className="cover-ph"><MonitorSpeaker size={48} /></div></div>
         </div>
         {devicesOpen && <DevicesDialog onClose={() => setDevicesOpen(false)} />}
       </HeroFrame>
@@ -86,53 +88,60 @@ export function NowPlayingCard({ snap, onConnect }: { snap: AppSnapshot; onConne
   const title = kind === "track" ? track!.title : kind === "episode" ? ep!.title : kind === "ad" ? t("np.ad") : t("np.unknown_title");
   const sub = kind === "track" ? track!.artists.join(", ") : kind === "episode" ? ep!.show ?? "" : kind === "ad" ? t("np.ad_hint") : "";
   const link = track?.external_url ?? ep?.external_url ?? null;
+  const kicker = kind === "episode" ? t("np.podcast") : !pb.is_playing && kind !== "ad" ? t("np.paused") : t("np.now_playing");
   return (
     <HeroFrame cover={cover}>
-      <div className="hero-body">
-        <div className="hero-cover">
-          {kind === "ad" ? <div className="cover-ph"><Megaphone size={40} /></div> : <Cover url={cover} alt={track?.album ?? ep?.show ?? ""} />}
-        </div>
-        <div className="col" style={{ gap: 0, minWidth: 0 }}>
-          <div className="hero-kicker">
-            {requester && <Badge tone="accent">{requestSource === "channel_points" ? <Sparkles size={11} /> : null}{t("np.requested_by", { name: requester })}</Badge>}
-            {kind === "episode" && <Badge tone="info">{t("np.podcast")}</Badge>}
-            {!pb.is_playing && kind !== "ad" && <Badge>{t("np.paused")}</Badge>}
-            {track?.explicit && <Badge title={t("q.explicit_label")}>{t("q.explicit")}</Badge>}
-          </div>
-          <div className="hero-title clamp2" title={title}>{title}</div>
-          <div className={kind === "ad" ? "hero-artist" : "hero-artist ellipsis"} title={sub}>
-            {sub}
-            {kind === "track" && track!.album ? <span className="subtle"> · {track!.album}</span> : null}
-          </div>
-          {stale ? (
-            <div className="row small" style={{ marginTop: 18, color: "var(--warn)", gap: 6 }}><Info size={14} /> {t("np.stale_hint", { time: clockTime(pb.fetched_at_ms, getLang()) })}</div>
-          ) : kind !== "ad" && dur > 0 ? (
-            <div className="progress small muted" aria-label={`${duration(progress)} / ${duration(dur)}`}>
-              <span>{duration(progress)}</span>
-              <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}><i style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }} /></div>
-              <span style={{ textAlign: "right" }}>{duration(dur)}</span>
+      <div className="stage-body">
+        <div className="stage-text">
+          <span className="stage-kicker">{kicker}{track?.explicit ? <Badge title={t("q.explicit_label")}>{t("q.explicit")}</Badge> : null}</span>
+          <h2 className="stage-title" title={title} style={{ ["--lw" as string]: Math.max(6, ...title.split(/\s+/).map((w) => w.length)) }}>{title}</h2>
+          <div className="stage-artist ellipsis" title={sub}>{sub}</div>
+          {kind === "track" && track!.album ? <div className="stage-album ellipsis">{track!.album}</div> : null}
+          {requester && (
+            <div className="stage-req">
+              <Avatar name={requester} size={36} />
+              <span>{t("np.requested_from")} <b>{requester}</b></span>
+              {requestSource === "channel_points" ? <Sparkles size={14} className="subtle" aria-label={t("rc.points")} /> : null}
             </div>
+          )}
+        </div>
+        <div className="stage-cover">
+          {kind === "ad" ? <div className="cover-ph"><Megaphone size={48} /></div> : <Cover url={cover} alt={track?.album ?? ep?.show ?? ""} />}
+        </div>
+      </div>
+      <div className="stage-transport">
+        <div className="stage-buttons">
+          <button className="icon-btn lg" aria-label={t("np.prev")} title={controls && pb.actions.can_skip_prev ? t("np.prev") : disabledReason} disabled={!controls || !pb.actions.can_skip_prev} onClick={() => api.transport("previous").catch(toastError)}><SkipBack size={22} /></button>
+          {pb.is_playing ? (
+            <button className="play-btn" aria-label={t("np.pause")} title={controls ? t("np.pause") : disabledReason} disabled={!controls || !pb.actions.can_pause} onClick={() => api.transport("pause").catch(toastError)}><Pause size={26} /></button>
+          ) : (
+            <button className="play-btn" aria-label={t("np.play")} title={controls ? t("np.play") : disabledReason} disabled={!controls || !pb.actions.can_resume} onClick={() => api.transport("resume").catch(toastError)}><Play size={26} /></button>
+          )}
+          <button className="icon-btn lg" aria-label={t("np.next")} title={controls && pb.actions.can_skip_next ? t("np.next") : disabledReason} disabled={!controls || !pb.actions.can_skip_next} onClick={() => api.transport("next").catch(toastError)}><SkipForward size={22} /></button>
+        </div>
+        <div className="stage-progress">
+          {stale ? (
+            <div className="row small" style={{ color: "var(--warn)", gap: 6 }}><Info size={14} /> {t("np.stale_hint", { time: clockTime(pb.fetched_at_ms, getLang()) })}</div>
+          ) : kind !== "ad" && dur > 0 ? (
+            <>
+              <div className="bar" role="progressbar" aria-label={`${duration(progress)} / ${duration(dur)}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+                <i style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }} />
+              </div>
+              <div className="stage-times num"><span>{duration(progress)}</span><span>{duration(dur)}</span></div>
+            </>
           ) : null}
-          <div className="transport">
-            <button className="icon-btn lg" aria-label={t("np.prev")} title={controls && pb.actions.can_skip_prev ? t("np.prev") : disabledReason} disabled={!controls || !pb.actions.can_skip_prev} onClick={() => api.transport("previous").catch(toastError)}><SkipBack size={20} /></button>
-            {pb.is_playing ? (
-              <button className="play-btn" aria-label={t("np.pause")} title={controls ? t("np.pause") : disabledReason} disabled={!controls || !pb.actions.can_pause} onClick={() => api.transport("pause").catch(toastError)}><Pause size={22} /></button>
-            ) : (
-              <button className="play-btn" aria-label={t("np.play")} title={controls ? t("np.play") : disabledReason} disabled={!controls || !pb.actions.can_resume} onClick={() => api.transport("resume").catch(toastError)}><Play size={22} /></button>
-            )}
-            <button className="icon-btn lg" aria-label={t("np.next")} title={controls && pb.actions.can_skip_next ? t("np.next") : disabledReason} disabled={!controls || !pb.actions.can_skip_next} onClick={() => api.transport("next").catch(toastError)}><SkipForward size={20} /></button>
-            <div className="grow" />
-            {pb.device && (
-              <button className="btn btn-ghost btn-sm" onClick={() => setDevicesOpen(true)} disabled={!usable} title={t("sp.choose_device")}>
-                <MonitorSpeaker size={15} /> <span className="ellipsis" style={{ maxWidth: 160 }}>{pb.device.name}</span>
-              </button>
-            )}
-            {link && (
-              <a className="btn btn-ghost btn-sm" href={link} onClick={(e) => { e.preventDefault(); void api.openExternal(link).catch(toastError); }}>
-                <ExternalLink size={15} /> <span>{t("np.open_link")}</span>
-              </a>
-            )}
-          </div>
+        </div>
+        <div className="stage-extra">
+          {pb.device && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setDevicesOpen(true)} disabled={!usable} title={t("sp.choose_device")}>
+              <MonitorSpeaker size={16} /> <span className="ellipsis" style={{ maxWidth: 150 }}>{pb.device.name}</span>
+            </button>
+          )}
+          {link && (
+            <a className="icon-btn" href={link} title={t("np.open_link")} aria-label={t("np.open_link")} onClick={(e) => { e.preventDefault(); void api.openExternal(link).catch(toastError); }}>
+              <ExternalLink size={17} />
+            </a>
+          )}
         </div>
       </div>
       {devicesOpen && <DevicesDialog onClose={() => setDevicesOpen(false)} />}

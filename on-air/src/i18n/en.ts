@@ -3,6 +3,19 @@ import type { DictKey } from "./de";
 // English texts (prepared localization).
 export const en: Record<DictKey, string> = {
   "nav.overview": "Overview",
+  "nav.live": "Live",
+  "nav.overlays": "Overlays",
+  "nav.account": "Account",
+  "sb.label": "Status bar",
+  "sb.points": "Channel points",
+  "sb.stream_end": "Stream ends",
+  "sb.plan": "Plan stream end",
+  "np.now_playing": "Now playing",
+  "np.requested_from": "Requested by",
+  "np.up_next": "Up next",
+  "np.songs": "{n} songs",
+  "np.song_one": "1 song",
+  "ov.controls": "Controls",
   "nav.queue": "Queue",
   "nav.widgets": "Widgets",
   "nav.history": "History",
@@ -165,7 +178,7 @@ export const en: Record<DictKey, string> = {
   "act.title": "Activity",
   "act.empty": "No events yet.",
 
-  "w.title": "Widgets",
+  "w.title": "Overlays",
   "w.subtitle": "Browser sources for OBS. Widgets run locally and only receive title, artist, cover and names – never credentials.",
   "w.minimal": "Minimal",
   "w.minimal_desc": "Cover, title and artist on a transparent background",

@@ -65,7 +65,7 @@ export function App() {
     };
   }, []);
 
-  const go = (r: Route) => {
+  const go = (r: Route | "history") => {
     window.location.hash = `/${r}`;
     setRoute(r);
   };
@@ -101,10 +101,10 @@ export function App() {
   return (
     <>
       {banner}
-      <Shell snap={snap} route={route === "history" ? "queue" : route} go={go}>
+      <Shell snap={snap} route={route} go={go}>
         <ErrorBoundary scope={route} resetKey={route}>
           {route === "overview" && <Overview snap={snap} go={(r) => go(r as Route)} onConnectSpotify={connectSpotify} />}
-          {(route === "queue" || route === "history") && <QueueView snap={snap} initialTab={route === "history" ? "history" : "queue"} />}
+          {(route === "queue" || route === "history") && <QueueView key={route} snap={snap} initialTab={route === "history" ? "history" : "queue"} />}
           {route === "widgets" && <WidgetsView snap={snap} />}
           {route === "settings" && <SettingsView snap={snap} />}
         </ErrorBoundary>
