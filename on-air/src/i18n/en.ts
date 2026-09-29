@@ -126,6 +126,8 @@ export const en: Record<DictKey, string> = {
   "q.reject": "Reject",
   "q.remove": "Remove",
   "q.retry": "Hand over again",
+  "q.dismiss_stuck": "Mark as done",
+  "q.dismiss_stuck_hint": "Stuck? Mark as done – it will not be sent to Spotify again.",
   "q.dismiss": "Mark as done",
   "q.block_user": "Block person",
   "q.block_track": "Block song",

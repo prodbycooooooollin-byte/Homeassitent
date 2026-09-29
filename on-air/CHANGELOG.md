@@ -16,6 +16,7 @@
 - Sammel-Playlist: jeder angenommene Songwunsch landet einmal in einer Spotify-Playlist (automatisch „Teil 2“ nach 10.000 Songs).
 - Übersicht aufgeräumt: „Als Nächstes“ breit unter dem Player, Steuerung, Planung und Aktivität in einer schmalen Spalte.
 - Kanalpunkte: Jede Einlösung steht mit Ergebnis im Aktivitätsprotokoll; Einlösungen fremder (von Hand angelegter) Belohnungen werden angezeigt statt still ignoriert und können übernommen werden; wer als Streamer selbst einlöst, gilt als Broadcaster.
+- Behoben: Ein an Spotify übergebener Song, der nie als laufend erkannt wurde, hing dauerhaft in „In Spotify“ und blockierte alle weiteren Wünsche. Jetzt: Abgleich mit Spotifys Queue nach 90 s, Erkennung von Spotify-Relinking (andere Fassung desselben Songs) und ein Knopf „Als erledigt markieren“.
 - Behoben: Umschalten eines Chatbefehls in den Einstellungen machte die App grau (Dokument verschob sich).
 - Behoben: Kanalpunkte-Wünsche bekamen keine Rückmeldung im Chat – jetzt dieselbe Antwort wie bei `!sr`, bei Ablehnung mit Erstattungshinweis.
 - Behoben: Kompaktmodus öffnete unter Windows ein graues, nicht schließbares Fenster und legte danach die App lahm (Pause-Knopf ohne Wirkung, leere Widget-Vorschau).

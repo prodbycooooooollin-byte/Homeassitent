@@ -8,8 +8,12 @@ pub fn parse_track(v: &Value) -> Option<Track> {
     if v.is_null() || v["type"].as_str().is_some_and(|t| t != "track") {
         return None;
     }
-    let id = v["id"].as_str()?.to_string();
-    let uri = v["uri"].as_str().map(str::to_string).unwrap_or_else(|| format!("spotify:track:{id}"));
+    // Track-Relinking: Spotify spielt je nach Land eine andere Fassung (andere ID) und nennt
+    // die ursprünglich angefragte unter `linked_from`. Für den Abgleich mit übergebenen
+    // Wünschen zählt die ursprüngliche ID – sonst würde ein Wunsch nie als „läuft“ erkannt.
+    let orig = &v["linked_from"];
+    let id = orig["id"].as_str().or(v["id"].as_str())?.to_string();
+    let uri = orig["uri"].as_str().or(v["uri"].as_str()).map(str::to_string).unwrap_or_else(|| format!("spotify:track:{id}"));
     let artists = v["artists"]
         .as_array()
         .map(|a| a.iter().filter_map(|x| x["name"].as_str().map(str::to_string)).collect())

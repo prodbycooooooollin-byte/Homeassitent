@@ -70,6 +70,8 @@ pub struct FakeSpotify {
     pub created_playlists: Vec<(String, String, bool)>,
     /// Inhalt der Playlists (POST /playlists/{id}/items).
     pub playlist_items: HashMap<String, Vec<String>>,
+    /// Track-Relinking simulieren: der laufende Titel kommt mit anderer ID und `linked_from`.
+    pub relink: bool,
 }
 
 impl Default for FakeSpotify {
@@ -95,6 +97,7 @@ impl Default for FakeSpotify {
             playlist: None,
             created_playlists: vec![],
             playlist_items: HashMap::new(),
+            relink: false,
         }
     }
 }
@@ -167,7 +170,16 @@ impl FakeSpotify {
                     "is_playing": self.is_playing, "progress_ms": self.progress_ms, "shuffle_state": false, "repeat_state": "off",
                     "currently_playing_type": "track",
                     "device": {"id": format!("dev-{}", self.device), "name": self.device, "type": "Computer", "is_active": true, "is_restricted": false, "volume_percent": 60},
-                    "item": self.current.as_deref().map(track_json).unwrap_or(Value::Null),
+                    "item": self.current.as_deref().map(|id| {
+                        let mut t = track_json(id);
+                        if self.relink {
+                            let other = format!("x{}", &id[1..]);
+                            t["linked_from"] = json!({"id": id, "uri": format!("spotify:track:{id}")});
+                            t["id"] = json!(other);
+                            t["uri"] = json!(format!("spotify:track:{other}"));
+                        }
+                        t
+                    }).unwrap_or(Value::Null),
                     "context": self.context.clone().unwrap_or(Value::Null),
                     "actions": {"disallows": {}}
                 })))

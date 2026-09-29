@@ -211,6 +211,9 @@ export function RequestRow({
             <button className="btn btn-ghost btn-sm" onClick={() => act("dismiss", r.id)}><CheckCheck size={14} /> {t("q.dismiss")}</button>
           </>
         ))}
+        {(r.status === "handed_off" || r.status === "playing") && (
+          <button className={`icon-btn sm ${compact ? "hover-only" : ""}`} aria-label={t("q.dismiss_stuck")} title={t("q.dismiss_stuck_hint")} onClick={() => act("dismiss", r.id)}><CheckCheck size={15} /></button>
+        )}
         {movable && !compact && onMove && (
           <>
             <button className="icon-btn sm" aria-label={t("q.move_up")} title={`${t("q.move_up")} (Alt+↑)`} disabled={!canUp} onClick={() => onMove(-1)}><ArrowUp size={15} /></button>

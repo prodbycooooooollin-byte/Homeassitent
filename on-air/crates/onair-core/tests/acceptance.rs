@@ -504,6 +504,67 @@ async fn handoff_is_sparse_and_playback_is_observed() {
     wait_for("abgeschlossen", || rt.queue.store.recent_finished(10).iter().any(|r| r.status == RequestStatus::Completed), Duration::from_secs(10)).await;
 }
 
+// Übergebener Titel verschwindet aus Spotifys Queue, ohne je als laufend erkannt zu werden
+// (übersprungen, Queue geleert …): Er darf die nächste Übergabe nicht dauerhaft blockieren.
+#[tokio::test(start_paused = true)]
+async fn unobserved_handoff_does_not_block_the_queue() {
+    let h = Harness::new();
+    let rt = start_runtime(&h, Db::in_memory().unwrap(), open_settings()).await;
+    wait_for("online", || rt.spotify_state.borrow().is_online(), Duration::from_secs(10)).await;
+    for i in 0..2 {
+        rt.queue.submit_query(&format!("s{i}"), viewer(i), Source::Chat, Some(&format!("u{i}")), None).await;
+    }
+    wait_for("erster übergeben", || h.count(Method::Post, "/me/player/queue") == 1, Duration::from_secs(10)).await;
+    let first = rt.queue.store.by_status(RequestStatus::HandedOff)[0].id.clone();
+    // Spotify verliert den Titel (z. B. Queue geleert); es läuft weiter etwas anderes.
+    h.fake.lock().unwrap().queue.clear();
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    assert_eq!(rt.queue.store.get(&first).unwrap().status, RequestStatus::HandedOff, "nicht voreilig abschließen");
+    wait_for("hängender Titel erledigt", || rt.queue.store.get(&first).map(|r| r.status) == Some(RequestStatus::Completed), Duration::from_secs(180)).await;
+    assert_eq!(rt.queue.store.get(&first).unwrap().reason.as_deref(), Some("not_observed"));
+    wait_for("nächster übergeben", || h.count(Method::Post, "/me/player/queue") == 2, Duration::from_secs(30)).await;
+    assert!(rt.activity.recent(30).iter().any(|a| a.kind == "request.not_observed"));
+}
+
+// Liegt der Titel noch in Spotifys Queue, bleibt er übergeben (kein falsches „erledigt“).
+#[tokio::test(start_paused = true)]
+async fn handoff_still_in_spotify_queue_is_kept() {
+    let h = Harness::new();
+    let rt = start_runtime(&h, Db::in_memory().unwrap(), open_settings()).await;
+    wait_for("online", || rt.spotify_state.borrow().is_online(), Duration::from_secs(10)).await;
+    rt.queue.submit_query("s0", viewer(0), Source::Chat, Some("k0"), None).await;
+    wait_for("übergeben", || h.count(Method::Post, "/me/player/queue") == 1, Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(300)).await;
+    assert_eq!(rt.queue.store.by_status(RequestStatus::HandedOff).len(), 1);
+}
+
+// Track-Relinking: Spotify spielt eine andere Fassung (andere ID, `linked_from`) → trotzdem erkannt.
+#[tokio::test(start_paused = true)]
+async fn relinked_track_is_recognized_as_playing() {
+    let h = Harness::new();
+    h.fake.lock().unwrap().relink = true;
+    let rt = start_runtime(&h, Db::in_memory().unwrap(), open_settings()).await;
+    wait_for("online", || rt.spotify_state.borrow().is_online(), Duration::from_secs(10)).await;
+    rt.queue.submit_query("s0", viewer(0), Source::Chat, Some("r0"), None).await;
+    wait_for("übergeben", || h.count(Method::Post, "/me/player/queue") == 1, Duration::from_secs(10)).await;
+    h.fake.lock().unwrap().advance();
+    wait_for("läuft", || !rt.queue.store.by_status(RequestStatus::Playing).is_empty(), Duration::from_secs(10)).await;
+}
+
+// Hängender Eintrag lässt sich von Hand als erledigt markieren.
+#[tokio::test(start_paused = true)]
+async fn handed_off_request_can_be_dismissed() {
+    let h = Harness::new();
+    let rt = start_runtime(&h, Db::in_memory().unwrap(), open_settings()).await;
+    wait_for("online", || rt.spotify_state.borrow().is_online(), Duration::from_secs(10)).await;
+    rt.queue.submit_query("s0", viewer(0), Source::Chat, Some("d0"), None).await;
+    wait_for("übergeben", || h.count(Method::Post, "/me/player/queue") == 1, Duration::from_secs(10)).await;
+    let id = rt.queue.store.by_status(RequestStatus::HandedOff)[0].id.clone();
+    rt.queue.dismiss(&id).unwrap();
+    assert_eq!(rt.queue.store.get(&id).unwrap().status, RequestStatus::Completed);
+    assert!(rt.queue.dismiss(&id).is_err(), "zweimal geht nicht");
+}
+
 // Zusätzlich: Limits greifen auch bei gleichzeitig eintreffenden Requests.
 #[tokio::test(start_paused = true)]
 async fn concurrent_requests_respect_user_limit() {

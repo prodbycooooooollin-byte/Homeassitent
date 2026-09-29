@@ -62,6 +62,10 @@ oder „600 s Sperre“ in Sekundenbruchteilen – die Zeitlogik ist dieselbe wi
 | Sammel-Playlist: anlegen, jeder Song einmal, keine abgelehnten/App-Wünsche, gelöschte Playlist neu | `request_playlist_collects_each_song_once` | ✅ |
 | Sammel-Playlist: alte Anmeldung ohne Rechte → Hinweis, Wunsch bleibt vorgemerkt | `request_playlist_requires_playlist_scope` | ✅ |
 | Sammel-Playlist: volle Playlist → „Teil 2“ | `request_playlist_rolls_over_when_full` | ✅ |
+| Übergebener, nie erkannter Song blockiert die Warteschlange nicht (Abgleich mit Spotify-Queue) | `unobserved_handoff_does_not_block_the_queue` (acceptance.rs) | ✅ |
+| Song noch in Spotifys Queue → bleibt übergeben | `handoff_still_in_spotify_queue_is_kept` (acceptance.rs) | ✅ |
+| Spotify-Relinking (andere ID, `linked_from`) wird als laufend erkannt | `relinked_track_is_recognized_as_playing` (acceptance.rs) | ✅ |
+| Hängenden Eintrag von Hand als erledigt markieren | `handed_off_request_can_be_dismissed` (acceptance.rs) | ✅ |
 | Update-Vorbereitung pausiert Requests/Belohnung, sichert DB; Abbruch stellt Annahme wieder her | `update_preparation_pauses_and_can_be_cancelled` | ✅ |
 
 Unit-Tests dazu: Budgetformel und Unsicherheitscodes (`plan.rs`), Sperrgründe inkl.

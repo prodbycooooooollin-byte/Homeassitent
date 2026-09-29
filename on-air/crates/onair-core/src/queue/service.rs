@@ -36,6 +36,11 @@ pub trait ChatNotifier: Send + Sync + 'static {
     fn notify(&self, text: String, reply_to: Option<String>);
 }
 
+/// Ab diesem Alter wird ein übergebener, nicht erkannter Titel mit Spotifys Queue abgeglichen.
+const HANDED_OFF_CHECK_AFTER_MS: i64 = 90_000;
+/// Höchstens so oft (ohne Titelwechsel) die Spotify-Queue dafür abfragen.
+const HANDED_OFF_SWEEP_INTERVAL_MS: i64 = 60_000;
+
 pub struct QueueService {
     pub store: QueueStore,
     spotify: Arc<SpotifyClient>,
@@ -47,6 +52,7 @@ pub struct QueueService {
     handoff_lock: tokio::sync::Mutex<()>,
     decide_lock: tokio::sync::Mutex<()>,
     last_track_uri: Mutex<Option<String>>,
+    last_sweep_ms: Mutex<i64>,
     notifier: OnceLock<Arc<dyn ChatNotifier>>,
     gate: OnceLock<Gate>,
     plan: SharedPlan,
@@ -82,6 +88,7 @@ impl QueueService {
             handoff_lock: tokio::sync::Mutex::new(()),
             decide_lock: tokio::sync::Mutex::new(()),
             last_track_uri: Mutex::new(None),
+            last_sweep_ms: Mutex::new(0),
             notifier: OnceLock::new(),
             gate: OnceLock::new(),
             plan,
@@ -626,10 +633,12 @@ impl QueueService {
         Ok(())
     }
 
-    /// Entscheidung bei unklarem Ausgang: als erledigt betrachten (nicht erneut senden).
+    /// Als erledigt betrachten (nicht erneut senden): bei unklarem Ausgang, und für Einträge,
+    /// die an Spotify übergeben sind bzw. laufen, aber hängen geblieben sind.
     pub fn dismiss(&self, id: &str) -> Result<(), String> {
-        if !self.store.transition(id, &[RequestStatus::Uncertain], RequestStatus::Completed, self.now(), Some(("dismissed", "manuell abgeschlossen")))? {
-            return Err("Request ist nicht unklar.".into());
+        let from = [RequestStatus::Uncertain, RequestStatus::HandedOff, RequestStatus::Playing];
+        if !self.store.transition(id, &from, RequestStatus::Completed, self.now(), Some(("dismissed", "manuell abgeschlossen")))? {
+            return Err("Request kann nicht als erledigt markiert werden.".into());
         }
         self.changed();
         Ok(())
@@ -815,7 +824,62 @@ impl QueueService {
         }
         self.process_offline_pending().await;
         self.reconcile().await;
+        self.sweep_handed_off(track_changed, current_uri.as_deref()).await;
         self.maybe_handoff().await;
+    }
+
+    /// Übergebene Wünsche, die nie als laufend erkannt wurden (z. B. übersprungen, bevor ON AIR
+    /// nachsah, Spotify-Queue geleert, Titel nicht verfügbar), blockieren sonst dauerhaft die
+    /// nächste Übergabe. Liegen sie nicht mehr in Spotifys Queue, gelten sie als erledigt.
+    async fn sweep_handed_off(&self, track_changed: bool, current_uri: Option<&str>) {
+        let now = self.now();
+        let stale: Vec<SongRequest> = self
+            .store
+            .by_status(RequestStatus::HandedOff)
+            .into_iter()
+            .filter(|r| now - r.handoff_at.unwrap_or(now) >= HANDED_OFF_CHECK_AFTER_MS)
+            .filter(|r| r.track.as_ref().map(|t| t.uri.as_str()) != current_uri)
+            .collect();
+        if stale.is_empty() {
+            return;
+        }
+        {
+            let mut last = self.last_sweep_ms.lock().unwrap();
+            if !track_changed && now - *last < HANDED_OFF_SWEEP_INTERVAL_MS {
+                return;
+            }
+            *last = now;
+        }
+        let q = match self.spotify.queue().await {
+            Ok(q) => q,
+            Err(e) => {
+                tracing::info!(target: "queue", code = e.code(), "Prüfung übergebener Titel verschoben");
+                return;
+            }
+        };
+        let playing = q.currently_playing.as_ref().map(|t| t.uri.clone());
+        let mut dirty = false;
+        for r in stale {
+            let Some(uri) = r.track.as_ref().map(|t| t.uri.clone()) else { continue };
+            if playing.as_deref() == Some(uri.as_str()) || q.uris.contains(&uri) {
+                continue;
+            }
+            if self
+                .store
+                .transition(&r.id, &[RequestStatus::HandedOff], RequestStatus::Completed, now, Some(("not_observed", "Wiedergabe nicht beobachtet")))
+                .unwrap_or(false)
+            {
+                dirty = true;
+                self.activity.warn(
+                    "request.not_observed",
+                    format!("„{}“ liegt nicht mehr in der Spotify-Queue und wurde nicht als laufend erkannt – als erledigt markiert", r.track.as_ref().map(|t| t.title.as_str()).unwrap_or("")),
+                    json!({ "id": r.id, "user": r.requester.name }),
+                );
+            }
+        }
+        if dirty {
+            self.changed();
+        }
     }
 
     /// Unklare Übergaben mit Spotifys Queue abgleichen. Nie blind erneut senden.

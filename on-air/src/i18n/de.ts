@@ -124,6 +124,8 @@ export const de = {
   "q.reject": "Ablehnen",
   "q.remove": "Entfernen",
   "q.retry": "Erneut übergeben",
+  "q.dismiss_stuck": "Als erledigt markieren",
+  "q.dismiss_stuck_hint": "Hängt der Eintrag? Als erledigt markieren – er wird nicht erneut an Spotify gesendet.",
   "q.dismiss": "Als erledigt markieren",
   "q.block_user": "Person sperren",
   "q.block_track": "Song sperren",
