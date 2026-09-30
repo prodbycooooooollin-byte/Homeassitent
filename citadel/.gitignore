@@ -8,3 +8,4 @@ server/data
 *.sqlite-journal
 .env
 screenshots-tmp
+src-tauri/gen

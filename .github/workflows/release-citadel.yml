@@ -1,0 +1,108 @@
+name: Release CITADEL (Windows)
+
+# Prüft und baut CITADEL (Tauri 2) auf echtem Windows und veröffentlicht NSIS-/MSI-Installer als
+# GitHub-Pre-Release "citadel-v<version aus package.json>".
+
+on:
+  push:
+    tags:
+      - 'citadel-v*'
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'citadel/**'
+      - '.github/workflows/release-citadel.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release-Tag (z. B. citadel-v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: citadel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Release-Tag bestimmen
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then TAG="${{ github.event.inputs.tag }}";
+          elif [ "${{ github.ref_type }}" = "tag" ]; then TAG="${{ github.ref_name }}";
+          else TAG="citadel-v$(node -p "require('./package.json').version")"; fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "Release-Tag: $TAG"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: citadel/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            citadel/src-tauri
+            citadel/crates/citadel-native
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Typprüfung
+        run: npm run typecheck
+
+      - name: Tests (Core + Recherche-Pipeline)
+        run: npm test
+
+      - name: Tests (native Dateioperationen, Windows)
+        working-directory: citadel/crates/citadel-native
+        run: cargo test
+
+      - name: Oberfläche bauen
+        run: npm run build
+
+      - name: Tests (IPC-Schnittstelle)
+        working-directory: citadel/src-tauri
+        run: cargo test
+
+      - name: Installer bauen (NSIS + MSI)
+        run: npx tauri build
+
+      - name: Artefakte hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: citadel-windows
+          path: |
+            citadel/src-tauri/target/release/bundle/nsis/*.exe
+            citadel/src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+
+      - name: GitHub-Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: CITADEL ${{ env.RELEASE_TAG }}
+          prerelease: true
+          body: |
+            Windows-Build von CITADEL – Deadlock Settings & Performance.
+
+            - `CITADEL_*_x64-setup.exe`: Installer (pro Benutzer, keine Administratorrechte nötig)
+            - `CITADEL_*_x64_*.msi`: MSI-Paket
+
+            Hinweise: nicht signiert (SmartScreen kann warnen). Alle Spiel-Einstellungen sind „noch ungeprüft“,
+            bis sie in einem Build verifiziert wurden – siehe citadel/docs/STATUS.md und citadel/docs/VERIFY.md.
+            Vor jedem Schreiben legt die App ein Backup an.
+          files: |
+            citadel/src-tauri/target/release/bundle/nsis/*.exe
+            citadel/src-tauri/target/release/bundle/msi/*.msi
+          overwrite_files: true

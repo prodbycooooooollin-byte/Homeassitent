@@ -242,8 +242,9 @@ export function buildChangeSet(files: LoadedFile[], draft: Draft, reasons: Recor
         blocked: { reason: 'structure-outside-convars', message: 'Änderungen außerhalb des ConVars-Blocks werden nicht angewendet.' },
       });
     }
-    const semanticLines = new Set(items.map((i) => i.line));
-    const otherLineChanges = lineDiff(f.text, after).filter((l) => l.kind !== 'same' && !semanticLines.has(l.newNo)).length;
+    // Geänderte Zeilen, die keinem erkannten Eintrag zuzuordnen sind (z. B. Kommentare im Expertenmodus)
+    const keys = items.map((i) => i.key.replace(/^bind /, '').toLowerCase()).filter((k) => !k.startsWith('('));
+    const otherLineChanges = lineDiff(f.text, after).filter((l) => l.kind !== 'same' && !keys.some((k) => l.text.toLowerCase().includes(k))).length;
     out.push({
       kind: f.kind,
       path: f.path,
