@@ -1,4 +1,4 @@
-import { CalendarClock, Copy, Database, Download, ExternalLink, FolderOpen, Layers, ListChecks, LogOut, MessageSquare, Monitor, Music2, Palette, Plug, RefreshCw, Save, Sparkles, Stethoscope, Trash2, Upload } from "lucide-react";
+import { CalendarClock, CheckCircle2, Copy, Database, Download, ExternalLink, FolderOpen, KeyRound, Layers, Link2, ListChecks, LogOut, MessageSquare, Monitor, Music2, Palette, Plug, RefreshCw, Save, Sparkles, Stethoscope, Trash2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CustomCommands } from "../components/CustomCommands";
 import { DiagnosticsDialog } from "../components/Dialogs";
@@ -14,7 +14,7 @@ import { relative } from "../lib/format";
 import { spotifyStatus, twitchStatus } from "../lib/status";
 import { refresh, useNow } from "../lib/store";
 import { useSettingsDraft } from "../lib/useSettings";
-import type { AppSnapshot, CommandCfg, Replies, Role, Settings } from "../lib/types";
+import type { AppSnapshot, CommandCfg, ProviderStatus, Replies, Role, Settings, SourceProvider } from "../lib/types";
 
 type Update = (fn: (s: Settings) => Settings) => void;
 
@@ -38,6 +38,7 @@ const SECTIONS = [
   { id: "connections", icon: Plug, label: () => t("set.connections") },
   { id: "playback", icon: Music2, label: () => t("set.playback") },
   { id: "requests", icon: ListChecks, label: () => t("set.requests") },
+  { id: "sources", icon: Link2, label: () => t("set.sources") },
   { id: "channel_points", icon: Sparkles, label: () => t("set.channel_points") },
   { id: "plan", icon: CalendarClock, label: () => t("set.plan") },
   { id: "commands", icon: MessageSquare, label: () => t("set.commands") },
@@ -72,6 +73,7 @@ export function SettingsView({ snap, initial }: { snap: AppSnapshot; initial?: S
           {sec === "connections" && <Connections snap={snap} draft={draft} update={update} />}
           {sec === "playback" && <Playback draft={draft} update={update} />}
           {sec === "requests" && <div className="col" style={{ gap: 16 }}><Rules draft={draft} update={update} /><RequestPlaylistCard snap={snap} draft={draft} update={update} /></div>}
+          {sec === "sources" && <Sources snap={snap} draft={draft} update={update} />}
           {sec === "channel_points" && <ChannelPoints snap={snap} draft={draft} update={update} />}
           {sec === "plan" && <PlanPanel snap={snap} full />}
           {sec === "commands" && <Commands draft={draft} update={update} />}
@@ -273,7 +275,81 @@ function Rules({ draft, update }: { draft: Settings; update: Update }) {
   );
 }
 
-const CMDS = ["sr", "song", "queue", "remove", "skip", "voteskip", "playlist"] as const;
+const CMDS = ["sr", "song", "queue", "remove", "skip", "voteskip", "playlist", "replace", "last_songs", "choose", "next_page", "prev_page", "cancel"] as const;
+
+const PROVIDERS: { id: SourceProvider; name: string; cred?: { label: string; placeholder: string } }[] = [
+  { id: "spotify", name: "Spotify" },
+  { id: "youtube", name: "YouTube / YouTube Music", cred: { label: "YouTube Data API v3 – API-Schlüssel", placeholder: "AIza…" } },
+  { id: "apple_music", name: "Apple Music", cred: { label: "Apple Music API – Developer Token (JWT)", placeholder: "eyJ…" } },
+  { id: "soundcloud", name: "SoundCloud", cred: { label: "SoundCloud API – client_id:client_secret", placeholder: "client_id:client_secret" } },
+];
+
+function capability(p: ProviderStatus | undefined, id: SourceProvider): string {
+  if (id === "spotify") return t("src.cap.spotify");
+  if (!p) return "";
+  const parts = [p.tracks === "full" ? t("src.cap.full") : t("src.cap.basic")];
+  if (p.albums) parts.push(t("src.cap.albums"));
+  parts.push(p.playlists ? t("src.cap.playlists") : t("src.cap.no_playlists"));
+  return parts.join(" · ");
+}
+
+function CredentialRow({ id, label, placeholder, configured }: { id: SourceProvider; label: string; placeholder: string; configured: boolean }) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async (v: string | null) => {
+    setBusy(true);
+    try {
+      await api.setProviderCredential(id, v);
+      setValue("");
+      toast(t("common.saved"));
+      refresh();
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Field label={<span className="row" style={{ gap: 6 }}><KeyRound size={13} /> {label} {configured && <span className="badge positive"><CheckCircle2 size={11} /> {t("src.stored")}</span>}</span>}>
+      <form className="input-group" onSubmit={(e) => { e.preventDefault(); if (value.trim()) void save(value.trim()); }}>
+        <input className="input mono" type="password" autoComplete="off" spellCheck={false} placeholder={configured ? t("src.replace_value") : placeholder} value={value} onChange={(e) => setValue(e.target.value)} aria-label={label} />
+        <button className="btn" type="submit" disabled={busy || !value.trim()}><Save size={14} /> {t("common.save")}</button>
+        {configured && <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => void save(null)}><Trash2 size={14} /></button>}
+      </form>
+    </Field>
+  );
+}
+
+function Sources({ snap, draft, update }: { snap: AppSnapshot; draft: Settings; update: Update }) {
+  const src = draft.sources;
+  const set = (patch: Partial<Settings["sources"]>) => update((s) => ({ ...s, sources: { ...s.sources, ...patch } }));
+  const status = (id: SourceProvider) => snap.providers?.find((p) => p.provider === id);
+  return (
+    <div className="col" style={{ gap: 16 }}>
+      <section className="card card-pad">
+        <p className="muted small" style={{ marginTop: 0 }}>{t("src.intro")}</p>
+        {PROVIDERS.map((p) => (
+          <SettingRow key={p.id} title={p.name} desc={capability(status(p.id), p.id)}>
+            {p.id === "spotify" ? <span className="badge positive">{t("src.always")}</span> : <Toggle checked={src[p.id as "youtube"]} onChange={(v) => set({ [p.id]: v } as Partial<Settings["sources"]>)} />}
+          </SettingRow>
+        ))}
+      </section>
+      <section className="card card-pad col" style={{ gap: 12 }}>
+        <h2>{t("src.creds")}</h2>
+        <p className="muted small" style={{ margin: 0 }}>{t("src.creds_hint")}</p>
+        {PROVIDERS.filter((p) => p.cred).map((p) => (
+          <CredentialRow key={p.id} id={p.id} label={p.cred!.label} placeholder={p.cred!.placeholder} configured={!!status(p.id)?.configured} />
+        ))}
+        <span className="subtle small">{t("src.creds_docs")}</span>
+      </section>
+      <section className="card card-pad">
+        <SettingRow title={t("src.timeout")} desc={t("src.timeout_desc")}><Num label={t("src.timeout")} value={src.selection_timeout_s} min={30} max={900} onChange={(v) => set({ selection_timeout_s: v })} /></SettingRow>
+        <SettingRow title={t("src.page_size")} desc={t("src.page_size_desc")}><Num label={t("src.page_size")} value={src.chat_page_size} min={3} max={8} onChange={(v) => set({ chat_page_size: v })} /></SettingRow>
+        <SettingRow title={t("src.max_options")}><Num label={t("src.max_options")} value={src.max_options} min={2} max={5} onChange={(v) => set({ max_options: v })} /></SettingRow>
+      </section>
+    </div>
+  );
+}
 
 function Commands({ draft, update }: { draft: Settings; update: Update }) {
   const c = draft.commands;
@@ -288,6 +364,7 @@ function Commands({ draft, update }: { draft: Settings; update: Update }) {
         <SettingRow title={t("s.cmd.reply")}><Toggle checked={c.reply_in_chat} onChange={(v) => update((s) => ({ ...s, commands: { ...s.commands, reply_in_chat: v } }))} /></SettingRow>
         <SettingRow title={t("s.cmd.voteskip_needed")}><Num label={t("s.cmd.voteskip_needed")} value={c.voteskip_needed} min={1} max={100} onChange={(v) => update((s) => ({ ...s, commands: { ...s.commands, voteskip_needed: v } }))} /></SettingRow>
         <SettingRow title={t("s.cmd.interval")}><Num label={t("s.cmd.interval")} value={c.min_reply_interval_ms} min={500} max={10000} onChange={(v) => update((s) => ({ ...s, commands: { ...s.commands, min_reply_interval_ms: v } }))} /></SettingRow>
+        <SettingRow title={t("s.cmd.last_songs_global")}><Num label={t("s.cmd.last_songs_global")} value={c.last_songs_global_cooldown_s} min={0} max={600} onChange={(v) => update((s) => ({ ...s, commands: { ...s.commands, last_songs_global_cooldown_s: v } }))} /></SettingRow>
       </section>
       <section className="card">
         <div className="list">

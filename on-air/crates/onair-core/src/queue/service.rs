@@ -19,8 +19,10 @@ use crate::events::{EventBus, Topic};
 use crate::model::{PlaybackView, Track};
 use crate::plan::{self, CurrentTrack, FitError, PlanConfig, PlanItem, PlanStatus};
 use crate::settings::{self as cfg, AcceptMode, SharedSettings};
+use crate::resolve::{Origin, Resolution, ResolveError, Resolver};
+use crate::selection::SelectionStore;
 use crate::spotify::service::SpotifyState;
-use crate::spotify::{parse_track_link, SpotifyClient};
+use crate::spotify::SpotifyClient;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -57,10 +59,21 @@ pub struct QueueService {
     gate: OnceLock<Gate>,
     plan: SharedPlan,
     session_started_ms: i64,
+    pub resolver: Arc<Resolver>,
+    pub selections: SelectionStore,
+    /// Serialisiert Auswahl-Vorgänge (Bestätigen, Blättern, Abbrechen, Ablauf).
+    pub(crate) select_lock: tokio::sync::Mutex<()>,
+    /// Twitch-Kanal (Broadcaster-ID), an den Auswahlen gebunden werden.
+    channel: Mutex<String>,
+    /// Erste Beobachtung nach dem Start: Doppeleintrag im Verlauf vermeiden.
+    first_observation: Mutex<bool>,
 }
 
-enum Resolve {
-    Found(Track),
+/// Neue Wiedergabe-Session nach so langer Zeit ohne Titelwechsel.
+pub const SESSION_GAP_MS: i64 = 3 * 3_600_000;
+
+pub(crate) enum Resolve {
+    Found(Track, Option<Origin>),
     Offline,
     Rejected(Rejection),
 }
@@ -75,9 +88,16 @@ impl QueueService {
         bus: EventBus,
         clock: SharedClock,
         plan: SharedPlan,
+        resolver: Arc<Resolver>,
     ) -> Arc<Self> {
         let now = clock.now_ms();
+        let selections = SelectionStore::new(store.db().clone());
         Arc::new(Self {
+            resolver,
+            selections,
+            select_lock: tokio::sync::Mutex::new(()),
+            channel: Mutex::new("twitch".into()),
+            first_observation: Mutex::new(true),
             store,
             spotify,
             sp_state,
@@ -112,6 +132,56 @@ impl QueueService {
 
     pub fn set_gate(&self, g: Gate) {
         let _ = self.gate.set(g);
+    }
+
+    /// Verbundener Twitch-Kanal (Broadcaster-ID).
+    pub fn set_channel(&self, broadcaster_id: &str) {
+        if !broadcaster_id.is_empty() {
+            *self.channel.lock().unwrap() = format!("twitch:{broadcaster_id}");
+        }
+    }
+
+    pub fn channel(&self) -> String {
+        self.channel.lock().unwrap().clone()
+    }
+
+    pub(crate) fn gate_check(&self, source: Source) -> Result<(), Rejection> {
+        match self.gate.get() {
+            Some(g) => g(source),
+            None => Ok(()),
+        }
+    }
+
+    pub(crate) fn clock_now(&self) -> i64 {
+        self.now()
+    }
+
+    pub(crate) fn activity(&self) -> &ActivityLog {
+        &self.activity
+    }
+
+    pub(crate) fn settings(&self) -> &SharedSettings {
+        &self.settings
+    }
+
+    pub(crate) fn spotify_state(&self) -> SpotifyState {
+        self.sp_state.borrow().clone()
+    }
+
+    pub(crate) fn notify_changed(&self) {
+        self.changed();
+    }
+
+    pub(crate) async fn decide_lock_guard(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.decide_lock.lock().await
+    }
+
+    pub(crate) fn first_observation_lock(&self) -> std::sync::MutexGuard<'_, bool> {
+        self.first_observation.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub(crate) fn bus_changed(&self, t: Topic) {
+        self.bus.changed(t);
     }
 
     pub fn plan_config(&self) -> PlanConfig {
@@ -177,7 +247,7 @@ impl QueueService {
         self.plan_status_excluding(None)
     }
 
-    fn check_plan_fit(&self, req: &SongRequest, track: &Track) -> Result<(), Rejection> {
+    pub(crate) fn check_plan_fit(&self, req: &SongRequest, track: &Track) -> Result<(), Rejection> {
         if req.source == Source::App {
             return Ok(());
         }
@@ -207,7 +277,7 @@ impl QueueService {
         self.bus.changed(Topic::Queue);
     }
 
-    fn spotify_online(&self) -> bool {
+    pub(crate) fn spotify_online(&self) -> bool {
         self.sp_state.borrow().is_online()
     }
 
@@ -245,6 +315,8 @@ impl QueueService {
             finished_at: None,
             chat_message_id: chat_message_id.map(str::to_string),
             redemption: None,
+            origin: None,
+            rev: 0,
         };
         self.submit_new(req).await
     }
@@ -291,6 +363,8 @@ impl QueueService {
                 target: None,
                 last_error: None,
             }),
+            origin: None,
+            rev: 0,
         };
         self.submit_new(req).await
     }
@@ -311,12 +385,26 @@ impl QueueService {
         if let Err(r) = self.check_requester(&req) {
             return self.reject(&req, r);
         }
-        let resolved = self.resolve(&req.query).await;
-        self.decide(req, resolved).await
+        self.resolve_and_decide(req, true).await
+    }
+
+    /// Auflösen (Universal Request) und – je nach Ergebnis – annehmen, Auswahl öffnen,
+    /// zurückstellen oder mit konkretem Grund ablehnen.
+    async fn resolve_and_decide(&self, req: SongRequest, fresh: bool) -> SubmitOutcome {
+        match self.resolve(&req.query).await {
+            (Resolve::Found(t, o), _) => self.decide(req, Resolve::Found(t, o), fresh).await,
+            (other, None) => self.decide(req, other, fresh).await,
+            (_, Some(choice)) => self.open_new_selection(req, choice).await,
+        }
     }
 
     /// Request für einen bereits ausgewählten Track (Suchergebnis in der App, Verlauf).
     pub async fn submit_track(&self, track: Track, requester: Requester, source: Source) -> SubmitOutcome {
+        self.submit_track_with_origin(track, requester, source, None).await
+    }
+
+    /// Wie [`submit_track`](Self::submit_track), mit bekannter Herkunft (Universal Request in der App).
+    pub async fn submit_track_with_origin(&self, track: Track, requester: Requester, source: Source, origin: Option<Origin>) -> SubmitOutcome {
         let now = self.now();
         let req = SongRequest {
             id: uuid::Uuid::new_v4().to_string(),
@@ -338,6 +426,8 @@ impl QueueService {
             finished_at: None,
             chat_message_id: None,
             redemption: None,
+            origin: None,
+            rev: 0,
         };
         if let Err(e) = self.store.insert(&req) {
             return SubmitOutcome::Rejected { code: "storage".into(), text: e, request: None };
@@ -345,7 +435,7 @@ impl QueueService {
         if let Err(r) = self.check_requester(&req) {
             return self.reject(&req, r);
         }
-        self.decide(req, Resolve::Found(track)).await
+        self.decide(req, Resolve::Found(track, origin), true).await
     }
 
     fn check_requester(&self, req: &SongRequest) -> Result<(), Rejection> {
@@ -371,48 +461,44 @@ impl QueueService {
         )
     }
 
-    async fn resolve(&self, query: &str) -> Resolve {
-        let q = query.trim();
-        if q.is_empty() {
-            return Resolve::Rejected(Rejection::NotFound);
-        }
-        let link = parse_track_link(q);
-        if link.is_none() && (q.starts_with("http://") || q.starts_with("https://") || q.starts_with("spotify:")) {
-            return Resolve::Rejected(Rejection::InvalidLink);
+    /// Liefert entweder ein Ergebnis für `decide` oder eine Auswahl (Version/Playlist).
+    pub(crate) async fn resolve(&self, query: &str) -> (Resolve, Option<Resolution>) {
+        if query.trim().is_empty() {
+            return (Resolve::Rejected(Rejection::NotFound), None);
         }
         if !self.spotify_online() {
-            return Resolve::Offline;
+            return (Resolve::Offline, None);
         }
-        let res = match &link {
-            Some(id) => self.spotify.track(id).await.map(|t| vec![t]),
-            None => self.spotify.search_tracks(q, 5).await,
-        };
-        match res {
-            Ok(list) if list.is_empty() => Resolve::Rejected(Rejection::NotFound),
-            Ok(mut list) => {
-                // Bei Suche: den ersten Treffer, der die Inhaltsregeln erfüllt.
-                if link.is_none() {
-                    let rules = cfg::read(&self.settings).requests.clone();
-                    let block = self.store.blocklist();
-                    let stats = rules::QueueStats::default();
-                    if let Some(pos) = list.iter().position(|t| {
-                        rules::check_track(&rules, &block, t, crate::settings::Role::Everyone, &stats).is_ok()
-                    }) {
-                        return Resolve::Found(list.swap_remove(pos));
-                    }
-                }
-                Resolve::Found(list.swap_remove(0))
-            }
-            Err(ApiError::NotFound) | Err(ApiError::BadRequest { .. }) => Resolve::Rejected(Rejection::NotFound),
-            Err(e) if e.is_transient() || matches!(e, ApiError::SessionEnded | ApiError::NotSignedIn | ApiError::ReauthRequired { .. } | ApiError::Unauthorized) => {
-                Resolve::Offline
-            }
-            Err(_) => Resolve::Offline,
+        match self.resolver.resolve(query).await {
+            Resolution::Track { track, origin } => (Resolve::Found(track, Some(origin)), None),
+            r @ (Resolution::Versions { .. } | Resolution::Collection { .. }) => (Resolve::Offline, Some(r)),
+            Resolution::Failed { error: ResolveError::SpotifyOffline } => (Resolve::Offline, None),
+            Resolution::Failed { error: ResolveError::NotFound } => (Resolve::Rejected(Rejection::NotFound), None),
+            Resolution::Failed { error } => (Resolve::Rejected(Rejection::Resolve { error }), None),
         }
     }
 
+    /// Gemeinsame Regelprüfung für Vorprüfung und endgültige Annahme (keine Schreibzugriffe).
+    /// Liefert, ob eine Moderationsfreigabe nötig ist. `final_check`: unter Sperre bei der
+    /// Annahme – Cooldowns zählen dann nur früher eingegangene Wünsche.
+    pub(crate) fn evaluate(&self, req: &SongRequest, track: &Track, check_gate: bool, final_check: bool) -> Result<bool, Rejection> {
+        if check_gate && req.source != Source::App {
+            self.gate_check(req.source)?;
+        }
+        let rules = cfg::read(&self.settings).requests.clone();
+        let block = self.store.blocklist();
+        let before = final_check.then_some((req.received_at, req.id.as_str()));
+        let stats = self.store.stats_before(&req.requester.id, Some(&track.uri), &req.id, before);
+        let now = if final_check { req.received_at } else { self.now() };
+        rules::check_requester(&rules, &block, &req.requester.id, &req.requester.name, req.requester.role, &stats, now, req.source == Source::ChannelPoints)?;
+        rules::check_track(&rules, &block, track, req.requester.role, &stats)?;
+        self.check_plan_fit(req, track)?;
+        let mode = if req.source == Source::ChannelPoints { cfg::read(&self.settings).channel_points.mode } else { rules.mode };
+        Ok(mode == AcceptMode::Moderation && req.requester.role != crate::settings::Role::Broadcaster)
+    }
+
     /// Endgültige Prüfung unter Sperre (verhindert, dass parallele Requests Limits umgehen).
-    async fn decide(&self, req: SongRequest, resolved: Resolve) -> SubmitOutcome {
+    pub(crate) async fn decide(&self, req: SongRequest, resolved: Resolve, fresh: bool) -> SubmitOutcome {
         let _g = self.decide_lock.lock().await;
         let now = self.now();
         let from = RequestStatus::parse(
@@ -432,23 +518,23 @@ impl QueueService {
                 let r = self.store.get(&req.id).unwrap_or(req);
                 return SubmitOutcome::PendingOffline { request: r };
             }
-            Resolve::Found(t) => t,
+            Resolve::Found(t, o) => {
+                let _ = self.store.set_origin(&req.id, o.as_ref());
+                t
+            }
+        };
+        // Alle Regeln erneut unter der Annahmesperre: Limits, Duplikate und Zeitbudget können
+        // von gleichzeitigen Wünschen nicht umgangen werden (keine doppelte Reservierung).
+        let moderated = match self.evaluate(&req, &track, fresh, true) {
+            Ok(m) => m,
+            Err(r) => {
+                let _ = self.store.set_track_and_status(&req.id, &track, from, from, None, now);
+                return self.reject(&req, r);
+            }
         };
         let rules = cfg::read(&self.settings).requests.clone();
-        let stats = self.store.stats(&req.requester.id, Some(&track.uri), &req.id);
-        if let Err(r) = rules::check_track(&rules, &self.store.blocklist(), &track, req.requester.role, &stats) {
-            let _ = self.store.set_track_and_status(&req.id, &track, from, from, None, now);
-            return self.reject(&req, r);
-        }
-        // Zeitbudget: unter derselben Sperre wie die Annahme → keine doppelte Reservierung.
-        if let Err(r) = self.check_plan_fit(&req, &track) {
-            let _ = self.store.set_track_and_status(&req.id, &track, from, from, None, now);
-            return self.reject(&req, r);
-        }
         let position = self.insertion_position(&req.requester.id, rules.fair_order);
         let _ = self.store.set_position(&req.id, position, now);
-        let mode = if req.source == Source::ChannelPoints { cfg::read(&self.settings).channel_points.mode } else { rules.mode };
-        let moderated = mode == AcceptMode::Moderation && req.requester.role != crate::settings::Role::Broadcaster;
         let (to, pending) = if moderated {
             (RequestStatus::PendingReview, Some(PendingReason::Moderation))
         } else {
@@ -579,12 +665,15 @@ impl QueueService {
         };
         if !self.store.transition(
             id,
-            &[RequestStatus::Received, RequestStatus::PendingReview, RequestStatus::Accepted],
+            &[RequestStatus::Received, RequestStatus::AwaitingSelection, RequestStatus::PendingReview, RequestStatus::Accepted],
             RequestStatus::Rejected,
             self.now(),
             Some((code, text)),
         )? {
             return Err("Nur noch nicht übergebene Requests können entfernt werden.".into());
+        }
+        if let Some(sel) = self.selections.for_request(id) {
+            let _ = self.selections.finish(&sel.id, "canceled", self.now());
         }
         self.activity.info(
             "request.removed",
@@ -685,12 +774,14 @@ impl QueueService {
             let Some(next) = self.store.by_status(RequestStatus::Accepted).into_iter().find(|r| r.track.is_some()) else {
                 return;
             };
-            let track = next.track.clone().expect("track");
             let now = self.now();
             match self.store.transition(&next.id, &[RequestStatus::Accepted], RequestStatus::HandingOff, now, None) {
                 Ok(true) => {}
                 _ => continue,
             }
+            // Erst nach dem Statuswechsel lesen: Ein gleichzeitiger Austausch ist ab jetzt
+            // ausgeschlossen, und es wird garantiert der aktuelle Song übergeben.
+            let Some(track) = self.store.get(&next.id).and_then(|r| r.track) else { continue };
             self.changed();
             let result = self.spotify.add_to_queue(&track.uri, device.id.as_deref()).await;
             let now = self.now();
@@ -815,8 +906,7 @@ impl QueueService {
 
         if track_changed {
             if let Some(t) = &current {
-                let _ = self.store.add_history(t, now, matched.as_ref());
-                self.bus.changed(Topic::History);
+                self.record_play(t, now, matched.as_ref());
             }
         }
         if dirty {
@@ -944,12 +1034,15 @@ impl QueueService {
             if !self.spotify_online() {
                 return;
             }
-            let resolved = self.resolve(&r.query).await;
-            if matches!(resolved, Resolve::Offline) {
+            let (resolved, choice) = self.resolve(&r.query).await;
+            if matches!(resolved, Resolve::Offline) && choice.is_none() {
                 return;
             }
             let reply_to = r.chat_message_id.clone();
-            let outcome = self.decide(r, resolved).await;
+            let outcome = match choice {
+                Some(c) => self.open_new_selection(r, c).await,
+                None => self.decide(r, resolved, false).await,
+            };
             if let Some(text) = super::super::twitch::commands::reply_for_outcome(&cfg::read(&self.settings).commands.replies, &outcome) {
                 self.chat(text, reply_to);
             }

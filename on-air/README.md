@@ -22,7 +22,8 @@ Weitere Ansichten (Browser-Vorschau mit Beispieldaten): [docs/screenshots](docs/
   `Retry-After`, Backoff mit Zufallsanteil, Circuit Breaker, Standby-Erkennung, Abgleich statt Blind-Wiederholung
 - Eigene, dauerhafte Request-Warteschlange (SQLite) mit Moderation, fairer Reihenfolge,
   Limits, Cooldowns, Sperrlisten, Explicit-Filter und sparsamer Übergabe an Spotify
-- Twitch-Chatbefehle `!sr`, `!song`, `!queue`, `!remove`, `!skip`, `!voteskip`, `!playlist` (konfigurierbar) plus **eigene Befehle** mit Vorlagen und Platzhaltern
+- Wünsche als Spotify-, YouTube-, Apple-Music- oder SoundCloud-Link oder „Künstler – Titel“ – mit Versionsauswahl, Playlist-Auswahl und Vorabprüfung ([Musikquellen](docs/QUELLEN.md))
+- Twitch-Chatbefehle `!sr`, `!song`, `!queue`, `!remove`, `!skip`, `!voteskip`, `!playlist`, `!auswahl`, `!ersetzen`, `!letztersong` (konfigurierbar) plus **eigene Befehle** mit Vorlagen und Platzhaltern
 - **OBS-Dock**: ON AIR direkt in OBS steuern (Now Playing, Requests pausieren, Skip, Freigeben/Ablehnen)
 - Optional **Kanalpunkte-Requests** über eine eigene, von ON AIR verwaltete Belohnung –
   Erfüllen erst nach beobachtetem Start, Ablehnen erstattet die Punkte
@@ -81,6 +82,7 @@ on-air/
 - [Funktionsmatrix (APIs, Berechtigungen, Einschränkungen)](docs/FUNKTIONSMATRIX.md)
 - [Architektur und Fehlerbehandlung](docs/ARCHITEKTUR.md)
 - [Einrichtung Spotify, Twitch, OBS](docs/EINRICHTUNG.md)
+- [Musikquellen, Auswahl und Komfortbefehle](docs/QUELLEN.md)
 - [Updates und Releases](docs/UPDATES.md)
 - [Änderungen](CHANGELOG.md)
 

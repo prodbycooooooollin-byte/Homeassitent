@@ -1,4 +1,5 @@
-import { ArrowDown, ArrowUp, Ban, Check, CheckCheck, GripVertical, Lock, MessageSquare, MoreHorizontal, RotateCcw, Sparkles, Star, Trash2, User, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, Check, CheckCheck, GripVertical, Link2, Lock, MessageSquare, MoreHorizontal, Replace, RotateCcw, Sparkles, Star, Trash2, User, X } from "lucide-react";
+import { AddSongDialog } from "./AddSong";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { api } from "../lib/api";
 import { clockTime, duration } from "../lib/format";
@@ -35,6 +36,8 @@ function shortLabel(r: SongRequest): string | null {
 
 export function statusBadge(r: SongRequest): { label: string; tone?: "accent" | "warn" | "danger" | "info" | "positive" } {
   switch (r.status) {
+    case "awaiting_selection":
+      return { label: t("st.awaiting_selection"), tone: "info" };
     case "pending_review":
       return r.pending_reason === "offline" ? { label: t("st.pending_offline"), tone: "warn" } : { label: t("st.pending_review"), tone: "info" };
     case "accepted":
@@ -62,6 +65,8 @@ const act = (action: string, id: string, index?: number) => api.queueAction(acti
 
 function RowMenu({ r }: { r: SongRequest }) {
   const [open, setOpen] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+  const replaceable = r.status === "accepted" || r.status === "pending_review";
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -91,8 +96,19 @@ function RowMenu({ r }: { r: SongRequest }) {
       <button className="icon-btn sm" aria-haspopup="menu" aria-expanded={open} aria-label="…" onClick={() => setOpen((o) => !o)}>
         <MoreHorizontal size={16} />
       </button>
+      {replacing && <AddSongDialog replace={r} onClose={() => setReplacing(false)} />}
       {open && (
         <div role="menu" className="card" style={{ position: "absolute", right: 0, top: 34, zIndex: 20, padding: 6, minWidth: 200, display: "flex", flexDirection: "column" }}>
+          {replaceable && (
+            <button role="menuitem" className="btn btn-ghost btn-sm" style={{ justifyContent: "flex-start" }} onClick={() => { setOpen(false); setReplacing(true); }}>
+              <Replace size={14} /> {t("add.replace_menu")}
+            </button>
+          )}
+          {r.origin?.url && r.origin.provider && r.origin.provider !== "spotify" && (
+            <button role="menuitem" className="btn btn-ghost btn-sm" style={{ justifyContent: "flex-start" }} title={r.origin.url} onClick={() => { setOpen(false); api.openExternal(r.origin!.url!).catch(toastError); }}>
+              <Link2 size={14} /> {t("add.open_source")}
+            </button>
+          )}
           {r.requester.id !== "local:streamer" && (
             <button role="menuitem" className="btn btn-ghost btn-sm" style={{ justifyContent: "flex-start" }} onClick={() => block("user")}>
               <Ban size={14} /> {t("q.block_user")}

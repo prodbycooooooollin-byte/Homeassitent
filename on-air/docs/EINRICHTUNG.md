@@ -111,6 +111,13 @@ der Link öffnet die Playlist zum Folgen oder Speichern. Private Playlists werde
 Optional lässt sich unter *Einstellungen → Chatbefehle* ein Standard-Link hinterlegen, der gilt,
 wenn gerade keine Playlist läuft.
 
+### Links von YouTube, Apple Music, SoundCloud (optional)
+
+`!sr` versteht neben Spotify-Links auch YouTube-/YouTube-Music-, Apple-Music- und SoundCloud-Links
+sowie „Künstler – Titel“. Einzelne Songlinks funktionieren ohne Einrichtung; für Playlists und
+genauere Zuordnung lassen sich unter *Einstellungen → Musikquellen* Zugangsdaten hinterlegen.
+Anleitung pro Anbieter sowie `!auswahl`, `!ersetzen` und `!letztersong`: [QUELLEN.md](QUELLEN.md).
+
 ## Streamplanung
 
 In der Übersicht unter *Streamplanung* die verbleibende Streamzeit wählen (15/30/60/90 Min)

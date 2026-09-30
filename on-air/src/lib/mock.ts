@@ -59,7 +59,23 @@ function defaults(): Settings {
         nothing_to_remove: "@{user} Du hast keinen offenen Request.", skipped: "Übersprungen.", voteskip_progress: "Skip-Abstimmung: {votes}/{needed}", no_permission: "",
         playlist: "@{user} Aktuelle Playlist „{name}“: {url}", playlist_link: "@{user} Aktuelle Playlist: {url}", playlist_album: "@{user} Gerade läuft das Album „{name}“: {url}",
         playlist_private: "@{user} Die aktuelle Playlist ist privat und kann nicht geteilt werden.", no_playlist: "@{user} Gerade läuft keine Playlist.", points_refund: " Deine Kanalpunkte werden erstattet.",
+        choose_version: "@{user} Ich habe mehrere passende Versionen gefunden: {options}. Wähle mit !auswahl <Nummer> (oder !abbrechen).",
+        choose_from_list: "@{user} „{name}“ (Seite {page}/{pages}): {options}. Wähle mit !auswahl <Nummer>, blättern mit !weiter / !zurueck, !abbrechen beendet.",
+        choose_request: "@{user} Welchen Wunsch möchtest du ändern? {options}. Wähle mit !auswahl <Nummer>.",
+        no_selection: "@{user} Du hast gerade keine offene Auswahl.", selection_invalid: "@{user} Bitte eine Nummer aus der Liste wählen (!auswahl 1).",
+        selection_canceled: "@{user} Auswahl abgebrochen.", selection_expired: "@{user} Deine Auswahl ist abgelaufen – schick den Wunsch einfach nochmal.",
+        selection_last_page: "@{user} Keine weiteren Titel.",
+        replaced: "@{user} Dein Wunsch wurde geändert: „{title}“ von {artist}. Dein Platz in der Warteschlange bleibt erhalten.",
+        replace_nothing: "@{user} Du hast keinen offenen Wunsch, den du ändern kannst.",
+        replace_locked: "@{user} Dieser Wunsch wurde bereits an Spotify übergeben und kann hier nicht mehr ausgetauscht werden.",
+        replace_same: "@{user} Das ist bereits dein Wunsch.", replace_failed: "@{user} Nicht geändert – dein bisheriger Wunsch bleibt: {reason}",
+        last_songs: "Zuletzt gespielt: {list}", last_songs_empty: "In dieser Session wurde noch nichts anderes gespielt.",
+        playlist_hint: " Lieber einen Song aus der Playlist? !sr {url}",
       },
+      choose: cmd("auswahl", "everyone", 0, ["choose", "wahl", "pick"]), next_page: cmd("weiter", "everyone", 0, ["next"]),
+      prev_page: cmd("zurueck", "everyone", 0, ["zurück", "back", "prev"]), cancel: cmd("abbrechen", "everyone", 0, ["cancel"]),
+      replace: cmd("ersetzen", "everyone", 20, ["replace"]), last_songs: cmd("letztersong", "everyone", 30, ["lastsong", "letzter song", "last song"]),
+      last_songs_global_cooldown_s: 10,
     },
     overlay: { port: 43822, stale_after_s: 20, minimal: style({}), glass: style({ background_opacity: 0.55, show_progress: true }), queue: style({ background_opacity: 0.7, width: 420, queue_count: 4 }), control_enabled: false },
     nowplaying_file: { enabled: false, path: "", template: "{artist} – {title}" },
@@ -67,6 +83,7 @@ function defaults(): Settings {
     channel_points: { enabled: false, title: "Song wünschen", cost: 500, prompt: "Spotify-Link oder Titel und Interpret", global_cooldown_s: 0, max_per_stream: 0, max_per_user_per_stream: 0, mode: "auto", external_reward: null },
     updates: { check_on_start: true, auto_install: true },
     request_playlist: { enabled: false, name: "ON AIR – Songwünsche", public: false, include_app: false },
+    sources: { youtube: true, apple_music: true, soundcloud: true, selection_timeout_s: 120, chat_page_size: 5, max_options: 3 },
   };
 }
 
@@ -75,6 +92,7 @@ export function createMockBackend(): Backend {
   const now = () => Date.now();
   const start = now();
   const settings = defaults();
+  const creds = new Set<string>();
   if (scenario === "onboarding") {
     settings.onboarding_done = false;
     settings.spotify.client_id = "";
@@ -230,6 +248,13 @@ export function createMockBackend(): Backend {
         ? { enabled: true, scope_ok: scenario !== "rp-scope", playlists: [{ id: "pl1", url: "https://open.spotify.com/playlist/pl1", name: settings.request_playlist.name, count: 1287 }], total: 1287, pending: 0, last_added_ms: start - 3 * 60_000, last_error: null }
         : { enabled: false, scope_ok: true, playlists: [], total: 0, pending: 0, last_added_ms: null, last_error: null },
       update_pause: false,
+      awaiting: [],
+      providers: [
+        { provider: "spotify", enabled: true, configured: true, tracks: "full", playlists: true, albums: true },
+        { provider: "youtube", enabled: settings.sources.youtube, configured: creds.has("youtube"), tracks: creds.has("youtube") ? "full" : "basic", playlists: creds.has("youtube"), albums: false },
+        { provider: "apple_music", enabled: settings.sources.apple_music, configured: creds.has("apple_music"), tracks: "full", playlists: creds.has("apple_music"), albums: true },
+        { provider: "soundcloud", enabled: settings.sources.soundcloud, configured: creds.has("soundcloud"), tracks: creds.has("soundcloud") ? "full" : "basic", playlists: creds.has("soundcloud"), albums: false },
+      ],
     };
   };
   const push = () => {
@@ -267,6 +292,43 @@ export function createMockBackend(): Backend {
     list_devices: () => [{ id: "d1", name: "Streaming-PC", kind: "Computer", is_active: true, is_restricted: false, volume_percent: 64 }, { id: "d2", name: "Handy", kind: "Smartphone", is_active: false, is_restricted: false, volume_percent: 40 }],
     transfer_playback: () => undefined,
     search: async (a) => { await sleep(300); const q = String(a.query).toLowerCase(); return TRACKS.filter((t) => `${t.title} ${t.artists.join(" ")}`.toLowerCase().includes(q)).concat(TRACKS).slice(0, 6); },
+    resolve_input: async (a) => {
+      await sleep(350);
+      const input = String(a.input).trim();
+      if (/^https?:\/\/(www\.)?deezer\./i.test(input)) return { kind: "failed", error: { code: "unsupported_content", what: "host:deezer.com" } };
+      if (/playlist/i.test(input)) {
+        const items = TRACKS.concat(TRACKS.map((t, i) => ({ ...t, id: `${t.id}b${i}` }))).map((t, i) => ({ provider: "spotify", id: t.id, url: null, title: t.title, artists: t.artists, uploader: null, duration_ms: t.duration_ms, isrc: null, image_url: t.image_url, available: i !== 4, spotify: t }));
+        return { kind: "collection", collection: { ref: { provider: "spotify", kind: "playlist", id: "pl1" }, name: "Beispiel-Playlist", url: "https://open.spotify.com/playlist/pl1", image_url: null, total: 40 }, page: { items, cursor: null, next: "12", total: 40 } };
+      }
+      if (/youtu/i.test(input)) return { kind: "versions", origin: { provider: "youtube", url: input, title: "Glass Harbour (Live)", artists: [], duration_ms: null, isrc: null, method: "metadata" }, options: [TRACKS[1], { ...TRACKS[1], id: "s2l", title: "Glass Harbour - Live", duration_ms: 262_000 }] };
+      const q = input.toLowerCase();
+      const hit = TRACKS.find((t) => `${t.artists.join(" ")} ${t.title}`.toLowerCase().includes(q));
+      return hit ? { kind: "track", track: hit, origin: { provider: null, url: null, title: null, artists: [], duration_ms: null, isrc: null, method: "search" } } : { kind: "versions", origin: { provider: null, url: null, title: null, artists: [], duration_ms: null, isrc: null, method: "search" }, options: TRACKS.slice(0, 3) };
+    },
+    collection_page: async (a) => {
+      await sleep(300);
+      const cur = Number(a.cursor ?? 0);
+      const items = TRACKS.map((t, i) => ({ provider: "spotify", id: `${t.id}p${cur + i}`, url: null, title: `${t.title} ${cur + i + 1}`, artists: t.artists, uploader: null, duration_ms: t.duration_ms, isrc: null, image_url: t.image_url, available: true, spotify: { ...t, id: `${t.id}p${cur + i}` } }));
+      return { collection: { ref: a.collection, name: "Beispiel-Playlist", url: "https://open.spotify.com/playlist/pl1", image_url: null, total: 40 }, page: { items, cursor: String(cur), next: cur + items.length < 40 ? String(cur + items.length) : null, total: 40 } };
+    },
+    match_item: async (a) => { await sleep(200); const it = a.item as { spotify?: Track }; return it.spotify ? { kind: "track", track: it.spotify, origin: { provider: "spotify", url: null, title: null, artists: [], duration_ms: null, isrc: null, method: "user_choice" } } : { kind: "failed", error: { code: "no_spotify_match" } }; },
+    precheck: (a) => {
+      const t = a.track as Track;
+      const dup = queue.findIndex((r) => r.track?.id === t.id);
+      const notices = dup >= 0 ? [{ code: "duplicate_position", text: `Bereits auf Platz ${dup + 1}` }] : [];
+      if (t.duration_ms > settings.requests.max_duration_s * 1000) return { ok: false, blocking: { code: "too_long", text: `Maximal ${Math.ceil(settings.requests.max_duration_s / 60)} Minuten erlaubt` }, notices, moderation: false };
+      if (!settings.requests.open) notices.push({ code: "closed", text: "Requests sind gerade pausiert (du kannst trotzdem hinzufügen)" });
+      return { ok: true, blocking: null, notices, moderation: false };
+    },
+    replace_request: (a) => {
+      const r = queue.find((x) => x.id === a.id);
+      if (!r || !(r.status === "accepted" || r.status === "pending_review")) return { flow: "notice", notice: { code: "replace_locked" } };
+      r.track = a.track as Track; r.rev = (r.rev ?? 0) + 1;
+      log(`Wunsch ersetzt: „${r.track.title}“ – Platz bleibt erhalten`);
+      return { flow: "replaced", request: r };
+    },
+    set_provider_credential: (a) => { if (a.value) creds.add(String(a.provider)); else creds.delete(String(a.provider)); },
+    last_played: () => TRACKS.slice(1, 6).map((t, i) => ({ id: i, track: t, played_at: now() - (i + 1) * 200_000, requester_name: i === 1 ? "kira_live" : null })),
     add_request: (a) => { const r = mkReq(a.track as Track, "Du", "accepted"); queue = [...queue, r]; log(`Request angenommen: „${r.track!.title}“`, "success"); return { outcome: "accepted", request: r, position: queue.length }; },
     queue_action: (a) => {
       const r = queue.find((x) => x.id === a.id);

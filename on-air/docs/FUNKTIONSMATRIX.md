@@ -34,6 +34,11 @@ Suchergebnissen zu den offiziellen Seiten, dem Spotify-Developer-Blog, der
 | Sammel-Playlist | `POST /me/playlists`, `POST /playlists/{id}/items` (Web API seit 02/2026; vorher `/users/{id}/playlists` bzw. `/tracks`) | `playlist-modify-private`, `playlist-modify-public` | Max. 10.000 Titel je Playlist; max. 100 Titel je Aufruf; schreibt nur in eigene Playlists. | Automatisch „Teil 2“; gelöschte Playlist wird neu angelegt |
 | Eigene Chatbefehle | wie Chat schreiben | `user:write:chat` | Antwort max. 450 Zeichen; Platzhalter werden lokal ersetzt, Chat-Eingaben nie erneut ausgewertet. | – |
 | `!playlist` | Wiedergabekontext aus `GET /me/player`, Name über `GET /playlists/{id}?fields=name,public` | – (Nutzertoken) | Nur Playlist-/Album-Kontext; Name ggf. nicht abrufbar (dann nur Link); private Playlists werden nicht geteilt; kein Download möglich. | Standard-Link in den Einstellungen |
+| Universal Request: YouTube | oEmbed `youtube.com/oembed` (ohne Schlüssel); Data API v3 `videos.list`, `playlistItems.list` (API-Schlüssel) | – | Ohne Schlüssel keine Dauer und keine Playlists; 10.000 Einheiten/Tag. | Songlink / „Künstler – Titel“ |
+| Universal Request: Apple Music | iTunes Lookup API (öffentlich); Apple Music API `catalog/{sf}/songs`, `…/playlists` (Developer Token) | – | Lookup-API gedrosselt (403); Playlists und ISRC nur mit Developer Token (Apple Developer Program). | – |
+| Universal Request: SoundCloud | oEmbed (ohne Zugang); API `/resolve`, `/tracks` mit Client-Credentials-Token | – | Ohne Zugang keine Dauer/Sets; private Inhalte nicht lesbar. | – |
+| Playlist-Auswahl Spotify | `GET /playlists/{id}`, `/playlists/{id}/items`, `/albums/{id}/tracks` | – (Nutzertoken) | Development Mode: Playlist-Inhalte nur für eigene/gemeinsame Playlists (sonst 403 → „nicht zugänglich“); Tracks ohne `external_ids`. | Einzelner Songlink |
+| Abgleich per ISRC | `GET /search?q=isrc:…&type=track` | – | ISRC nur, wenn die Quelle sie liefert (Apple mit Token, teils SoundCloud). | Titel/Künstler/Version/Dauer |
 
 ## Quellen
 
@@ -48,3 +53,6 @@ Suchergebnissen zu den offiziellen Seiten, dem Spotify-Developer-Blog, der
 - Twitch Kanalpunkte (Custom Rewards, Redemptions): https://dev.twitch.tv/docs/api/reference/#create-custom-rewards, https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/
 - Tauri Updater: https://v2.tauri.app/plugin/updater/
 - Twitch Tokens/DCF: https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/, https://dev.twitch.tv/docs/authentication/refresh-tokens/
+- YouTube Data API: https://developers.google.com/youtube/v3/docs/playlistItems/list, https://developers.google.com/youtube/v3/docs/videos/list
+- Apple Music API: https://developer.apple.com/documentation/applemusicapi, iTunes Search/Lookup: https://performance-partners.apple.com/search-api
+- SoundCloud API-Leitfaden: https://developers.soundcloud.com/docs/api/guide

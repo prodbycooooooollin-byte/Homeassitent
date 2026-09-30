@@ -100,6 +100,7 @@ export interface TwitchState {
 
 export type RequestStatus =
   | "received"
+  | "awaiting_selection"
   | "pending_review"
   | "accepted"
   | "handing_off"
@@ -130,7 +131,104 @@ export interface SongRequest {
   finished_at: number | null;
   chat_message_id: string | null;
   redemption: Redemption | null;
+  origin?: Origin | null;
+  rev?: number;
 }
+
+export type SourceProvider = "spotify" | "youtube" | "apple_music" | "soundcloud";
+export type MatchMethod = "spotify_link" | "isrc" | "metadata" | "search" | "user_choice";
+
+/** Herkunft eines Wunschs: ursprüngliche Quelle, Zuordnungsweg, Nutzerentscheidung. */
+export interface Origin {
+  provider: SourceProvider | null;
+  url: string | null;
+  title: string | null;
+  artists: string[];
+  duration_ms: number | null;
+  isrc: string | null;
+  method: MatchMethod;
+  collection?: string | null;
+  playlist_hint?: string | null;
+}
+
+export interface SourceItem {
+  provider: SourceProvider;
+  id: string;
+  url: string | null;
+  title: string;
+  artists: string[];
+  uploader: string | null;
+  duration_ms: number | null;
+  isrc: string | null;
+  image_url: string | null;
+  available: boolean;
+  explicit?: boolean | null;
+  spotify?: Track | null;
+}
+
+export interface CollectionRef {
+  provider: SourceProvider;
+  kind: "playlist" | "album";
+  id: string;
+  storefront?: string | null;
+  path?: string | null;
+}
+
+export interface CollectionInfo {
+  ref: CollectionRef;
+  name: string | null;
+  url: string;
+  image_url: string | null;
+  total: number | null;
+}
+
+export interface CollectionPage {
+  items: SourceItem[];
+  cursor: string | null;
+  next: string | null;
+  total: number | null;
+}
+
+export interface ResolveError {
+  code: string;
+  provider?: SourceProvider;
+  what?: string;
+  title?: string;
+}
+
+export type Resolution =
+  | { kind: "track"; track: Track; origin: Origin }
+  | { kind: "versions"; origin: Origin; options: Track[] }
+  | { kind: "collection"; collection: CollectionInfo; page: CollectionPage }
+  | { kind: "failed"; error: ResolveError };
+
+export interface Issue {
+  code: string;
+  text: string;
+}
+
+export interface Verdict {
+  ok: boolean;
+  blocking: Issue | null;
+  notices: Issue[];
+  moderation: boolean;
+}
+
+export interface ProviderStatus {
+  provider: SourceProvider;
+  enabled: boolean;
+  configured: boolean;
+  tracks: "full" | "basic" | "none";
+  playlists: boolean;
+  albums: boolean;
+}
+
+export type ChatFlow =
+  | { flow: "outcome"; outcome: SubmitOutcome }
+  | { flow: "prompt"; prompt: unknown }
+  | { flow: "replaced"; request: SongRequest }
+  | { flow: "replace_failed"; code: string; text: string }
+  | { flow: "notice"; notice: { code: string; text?: string } };
 
 export type RedemptionStatus = "unfulfilled" | "fulfilled" | "canceled" | "review" | "conflict";
 
@@ -246,6 +344,31 @@ export interface Replies {
   playlist_private: string;
   no_playlist: string;
   points_refund: string;
+  choose_version: string;
+  choose_from_list: string;
+  choose_request: string;
+  no_selection: string;
+  selection_invalid: string;
+  selection_canceled: string;
+  selection_expired: string;
+  selection_last_page: string;
+  replaced: string;
+  replace_nothing: string;
+  replace_locked: string;
+  replace_same: string;
+  replace_failed: string;
+  last_songs: string;
+  last_songs_empty: string;
+  playlist_hint: string;
+}
+
+export interface SourceSettings {
+  youtube: boolean;
+  apple_music: boolean;
+  soundcloud: boolean;
+  selection_timeout_s: number;
+  chat_page_size: number;
+  max_options: number;
 }
 
 export interface Settings {
@@ -270,6 +393,13 @@ export interface Settings {
     voteskip_needed: number;
     playlist: CommandCfg;
     playlist_fallback_url: string;
+    choose: CommandCfg;
+    next_page: CommandCfg;
+    prev_page: CommandCfg;
+    cancel: CommandCfg;
+    replace: CommandCfg;
+    last_songs: CommandCfg;
+    last_songs_global_cooldown_s: number;
     replies: Replies;
     min_reply_interval_ms: number;
     custom: CustomCommand[];
@@ -283,6 +413,7 @@ export interface Settings {
   channel_points: ChannelPointsSettings;
   updates: { check_on_start: boolean; auto_install: boolean };
   request_playlist: { enabled: boolean; name: string; public: boolean; include_app: boolean };
+  sources: SourceSettings;
 }
 
 export interface ArchivePlaylist { id: string; url: string; name: string; count: number }
@@ -439,6 +570,8 @@ export interface AppSnapshot {
   channel_points: ChannelPointsStatus;
   request_playlist: RequestPlaylistStatus;
   update_pause: boolean;
+  awaiting?: SongRequest[];
+  providers?: ProviderStatus[];
 }
 
 export interface Check {
@@ -467,6 +600,7 @@ export type SubmitOutcome =
   | { outcome: "pending_review"; request: SongRequest }
   | { outcome: "pending_offline"; request: SongRequest }
   | { outcome: "rejected"; code: string; text: string; request: SongRequest | null }
+  | { outcome: "needs_choice"; request: SongRequest; prompt: unknown }
   | { outcome: "duplicate" };
 
 export interface CmdError {

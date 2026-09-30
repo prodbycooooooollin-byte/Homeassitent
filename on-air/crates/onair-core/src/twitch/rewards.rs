@@ -663,6 +663,7 @@ impl ChannelPointsService {
                 self.d.activity.success("channel_points.redeemed", format!("Kanalpunkte-Wunsch von {who}: {song} (Platz {position})"), meta);
             }
             O::PendingReview { .. } => self.d.activity.info("channel_points.redeemed", format!("Kanalpunkte-Wunsch von {who} wartet auf Freigabe"), meta),
+            O::NeedsChoice { .. } => self.d.activity.info("channel_points.redeemed", format!("Kanalpunkte-Wunsch von {who}: Auswahl offen"), meta),
             O::PendingOffline { .. } => {
                 self.d.activity.info("channel_points.redeemed", format!("Kanalpunkte-Wunsch von {who} gespeichert – wird verarbeitet, sobald Spotify verbunden ist"), meta)
             }

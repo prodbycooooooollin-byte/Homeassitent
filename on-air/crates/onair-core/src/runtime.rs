@@ -105,6 +105,10 @@ pub struct AppSnapshot {
     pub channel_points: ChannelPointsStatus,
     pub request_playlist: crate::archive::ArchiveStatus,
     pub update_pause: bool,
+    /// Wünsche mit offener Auswahl (Zuschauer wählt noch).
+    pub awaiting: Vec<SongRequest>,
+    /// Universal Request: Fähigkeiten der Anbieter (ohne Zugangsdaten).
+    pub providers: Vec<crate::resolve::ProviderStatus>,
 }
 
 /// Höchstdauer der Update-Pause (siehe `update_pause_active`).
@@ -189,6 +193,13 @@ impl Runtime {
         let (poll_tx, poll_rx) = watch::channel(poll_cfg);
         let (sp_service, sp_handle) = SpotifyService::new(spotify.clone(), cfg.clock.clone(), poll_rx);
 
+        let resolver = crate::resolve::Resolver::new(crate::resolve::ResolverDeps {
+            http: cfg.http.clone(),
+            spotify: spotify.clone(),
+            secrets: cfg.secrets.clone(),
+            settings: settings.clone(),
+            clock: cfg.clock.clone(),
+        });
         let queue = QueueService::new(
             QueueStore::new(cfg.db.clone()),
             spotify.clone(),
@@ -198,6 +209,7 @@ impl Runtime {
             bus.clone(),
             cfg.clock.clone(),
             plan.clone(),
+            resolver,
         );
 
         let s2 = settings.clone();
@@ -351,6 +363,7 @@ impl Runtime {
 
         // Absturzreste auflösen, bevor Worker starten.
         rt.queue.recover_after_start().await;
+        rt.queue.sweep_selections().await;
         let _ = rt.db.prune(rt.clock.now_ms());
 
         let mut tasks = vec![
@@ -477,6 +490,8 @@ impl Runtime {
             channel_points: self.cp_status.borrow().clone(),
             request_playlist: self.archive.status(),
             update_pause: self.update_pause_active(),
+            awaiting: self.queue.store.awaiting(),
+            providers: self.queue.resolver.provider_status(),
         }
     }
 
@@ -575,6 +590,64 @@ impl Runtime {
             return self.spotify.track(&id).await.map(|t| vec![t]);
         }
         self.spotify.search_tracks(q, crate::spotify::client::SEARCH_LIMIT).await
+    }
+
+    // ------------------------------------------------------------------
+    // Universal Request (App)
+    // ------------------------------------------------------------------
+
+    /// Eingabe (Link oder Suchtext) für den „Song hinzufügen“-Dialog auflösen – ohne etwas
+    /// anzulegen.
+    pub async fn resolve_input(&self, input: &str) -> crate::resolve::Resolution {
+        if !self.spotify_state.borrow().is_online() {
+            return crate::resolve::Resolution::Failed { error: crate::resolve::ResolveError::SpotifyOffline };
+        }
+        self.queue.resolver.resolve(input).await
+    }
+
+    pub async fn collection_page(&self, r: crate::resolve::CollectionRef, cursor: Option<String>) -> Result<(crate::resolve::CollectionInfo, crate::resolve::CollectionPage), crate::resolve::ResolveError> {
+        self.queue.resolver.page(&r, cursor.as_deref()).await
+    }
+
+    pub async fn match_item(&self, item: crate::resolve::SourceItem) -> crate::resolve::Resolution {
+        self.queue.resolver.match_item(&item).await
+    }
+
+    /// Vorprüfung ohne Reservierung (App: Streamer).
+    pub fn precheck(&self, track: &Track, replace_target: Option<&str>) -> crate::queue::flow::Verdict {
+        self.queue.precheck_track(track, &Requester::streamer(), Source::App, replace_target)
+    }
+
+    pub async fn add_request_with_origin(&self, track: Track, origin: Option<crate::resolve::Origin>) -> SubmitOutcome {
+        self.queue.submit_track_with_origin(track, Requester::streamer(), Source::App, origin).await
+    }
+
+    /// „Song ändern“ in der App (Verwaltungsrechte des Streamers).
+    pub async fn replace_request(&self, id: &str, track: Track, origin: Option<crate::resolve::Origin>) -> crate::queue::flow::ChatFlow {
+        let origin = origin.unwrap_or(crate::resolve::Origin {
+            provider: Some(crate::resolve::SourceProvider::Spotify),
+            url: Some(format!("https://open.spotify.com/track/{}", track.id)),
+            title: Some(track.title.clone()),
+            artists: track.artists.clone(),
+            duration_ms: Some(track.duration_ms),
+            isrc: None,
+            method: crate::resolve::MatchMethod::UserChoice,
+            collection: None,
+            playlist_hint: None,
+        });
+        let input = track.uri.clone();
+        self.queue.commit_replace(id, track, origin, &Requester::streamer(), &input, true).await
+    }
+
+    pub fn set_provider_credential(&self, provider: crate::resolve::SourceProvider, value: Option<&str>) -> Result<(), String> {
+        self.queue.resolver.set_credential(provider, value)?;
+        self.activity.info("sources.credential", format!("Zugangsdaten für {} {}", provider.label(), if value.is_some_and(|v| !v.trim().is_empty()) { "gespeichert" } else { "entfernt" }), json!({ "provider": provider.as_str() }));
+        self.bus.changed(Topic::Settings);
+        Ok(())
+    }
+
+    pub fn last_played(&self, n: usize) -> Vec<HistoryEntry> {
+        self.queue.last_played(n.min(20))
     }
 
     pub async fn add_request(&self, track: Track) -> SubmitOutcome {
@@ -1113,6 +1186,8 @@ async fn acceptance_watcher(weak: Weak<Runtime>) {
         // War der Anmeldespeicher beim Start nicht lesbar, hier erneut versuchen.
         rt.spotify_tokens.retry_load();
         rt.twitch_tokens.retry_load();
+        // Abgelaufene Auswahlen beenden (wartende Wünsche freigeben, ggf. erstatten).
+        rt.queue.sweep_selections().await;
         let a = rt.acceptance();
         let prev = rt.last_acceptance.lock().unwrap().replace(a.clone());
         let Some(prev) = prev else { continue };

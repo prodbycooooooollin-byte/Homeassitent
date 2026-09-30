@@ -397,6 +397,7 @@ impl Shared {
                     return Err(ApiError::Forbidden { reason: Some("missing_scope".into()), message: format!("{missing:?}") });
                 }
                 *self.identity.lock().unwrap() = Some(id.clone());
+                self.deps.queue.set_channel(&id.user_id);
                 self.update(|s| s.identity = Some(id.clone()));
                 Ok(id)
             }
@@ -506,6 +507,52 @@ impl Shared {
                     .await;
                 if let Some(text) = commands::reply_for_outcome(&replies, &outcome) {
                     self.reply(text, Some(ev.message_id));
+                }
+            }
+            CommandKind::Choose => {
+                let channel = self.deps.queue.channel();
+                let flow = match args.split_whitespace().next().and_then(|a| a.trim_start_matches('#').parse::<usize>().ok()) {
+                    Some(n) => self.deps.queue.choose(&channel, &requester, n).await,
+                    None => crate::queue::flow::ChatFlow::Notice { notice: crate::queue::flow::Notice::Invalid },
+                };
+                if let Some(text) = commands::render_flow(&replies, &flow, &ev.user_name) {
+                    self.reply(text, Some(ev.message_id));
+                }
+            }
+            CommandKind::NextPage | CommandKind::PrevPage => {
+                let channel = self.deps.queue.channel();
+                let flow = self.deps.queue.page_step(&channel, &requester, kind == CommandKind::NextPage).await;
+                if let Some(text) = commands::render_flow(&replies, &flow, &ev.user_name) {
+                    self.reply(text, Some(ev.message_id));
+                }
+            }
+            CommandKind::Cancel => {
+                let channel = self.deps.queue.channel();
+                let flow = self.deps.queue.cancel_selection(&channel, &requester).await;
+                if let Some(text) = commands::render_flow(&replies, &flow, &ev.user_name) {
+                    self.reply(text, Some(ev.message_id));
+                }
+            }
+            CommandKind::Replace => {
+                if args.is_empty() {
+                    return;
+                }
+                let channel = self.deps.queue.channel();
+                let flow = self.deps.queue.replace(&channel, &requester, &args, None).await;
+                if let Some(text) = commands::render_flow(&replies, &flow, &ev.user_name) {
+                    self.reply(text, Some(ev.message_id));
+                }
+            }
+            CommandKind::LastSongs => {
+                // Zusätzlich zur Sperre pro Person eine kanalweite Sperre gegen Chatspam.
+                if self.cooldowns.lock().unwrap().check("LastSongs:global", "*", Role::Everyone, settings.last_songs_global_cooldown_s, now).is_err() {
+                    return;
+                }
+                let entries = self.deps.queue.last_played(5);
+                let messages = commands::last_songs_messages(&replies, &entries);
+                let n = messages.len();
+                for (i, m) in messages.into_iter().enumerate() {
+                    self.reply(m, (i == 0 && n > 0).then(|| ev.message_id.clone()));
                 }
             }
             CommandKind::Song => {
@@ -672,6 +719,7 @@ pub async fn handle_chat_for_test(handle_shared: &TwitchService, ev: ChatEvent) 
 impl TwitchService {
     /// Setzt eine Identität (Tests ohne Validate-Endpunkt).
     pub fn set_identity_for_test(&self, id: Identity) {
+        self.shared.deps.queue.set_channel(&id.user_id);
         *self.shared.identity.lock().unwrap() = Some(id);
     }
     /// Startet nur den Chat-Sender (Tests ohne WebSocket).

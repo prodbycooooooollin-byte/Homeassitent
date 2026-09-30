@@ -131,6 +131,27 @@ pub struct Replies {
     pub no_playlist: String,
     /// An Antworten auf abgelehnte Kanalpunkte-Wünsche angehängt.
     pub points_refund: String,
+    /// Mehrere passende Spotify-Versionen: `{options}` = nummerierte Liste.
+    pub choose_version: String,
+    /// Playlist/Album: `{name}`, `{page}`, `{pages}`, `{options}`.
+    pub choose_from_list: String,
+    /// Mehrere eigene Wünsche beim Ersetzen: `{options}`.
+    pub choose_request: String,
+    pub no_selection: String,
+    pub selection_invalid: String,
+    pub selection_canceled: String,
+    pub selection_expired: String,
+    pub selection_last_page: String,
+    pub replaced: String,
+    pub replace_nothing: String,
+    pub replace_locked: String,
+    pub replace_same: String,
+    pub replace_failed: String,
+    /// `!letztersong`: `{list}`.
+    pub last_songs: String,
+    pub last_songs_empty: String,
+    /// Angehängt, wenn ein YouTube-Link auch eine Playlist enthält: `{url}`.
+    pub playlist_hint: String,
 }
 
 impl Default for Replies {
@@ -157,6 +178,22 @@ impl Default for Replies {
             playlist_private: "@{user} Die aktuelle Playlist ist privat und kann nicht geteilt werden.".into(),
             no_playlist: "@{user} Gerade läuft keine Playlist.".into(),
             points_refund: " Deine Kanalpunkte werden erstattet.".into(),
+            choose_version: "@{user} Ich habe mehrere passende Versionen gefunden: {options}. Wähle mit !auswahl <Nummer> (oder !abbrechen).".into(),
+            choose_from_list: "@{user} „{name}“ (Seite {page}/{pages}): {options}. Wähle mit !auswahl <Nummer>, blättern mit !weiter / !zurueck, !abbrechen beendet.".into(),
+            choose_request: "@{user} Welchen Wunsch möchtest du ändern? {options}. Wähle mit !auswahl <Nummer>.".into(),
+            no_selection: "@{user} Du hast gerade keine offene Auswahl.".into(),
+            selection_invalid: "@{user} Bitte eine Nummer aus der Liste wählen (!auswahl 1).".into(),
+            selection_canceled: "@{user} Auswahl abgebrochen.".into(),
+            selection_expired: "@{user} Deine Auswahl ist abgelaufen – schick den Wunsch einfach nochmal.".into(),
+            selection_last_page: "@{user} Keine weiteren Titel.".into(),
+            replaced: "@{user} Dein Wunsch wurde geändert: „{title}“ von {artist}. Dein Platz in der Warteschlange bleibt erhalten.".into(),
+            replace_nothing: "@{user} Du hast keinen offenen Wunsch, den du ändern kannst.".into(),
+            replace_locked: "@{user} Dieser Wunsch wurde bereits an Spotify übergeben und kann hier nicht mehr ausgetauscht werden.".into(),
+            replace_same: "@{user} Das ist bereits dein Wunsch.".into(),
+            replace_failed: "@{user} Nicht geändert – dein bisheriger Wunsch bleibt: {reason}".into(),
+            last_songs: "Zuletzt gespielt: {list}".into(),
+            last_songs_empty: "In dieser Session wurde noch nichts anderes gespielt.".into(),
+            playlist_hint: " Lieber einen Song aus der Playlist? !sr {url}".into(),
         }
     }
 }
@@ -177,6 +214,19 @@ pub struct CommandSettings {
     pub playlist: CommandCfg,
     /// Link, der gezeigt wird, wenn gerade keine Playlist läuft (leer = keiner).
     pub playlist_fallback_url: String,
+    /// Auswahl bestätigen (`!auswahl 2`).
+    pub choose: CommandCfg,
+    /// In einer Playlist-Auswahl blättern.
+    pub next_page: CommandCfg,
+    pub prev_page: CommandCfg,
+    /// Offene Auswahl beenden.
+    pub cancel: CommandCfg,
+    /// Eigenen ausstehenden Wunsch austauschen (Platz bleibt erhalten).
+    pub replace: CommandCfg,
+    /// Die letzten fünf gespielten Songs der Session.
+    pub last_songs: CommandCfg,
+    /// Globale Sperrzeit für `!letztersong` (gegen Chatspam), zusätzlich zur Sperre pro Person.
+    pub last_songs_global_cooldown_s: u32,
     pub replies: Replies,
     /// Max. eine Chatnachricht pro Intervall (ms); darüber hinaus wird verworfen.
     pub min_reply_interval_ms: u64,
@@ -228,6 +278,13 @@ impl Default for CommandSettings {
             voteskip_needed: 5,
             playlist: CommandCfg { aliases: vec!["pl".into()], ..CommandCfg::new("playlist", Role::Everyone, 20) },
             playlist_fallback_url: String::new(),
+            choose: CommandCfg { aliases: vec!["choose".into(), "wahl".into(), "pick".into()], ..CommandCfg::new("auswahl", Role::Everyone, 0) },
+            next_page: CommandCfg { aliases: vec!["next".into()], ..CommandCfg::new("weiter", Role::Everyone, 0) },
+            prev_page: CommandCfg { aliases: vec!["zurück".into(), "back".into(), "prev".into()], ..CommandCfg::new("zurueck", Role::Everyone, 0) },
+            cancel: CommandCfg { aliases: vec!["cancel".into()], ..CommandCfg::new("abbrechen", Role::Everyone, 0) },
+            replace: CommandCfg { aliases: vec!["replace".into()], ..CommandCfg::new("ersetzen", Role::Everyone, 20) },
+            last_songs: CommandCfg { aliases: vec!["lastsong".into(), "letzter song".into(), "last song".into()], ..CommandCfg::new("letztersong", Role::Everyone, 30) },
+            last_songs_global_cooldown_s: 10,
             replies: Replies::default(),
             min_reply_interval_ms: 1_200,
             custom: vec![],
@@ -416,6 +473,28 @@ impl Default for RequestPlaylistSettings {
     }
 }
 
+/// Universal Request: Musiklinks anderer Anbieter annehmen. Zugangsdaten liegen nicht hier,
+/// sondern im Betriebssystem-Tresor (siehe `resolve::SECRET_*`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SourceSettings {
+    pub youtube: bool,
+    pub apple_music: bool,
+    pub soundcloud: bool,
+    /// Wie lange eine offene Auswahl gilt (Sekunden).
+    pub selection_timeout_s: u32,
+    /// Einträge pro Seite bei der Playlist-Auswahl im Chat.
+    pub chat_page_size: u32,
+    /// Höchstzahl angebotener Versionen.
+    pub max_options: u32,
+}
+
+impl Default for SourceSettings {
+    fn default() -> Self {
+        Self { youtube: true, apple_music: true, soundcloud: true, selection_timeout_s: 120, chat_page_size: 5, max_options: 3 }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UpdateSettings {
@@ -465,6 +544,7 @@ pub struct Settings {
     pub channel_points: ChannelPointsSettings,
     pub updates: UpdateSettings,
     pub request_playlist: RequestPlaylistSettings,
+    pub sources: SourceSettings,
 }
 
 impl Default for Settings {
@@ -489,6 +569,7 @@ impl Default for Settings {
             channel_points: ChannelPointsSettings::default(),
             updates: UpdateSettings::default(),
             request_playlist: RequestPlaylistSettings::default(),
+            sources: SourceSettings::default(),
         }
     }
 }
@@ -540,6 +621,11 @@ impl Settings {
         if rp.name.is_empty() {
             rp.name = RequestPlaylistSettings::default().name;
         }
+        let src = &mut self.sources;
+        src.selection_timeout_s = src.selection_timeout_s.clamp(30, 900);
+        src.chat_page_size = src.chat_page_size.clamp(3, 8);
+        src.max_options = src.max_options.clamp(2, 5);
+        self.commands.last_songs_global_cooldown_s = self.commands.last_songs_global_cooldown_s.min(600);
         let prefix = self.commands.prefix.clone();
         let mut seen = std::collections::HashSet::new();
         self.commands.custom.truncate(MAX_CUSTOM_COMMANDS);

@@ -535,8 +535,8 @@ async fn request_playlist_collects_each_song_once() {
     // Derselbe Song nochmal, ein abgelehnter Wunsch und ein App-Wunsch → nichts Neues.
     let again = rt.queue.submit_query("erster song", viewer(2), Source::Chat, Some("a2"), None).await;
     assert!(accepted(&again), "{again:?}");
-    let bad = rt.queue.submit_query("https://youtube.com/watch?v=x", viewer(3), Source::Chat, Some("a3"), None).await;
-    assert_eq!(rejected_code(&bad), "invalid_link");
+    let bad = rt.queue.submit_query("https://www.deezer.com/track/123", viewer(3), Source::Chat, Some("a3"), None).await;
+    assert_eq!(rejected_code(&bad), "unsupported_content");
     let app = rt.queue.submit_query("app song", viewer(4), Source::App, None, None).await;
     assert!(accepted(&app), "{app:?}");
     let b = rt.queue.submit_query("zweiter song", viewer(5), Source::Chat, Some("a4"), None).await;

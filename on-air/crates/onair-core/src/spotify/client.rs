@@ -59,6 +59,17 @@ pub struct UserProfile {
     pub display_name: Option<String>,
 }
 
+/// Eine Seite aus Album oder Playlist. Nicht abspielbare Einträge (lokale Dateien,
+/// Podcastfolgen, entfernte Titel) werden als `unavailable` gezählt.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct TrackPage {
+    pub name: Option<String>,
+    pub image_url: Option<String>,
+    pub items: Vec<Option<Track>>,
+    pub total: Option<u32>,
+    pub next_offset: Option<u32>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct QueueSnapshot {
     pub currently_playing: Option<Track>,
@@ -301,6 +312,57 @@ impl SpotifyClient {
         let v = r.json_body().unwrap_or_default();
         let name = v["name"].as_str().ok_or(ApiError::Decode { message: "Playlist".into() })?.to_string();
         Ok((name, v["public"].as_bool()))
+    }
+
+    /// Titel eines Albums. Seite 0 liefert zusätzlich Name und Cover.
+    pub async fn album_page(&self, id: &str, offset: u32, limit: u32) -> Result<TrackPage, ApiError> {
+        if !id.chars().all(|c| c.is_ascii_alphanumeric()) || id.is_empty() {
+            return Err(ApiError::BadRequest { message: "ungültige Album-ID".into() });
+        }
+        let limit = limit.clamp(1, 50);
+        if offset == 0 {
+            let v = self.get(&format!("/albums/{id}")).await?.json_body().unwrap_or_default();
+            let name = v["name"].as_str().map(str::to_string);
+            let image = v["images"].as_array().and_then(|i| i.first()).and_then(|i| i["url"].as_str()).map(str::to_string);
+            let mut page = Self::track_page(&v["tracks"], offset, |x| x.clone());
+            for t in page.items.iter_mut().flatten() {
+                t.album = name.clone();
+                t.image_url = image.clone();
+            }
+            page.name = name;
+            page.image_url = image;
+            return Ok(page);
+        }
+        let v = self.get(&format!("/albums/{id}/tracks?limit={limit}&offset={offset}")).await?.json_body().unwrap_or_default();
+        Ok(Self::track_page(&v, offset, |x| x.clone()))
+    }
+
+    /// Einträge einer Playlist (Web API seit 02/2026: `GET /playlists/{id}/items`, Feld `item`).
+    /// Im Development Mode sind nur eigene bzw. gemeinsam bearbeitete Playlists lesbar.
+    pub async fn playlist_page(&self, id: &str, offset: u32, limit: u32) -> Result<TrackPage, ApiError> {
+        if !id.chars().all(|c| c.is_ascii_alphanumeric()) || id.is_empty() {
+            return Err(ApiError::BadRequest { message: "ungültige Playlist-ID".into() });
+        }
+        let limit = limit.clamp(1, 50);
+        let v = self.get(&format!("/playlists/{id}/items?limit={limit}&offset={offset}")).await?.json_body().unwrap_or_default();
+        // Neues Feld `item`, älteres `track`.
+        Ok(Self::track_page(&v, offset, |x| if x["item"].is_null() { x["track"].clone() } else { x["item"].clone() }))
+    }
+
+    fn track_page(v: &serde_json::Value, offset: u32, pick: impl Fn(&serde_json::Value) -> serde_json::Value) -> TrackPage {
+        let items: Vec<Option<Track>> = v["items"]
+            .as_array()
+            .map(|a| a.iter().map(|x| {
+                let t = pick(x);
+                if t["is_local"].as_bool() == Some(true) || t["is_playable"].as_bool() == Some(false) {
+                    return None;
+                }
+                parse::parse_track(&t)
+            }).collect())
+            .unwrap_or_default();
+        let total = v["total"].as_u64().map(|t| t as u32);
+        let next_offset = (!v["next"].is_null() && v["next"].is_string()).then(|| offset + items.len() as u32);
+        TrackPage { name: None, image_url: None, items, total, next_offset }
     }
 
     /// Legt eine Playlist im Konto an (Web API seit 02/2026: `POST /me/playlists`).

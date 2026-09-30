@@ -2,6 +2,12 @@
 
 ## 0.2.0
 
+- Universal Request: Wünsche als Spotify-, YouTube-/YouTube-Music-, Apple-Music- und SoundCloud-Link oder „Künstler – Titel“; Kurzlinks, regionale Links und Tracking-Parameter werden erkannt; Zuordnung zur passenden Spotify-Version mit Versionserkennung (Remix, Live, Acoustic, sped up …); bei Mehrdeutigkeit kleine Auswahl im Chat (`!auswahl N`, `!abbrechen`) bzw. in der App. Einrichtung optionaler Zugangsdaten unter *Einstellungen → Musikquellen* (siehe `docs/QUELLEN.md`).
+- Playlist- und Albumlinks: Auswahl eines einzelnen Titels (`!weiter`, `!zurueck`), in der App mit Nachladen und Filter; Playlists werden nie komplett übernommen.
+- `!ersetzen` / `!replace` und „Song ändern“: eigenen noch nicht übergebenen Wunsch austauschen – Platz, Einlösung und Eingangszeit bleiben, der alte Song bleibt bei jedem Fehler erhalten.
+- `!letztersong` (auch `!lastsong`, `!letzter song`, `!last song`): die letzten fünf tatsächlich gespielten Songs der Sitzung.
+- Vorabprüfung beim Hinzufügen: konkrete Hinweise („Bereits auf Platz 4“, „Maximal 6 Minuten erlaubt“ …) nach denselben Regeln wie die endgültige Annahme.
+- Behoben: Ein Wunsch, der genau während der Übergabe an Spotify geändert wurde, konnte mit dem alten Titel übergeben werden – die Übergabe liest den Titel jetzt nach dem Sperren neu.
 - Neues Design der Desktop-App: Player im Mittelpunkt, Warteschlange mit Verlauf und Moderationsbereich, neu gegliederte Einstellungen.
 - Songrequests mit Twitch-Kanalpunkten (optional, eigene verwaltete Belohnung, Abwicklung und Erstattung).
 - Planung bis zum Streamende: Requests passend zur verbleibenden Streamzeit annehmen.

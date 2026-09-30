@@ -109,6 +109,40 @@ const MIGRATIONS: &[&str] = &[
         created_at INTEGER NOT NULL
     );
     "#,
+    // v4: Universal Request, Ersetzen, Auswahl-Sitzungen, Session-Verlauf
+    r#"
+    -- Revision: jede inhaltliche Änderung (z. B. Austausch) erhöht sie; die Übergabe prüft sie.
+    ALTER TABLE requests ADD COLUMN rev INTEGER NOT NULL DEFAULT 0;
+    -- Herkunft (JSON): ursprüngliche Quelle, Zuordnungsweg, Nutzerentscheidung.
+    ALTER TABLE requests ADD COLUMN origin TEXT;
+    CREATE TABLE selections (
+        id         TEXT PRIMARY KEY,
+        channel    TEXT NOT NULL,
+        user_id    TEXT NOT NULL,
+        user_name  TEXT NOT NULL,
+        -- new | replace
+        purpose    TEXT NOT NULL,
+        -- version | collection | pick_request
+        stage      TEXT NOT NULL,
+        request_id TEXT,
+        data       TEXT NOT NULL,
+        -- open | done | canceled | expired | replaced
+        state      TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    );
+    CREATE UNIQUE INDEX idx_selections_open ON selections(channel, user_id) WHERE state = 'open';
+    CREATE TABLE play_sessions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        channel      TEXT NOT NULL,
+        started_at   INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL
+    );
+    ALTER TABLE history ADD COLUMN session_id INTEGER;
+    ALTER TABLE history ADD COLUMN channel TEXT;
+    CREATE INDEX idx_history_session ON history(session_id, played_at);
+    "#,
 ];
 
 pub fn schema_version() -> i64 {
@@ -213,6 +247,8 @@ impl Db {
         )
         .map_err(|e| e.to_string())?;
         c.execute("DELETE FROM history WHERE played_at < ?1", params![now_ms - 180 * day])
+            .map_err(|e| e.to_string())?;
+        c.execute("DELETE FROM selections WHERE state != 'open' AND updated_at < ?1", params![now_ms - day])
             .map_err(|e| e.to_string())?;
         Ok(())
     }

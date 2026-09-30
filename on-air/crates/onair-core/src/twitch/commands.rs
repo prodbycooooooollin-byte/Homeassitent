@@ -13,6 +13,12 @@ pub enum CommandKind {
     Skip,
     VoteSkip,
     Playlist,
+    Choose,
+    NextPage,
+    PrevPage,
+    Cancel,
+    Replace,
+    LastSongs,
 }
 
 impl CommandKind {
@@ -25,9 +31,15 @@ impl CommandKind {
             CommandKind::Skip => &s.skip,
             CommandKind::VoteSkip => &s.voteskip,
             CommandKind::Playlist => &s.playlist,
+            CommandKind::Choose => &s.choose,
+            CommandKind::NextPage => &s.next_page,
+            CommandKind::PrevPage => &s.prev_page,
+            CommandKind::Cancel => &s.cancel,
+            CommandKind::Replace => &s.replace,
+            CommandKind::LastSongs => &s.last_songs,
         }
     }
-    const ALL: [CommandKind; 7] = [
+    const ALL: [CommandKind; 13] = [
         CommandKind::Sr,
         CommandKind::Song,
         CommandKind::Queue,
@@ -35,28 +47,45 @@ impl CommandKind {
         CommandKind::Skip,
         CommandKind::VoteSkip,
         CommandKind::Playlist,
+        CommandKind::Choose,
+        CommandKind::NextPage,
+        CommandKind::PrevPage,
+        CommandKind::Cancel,
+        CommandKind::Replace,
+        CommandKind::LastSongs,
     ];
 }
 
-/// Erkennt einen Befehl; liefert Art und Argumenttext.
+/// Erkennt einen Befehl; liefert Art und Argumenttext. Groß-/Kleinschreibung und
+/// Mehrfach-Leerzeichen spielen keine Rolle; Aliase dürfen aus mehreren Wörtern bestehen
+/// („!letzter song“). Längere Aliase haben Vorrang vor kürzeren.
 pub fn parse(text: &str, s: &CommandSettings) -> Option<(CommandKind, String)> {
     let t = text.trim();
     let rest = t.strip_prefix(s.prefix.as_str())?;
-    let (word, args) = match rest.split_once(char::is_whitespace) {
-        Some((w, a)) => (w, a.trim()),
-        None => (rest, ""),
-    };
-    let word = word.to_lowercase();
+    let words: Vec<&str> = rest.split_whitespace().collect();
+    if words.is_empty() {
+        return None;
+    }
+    let mut best: Option<(usize, CommandKind)> = None;
     for k in CommandKind::ALL {
         let c = k.cfg(s);
         if !c.enabled {
             continue;
         }
-        if c.name.eq_ignore_ascii_case(&word) || c.aliases.iter().any(|a| a.eq_ignore_ascii_case(&word)) {
-            return Some((k, args.chars().take(300).collect()));
+        for name in std::iter::once(&c.name).chain(c.aliases.iter()) {
+            let parts: Vec<String> = name.split_whitespace().map(str::to_lowercase).collect();
+            if parts.is_empty() || parts.len() > words.len() {
+                continue;
+            }
+            let hit = parts.iter().zip(words.iter()).all(|(a, w)| w.to_lowercase() == *a);
+            if hit && best.is_none_or(|(n, _)| parts.len() > n) {
+                best = Some((parts.len(), k));
+            }
         }
     }
-    None
+    let (n, kind) = best?;
+    let args = words[n..].join(" ");
+    Some((kind, args.chars().take(300).collect()))
 }
 
 /// Eigener Befehl zum Text? Eingebaute Befehle haben Vorrang (siehe `parse`).
@@ -256,19 +285,138 @@ pub fn reply_for_outcome(r: &Replies, o: &SubmitOutcome) -> Option<String> {
             let t = if code == "not_found" { &r.not_found } else if code == "closed" { &r.closed } else { &r.rejected };
             (t.as_str(), request.as_ref(), vec![("reason", text.clone())])
         }
+        SubmitOutcome::NeedsChoice { request, prompt } => return render_prompt(r, prompt, &request.requester.name),
     };
     if tmpl.trim().is_empty() {
         return None;
     }
     let mut vars = extra;
+    let mut hint = String::new();
     if let Some(req) = req {
         vars.push(("user", req.requester.name.clone()));
         if let Some(t) = &req.track {
             vars.push(("title", t.title.clone()));
             vars.push(("artist", t.artist_line()));
         }
+        if matches!(o, SubmitOutcome::Accepted { .. } | SubmitOutcome::PendingReview { .. }) {
+            if let Some(url) = req.origin.as_ref().and_then(|x| x.playlist_hint.clone()) {
+                hint = fill(&r.playlist_hint, &[("url", url)]);
+            }
+        }
     }
-    Some(sanitize_chat(&fill(tmpl, &vars)))
+    Some(sanitize_chat(&format!("{}{hint}", fill(tmpl, &vars))))
+}
+
+/// Nummerierte Auswahl so kürzen, dass die Nachricht in Twitchs Längengrenze passt.
+fn fit_options(template: &str, vars: &[(&str, String)], options: &[String]) -> String {
+    for max in [70usize, 55, 45, 36, 28, 20] {
+        let list: Vec<String> = options
+            .iter()
+            .enumerate()
+            .map(|(i, o)| {
+                let o: String = if o.chars().count() > max { format!("{}…", o.chars().take(max - 1).collect::<String>()) } else { o.clone() };
+                format!("{}) {o}", i + 1)
+            })
+            .collect();
+        let mut v = vars.to_vec();
+        v.push(("options", list.join(" · ")));
+        let text = fill(template, &v);
+        if text.chars().count() <= 480 || max == 20 {
+            return text;
+        }
+    }
+    unreachable!()
+}
+
+/// Chattext für eine offene Auswahl.
+pub fn render_prompt(r: &Replies, p: &crate::queue::ChoicePrompt, user: &str) -> Option<String> {
+    use crate::selection::Stage;
+    let tmpl = match p.stage {
+        Stage::Version => &r.choose_version,
+        Stage::Collection => &r.choose_from_list,
+        Stage::PickRequest => &r.choose_request,
+    };
+    if tmpl.trim().is_empty() {
+        return None;
+    }
+    let vars = vec![
+        ("user", user.to_string()),
+        ("name", p.name.clone().unwrap_or_else(|| "Playlist".into())),
+        ("page", p.page.to_string()),
+        ("pages", p.pages.map(|n| n.to_string()).unwrap_or_else(|| "?".into())),
+    ];
+    Some(sanitize_chat(&fit_options(tmpl, &vars, &p.options)))
+}
+
+/// Chattext für einen Auswahl-/Austausch-Vorgang.
+pub fn render_flow(r: &Replies, f: &crate::queue::flow::ChatFlow, user: &str) -> Option<String> {
+    use crate::queue::flow::{ChatFlow, Notice};
+    let u = ("user", user.to_string());
+    let text = match f {
+        ChatFlow::Outcome { outcome } => return reply_for_outcome(r, outcome).map(|t| t.replace("{user}", user)),
+        ChatFlow::Prompt { prompt } => return render_prompt(r, prompt, user),
+        ChatFlow::Replaced { request } => {
+            let (title, artist) = request.track.as_ref().map(|t| (t.title.clone(), t.artist_line())).unwrap_or_default();
+            let mut t = fill(&r.replaced, &[u, ("title", title), ("artist", artist)]);
+            if request.status == crate::queue::RequestStatus::PendingReview {
+                t.push_str(" (wartet auf Freigabe)");
+            }
+            t
+        }
+        ChatFlow::ReplaceFailed { text, .. } => fill(&r.replace_failed, &[u, ("reason", text.clone())]),
+        ChatFlow::Notice { notice } => match notice {
+            Notice::NoSelection => fill(&r.no_selection, &[u]),
+            Notice::Invalid => fill(&r.selection_invalid, &[u]),
+            Notice::Canceled => fill(&r.selection_canceled, &[u]),
+            Notice::LastPage => fill(&r.selection_last_page, &[u]),
+            Notice::ReplaceNothing => fill(&r.replace_nothing, &[u]),
+            Notice::ReplaceLocked => fill(&r.replace_locked, &[u]),
+            Notice::ReplaceSame => fill(&r.replace_same, &[u]),
+            Notice::ItemFailed { text } => format!("@{user} {text}"),
+        },
+    };
+    (!text.trim().is_empty()).then(|| sanitize_chat(&text))
+}
+
+/// `!letztersong`: bis zu fünf Einträge in möglichst wenigen Nachrichten (je ≤ 450 Zeichen).
+pub fn last_songs_messages(r: &Replies, entries: &[crate::queue::store::HistoryEntry]) -> Vec<String> {
+    if entries.is_empty() {
+        return if r.last_songs_empty.trim().is_empty() { vec![] } else { vec![sanitize_chat(&r.last_songs_empty)] };
+    }
+    let items: Vec<String> = entries
+        .iter()
+        .enumerate()
+        .map(|(i, e)| {
+            let link = if !e.track.id.is_empty() && e.track.id.chars().all(|c| c.is_ascii_alphanumeric()) { format!(" https://open.spotify.com/track/{}", e.track.id) } else { String::new() };
+            let who = e.requester_name.as_ref().map(|n| format!(" (Wunsch von {n})")).unwrap_or_default();
+            let title: String = e.track.title.chars().take(80).collect();
+            format!("{}) {} – {title}{who}{link}", i + 1, e.track.artists.first().cloned().unwrap_or_default())
+        })
+        .collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    for it in items {
+        let candidate = if cur.is_empty() { it.clone() } else { format!("{cur} · {it}") };
+        let rendered = fill(&r.last_songs, &[("list", candidate.clone())]);
+        if rendered.chars().count() > 450 && !cur.is_empty() {
+            out.push(cur);
+            cur = it;
+        } else {
+            cur = candidate;
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    let n = out.len();
+    out.into_iter()
+        .enumerate()
+        .map(|(i, list)| {
+            let text = if i == 0 { fill(&r.last_songs, &[("list", list)]) } else { list };
+            sanitize_chat(&if n > 1 && i + 1 < n { format!("{text} …") } else { text })
+        })
+        .take(3)
+        .collect()
 }
 
 /// Chat-Antwort auf eine Kanalpunkte-Einlösung: dieselben Texte wie bei `!sr`, immer mit
@@ -300,6 +448,36 @@ mod tests {
         assert_eq!(parse("!song", &s), Some((CommandKind::Song, "".into())));
         assert_eq!(parse("hello !sr", &s), None);
         assert_eq!(parse("!unknown", &s), None);
+    }
+
+    #[test]
+    fn history_aliases_with_spaces_and_case() {
+        let s = CommandSettings::default();
+        for t in ["!letztersong", "!LastSong", "!letzter song", "!Last   Song", "  !last song  "] {
+            assert_eq!(parse(t, &s).map(|(k, _)| k), Some(CommandKind::LastSongs), "{t}");
+        }
+        // „!last“ allein ist kein eingebauter Befehl (bleibt für eigene Befehle frei).
+        assert_eq!(parse("!last", &s), None);
+        assert_eq!(parse("!auswahl 2", &s), Some((CommandKind::Choose, "2".into())));
+        assert_eq!(parse("!replace https://youtu.be/x", &s), Some((CommandKind::Replace, "https://youtu.be/x".into())));
+        assert_eq!(parse("!zurück", &s).map(|(k, _)| k), Some(CommandKind::PrevPage));
+    }
+
+    #[test]
+    fn prompts_fit_into_one_chat_message() {
+        let r = Replies::default();
+        let p = crate::queue::ChoicePrompt {
+            selection_id: "s".into(),
+            stage: crate::selection::Stage::Collection,
+            name: Some("Sehr lange Playlist mit ausführlichem Namen".into()),
+            page: 1,
+            pages: Some(9),
+            options: (0..5).map(|i| format!("Ein ziemlich langer Songtitel Nummer {i} – Interpret mit langem Namen (Original, 3:20)")).collect(),
+            playlist_hint: None,
+        };
+        let t = render_prompt(&r, &p, "Kira").unwrap();
+        assert!(t.chars().count() <= 480, "{}", t.len());
+        assert!(t.contains("1) ") && t.contains("5) ") && !t.ends_with('…'));
     }
 
     fn custom(name: &str, reply: &str) -> CustomCommand {

@@ -29,6 +29,8 @@ pub mod overlay;
 pub mod palette;
 pub mod plan;
 pub mod queue;
+pub mod resolve;
+pub mod selection;
 pub mod runtime;
 pub mod secrets;
 pub mod settings;

@@ -119,8 +119,64 @@ pub async fn search(state: State<'_, AppState>, query: String) -> R<Vec<Track>> 
 }
 
 #[tauri::command]
-pub async fn add_request(state: State<'_, AppState>, track: Track) -> R<SubmitOutcome> {
-    Ok(state.rt.add_request(track).await)
+pub async fn add_request(state: State<'_, AppState>, track: Track, origin: Option<onair_core::resolve::Origin>) -> R<SubmitOutcome> {
+    Ok(state.rt.add_request_with_origin(track, origin).await)
+}
+
+/// Universal Request: Link oder Suchtext auflösen (legt nichts an).
+#[tauri::command]
+pub async fn resolve_input(state: State<'_, AppState>, input: String) -> R<onair_core::resolve::Resolution> {
+    if input.len() > 2000 {
+        return Err("Eingabe zu lang".into());
+    }
+    Ok(state.rt.resolve_input(&input).await)
+}
+
+#[derive(Serialize)]
+pub struct CollectionResult {
+    pub collection: onair_core::resolve::CollectionInfo,
+    pub page: onair_core::resolve::CollectionPage,
+}
+
+impl From<onair_core::resolve::ResolveError> for CmdError {
+    fn from(e: onair_core::resolve::ResolveError) -> Self {
+        Self { code: e.code().into(), message: e.text() }
+    }
+}
+
+#[tauri::command]
+pub async fn collection_page(state: State<'_, AppState>, collection: onair_core::resolve::CollectionRef, cursor: Option<String>) -> R<CollectionResult> {
+    let (collection, page) = state.rt.collection_page(collection, cursor).await?;
+    Ok(CollectionResult { collection, page })
+}
+
+#[tauri::command]
+pub async fn match_item(state: State<'_, AppState>, item: onair_core::resolve::SourceItem) -> R<onair_core::resolve::Resolution> {
+    Ok(state.rt.match_item(item).await)
+}
+
+/// Vorprüfung: würde dieser Titel angenommen? (keine Reservierung, keine Spotify-Aktion)
+#[tauri::command]
+pub fn precheck(state: State<'_, AppState>, track: Track, replace: Option<String>) -> R<onair_core::queue::flow::Verdict> {
+    Ok(state.rt.precheck(&track, replace.as_deref()))
+}
+
+/// „Song ändern“: Wunsch austauschen, Platz bleibt erhalten.
+#[tauri::command]
+pub async fn replace_request(state: State<'_, AppState>, id: String, track: Track, origin: Option<onair_core::resolve::Origin>) -> R<onair_core::queue::flow::ChatFlow> {
+    Ok(state.rt.replace_request(&id, track, origin).await)
+}
+
+/// Zugangsdaten eines Musikanbieters (landen im Windows-Tresor, nie in Einstellungen/Exports).
+#[tauri::command]
+pub fn set_provider_credential(state: State<'_, AppState>, provider: String, value: Option<String>) -> R<()> {
+    let p = onair_core::resolve::SourceProvider::parse(&provider).ok_or("unbekannter Anbieter")?;
+    state.rt.set_provider_credential(p, value.as_deref()).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn last_played(state: State<'_, AppState>, limit: Option<usize>) -> R<Vec<HistoryEntry>> {
+    Ok(state.rt.last_played(limit.unwrap_or(5)))
 }
 
 #[tauri::command]

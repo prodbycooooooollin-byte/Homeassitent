@@ -327,3 +327,72 @@ test("Als Nächstes: feste Kartenbreite, seitlich scrollbar per Mausrad und Pfei
   await expect.poll(() => row.evaluate((el) => el.scrollLeft)).toBe(0);
   await noHorizontalOverflow(page);
 });
+
+// Universal Request (Beispiel-Backend): Links werden erkannt, Versionen/Playlists verlangen eine Auswahl,
+// jede Zeile zeigt das Vorabprüfungsergebnis.
+test("Song hinzufügen: Link mit mehreren Versionen zeigt Auswahl und Vorabprüfung", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/#/queue");
+  await page.getByRole("button", { name: "Song hinzufügen" }).first().click();
+  await page.getByLabel(/Titel, Interpret oder Link/).fill("https://youtu.be/dQw4w9WgXcQ");
+  await expect(page.getByText("Mehrere passende Versionen – bitte wählen")).toBeVisible();
+  await expect(page.locator(".verdict").first()).toBeVisible();
+  await expect(page.getByText(/Bereits auf Platz \d/).first()).toBeVisible();
+  await noHorizontalOverflow(page);
+});
+
+test("Song hinzufügen: Playlist lädt seitenweise, Filter ist als Teilmenge gekennzeichnet", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/#/queue");
+  await page.getByRole("button", { name: "Song hinzufügen" }).first().click();
+  await page.getByLabel(/Titel, Interpret oder Link/).fill("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M");
+  const loaded = page.getByText(/\d+ von 40 geladen/);
+  await expect(loaded).toBeVisible();
+  const count = async () => Number((await loaded.textContent())!.match(/(\d+) von 40/)![1]);
+  const before = await count();
+  await page.getByLabel("In geladenen Titeln filtern").fill("glass");
+  await expect(page.getByText("Der Filter durchsucht nur die bereits geladenen Titel.")).toBeVisible();
+  await page.getByLabel("In geladenen Titeln filtern").fill("");
+  await page.getByRole("button", { name: "Weitere laden" }).click();
+  await expect.poll(count).toBeGreaterThan(before);
+  await page.getByRole("button", { name: /Wählen: Glass Harbour/ }).first().click();
+  await expect(page.getByText("Spotify-Version bestätigen")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Zurück zur Liste" })).toBeVisible();
+});
+
+test("Song hinzufügen: nicht unterstützter Dienst wird verständlich abgelehnt", async ({ page }) => {
+  await page.goto("/#/queue");
+  await page.getByRole("button", { name: "Song hinzufügen" }).first().click();
+  await page.getByLabel(/Titel, Interpret oder Link/).fill("https://www.deezer.com/track/1");
+  await expect(page.getByText("Dieser Musikdienst wird nicht unterstützt", { exact: false })).toBeVisible();
+});
+
+test("Song ändern über das Zeilenmenü behält den Platz", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/#/queue");
+  const menus = page.getByRole("button", { name: "…" });
+  let found = false;
+  for (let i = 0; i < (await menus.count()) && !found; i++) {
+    await menus.nth(i).click();
+    const item = page.getByRole("menuitem", { name: "Song ändern" });
+    if (await item.count()) {
+      await item.click();
+      found = true;
+    } else {
+      await menus.nth(i).click();
+    }
+  }
+  expect(found, "mindestens ein offener Wunsch hat „Song ändern“").toBe(true);
+  await expect(page.getByText("Platz in der Warteschlange bleibt erhalten")).toBeVisible();
+});
+
+test("Einstellungen: Musikquellen zeigen Fähigkeiten und maskierte Zugangsdaten", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/#/settings");
+  await page.locator(".settings-nav").getByRole("button", { name: "Musikquellen" }).click();
+  await expect(page.getByText("YouTube").first()).toBeVisible();
+  await expect(page.getByText("SoundCloud").first()).toBeVisible();
+  const secrets = page.locator('.settings-section input[type="password"]');
+  expect(await secrets.count()).toBeGreaterThanOrEqual(3);
+  await noHorizontalOverflow(page);
+});

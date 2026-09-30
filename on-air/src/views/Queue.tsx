@@ -103,6 +103,23 @@ export function QueueView({ snap, initialTab }: { snap: AppSnapshot; initialTab?
               </div>
             )}
           </section>
+          {(snap.awaiting?.length ?? 0) > 0 && (
+            <section className="card" aria-label={t("q.awaiting")}>
+              <div className="section-label">{t("q.awaiting")} <span className="subtle small" style={{ fontWeight: 400 }}>– {t("q.awaiting_hint")}</span></div>
+              <div className="list" style={{ paddingBottom: 6 }}>
+                {snap.awaiting!.map((r) => (
+                  <div className="item awaiting-row" key={r.id}>
+                    <span className="badge info">{t("st.awaiting_selection")}</span>
+                    <div className="col" style={{ gap: 1, minWidth: 0 }}>
+                      <span className="t ellipsis" title={r.query}>{r.query}</span>
+                      <span className="s ellipsis">{r.requester.name}{r.source === "channel_points" ? ` · ${t("q.src_points")}` : ""}</span>
+                    </div>
+                    <button className="icon-btn sm" aria-label={t("q.remove")} title={t("q.remove")} onClick={() => api.queueAction("remove", r.id).catch(toastError)}><Trash2 size={15} /></button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           {snap.recent.length > 0 && (
             <section className="card" aria-label={t("q.recent")}>
               <div className="section-label">{t("q.recent")}</div>

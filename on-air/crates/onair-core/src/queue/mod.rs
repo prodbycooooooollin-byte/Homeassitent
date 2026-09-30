@@ -3,6 +3,7 @@
 //! Die lokale Queue bestimmt ausstehende Requests; Spotify bestimmt den tatsächlich
 //! beobachteten Wiedergabezustand. Beide werden abgeglichen, nie gleichgesetzt.
 
+pub mod flow;
 pub mod rules;
 pub mod service;
 pub mod store;
@@ -16,6 +17,8 @@ use serde::{Deserialize, Serialize};
 pub enum RequestStatus {
     /// Eingegangen, noch nicht geprüft (nur kurzzeitig; nach Absturz neu geprüft).
     Received,
+    /// Auswahl offen: Zuschauer wählt Version bzw. Playlist-Titel (hält den Platz des Nutzers).
+    AwaitingSelection,
     /// Prüfung ausstehend: Moderation oder Spotify gerade nicht erreichbar.
     PendingReview,
     /// Angenommen, wartet auf Übergabe an Spotify.
@@ -37,6 +40,7 @@ impl RequestStatus {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Received => "received",
+            Self::AwaitingSelection => "awaiting_selection",
             Self::PendingReview => "pending_review",
             Self::Accepted => "accepted",
             Self::HandingOff => "handing_off",
@@ -52,6 +56,7 @@ impl RequestStatus {
     pub fn parse(s: &str) -> Self {
         match s {
             "received" => Self::Received,
+            "awaiting_selection" => Self::AwaitingSelection,
             "pending_review" => Self::PendingReview,
             "accepted" => Self::Accepted,
             "handing_off" => Self::HandingOff,
@@ -68,7 +73,7 @@ impl RequestStatus {
     pub fn is_pending(self) -> bool {
         matches!(
             self,
-            Self::Received | Self::PendingReview | Self::Accepted | Self::HandingOff | Self::HandedOff | Self::Uncertain
+            Self::Received | Self::AwaitingSelection | Self::PendingReview | Self::Accepted | Self::HandingOff | Self::HandedOff | Self::Uncertain
         )
     }
 
@@ -79,6 +84,11 @@ impl RequestStatus {
 
     pub fn is_final(self) -> bool {
         matches!(self, Self::Completed | Self::Rejected | Self::Failed)
+    }
+
+    /// Eigener Wunsch darf noch ausgetauscht werden (weder übergeben noch in Übergabe).
+    pub fn is_replaceable(self) -> bool {
+        matches!(self, Self::PendingReview | Self::Accepted)
     }
 }
 
@@ -150,6 +160,12 @@ pub struct SongRequest {
     pub chat_message_id: Option<String>,
     /// Nur bei Kanalpunkte-Requests.
     pub redemption: Option<Redemption>,
+    /// Ursprüngliche Quelle und Zuordnungsweg (Universal Request).
+    #[serde(default)]
+    pub origin: Option<crate::resolve::Origin>,
+    /// Revision: steigt bei jedem Austausch des Songs.
+    #[serde(default)]
+    pub rev: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -206,6 +222,24 @@ pub enum SubmitOutcome {
     PendingReview { request: SongRequest },
     PendingOffline { request: SongRequest },
     Rejected { code: String, text: String, request: Option<SongRequest> },
+    /// Auswahl nötig (Version oder Playlist-Titel). Der Wunsch wartet mit Status
+    /// `awaiting_selection`, bis gewählt, abgebrochen oder abgelaufen.
+    NeedsChoice { request: SongRequest, prompt: ChoicePrompt },
     /// Dieselbe Event-ID wurde bereits verarbeitet – keine zweite Antwort.
     Duplicate,
+}
+
+/// Anzeige einer offenen Auswahl (Chat und App).
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ChoicePrompt {
+    pub selection_id: String,
+    pub stage: crate::selection::Stage,
+    /// Name der Playlist bzw. des Albums.
+    pub name: Option<String>,
+    /// 1-basiert.
+    pub page: u32,
+    pub pages: Option<u32>,
+    /// Beschriftungen der aktuell wählbaren Nummern (1…n).
+    pub options: Vec<String>,
+    pub playlist_hint: Option<String>,
 }

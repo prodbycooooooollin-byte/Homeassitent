@@ -35,11 +35,18 @@ pub struct HttpRequest {
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub body: Body,
+    /// `false` = Weiterleitungen nicht folgen (Antwort mit `Location` kommt zurück). Für
+    /// Kurzlinks: Jedes Ziel wird vom Aufrufer erneut gegen die Anbieterliste geprüft.
+    pub follow_redirects: bool,
 }
 
 impl HttpRequest {
     pub fn new(method: Method, url: impl Into<String>) -> Self {
-        Self { method, url: url.into(), headers: Vec::new(), body: Body::None }
+        Self { method, url: url.into(), headers: Vec::new(), body: Body::None, follow_redirects: true }
+    }
+    pub fn no_redirects(mut self) -> Self {
+        self.follow_redirects = false;
+        self
     }
     pub fn header(mut self, k: &str, v: impl Into<String>) -> Self {
         self.headers.push((k.to_string(), v.into()));
@@ -125,22 +132,27 @@ pub type SharedTransport = Arc<dyn HttpTransport>;
 /// Echter Transport über `reqwest` mit festen Timeouts.
 pub struct ReqwestTransport {
     client: reqwest::Client,
+    /// Ohne automatische Weiterleitungen (siehe [`HttpRequest::follow_redirects`]).
+    direct: reqwest::Client,
 }
 
 impl ReqwestTransport {
     pub fn new() -> Self {
-        let client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(12))
-            .pool_idle_timeout(Duration::from_secs(60))
-            .user_agent(concat!("ON-AIR/", env!("CARGO_PKG_VERSION")))
-            .build()
-            // Nie wegen des HTTP-Clients abstürzen (z. B. unlesbarer Zertifikatsspeicher).
-            .unwrap_or_else(|e| {
-                tracing::warn!(target: "http", error = %e, "HTTP-Client mit Standardeinstellungen");
-                reqwest::Client::new()
-            });
-        Self { client }
+        let build = |redirects: bool| {
+            reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(5))
+                .timeout(Duration::from_secs(12))
+                .pool_idle_timeout(Duration::from_secs(60))
+                .redirect(if redirects { reqwest::redirect::Policy::limited(5) } else { reqwest::redirect::Policy::none() })
+                .user_agent(concat!("ON-AIR/", env!("CARGO_PKG_VERSION")))
+                .build()
+                // Nie wegen des HTTP-Clients abstürzen (z. B. unlesbarer Zertifikatsspeicher).
+                .unwrap_or_else(|e| {
+                    tracing::warn!(target: "http", error = %e, "HTTP-Client mit Standardeinstellungen");
+                    reqwest::Client::new()
+                })
+        };
+        Self { client: build(true), direct: build(false) }
     }
 }
 
@@ -160,7 +172,8 @@ impl HttpTransport for ReqwestTransport {
             Method::Patch => reqwest::Method::PATCH,
             Method::Delete => reqwest::Method::DELETE,
         };
-        let mut rb = self.client.request(method, &req.url);
+        let client = if req.follow_redirects { &self.client } else { &self.direct };
+        let mut rb = client.request(method, &req.url);
         for (k, v) in &req.headers {
             rb = rb.header(k, v);
         }

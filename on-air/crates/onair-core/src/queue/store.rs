@@ -11,7 +11,7 @@ use rusqlite::{params, OptionalExtension, Row};
 const COLS: &str = "id, track_id, track_uri, title, artists, album, image_url, duration_ms, explicit, query, \
 requester_id, requester_name, requester_role, source, source_event, received_at, status, pending_reason, reason, \
 position, priority, updated_at, handoff_at, observed_at, finished_at, chat_message_id, reward_id, redemption_id, \
-redemption_status, redemption_target, redemption_error";
+redemption_status, redemption_target, redemption_error, rev, origin";
 
 fn role_str(r: Role) -> &'static str {
     match r {
@@ -102,6 +102,8 @@ fn from_row(r: &Row) -> rusqlite::Result<SongRequest> {
             }),
             _ => None,
         },
+        rev: r.get::<_, Option<i64>>(31)?.unwrap_or(0),
+        origin: r.get::<_, Option<String>>(32)?.and_then(|o| serde_json::from_str(&o).ok()),
     })
 }
 
@@ -162,7 +164,7 @@ impl QueueStore {
     fn insert_on(c: &rusqlite::Connection, r: &SongRequest) -> DbResult<()> {
         let t = r.track.as_ref();
         c.execute(
-            &format!("INSERT INTO requests(provider, {COLS}) VALUES ('spotify', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)"),
+            &format!("INSERT INTO requests(provider, {COLS}) VALUES ('spotify', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33)"),
             params![
                 r.id,
                 t.map(|t| t.id.clone()),
@@ -195,6 +197,8 @@ impl QueueStore {
                 r.redemption.as_ref().map(|x| x.status.as_str()),
                 r.redemption.as_ref().and_then(|x| x.target.map(|t| t.as_str())),
                 r.redemption.as_ref().and_then(|x| x.last_error.clone()),
+                r.rev,
+                r.origin.as_ref().and_then(|o| serde_json::to_string(o).ok()),
             ],
         )
         .map(|_| ())
@@ -378,26 +382,37 @@ impl QueueStore {
 
     /// Kennzahlen für die Regelprüfung; `exclude_id` ist der gerade geprüfte Request.
     pub fn stats(&self, requester_id: &str, track_uri: Option<&str>, exclude_id: &str) -> QueueStats {
+        self.stats_before(requester_id, track_uri, exclude_id, None)
+    }
+
+    /// Wie [`stats`](Self::stats); mit `before` zählen für Cooldowns nur Requests, die vor
+    /// diesem (Eingangszeit, ID) eingingen – so bleibt die endgültige Prüfung unter Sperre
+    /// auch für später verarbeitete Wünsche fair.
+    pub fn stats_before(&self, requester_id: &str, track_uri: Option<&str>, exclude_id: &str, before: Option<(i64, &str)>) -> QueueStats {
         let c = self.db.conn();
-        let pend = format!(
-            "('received','pending_review','accepted','handing_off','handed_off','uncertain') AND id != '{}'",
-            exclude_id.replace('\'', "")
-        );
+        let ex = exclude_id.replace('\'', "");
+        let pend = format!("('received','pending_review','accepted','handing_off','handed_off','uncertain') AND id != '{ex}'");
+        // Offene Auswahl hält den Platz des Nutzers, zählt aber nicht zur Warteschlangenlänge.
+        let pend_user = format!("('received','awaiting_selection','pending_review','accepted','handing_off','handed_off','uncertain') AND id != '{ex}'");
+        let before_sql = match before {
+            Some((t, id)) => format!(" AND (received_at < {t} OR (received_at = {t} AND id < '{}'))", id.replace('\'', "")),
+            None => String::new(),
+        };
         let q = |sql: &str, p: &[&dyn rusqlite::ToSql]| -> Option<i64> {
             c.query_row(sql, p, |r| r.get::<_, Option<i64>>(0)).ok().flatten()
         };
         QueueStats {
             pending_total: q(&format!("SELECT COUNT(*) FROM requests WHERE status IN {pend}"), &[]).unwrap_or(0) as u32,
             pending_for_user: q(
-                &format!("SELECT COUNT(*) FROM requests WHERE status IN {pend} AND requester_id = ?1"),
+                &format!("SELECT COUNT(*) FROM requests WHERE status IN {pend_user} AND requester_id = ?1"),
                 &[&requester_id],
             )
             .unwrap_or(0) as u32,
             last_by_user_ms: q(
-                &format!("SELECT MAX(received_at) FROM requests WHERE requester_id = ?1 AND status NOT IN ('rejected') AND id != '{}'", exclude_id.replace('\'', "")),
+                &format!("SELECT MAX(received_at) FROM requests WHERE requester_id = ?1 AND status NOT IN ('rejected') AND id != '{ex}'{before_sql}"),
                 &[&requester_id],
             ),
-            last_global_ms: q(&format!("SELECT MAX(received_at) FROM requests WHERE status NOT IN ('rejected') AND id != '{}'", exclude_id.replace('\'', "")), &[]),
+            last_global_ms: q(&format!("SELECT MAX(received_at) FROM requests WHERE status NOT IN ('rejected') AND id != '{ex}'{before_sql}"), &[]),
             track_pending: match track_uri {
                 Some(u) => q(&format!("SELECT COUNT(*) FROM requests WHERE status IN {pend} AND track_uri = ?1"), &[&u])
                     .unwrap_or(0)
@@ -405,6 +420,147 @@ impl QueueStore {
                 None => false,
             },
         }
+    }
+
+    /// Wünsche mit offener Auswahl (für die App-Anzeige).
+    pub fn awaiting(&self) -> Vec<SongRequest> {
+        self.query("WHERE status = 'awaiting_selection' ORDER BY received_at ASC", [])
+    }
+
+    /// Position eines offenen Requests mit diesem Titel (1-basiert), falls vorhanden.
+    pub fn pending_with_track(&self, track_uri: &str, exclude_id: Option<&str>) -> Option<SongRequest> {
+        self.pending().into_iter().find(|r| r.track.as_ref().map(|t| t.uri.as_str()) == Some(track_uri) && Some(r.id.as_str()) != exclude_id && r.status != RequestStatus::Playing)
+    }
+
+    pub fn set_origin(&self, id: &str, origin: Option<&crate::resolve::Origin>) -> DbResult<()> {
+        self.db
+            .conn()
+            .execute("UPDATE requests SET origin = ?2 WHERE id = ?1", params![id, origin.and_then(|o| serde_json::to_string(o).ok())])
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Austausch des Songs eines ausstehenden Requests – atomar und nur, solange er noch nicht
+    /// übergeben wird (Compare-and-Set auf Status und Revision). Identität, Eingangszeit,
+    /// Position, Priorität und Kanalpunkte-Zuordnung bleiben erhalten.
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_track(
+        &self,
+        id: &str,
+        expected_rev: i64,
+        track: &Track,
+        query: &str,
+        origin: Option<&crate::resolve::Origin>,
+        to: RequestStatus,
+        pending: Option<PendingReason>,
+        now: i64,
+    ) -> DbResult<bool> {
+        let n = self
+            .db
+            .conn()
+            .execute(
+                "UPDATE requests SET track_id=?2, track_uri=?3, title=?4, artists=?5, album=?6, image_url=?7, duration_ms=?8, explicit=?9, \
+                 query=?10, origin=?11, status=?12, pending_reason=?13, updated_at=?14, reason=NULL, rev = rev + 1 \
+                 WHERE id=?1 AND rev=?15 AND status IN ('accepted','pending_review')",
+                params![
+                    id,
+                    track.id,
+                    track.uri,
+                    track.title,
+                    serde_json::to_string(&track.artists).unwrap_or_default(),
+                    track.album,
+                    track.image_url,
+                    track.duration_ms as i64,
+                    track.explicit as i64,
+                    query,
+                    origin.and_then(|o| serde_json::to_string(o).ok()),
+                    to.as_str(),
+                    pending_str(pending),
+                    now,
+                    expected_rev
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(n == 1)
+    }
+
+    // ------------------------------------------------------------------
+    // Wiedergabe-Sessions (Verlauf „zuletzt gespielt“)
+    // ------------------------------------------------------------------
+
+    /// Aktuelle Session des Kanals: fortsetzen, wenn die letzte Beobachtung höchstens
+    /// `gap_ms` zurückliegt (z. B. nach einem App-Neustart), sonst neu anlegen.
+    pub fn session_for(&self, channel: &str, now: i64, gap_ms: i64) -> DbResult<i64> {
+        let c = self.db.conn();
+        let last: Option<(i64, i64)> = c
+            .query_row("SELECT id, last_seen_at FROM play_sessions WHERE channel = ?1 ORDER BY id DESC LIMIT 1", params![channel], |r| Ok((r.get(0)?, r.get(1)?)))
+            .optional()
+            .map_err(|e| e.to_string())?;
+        match last {
+            Some((id, seen)) if now - seen <= gap_ms => {
+                c.execute("UPDATE play_sessions SET last_seen_at = ?2 WHERE id = ?1", params![id, now]).map_err(|e| e.to_string())?;
+                Ok(id)
+            }
+            _ => {
+                c.execute("INSERT INTO play_sessions(channel, started_at, last_seen_at) VALUES (?1, ?2, ?2)", params![channel, now]).map_err(|e| e.to_string())?;
+                Ok(c.last_insert_rowid())
+            }
+        }
+    }
+
+    /// Laufende Session (ohne sie anzulegen).
+    pub fn current_session(&self, channel: &str, now: i64, gap_ms: i64) -> Option<(i64, i64)> {
+        self.db
+            .conn()
+            .query_row(
+                "SELECT id, started_at FROM play_sessions WHERE channel = ?1 AND last_seen_at >= ?2 ORDER BY id DESC LIMIT 1",
+                params![channel, now - gap_ms],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .ok()
+            .flatten()
+    }
+
+    pub fn add_session_history(&self, t: &Track, now: i64, req: Option<&SongRequest>, session_id: i64, channel: &str) -> DbResult<()> {
+        self.db
+            .conn()
+            .execute(
+                "INSERT INTO history(track_uri, track_id, title, artists, album, image_url, duration_ms, played_at, request_id, requester_name, session_id, channel) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                params![
+                    t.uri,
+                    t.id,
+                    t.title,
+                    serde_json::to_string(&t.artists).unwrap_or_default(),
+                    t.album,
+                    t.image_url,
+                    t.duration_ms as i64,
+                    now,
+                    req.map(|r| r.id.clone()),
+                    req.map(|r| r.requester.name.clone()),
+                    session_id,
+                    channel
+                ],
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Einträge einer Session, neueste zuerst.
+    pub fn session_history(&self, session_id: i64, limit: u32) -> Vec<HistoryEntry> {
+        self.history_where("WHERE session_id = ?1 ORDER BY played_at DESC, id DESC LIMIT ?2", params![session_id, limit])
+    }
+
+    fn history_where(&self, where_sql: &str, p: impl rusqlite::Params) -> Vec<HistoryEntry> {
+        let c = self.db.conn();
+        let mut st = match c.prepare(&format!(
+            "SELECT id, track_uri, track_id, title, artists, album, image_url, duration_ms, played_at, requester_name FROM history {where_sql}"
+        )) {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+        st.query_map(p, history_row).map(|rows| rows.filter_map(Result::ok).collect()).unwrap_or_default()
     }
 
     pub fn blocklist(&self) -> Blocklist {
@@ -494,29 +650,29 @@ impl QueueStore {
             Ok(s) => s,
             Err(_) => return vec![],
         };
-        st.query_map(params![like, limit], |r| {
-            let artists: String = r.get(4)?;
-            Ok(HistoryEntry {
-                id: r.get(0)?,
-                track: Track {
-                    provider: Provider::Spotify,
-                    uri: r.get(1)?,
-                    id: r.get(2)?,
-                    title: r.get(3)?,
-                    artists: serde_json::from_str(&artists).unwrap_or_default(),
-                    album: r.get(5)?,
-                    image_url: r.get(6)?,
-                    duration_ms: r.get::<_, i64>(7)? as u64,
-                    explicit: false,
-                    external_url: None,
-                },
-                played_at: r.get(8)?,
-                requester_name: r.get(9)?,
-            })
-        })
-        .map(|rows| rows.filter_map(Result::ok).collect())
-        .unwrap_or_default()
+        st.query_map(params![like, limit], history_row).map(|rows| rows.filter_map(Result::ok).collect()).unwrap_or_default()
     }
+}
+
+fn history_row(r: &Row) -> rusqlite::Result<HistoryEntry> {
+    let artists: String = r.get(4)?;
+    Ok(HistoryEntry {
+        id: r.get(0)?,
+        track: Track {
+            provider: Provider::Spotify,
+            uri: r.get(1)?,
+            id: r.get(2)?,
+            title: r.get(3)?,
+            artists: serde_json::from_str(&artists).unwrap_or_default(),
+            album: r.get(5)?,
+            image_url: r.get(6)?,
+            duration_ms: r.get::<_, i64>(7)? as u64,
+            explicit: false,
+            external_url: None,
+        },
+        played_at: r.get(8)?,
+        requester_name: r.get(9)?,
+    })
 }
 
 fn join_reason(code: &Option<String>, text: &Option<String>) -> Option<String> {

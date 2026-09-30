@@ -38,6 +38,12 @@ pub enum Rejection {
     Technical { detail: String },
     /// Auf Twitch storniert.
     CanceledOnTwitch,
+    /// Link/Quelle konnte nicht (eindeutig) aufgelöst werden.
+    Resolve { error: crate::resolve::ResolveError },
+    /// Offene Auswahl abgelaufen, abgebrochen bzw. durch eine neue ersetzt.
+    SelectionExpired,
+    SelectionCanceled,
+    SelectionReplaced,
 }
 
 impl Rejection {
@@ -66,6 +72,10 @@ impl Rejection {
             Rejection::UpdatePause => "update_pause",
             Rejection::Technical { .. } => "technical",
             Rejection::CanceledOnTwitch => "canceled_on_twitch",
+            Rejection::Resolve { error } => error.code(),
+            Rejection::SelectionExpired => "selection_expired",
+            Rejection::SelectionCanceled => "selection_canceled",
+            Rejection::SelectionReplaced => "selection_replaced",
         }
     }
 
@@ -85,7 +95,7 @@ impl Rejection {
             Rejection::GlobalCooldown { remaining_s } => format!("nächster Request in {remaining_s} s möglich"),
             Rejection::Duplicate => "der Song ist schon in der Warteschlange".into(),
             Rejection::NotFound => "kein passender Song gefunden".into(),
-            Rejection::InvalidLink => "nur Spotify-Track-Links oder Suchbegriffe".into(),
+            Rejection::InvalidLink => "nur Songlinks (Spotify, YouTube, Apple Music, SoundCloud) oder Titel und Interpret".into(),
             Rejection::NotPlayable => "dieser Song kann nicht abgespielt werden".into(),
             Rejection::SourceDisabled => "dieser Request-Weg ist gerade ausgeschaltet".into(),
             Rejection::StreamEnded => "der Stream endet gleich – keine neuen Wünsche mehr".into(),
@@ -104,6 +114,10 @@ impl Rejection {
                 d => format!("Requests sind gerade technisch nicht möglich ({d})"),
             },
             Rejection::CanceledOnTwitch => "auf Twitch storniert".into(),
+            Rejection::Resolve { error } => error.text(),
+            Rejection::SelectionExpired => "die Auswahl ist abgelaufen".into(),
+            Rejection::SelectionCanceled => "Auswahl abgebrochen".into(),
+            Rejection::SelectionReplaced => "durch einen neueren Wunsch ersetzt".into(),
         }
     }
 }

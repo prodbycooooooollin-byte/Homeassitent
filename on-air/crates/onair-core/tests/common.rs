@@ -72,6 +72,12 @@ pub struct FakeSpotify {
     pub playlist_items: HashMap<String, Vec<String>>,
     /// Track-Relinking simulieren: der laufende Titel kommt mit anderer ID und `linked_from`.
     pub relink: bool,
+    /// Realistischer Suchkatalog: ist er gefüllt, liefert /search nur passende Einträge.
+    pub catalog: Vec<Value>,
+    /// Playlist-Inhalte zum Lesen (GET /playlists/{id}/items); fehlend = 403 (Development Mode).
+    pub readable_playlists: HashMap<String, Vec<Value>>,
+    /// Gezählte Suchanfragen.
+    pub searches: Vec<String>,
 }
 
 impl Default for FakeSpotify {
@@ -98,8 +104,24 @@ impl Default for FakeSpotify {
             created_playlists: vec![],
             playlist_items: HashMap::new(),
             relink: false,
+            catalog: vec![],
+            readable_playlists: HashMap::new(),
+            searches: vec![],
         }
     }
+}
+
+/// Katalogeintrag für die Suche.
+pub fn cat(id: &str, name: &str, artist: &str, dur_s: u64) -> Value {
+    json!({
+        "type": "track", "id": id, "uri": format!("spotify:track:{id}"), "name": name,
+        "artists": [{"name": artist}], "album": {"name": "Album", "images": []},
+        "duration_ms": dur_s * 1000, "explicit": false
+    })
+}
+
+fn words(s: &str) -> Vec<String> {
+    s.to_lowercase().split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty() && !matches!(*w, "track" | "artist")).map(str::to_string).collect()
 }
 
 pub fn track_json(id: &str) -> Value {
@@ -202,6 +224,20 @@ impl FakeSpotify {
                     None => Ok(HttpResponse::json(404, json!({"error": {"status": 404, "message": "Resource not found"}}))),
                 }
             }
+            (Method::Get, r) if r.starts_with("/playlists/") && r.ends_with("/items") => {
+                let id = r.trim_start_matches("/playlists/").trim_end_matches("/items");
+                let q: HashMap<String, String> = url::Url::parse(&req.url).unwrap().query_pairs().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+                let off: usize = q.get("offset").and_then(|o| o.parse().ok()).unwrap_or(0);
+                let lim: usize = q.get("limit").and_then(|o| o.parse().ok()).unwrap_or(50);
+                match self.readable_playlists.get(id) {
+                    Some(items) => {
+                        let page: Vec<Value> = items.iter().skip(off).take(lim).map(|t| json!({"item": t})).collect();
+                        let next = (off + lim < items.len()).then(|| format!("{API}/playlists/{id}/items?offset={}", off + lim));
+                        Ok(HttpResponse::json(200, json!({"items": page, "total": items.len(), "next": next})))
+                    }
+                    None => Ok(HttpResponse::json(403, json!({"error": {"status": 403, "message": "Forbidden"}}))),
+                }
+            }
             (Method::Get, r) if r.starts_with("/playlists/") => match &self.playlist {
                 Some((name, public)) => Ok(HttpResponse::json(200, json!({"name": name, "public": public}))),
                 None => Ok(HttpResponse::json(404, json!({"error": {"status": 404, "message": "Not found"}}))),
@@ -238,10 +274,37 @@ impl FakeSpotify {
             (Method::Get, "/search") => {
                 // Deterministischer Treffer je Suchbegriff.
                 let q = url::Url::parse(&req.url).unwrap().query_pairs().find(|(k, _)| k == "q").map(|(_, v)| v.to_string()).unwrap_or_default();
+                self.searches.push(q.clone());
+                if !self.catalog.is_empty() {
+                    // Treffer: alle Suchwörter kommen in Titel oder Interpret vor (ISRC exakt).
+                    let hits: Vec<Value> = if let Some(isrc) = q.strip_prefix("isrc:") {
+                        self.catalog.iter().filter(|t| t["isrc"].as_str() == Some(isrc)).cloned().collect()
+                    } else {
+                        let qw = words(&q);
+                        self.catalog
+                            .iter()
+                            .filter(|t| {
+                                let hay = words(&format!("{} {}", t["name"].as_str().unwrap_or(""), t["artists"][0]["name"].as_str().unwrap_or("")));
+                                qw.iter().filter(|w| !matches!(w.as_str(), "remix" | "live" | "acoustic")).all(|w| hay.contains(w))
+                            })
+                            .cloned()
+                            .collect()
+                    };
+                    return Ok(HttpResponse::json(200, json!({"tracks": {"items": hits}})));
+                }
+                // Deterministischer Treffer je Suchbegriff; der erste trägt den gesuchten Titel.
                 let n = q.bytes().fold(7u32, |a, b| a.wrapping_mul(31).wrapping_add(b as u32)) % 100_000;
-                Ok(HttpResponse::json(200, json!({"tracks": {"items": [track_json(&tid(n)), track_json(&tid(n + 1))]}})))
+                let mut first = track_json(&tid(n));
+                first["name"] = json!(q);
+                Ok(HttpResponse::json(200, json!({"tracks": {"items": [first, track_json(&tid(n + 1))]}})))
             }
-            (Method::Get, r) if r.starts_with("/tracks/") => Ok(HttpResponse::json(200, track_json(&r[8..]))),
+            (Method::Get, r) if r.starts_with("/tracks/") => {
+                let id = &r[8..];
+                match self.catalog.iter().find(|t| t["id"] == id) {
+                    Some(t) => Ok(HttpResponse::json(200, t.clone())),
+                    None => Ok(HttpResponse::json(200, track_json(id))),
+                }
+            }
             _ => Ok(HttpResponse::json(404, json!({"error": {"status": 404, "message": "not found"}}))),
         }
     }
@@ -254,6 +317,90 @@ impl FakeSpotify {
         } else {
             self.queue.remove(0).trim_start_matches("spotify:track:").to_string()
         });
+    }
+}
+
+/// Simulierte Metadaten-Anbieter (YouTube, Apple Music, SoundCloud, Kurzlinks).
+#[derive(Default)]
+pub struct FakeProviders {
+    /// oEmbed: Video-ID → (Titel, Kanal). Fehlend = 404.
+    pub yt_oembed: HashMap<String, (String, String)>,
+    /// Private Videos (oEmbed 401).
+    pub yt_private: HashSet<String>,
+    /// YouTube Data API: Playlist-ID → (Name, [(Video-ID, Titel, Kanal)]).
+    pub yt_playlists: HashMap<String, (String, Vec<(String, String, String)>)>,
+    /// Anbieter nicht erreichbar (Verbindungsfehler).
+    pub yt_down: bool,
+    /// iTunes Lookup: ID → Ergebnisobjekt.
+    pub itunes: HashMap<String, Value>,
+    pub itunes_throttled: bool,
+    /// SoundCloud oEmbed: Pfad → (Titel, Uploader).
+    pub sc_oembed: HashMap<String, (String, String)>,
+    /// Kurzlinks: URL → Weiterleitungsziel.
+    pub short: HashMap<String, String>,
+    pub calls: Vec<String>,
+}
+
+impl FakeProviders {
+    pub fn handles(url: &str) -> bool {
+        ["https://www.youtube.com/", "https://www.googleapis.com/", "https://itunes.apple.com/", "https://api.music.apple.com/", "https://api.soundcloud.com/", "https://secure.soundcloud.com/", "https://soundcloud.com/", "https://spotify.link/", "https://on.soundcloud.com/"]
+            .iter()
+            .any(|p| url.starts_with(p))
+    }
+
+    pub fn handle(&mut self, req: &HttpRequest) -> Result<HttpResponse, TransportError> {
+        self.calls.push(req.url.clone());
+        let u = url::Url::parse(&req.url).unwrap();
+        let q: HashMap<String, String> = u.query_pairs().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        if let Some(loc) = self.short.get(&req.url) {
+            assert!(!req.follow_redirects, "Kurzlinks werden ohne automatische Weiterleitung abgerufen");
+            return Ok(HttpResponse::new(302).with_header("Location", loc));
+        }
+        if (req.url.starts_with("https://www.youtube.com/oembed") || req.url.starts_with("https://www.googleapis.com/")) && self.yt_down {
+            return Err(TransportError::Connect("connection refused".into()));
+        }
+        if req.url.starts_with("https://www.youtube.com/oembed") {
+            let target = url::Url::parse(&q["url"]).unwrap();
+            let v = target.query_pairs().find(|(k, _)| k == "v").map(|(_, v)| v.to_string()).unwrap_or_default();
+            if self.yt_private.contains(&v) {
+                return Ok(HttpResponse::new(401));
+            }
+            return match self.yt_oembed.get(&v) {
+                Some((t, a)) => Ok(HttpResponse::json(200, json!({"title": t, "author_name": a, "thumbnail_url": "https://i.ytimg.com/x.jpg"}))),
+                None => Ok(HttpResponse::new(404)),
+            };
+        }
+        if req.url.starts_with("https://www.googleapis.com/youtube/v3/playlists") {
+            return Ok(match self.yt_playlists.get(&q["id"]) {
+                Some((name, _)) => HttpResponse::json(200, json!({"items": [{"snippet": {"title": name}}]})),
+                None => HttpResponse::json(200, json!({"items": []})),
+            });
+        }
+        if req.url.starts_with("https://www.googleapis.com/youtube/v3/playlistItems") {
+            let Some((_, items)) = self.yt_playlists.get(&q["playlistId"]) else { return Ok(HttpResponse::json(404, json!({"error": {"errors": [{"reason": "playlistNotFound"}]}}))) };
+            let start: usize = q.get("pageToken").and_then(|t| t.parse().ok()).unwrap_or(0);
+            let page: Vec<Value> = items.iter().skip(start).take(50).map(|(v, t, c)| json!({"snippet": {"title": t, "videoOwnerChannelTitle": c, "resourceId": {"videoId": v}}, "status": {"privacyStatus": "public"}})).collect();
+            let next = (start + 50 < items.len()).then(|| (start + 50).to_string());
+            return Ok(HttpResponse::json(200, json!({"items": page, "nextPageToken": next, "pageInfo": {"totalResults": items.len()}})));
+        }
+        if req.url.starts_with("https://www.googleapis.com/youtube/v3/videos") {
+            return Ok(HttpResponse::json(200, json!({"items": []})));
+        }
+        if req.url.starts_with("https://itunes.apple.com/lookup") {
+            if self.itunes_throttled {
+                return Ok(HttpResponse::new(403));
+            }
+            let res: Vec<Value> = self.itunes.get(&q["id"]).cloned().into_iter().collect();
+            return Ok(HttpResponse::json(200, json!({"resultCount": res.len(), "results": res})));
+        }
+        if req.url.starts_with("https://soundcloud.com/oembed") {
+            let target = url::Url::parse(&q["url"]).unwrap();
+            return match self.sc_oembed.get(target.path()) {
+                Some((t, a)) => Ok(HttpResponse::json(200, json!({"title": format!("{t} by {a}"), "author_name": a}))),
+                None => Ok(HttpResponse::new(404)),
+            };
+        }
+        Ok(HttpResponse::new(404))
     }
 }
 
@@ -394,22 +541,27 @@ pub struct Harness {
     pub transport: Arc<FakeTransport>,
     pub secrets: Arc<MemorySecretStore>,
     pub clock: SharedClock,
+    pub providers: Arc<Mutex<FakeProviders>>,
 }
 
 impl Harness {
     pub fn new() -> Self {
         let fake = Arc::new(Mutex::new(FakeSpotify::default()));
         let twitch = Arc::new(Mutex::new(FakeTwitch::new()));
+        let providers = Arc::new(Mutex::new(FakeProviders::default()));
         let f2 = fake.clone();
         let t2 = twitch.clone();
+        let p2 = providers.clone();
         let transport = FakeTransport::new(move |r| {
             if r.url.starts_with("http://fake-helix") || r.url.starts_with("http://fake-twitch-id") {
                 t2.lock().unwrap().handle(r)
+            } else if FakeProviders::handles(&r.url) {
+                p2.lock().unwrap().handle(r)
             } else {
                 f2.lock().unwrap().handle(r)
             }
         });
-        Self { twitch, fake, transport, secrets: Arc::new(MemorySecretStore::default()), clock: TokioClock::new() }
+        Self { twitch, fake, transport, secrets: Arc::new(MemorySecretStore::default()), clock: TokioClock::new(), providers }
     }
 
     pub fn tokens(&self, key: &str, expires_in_ms: i64) -> Arc<TokenManager> {

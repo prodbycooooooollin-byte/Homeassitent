@@ -90,8 +90,32 @@ war wegen Einblend-Animationen nicht deterministisch und wurde nicht als Nachwei
 Zusätzlich 21 Unit-Tests (PKCE nach RFC 7636, Backoff/Circuit Breaker, Regeln, Chatbefehle,
 EventSub-Protokoll inkl. Reconnect ohne Neuabo, Migrationen, atomare Textdatei, Anonymisierung).
 
+## Universal Request, Auswahl, Ersetzen, Verlauf – simuliert
+
+`cargo test -p onair-core --test universal` (Fake-Spotify + Fake-YouTube/Apple/SoundCloud, keine echten Dienste):
+
+| Abnahmefall | Test |
+|---|---|
+| Spotify-, YouTube-, Apple-, SoundCloud-Link und Kurzlink erzeugen genau einen Wunsch | `direct_and_external_links_create_exactly_one_request`, `apple_soundcloud_and_short_links` |
+| Remix wird nicht mit Original verwechselt; Mehrdeutigkeit verlangt Auswahl | `remix_is_not_confused_and_ambiguity_needs_a_choice` |
+| Fehlerzustände unterscheidbar (privat, nicht unterstützt, Einrichtung, Limit, kein Treffer) | `failure_states_are_distinct_and_understandable` |
+| Auswahl nur durch denselben Zuschauer, neue ersetzt alte, `!abbrechen` | `selections_are_bound_to_the_viewer` |
+| `!ersetzen` behält Platz, erzeugt keinen zweiten Wunsch | `replace_keeps_position_and_never_duplicates` |
+| Ersetzen gleichzeitig mit Übergabe sendet nie zwei Songs / nie den falschen | `replace_racing_the_handoff_never_sends_two_songs` (schlug vor der Korrektur fehl) |
+| Einlösung bleibt, Streamplan rechnet mit neuer Dauer | `replace_keeps_redemption_and_respects_budget` |
+| `!letztersong` nur beobachtete Wiedergaben, ohne Doppelungen, nach Neustart | `last_played_lists_observed_plays_only` |
+| Playlist nie komplett, nur explizit gewählter Titel | `playlist_needs_explicit_single_choice` |
+| Vorabprüfung ohne Nebenwirkung, endgültige Prüfung verhindert Doppelannahme | `precheck_is_side_effect_free_and_final_check_prevents_races` |
+| Wiederholung, Ablauf, Neustart erzeugen keine zusätzlichen Songs | `repeats_expiry_and_restart_create_no_extra_songs` |
+
+Dazu Unit-Tests für Linkerkennung (Tracking-Parameter, regionale Pfade, `?i=`, Video+Liste, fremde
+Hosts, Ports, Benutzerangaben), Titelbereinigung/Versionserkennung, Mehrwort-Aliasse und
+Chatlängen sowie Playwright-Tests für den Dialog „Song hinzufügen“ (Versionen + Vorabprüfung,
+Playlist mit Nachladen und Teilfilter, nicht unterstützter Dienst), „Song ändern“ und Musikquellen.
+
 ## Nicht durchgeführt
 
+- Live-Test der Anbieter-Adapter mit echten YouTube-/Apple-/SoundCloud-Zugangsdaten und echten Links.
 - Live-Smoke-Test mit echtem Spotify-Premium-Konto und Twitch-Kanal.
 - Manueller Test der Windows-Build-Artefakte (Tray, Autostart, Credential Manager, echtes Standby).
 - **Achtstündiger realer Dauertest** – noch nicht durchgeführt, keine Messwerte vorhanden.
