@@ -1,0 +1,16 @@
+"video.cfg"
+{
+	"Version"		"20"
+	"VendorID"		"4098"
+	"DeviceID"		"29663"
+	"setting.defaultres"		"1920"
+	"setting.defaultresheight"		"1080"
+	"setting.mat_vsync"		"0"
+	"setting.r_low_latency"		"1"
+	"setting.r_citadel_motion_blur"		"0"
+	"setting.r_depth_of_field"		"false"
+	"setting.r_citadel_shadow_quality"		"0"
+	"setting.r_citadel_ssao"		"0"
+	"setting.mat_viewportscale"		"9.5"
+	"setting.some_unknown_thing"		"1"
+}

@@ -1,0 +1,57 @@
+{
+  "_comment": "Quellen des Recherche-Dienstes. Zugangsdaten stehen NIE hier, sondern in Umgebungsvariablen (siehe .env.example).",
+  "sources": [
+    {
+      "id": "deadlock-api-leaderboard",
+      "adapter": "deadlock-api-leaderboard",
+      "name": "Deadlock-API Ranglisten (alle Regionen)",
+      "intervalKind": "discovery",
+      "config": { "topN": 100, "regions": ["Europe", "Asia", "NAmerica", "SAmerica", "Oceania"] },
+      "attribution": "Daten: deadlock-api.com (MIT)"
+    },
+    {
+      "id": "liquipedia",
+      "adapter": "liquipedia",
+      "name": "Liquipedia Deadlock – Spielerseiten",
+      "intervalKind": "discovery",
+      "config": { "apiUrl": "https://liquipedia.net/deadlock/api.php", "category": "Category:Players" },
+      "attribution": "Liquipedia (CC-BY-SA 3.0)"
+    },
+    {
+      "id": "github-configs",
+      "adapter": "github-configs",
+      "name": "GitHub – veröffentlichte Configs",
+      "intervalKind": "settings",
+      "config": {
+        "repos": [
+          {
+            "owner": "dacooderr",
+            "repo": "OptiLock",
+            "relation": "community-preset",
+            "attribution": "OptiLock von dacooderr (github.com/dacooderr/OptiLock)",
+            "exclude": ["Localization/"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "web-pages",
+      "adapter": "web-pages",
+      "name": "Spieler-Homepages & Suchtreffer",
+      "intervalKind": "settings"
+    },
+    {
+      "id": "brave-search",
+      "adapter": "brave-search",
+      "name": "Brave Search – Settings-Quellen",
+      "intervalKind": "settings",
+      "config": { "playersPerRun": 10 }
+    },
+    {
+      "id": "youtube",
+      "adapter": "youtube",
+      "name": "YouTube – Videobeschreibungen belegter Kanäle",
+      "intervalKind": "settings"
+    }
+  ]
+}

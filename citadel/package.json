@@ -1,0 +1,49 @@
+{
+  "name": "citadel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CITADEL — Deadlock Settings & Performance (Tauri-Desktop-App + Recherche-Backend)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "server": "tsx server/main.ts api",
+    "worker": "tsx server/main.ts worker",
+    "server:all": "tsx server/main.ts all",
+    "tauri": "tauri",
+    "screenshots": "tsx scripts/screenshots.ts"
+  },
+  "author": "prodbycooooooollin-byte",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prodbycooooooollin-byte/Homeassitent.git"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@tauri-apps/api": "^2.12.0",
+    "@tauri-apps/plugin-dialog": "^2.8.0",
+    "@tauri-apps/plugin-opener": "^2.7.0",
+    "codemirror": "^6.0.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.0",
+    "@types/node": "^22.20.4",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "playwright-core": "^1.63.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}
