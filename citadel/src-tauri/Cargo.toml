@@ -8,6 +8,14 @@ license = "MIT"
 [lib]
 name = "citadel_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+# Tests liegen in tests/ (eigenes Manifest unter Windows, siehe build.rs)
+test = false
+doctest = false
+
+[[bin]]
+name = "citadel"
+path = "src/main.rs"
+test = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
