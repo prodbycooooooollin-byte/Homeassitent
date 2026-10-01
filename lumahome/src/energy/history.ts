@@ -148,3 +148,11 @@ export function bucketValues(h: HistoryResult, index: number): Map<string, numbe
   for (const [id, mh] of h.meters) if (mh.energy) out.set(id, mh.energy.buckets[index]?.value ?? null);
   return out;
 }
+
+/** Getrennte Anteile von Netto-Flüssen für einen Bucket. */
+export function bucketSplits(h: HistoryResult, index: number): Map<string, { positive: number | null; negative: number | null }> {
+  const out = new Map<string, { positive: number | null; negative: number | null }>();
+  for (const [id, mh] of h.meters)
+    if (mh.split) out.set(id, { positive: mh.split.positive.buckets[index]?.value ?? null, negative: mh.split.negative.buckets[index]?.value ?? null });
+  return out;
+}

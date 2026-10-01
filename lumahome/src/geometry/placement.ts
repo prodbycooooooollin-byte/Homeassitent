@@ -81,7 +81,7 @@ export function placementIssues(item: Item, project: Project, walls?: WallSegmen
   const room = roomAt({ x: item.x, y: item.y }, rooms);
   if (!room) issues.push({ code: "outside", message: "Liegt außerhalb aller Räume." });
 
-  if (item.elevation + item.height > floor.height + 0.01) {
+  if (!entry.throughCeiling && item.elevation + item.height > floor.height + 0.01) {
     issues.push({ code: "ceiling", message: "Ragt über die Raumhöhe hinaus." });
   }
 

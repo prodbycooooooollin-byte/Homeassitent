@@ -155,7 +155,9 @@ export function flowValues(meters: EnergyMeter[], values: Values, splits?: Split
   };
   let gridImport = sum(get("grid_import"));
   let gridExport = sum(get("grid_export"));
-  const net = get("grid_net");
+  // Getrennte Bezugs-/Einspeisezähler haben Vorrang vor einem Netto-Zähler
+  const dedicatedGrid = get("grid_import").length + get("grid_export").length > 0;
+  const net = dedicatedGrid ? [] : get("grid_net");
   if (net.length && splits) {
     const pos = splitSum(net, "positive");
     const neg = splitSum(net, "negative");
@@ -168,7 +170,8 @@ export function flowValues(meters: EnergyMeter[], values: Values, splits?: Split
   }
   let batteryCharge = sum(get("battery_charge"));
   let batteryDischarge = sum(get("battery_discharge"));
-  const bnet = get("battery_net");
+  const dedicatedBattery = get("battery_charge").length + get("battery_discharge").length > 0;
+  const bnet = dedicatedBattery ? [] : get("battery_net");
   if (bnet.length && splits) {
     const pos = splitSum(bnet, "positive");
     const neg = splitSum(bnet, "negative");
@@ -186,9 +189,9 @@ export function flowValues(meters: EnergyMeter[], values: Values, splits?: Split
     pv: sum(get("pv_production")),
     batteryCharge,
     batteryDischarge,
-    hasGrid: get("grid_import").length + get("grid_export").length + net.length > 0,
+    hasGrid: dedicatedGrid || net.length > 0,
     hasPv: get("pv_production").length > 0,
-    hasBattery: get("battery_charge").length + get("battery_discharge").length + bnet.length > 0,
+    hasBattery: dedicatedBattery || bnet.length > 0,
   };
 }
 

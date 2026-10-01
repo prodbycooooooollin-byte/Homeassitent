@@ -73,7 +73,8 @@ jeweiligen Haushalts gemappt werden (Kommentare markieren die Stellen).
 
 ---
 
-## Weiteres Projekt in diesem Repository
+## Weitere Projekte in diesem Repository
 
+- [`lumahome/`](lumahome/README.md) – LumaHome: eigenständiger 3D-Hausplaner mit Home-Assistant-Steuerung und Energieansicht (lokale Anwendung, eigenständiges npm-Projekt).
 - [`lol-build-assistant/`](lol-build-assistant/README.md) – Windows-Desktop-App mit Ingame-Overlay für dynamische, erklärbare Item-Empfehlungen in League of Legends (Electron + TypeScript, eigenständiges npm-Projekt).
 

@@ -42,6 +42,8 @@ export interface CatalogEntry {
   light?: { y: number; kind: "point" | "spot" };
   /** Gerätearten, die zu diesem Objekt passen */
   deviceRoles: BindingRole[];
+  /** Darf durch die Decke reichen (Treppe in einer Deckenöffnung) */
+  throughCeiling?: boolean;
 }
 
 export const CATEGORIES: { id: CategoryId; label: string }[] = [
@@ -211,6 +213,16 @@ export const CATALOG: CatalogEntry[] = [
     size: { w: 0.5, d: 0.5, h: 1.2 }, mount: "floor", defaultColor: "#6E8F80", accent: "#E6DFD3",
     materials: ["keramik"], defaultMaterial: "keramik",
     parts: [cyl(0, 0.13, 0, 0.6, 0.26, 0.6, "accent"), sphere(0, 0.55, 0, 0.9, 0.55, 0.9), sphere(0.15, 0.82, -0.1, 0.6, 0.35, 0.6)],
+    deviceRoles: [],
+  },
+  {
+    id: "stairs", name: "Treppe, gerade", category: "wohnen", keywords: ["treppe", "stufen", "etage"],
+    size: { w: 2.8, d: 0.95, h: 2.9 }, mount: "floor", defaultColor: "#CBB79A", accent: "#9A9C97",
+    materials: ["holz", "stein"], defaultMaterial: "holz", throughCeiling: true,
+    parts: [
+      ...Array.from({ length: 14 }, (_, i) => box(-0.5 + (i + 0.5) / 14, (i + 1) / 14 - 0.02, 0, 1 / 14 + 0.004, 0.04, 1)),
+      ...Array.from({ length: 14 }, (_, i) => box(-0.5 + (i + 0.5) / 14, (i + 1) / 14 - 0.05, 0, 1 / 14 - 0.01, 0.06, 0.94, "light")),
+    ],
     deviceRoles: [],
   },
   // Küche & Essen
