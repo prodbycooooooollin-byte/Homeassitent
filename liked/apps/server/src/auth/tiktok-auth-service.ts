@@ -20,8 +20,12 @@ import type { Logger } from '../logger.js';
  * Ablauf:
  *  1. Desktop ruft POST /api/tiktok/login mit einem zufälligen Geräte-Geheimnis
  *     (Bearer) auf und erhält die TikTok-Autorisierungs-URL (im System-Browser geöffnet).
- *  2. TikTok leitet auf /auth/tiktok/callback um; der Server tauscht den Code mit dem
- *     Client-Secret (bleibt hier) gegen Tokens und speichert sie verschlüsselt.
+ *  2a. Web-Modus: TikTok leitet auf /auth/tiktok/callback um; der Server tauscht den Code
+ *      mit dem Client-Secret (bleibt hier) gegen Tokens und speichert sie verschlüsselt.
+ *  2b. Desktop-Modus (Login Kit for Desktop, Redirect auf http://localhost:PORT/callback/, Port als „*“ registriert):
+ *      Die Desktop-App öffnet kurz einen lokalen Empfänger, nimmt Code und State entgegen
+ *      und reicht sie per POST /api/tiktok/complete an den Server weiter. Der Server tauscht
+ *      den Code (mit PKCE-Verifier und Client-Secret) – Tokens verlassen ihn auch hier nie.
  *  3. POST /api/tiktok/sync startet eine Datenanfrage (Kategorie „activity“).
  *     Die Bereitstellung ist asynchron; der Server prüft mit Backoff.
  *  4. Ist das Archiv bereit, wird es als Datenstrom in eine kurzlebige Datei geladen,
@@ -40,6 +44,32 @@ export interface AuthServiceOptions {
   pollMaxMs?: number;
   maxSyncDurationMs?: number;
   maxArchiveBytes?: number;
+  /** Kodierung der PKCE-Challenge im Desktop-Modus (TikTok: hex). */
+  pkceEncoding?: 'hex' | 'base64url';
+}
+
+interface PendingLogin {
+  recordId: string;
+  expiresAt: number;
+  redirectUri: string;
+  codeVerifier: string | null;
+}
+
+/** Desktop-Redirect (Login Kit for Desktop): Loopback-Adresse, Port ggf. als Platzhalter „*“. */
+export function isLoopbackRedirect(uri: string): boolean {
+  try {
+    const u = new URL(uri.replace(':*', ':1'));
+    return u.protocol === 'http:' || u.protocol === 'https:' ? ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname) : false;
+  } catch {
+    return false;
+  }
+}
+
+/** Setzt den vom Gerät gewählten Port in das Muster ein; feste Ports bleiben unverändert. */
+export function loopbackRedirectFor(pattern: string, port: number | undefined): string | null {
+  if (!pattern.includes(':*')) return pattern;
+  if (!Number.isInteger(port) || port! < 1024 || port! > 65535) return null;
+  return pattern.replace(':*', `:${port}`);
 }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -49,7 +79,7 @@ const MAX_IDLE_MS = 90 * 24 * 3_600_000;
 export class TikTokAuthService {
   readonly client: TikTokPortabilityClient;
   readonly store: TokenStore;
-  private pendingStates = new Map<string, { recordId: string; expiresAt: number }>();
+  private pendingStates = new Map<string, PendingLogin>();
   private jobs = new Map<string, NodeJS.Timeout>();
   private readonly limiter: RateLimiter;
   private readonly now: () => number;
@@ -97,6 +127,11 @@ export class TikTokAuthService {
   /* HTTP                                                        */
   /* ---------------------------------------------------------- */
 
+  /** „desktop“, wenn die Redirect-URL eine Loopback-Adresse ist (Login Kit for Desktop). */
+  get loginMode(): 'web' | 'desktop' {
+    return isLoopbackRedirect(this.opts.app.redirectUri) ? 'desktop' : 'web';
+  }
+
   async handle(req: IncomingMessage, res: ServerResponse, url: URL, ip: string): Promise<boolean> {
     const isCallback = isCallbackPath(url.pathname);
     if (!url.pathname.startsWith('/api/tiktok/') && !isCallback) return false;
@@ -116,8 +151,14 @@ export class TikTokAuthService {
     const id = sha(secret);
     try {
       switch (`${req.method} ${url.pathname}`) {
-        case 'POST /api/tiktok/login':
-          return json(res, 200, this.login(id)), true;
+        case 'POST /api/tiktok/login': {
+          const r = this.login(id, await readJson(req));
+          return json(res, 'error' in r ? 400 : 200, r), true;
+        }
+        case 'POST /api/tiktok/complete': {
+          const r = await this.complete(id, await readJson(req));
+          return json(res, r.ok ? 200 : 400, r), true;
+        }
         case 'GET /api/tiktok/status':
           return json(res, 200, this.status(id)), true;
         case 'POST /api/tiktok/sync':
@@ -138,33 +179,70 @@ export class TikTokAuthService {
     }
   }
 
-  login(id: string): { authorizeUrl: string } {
+  login(
+    id: string,
+    body: Record<string, unknown> = {}
+  ): { authorizeUrl: string; mode: 'web' | 'desktop'; redirectUri: string } | { error: string } {
+    let redirectUri = this.opts.app.redirectUri;
+    let codeVerifier: string | null = null;
+    let codeChallenge: string | undefined;
+    if (this.loginMode === 'desktop') {
+      const port = typeof body.loopbackPort === 'number' ? body.loopbackPort : undefined;
+      const concrete = loopbackRedirectFor(redirectUri, port);
+      if (!concrete) return { error: 'loopback_port_required' };
+      redirectUri = concrete;
+      codeVerifier = randomBytes(48).toString('base64url');
+      const digest = createHash('sha256').update(codeVerifier);
+      codeChallenge = this.opts.pkceEncoding === 'base64url' ? digest.digest('base64url') : digest.digest('hex');
+    }
     const rec = this.store.get(id) ?? this.blank(id);
     if (!rec.tokens) rec.state = 'authorizing';
     rec.lastSeenAt = this.now();
     this.store.upsert(rec);
     const state = randomBytes(24).toString('base64url');
-    this.pendingStates.set(state, { recordId: id, expiresAt: this.now() + 10 * 60_000 });
-    return { authorizeUrl: this.client.authorizeUrl(state) };
+    this.pendingStates.set(state, { recordId: id, expiresAt: this.now() + 10 * 60_000, redirectUri, codeVerifier });
+    return { authorizeUrl: this.client.authorizeUrl(state, { redirectUri, codeChallenge }), mode: this.loginMode, redirectUri };
+  }
+
+  /** Desktop-Modus: Code und State, die der lokale Empfänger der App erhalten hat. */
+  async complete(id: string, body: Record<string, unknown>): Promise<{ ok: boolean; state?: string; error?: string }> {
+    const state = typeof body.state === 'string' ? body.state : '';
+    const pending = this.pendingStates.get(state);
+    // Nur das Gerät, das die Anmeldung gestartet hat, darf sie abschließen.
+    if (!pending || pending.recordId !== id) return { ok: false, error: 'invalid_state' };
+    this.pendingStates.delete(state);
+    const r = await this.finishAuthorization(pending, typeof body.code === 'string' ? body.code : null, typeof body.error === 'string' ? body.error : null);
+    return { ok: r.ok, state: r.rec?.state, error: r.ok ? undefined : (r.message ?? undefined) };
   }
 
   private async callback(url: URL, res: ServerResponse): Promise<void> {
     const state = url.searchParams.get('state') ?? '';
     const pending = this.pendingStates.get(state);
     this.pendingStates.delete(state);
-    if (!pending || pending.expiresAt < this.now()) return page(res, 400, 'Anmeldung abgelaufen', 'Bitte starte die Verbindung in LIKED erneut.');
+    const r = await this.finishAuthorization(pending, url.searchParams.get('code'), url.searchParams.get('error'));
+    page(res, r.httpStatus, r.title, r.message);
+  }
+
+  private async finishAuthorization(
+    pending: PendingLogin | undefined,
+    code: string | null,
+    error: string | null
+  ): Promise<{ ok: boolean; httpStatus: number; title: string; message: string; rec?: AuthRecord }> {
+    const expired = { ok: false, httpStatus: 400, title: 'Anmeldung abgelaufen', message: 'Bitte starte die Verbindung in LIKED erneut.' };
+    if (!pending || pending.expiresAt < this.now()) return expired;
     const rec = this.store.get(pending.recordId);
-    if (!rec) return page(res, 400, 'Anmeldung abgelaufen', 'Bitte starte die Verbindung in LIKED erneut.');
-    const error = url.searchParams.get('error');
-    const code = url.searchParams.get('code');
+    if (!rec) return expired;
     if (error || !code) {
       rec.state = rec.tokens ? rec.state : 'error';
       rec.error = error === 'access_denied' ? 'Zugriff wurde auf TikTok abgelehnt.' : 'TikTok hat die Anmeldung abgebrochen.';
       this.store.upsert(rec);
-      return page(res, 400, 'Nicht verbunden', rec.error);
+      return { ok: false, httpStatus: 400, title: 'Nicht verbunden', message: rec.error, rec };
     }
     try {
-      const tokens = await this.client.exchangeCode(code, this.now());
+      const tokens = await this.client.exchangeCode(code, this.now(), {
+        redirectUri: pending.redirectUri,
+        codeVerifier: pending.codeVerifier ?? undefined
+      });
       rec.tokens = tokens;
       rec.error = null;
       try {
@@ -178,13 +256,14 @@ export class TikTokAuthService {
       if (!hasPortability) rec.error = 'Die Berechtigung für Aktivitätsdaten (Likes) wurde nicht erteilt.';
       this.store.upsert(rec);
       this.opts.log.info('tiktok_connected', { status: rec.state });
-      page(res, 200, 'Verbunden', 'Dein TikTok-Account ist verbunden. Du kannst dieses Fenster schließen und zu LIKED zurückkehren.');
+      return { ok: true, httpStatus: 200, title: 'Verbunden', message: 'Dein TikTok-Account ist verbunden. Du kannst dieses Fenster schließen und zu LIKED zurückkehren.', rec };
     } catch (err) {
+      const code = err instanceof TikTokApiError ? err.code : 'unknown';
       rec.state = 'error';
-      rec.error = 'Die Anmeldung konnte nicht abgeschlossen werden.';
+      rec.error = `Die Anmeldung konnte nicht abgeschlossen werden (TikTok: ${code.slice(0, 60)}).`;
       this.store.upsert(rec);
-      this.opts.log.warn('tiktok_exchange_failed', { code: err instanceof TikTokApiError ? err.code : 'unknown' });
-      page(res, 502, 'Nicht verbunden', rec.error);
+      this.opts.log.warn('tiktok_exchange_failed', { code });
+      return { ok: false, httpStatus: 502, title: 'Nicht verbunden', message: rec.error, rec };
     }
   }
 
@@ -389,6 +468,23 @@ function bearer(req: IncomingMessage): string | null {
   const h = req.headers.authorization ?? '';
   const m = /^Bearer ([A-Za-z0-9_-]{32,128})$/.exec(h);
   return m?.[1] ?? null;
+}
+
+/** Kleiner JSON-Body (max. 4 KB); bei Fehlern ein leeres Objekt. */
+async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+  let size = 0;
+  const chunks: Buffer[] = [];
+  try {
+    for await (const c of req) {
+      size += (c as Buffer).length;
+      if (size > 4096) return {};
+      chunks.push(c as Buffer);
+    }
+    const v = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {

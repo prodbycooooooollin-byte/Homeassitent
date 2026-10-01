@@ -5,8 +5,11 @@ export type Timings = { -readonly [K in keyof typeof TIMINGS]: number };
 export interface TikTokServerConfig {
   clientKey: string;
   clientSecret: string;
+  /** Web: https://…/auth/tiktok/callback · Desktop (Login Kit for Desktop): z. B. http://localhost:PORT/callback/ (Port als Platzhalter „*“) */
   redirectUri: string;
   scopes: string[];
+  /** PKCE-Challenge-Kodierung im Desktop-Modus (Standard: hex, wie von TikTok für Desktop beschrieben). */
+  pkceEncoding?: 'hex' | 'base64url';
 }
 
 export interface ServerConfig {
@@ -63,7 +66,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
           scopes: unquote(env.TIKTOK_SCOPES ?? 'user.info.basic,portability.activity.ongoing')
             .split(',')
             .map((s) => s.trim())
-            .filter(Boolean)
+            .filter(Boolean),
+          pkceEncoding: unquote(env.TIKTOK_PKCE_ENCODING) === 'base64url' ? 'base64url' : 'hex'
         }
       : null,
     tokenEncryptionKey: key,

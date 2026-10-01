@@ -77,14 +77,22 @@ export class TikTokPortabilityClient {
     this.f = cfg.fetchImpl ?? fetch;
   }
 
-  authorizeUrl(state: string): string {
+  /**
+   * Autorisierungs-URL. Für Login Kit for Desktop wird die konkrete Loopback-Redirect-URL
+   * (z. B. http://localhost:51234/callback/) und eine PKCE-Challenge übergeben.
+   */
+  authorizeUrl(state: string, opts: { redirectUri?: string; codeChallenge?: string } = {}): string {
     const q = new URLSearchParams({
       client_key: this.cfg.clientKey,
       scope: this.cfg.scopes.join(','),
       response_type: 'code',
-      redirect_uri: this.cfg.redirectUri,
+      redirect_uri: opts.redirectUri ?? this.cfg.redirectUri,
       state
     });
+    if (opts.codeChallenge) {
+      q.set('code_challenge', opts.codeChallenge);
+      q.set('code_challenge_method', 'S256');
+    }
     return `${this.authBase}/v2/auth/authorize/?${q.toString()}`;
   }
 
@@ -118,14 +126,16 @@ export class TikTokPortabilityClient {
     };
   }
 
-  async exchangeCode(code: string, now = Date.now()): Promise<TokenSet> {
-    const json = await this.form('/v2/oauth/token/', {
+  async exchangeCode(code: string, now = Date.now(), opts: { redirectUri?: string; codeVerifier?: string } = {}): Promise<TokenSet> {
+    const body: Record<string, string> = {
       client_key: this.cfg.clientKey,
       client_secret: this.cfg.clientSecret,
       code,
       grant_type: 'authorization_code',
-      redirect_uri: this.cfg.redirectUri
-    });
+      redirect_uri: opts.redirectUri ?? this.cfg.redirectUri
+    };
+    if (opts.codeVerifier) body.code_verifier = opts.codeVerifier;
+    const json = await this.form('/v2/oauth/token/', body);
     return this.toTokenSet(json, now);
   }
 

@@ -12,7 +12,14 @@ import { startServer, type Srv } from './helpers.js';
  * NICHT kontaktiert – siehe docs/INTEGRATION_REPORT.md für den Stand des Realtests.
  */
 function mockTikTok() {
-  const state = { checks: 0, revoked: [] as string[], readyAfter: 2, archive: Buffer.alloc(0) as Buffer, scope: 'user.info.basic,portability.activity.single' };
+  const state = {
+    checks: 0,
+    revoked: [] as string[],
+    readyAfter: 2,
+    archive: Buffer.alloc(0) as Buffer,
+    scope: 'user.info.basic,portability.activity.single',
+    lastToken: null as Record<string, string> | null
+  };
   const srv: Server = createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on('data', (c) => chunks.push(c));
@@ -25,6 +32,7 @@ function mockTikTok() {
       };
       if (url.pathname === '/v2/oauth/token/') {
         const p = new URLSearchParams(body);
+        state.lastToken = Object.fromEntries(p);
         if (p.get('client_secret') !== 'test-secret') return j({ error: 'invalid_client' }, 401);
         if (p.get('code') === 'bad') return j({ error: 'invalid_grant', error_description: 'x' }, 400);
         return j({ access_token: 'act.SECRET-ACCESS', refresh_token: 'rft.SECRET-REFRESH', open_id: 'open-1', scope: state.scope, expires_in: 86400, refresh_expires_in: 999999 });
@@ -70,7 +78,7 @@ afterEach(async () => {
   if (dataDir) rmSync(dataDir, { recursive: true, force: true });
 });
 
-async function setup(scope?: string) {
+async function setup(scope?: string, redirectUri = 'http://127.0.0.1/auth/tiktok/callback') {
   const m = mockTikTok();
   if (scope) m.state.scope = scope;
   m.state.archive = await zipOf({
@@ -88,7 +96,7 @@ async function setup(scope?: string) {
   const s = await startServer({
     dataDir,
     tokenEncryptionKey: randomBytes(32),
-    tiktok: { clientKey: 'ck', clientSecret: 'test-secret', redirectUri: 'http://127.0.0.1/auth/tiktok/callback', scopes: ['user.info.basic', 'portability.activity.single'] }
+    tiktok: { clientKey: 'ck', clientSecret: 'test-secret', redirectUri, scopes: ['user.info.basic', 'portability.activity.single'] }
   });
   server = s.server;
   // Mock-Basis-URLs einsetzen (nur Test).
@@ -237,6 +245,60 @@ describe('TikTok-URL-Verifizierung', () => {
     expect((await fetch(`${s.url}/auth/tiktok/callback/andere.txt`)).status).toBe(404);
     expect((await fetch(`${s.url}/auth/tiktok/callback/tiktokAbCdEf123456.txt`, { method: 'HEAD' })).status).toBe(200);
     expect((await fetch(`${s.url}/healthz`).then((r) => r.json())).tiktokVerifyFile).toBe('tiktokAbCdEf123456.txt');
+  });
+});
+
+describe('Login Kit for Desktop (Loopback-Redirect)', () => {
+  const post = (url: string, path: string, sec: string, body: unknown) =>
+    fetch(`${url}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${sec}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(
+      async (r) => ({ status: r.status, body: (await r.json()) as Record<string, any> })
+    );
+
+  it('nutzt den Port des Geräts, PKCE und schließt die Anmeldung über /complete ab', async () => {
+    const { url, mockState } = await setup(undefined, 'http://localhost:*/callback/');
+    expect((await fetch(`${url}/healthz`).then((r) => r.json())).tiktokLoginMode).toBe('desktop');
+    const sec = secret();
+    expect((await post(url, '/api/tiktok/login', sec, {})).status).toBe(400);
+    const login = await post(url, '/api/tiktok/login', sec, { loopbackPort: 51234 });
+    expect(login.status).toBe(200);
+    expect(login.body.redirectUri).toBe('http://localhost:51234/callback/');
+    const au = new URL(login.body.authorizeUrl);
+    expect(au.searchParams.get('redirect_uri')).toBe('http://localhost:51234/callback/');
+    expect(au.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(au.searchParams.get('code_challenge')).toMatch(/^[0-9a-f]{64}$/);
+    const state = au.searchParams.get('state')!;
+
+    // Ein fremdes Gerät kann den State nicht verwenden
+    expect((await post(url, '/api/tiktok/complete', secret(), { state, code: 'abc' })).body).toMatchObject({ ok: false, error: 'invalid_state' });
+
+    const done = await post(url, '/api/tiktok/complete', sec, { state, code: 'abc' });
+    expect(done.body).toMatchObject({ ok: true, state: 'connected' });
+    // Austausch mit derselben Redirect-URL und einem Verifier, dessen SHA-256 (hex) die Challenge ist
+    expect(mockState.lastToken!.redirect_uri).toBe('http://localhost:51234/callback/');
+    const { createHash } = await import('node:crypto');
+    expect(createHash('sha256').update(mockState.lastToken!.code_verifier!).digest('hex')).toBe(au.searchParams.get('code_challenge'));
+    expect((await call(url, '/api/tiktok/status', sec)).body.state).toBe('connected');
+    // Einmalig
+    expect((await post(url, '/api/tiktok/complete', sec, { state, code: 'abc' })).body.ok).toBe(false);
+  });
+
+  it('meldet eine Ablehnung im Browser als Fehler', async () => {
+    const { url } = await setup(undefined, 'http://localhost:*/callback/');
+    const sec = secret();
+    const login = await post(url, '/api/tiktok/login', sec, { loopbackPort: 40000 });
+    const state = new URL(login.body.authorizeUrl).searchParams.get('state');
+    const r = await post(url, '/api/tiktok/complete', sec, { state, error: 'access_denied' });
+    expect(r.body.ok).toBe(false);
+    expect((await call(url, '/api/tiktok/status', sec)).body.state).toBe('error');
+  });
+
+  it('erkennt Loopback-Adressen und setzt Ports ein', async () => {
+    const { isLoopbackRedirect, loopbackRedirectFor } = await import('../src/auth/tiktok-auth-service.js');
+    expect(isLoopbackRedirect('http://localhost:*/callback/')).toBe(true);
+    expect(isLoopbackRedirect('https://127.0.0.1:3455/callback/')).toBe(true);
+    expect(isLoopbackRedirect('https://liked-partyspiel.onrender.com/auth/tiktok/callback')).toBe(false);
+    expect(loopbackRedirectFor('http://localhost:*/callback/', 80)).toBeNull();
+    expect(loopbackRedirectFor('https://127.0.0.1:3455/callback/', undefined)).toBe('https://127.0.0.1:3455/callback/');
   });
 });
 

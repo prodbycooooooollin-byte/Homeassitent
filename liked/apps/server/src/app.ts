@@ -41,6 +41,7 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
           app: config.tiktok,
           dataDir: config.dataDir,
           encryptionKey: config.tokenEncryptionKey,
+          pkceEncoding: config.tiktok.pkceEncoding,
           log,
           now
         })
@@ -88,6 +89,7 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
             tiktokOfficialAdapter: auth ? 'configured' : 'not_configured',
             // Öffentliche Werte (keine Secrets) zum Abgleich mit den Einstellungen der TikTok-App.
             tiktokRedirectUri: config.tiktok?.redirectUri ?? null,
+            tiktokLoginMode: auth?.loginMode ?? null,
             tiktokScopes: config.tiktok?.scopes ?? null,
             // Öffentlicher Dateiname (kein Secret) – hilft beim Prüfen der TikTok-Verifizierung.
             tiktokVerifyFile: config.tiktokVerification?.file ?? null,

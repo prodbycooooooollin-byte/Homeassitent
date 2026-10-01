@@ -95,7 +95,8 @@ In der Desktop-App trägt jeder Spieler unter *Einstellungen → Server* die Adr
 | `LOG_LEVEL` | `debug/info/warn/error` | `info` |
 | `RECONNECT_WINDOW_MS` | Wiederverbindungsfenster | `30000` |
 | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` | aktiviert den offiziellen Adapter | – |
-| `TIKTOK_REDIRECT_URI` | muss exakt in der TikTok-App eingetragen sein | `PUBLIC_URL/auth/tiktok/callback` |
+| `TIKTOK_REDIRECT_URI` | muss exakt in der TikTok-App eingetragen sein. Web: `https://…/auth/tiktok/callback`. **Login Kit for Desktop:** die dort registrierte Loopback-Adresse, z. B. `http://localhost:*/callback/` – dann öffnet die Desktop-App kurz einen lokalen Empfänger (nur 127.0.0.1/::1) und reicht Code + State an den Server weiter; der Server tauscht ihn mit PKCE und Client-Secret | `PUBLIC_URL/auth/tiktok/callback` |
+| `TIKTOK_PKCE_ENCODING` | Kodierung der PKCE-Challenge im Desktop-Modus: `hex` (laut TikTok-Doku für Desktop) oder `base64url` | `hex` |
 | `TIKTOK_SCOPES` | angefragte Scopes | `user.info.basic,portability.activity.ongoing` |
 | `TOKEN_ENCRYPTION_KEY` | 32 Byte base64, Pflicht mit TikTok | – |
 | `TIKTOK_VERIFY_FILE`, `TIKTOK_VERIFY_CONTENT` (+ `_2` … `_9`) | TikTok-URL-Verifizierung: Dateiname und Inhalt je heruntergeladener Datei; wird unter jedem Pfad-Präfix ausgeliefert | – |

@@ -1,3 +1,4 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { BrowserWindow, session, shell } from 'electron';
 import type { RoomMode, PoolSubmission } from '@liked/protocol';
 import {
@@ -37,6 +38,8 @@ export class TikTokManager {
   private webCollected = new Map<string, number>();
   private webHandle: string | null = null;
   private webTimer: NodeJS.Timeout | null = null;
+  /** Lokaler Empfänger für Login Kit for Desktop (nur während einer Anmeldung offen). */
+  private loopback: { servers: Server[]; timer: NodeJS.Timeout } | null = null;
 
   constructor(
     private readonly getSettings: () => AppSettings,
@@ -69,12 +72,15 @@ export class TikTokManager {
     return o;
   }
 
-  private async api(path: string, method: 'GET' | 'POST' | 'DELETE' = 'GET'): Promise<{ status: number; body: any }> {
+  private async api(path: string, method: 'GET' | 'POST' | 'DELETE' = 'GET', payload?: unknown): Promise<{ status: number; body: any }> {
     const secret = secretStore.get();
+    const headers: Record<string, string> = secret ? { Authorization: `Bearer ${secret}` } : {};
+    if (payload !== undefined) headers['Content-Type'] = 'application/json';
     const res = await fetch(`${this.server}${path}`, {
       method,
-      headers: secret ? { Authorization: `Bearer ${secret}` } : {},
-      signal: AbortSignal.timeout(15_000)
+      headers,
+      body: payload !== undefined ? JSON.stringify(payload) : undefined,
+      signal: AbortSignal.timeout(30_000)
     });
     const body = await res.json().catch(() => ({}));
     if (res.status === 503 && body?.error === 'not_configured') this.officialConfigured = false;
@@ -195,10 +201,29 @@ export class TikTokManager {
           return this.set({ kind: 'error', account: null, message: 'Sichere Speicherung ist auf diesem System nicht verfügbar.', retryable: false });
         }
       }
-      const { status, body } = await this.api('/api/tiktok/login', 'POST');
+      // Login Kit for Desktop: TikTok leitet auf eine lokale Adresse dieses PCs zurück.
+      const desktop = health.tiktokLoginMode === 'desktop';
+      this.closeLoopback();
+      const port = desktop ? await this.openLoopback(0) : undefined;
+      const { status, body } = await this.api('/api/tiktok/login', 'POST', desktop ? { loopbackPort: port } : undefined);
       if (status === 503) return this.set({ kind: 'unsupported', reason: 'adapter_unavailable', detail: 'Der Server hat keine TikTok-Freigabe konfiguriert.' });
       if (status !== 200 || typeof body.authorizeUrl !== 'string' || !body.authorizeUrl.startsWith('https://www.tiktok.com/')) {
+        this.closeLoopback();
         return this.set({ kind: 'error', account: null, message: 'Anmeldung konnte nicht gestartet werden.', retryable: true });
+      }
+      if (desktop) {
+        const redirect = new URL(String(body.redirectUri));
+        const state = new URL(body.authorizeUrl).searchParams.get('state') ?? '';
+        // Fest registrierter Port: Empfänger dort neu öffnen.
+        if (Number(redirect.port) !== port) {
+          this.closeLoopback();
+          try {
+            await this.openLoopback(Number(redirect.port));
+          } catch {
+            return this.set({ kind: 'error', account: null, message: `Der lokale Port ${redirect.port} für die TikTok-Anmeldung ist belegt.`, retryable: true });
+          }
+        }
+        this.armLoopback(redirect.pathname, state);
       }
       await shell.openExternal(body.authorizeUrl);
       this.set({ kind: 'authorizing', adapter: 'portability' });
@@ -207,6 +232,74 @@ export class TikTokManager {
     } catch {
       return this.set({ kind: 'error', account: null, message: 'Server nicht erreichbar.', retryable: true });
     }
+  }
+
+  /* ------------------------------------------------------------ */
+  /* Lokaler Empfänger (Login Kit for Desktop)                    */
+  /* ------------------------------------------------------------ */
+
+  private loopbackHandler: ((req: IncomingMessage, res: ServerResponse) => void) | null = null;
+
+  /** Öffnet den Empfänger auf 127.0.0.1 (und ::1, falls verfügbar) – nie im Netzwerk. Liefert den Port. */
+  private async openLoopback(port: number): Promise<number> {
+    const handler = (req: IncomingMessage, res: ServerResponse) => {
+      if (this.loopbackHandler) this.loopbackHandler(req, res);
+      else {
+        res.writeHead(404);
+        res.end();
+      }
+    };
+    const listen = (host: string, p: number) =>
+      new Promise<Server>((resolve, reject) => {
+        const s = createServer(handler);
+        s.once('error', reject);
+        s.listen(p, host, () => resolve(s));
+      });
+    const v4 = await listen('127.0.0.1', port);
+    const actual = (v4.address() as { port: number }).port;
+    const servers = [v4];
+    // „localhost“ kann im Browser auf ::1 zeigen.
+    await listen('::1', actual).then((s) => servers.push(s)).catch(() => undefined);
+    const timer = setTimeout(() => this.closeLoopback(), 10 * 60_000);
+    this.loopback = { servers, timer };
+    return actual;
+  }
+
+  private armLoopback(pathname: string, expectedState: string): void {
+    const norm = (p: string) => p.replace(/\/+$/, '');
+    this.loopbackHandler = (req, res) => {
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      const host = String(req.headers.host ?? '').replace(/:\d+$/, '');
+      if (req.method !== 'GET' || norm(url.pathname) !== norm(pathname) || !['localhost', '127.0.0.1', '[::1]'].includes(host)) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      const state = url.searchParams.get('state') ?? '';
+      if (state !== expectedState) {
+        loopbackPage(res, 400, 'Anmeldung abgelaufen', 'Bitte starte die Verbindung in LIKED erneut.');
+        return;
+      }
+      this.loopbackHandler = null;
+      void (async () => {
+        const payload = { state, code: url.searchParams.get('code') ?? undefined, error: url.searchParams.get('error') ?? undefined };
+        const r = await this.api('/api/tiktok/complete', 'POST', payload).catch(() => null);
+        if (r?.body?.ok) loopbackPage(res, 200, 'Verbunden', 'Dein TikTok-Account ist verbunden. Du kannst dieses Fenster schließen und zu LIKED zurückkehren.');
+        else loopbackPage(res, 400, 'Nicht verbunden', String(r?.body?.error ?? 'Die Anmeldung konnte nicht abgeschlossen werden.'));
+        this.closeLoopback();
+        if (this.pollTimer) clearTimeout(this.pollTimer);
+        this.pollTimer = null;
+        await this.refreshOfficial().catch(() => undefined);
+      })();
+    };
+  }
+
+  private closeLoopback(): void {
+    if (!this.loopback) return;
+    clearTimeout(this.loopback.timer);
+    for (const s of this.loopback.servers) s.close();
+    this.loopback = null;
+    this.loopbackHandler = null;
   }
 
   private pollAuthorization(startedAt: number): void {
@@ -238,6 +331,7 @@ export class TikTokManager {
 
   async cancel(): Promise<TikTokOverview> {
     if (this.status.kind === 'authorizing' && this.status.adapter === 'portability') {
+      this.closeLoopback();
       if (this.pollTimer) clearTimeout(this.pollTimer);
       this.pollTimer = null;
       return this.set({ kind: 'error', account: null, message: 'Anmeldung abgebrochen.', retryable: true });
@@ -267,6 +361,7 @@ export class TikTokManager {
   /** Verbindung trennen: Server widerruft Tokens; lokal werden Geheimnis, Web-Sitzung und Index gelöscht. */
   async disconnect(): Promise<TikTokOverview> {
     if (this.pollTimer) clearTimeout(this.pollTimer);
+    this.closeLoopback();
     this.closeWeb();
     if (secretStore.get()) await this.api('/api/tiktok/connection', 'DELETE').catch(() => null);
     secretStore.clear();
@@ -431,6 +526,21 @@ export class TikTokManager {
 
   dispose(): void {
     if (this.pollTimer) clearTimeout(this.pollTimer);
+    this.closeLoopback();
     this.closeWeb();
   }
+}
+
+/** Kleine Ergebnisseite im Browser nach der TikTok-Anmeldung. */
+function loopbackPage(res: ServerResponse, status: number, title: string, text: string): void {
+  const esc = (v: string) => v.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'"
+  });
+  res.end(`<!doctype html><html lang="de"><meta charset="utf-8"><title>LIKED – ${esc(title)}</title>
+<body style="background:#0c0722;color:#fbf8ff;font-family:system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0">
+<div style="max-width:440px;text-align:center"><h1 style="font-size:48px;margin:0;background:linear-gradient(100deg,#ff5f98,#c77dff,#4ee8f2);-webkit-background-clip:text;color:transparent">LIKED</h1>
+<h2>${esc(title)}</h2><p style="color:#ddd5f7">${esc(text)}</p></div></body></html>`);
 }
