@@ -76,7 +76,8 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
         return;
       }
       if (url.pathname === '/healthz') {
-        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        // Öffentliche Statusinfo: darf von der Desktop-App (Origin app://liked) gelesen werden.
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
         res.end(
           JSON.stringify({
             ok: true,

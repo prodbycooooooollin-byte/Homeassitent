@@ -188,8 +188,10 @@ function useServerStatus(url: string): ['checking' | 'online' | 'offline', () =>
   useEffect(() => {
     let alive = true;
     setState('checking');
-    fetch(`${url.replace(/\/$/, '')}/healthz`, { signal: AbortSignal.timeout(60_000) })
-      .then((r) => alive && setState(r.ok ? 'online' : 'offline'))
+    // no-cors: Die Antwort selbst wird nicht gebraucht – kommt überhaupt eine an, ist der Server erreichbar.
+    // (Ältere Server senden für /healthz keinen CORS-Header; ein normaler fetch würde dann fälschlich scheitern.)
+    fetch(`${url.replace(/\/$/, '')}/healthz`, { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(60_000) })
+      .then(() => alive && setState('online'))
       .catch(() => alive && setState('offline'));
     return () => {
       alive = false;

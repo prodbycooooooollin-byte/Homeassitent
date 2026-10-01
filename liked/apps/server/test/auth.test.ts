@@ -202,6 +202,7 @@ describe('Server ohne TikTok-Konfiguration', () => {
     server = s.server;
     const h = await fetch(`${s.url}/healthz`).then((r) => r.json());
     expect(h).toMatchObject({ ok: true, tiktokOfficialAdapter: 'not_configured' });
+    expect((await fetch(`${s.url}/healthz`)).headers.get('access-control-allow-origin')).toBe('*');
     const r = await fetch(`${s.url}/api/tiktok/login`, { method: 'POST' });
     expect(r.status).toBe(503);
     expect(await r.json()).toEqual({ error: 'not_configured', configured: false });
