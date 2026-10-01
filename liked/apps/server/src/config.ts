@@ -56,10 +56,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     reconnectWindowMs: Number(env.RECONNECT_WINDOW_MS ?? 30_000),
     tiktok: hasTikTok
       ? {
-          clientKey: env.TIKTOK_CLIENT_KEY!,
-          clientSecret: env.TIKTOK_CLIENT_SECRET!,
-          redirectUri: env.TIKTOK_REDIRECT_URI ?? `${publicUrl}/auth/tiktok/callback`,
-          scopes: (env.TIKTOK_SCOPES ?? 'user.info.basic,portability.activity.ongoing').split(',').map((s) => s.trim())
+          clientKey: unquote(env.TIKTOK_CLIENT_KEY!),
+          clientSecret: unquote(env.TIKTOK_CLIENT_SECRET!),
+          // Muss Zeichen für Zeichen der in der TikTok-App eingetragenen Redirect-URL entsprechen.
+          redirectUri: unquote(env.TIKTOK_REDIRECT_URI) || `${publicUrl}/auth/tiktok/callback`,
+          scopes: unquote(env.TIKTOK_SCOPES ?? 'user.info.basic,portability.activity.ongoing')
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
         }
       : null,
     tokenEncryptionKey: key,
@@ -99,4 +103,9 @@ export function parseTikTokVerification(env: NodeJS.ProcessEnv, suffix = ''): Pi
   const file = rawFile.split(/[\\/]/).pop()!.split('?')[0]!.trim();
   if (!/^[A-Za-z0-9_-]{4,100}\.txt$/.test(file)) return { tiktokVerification: null, tiktokVerificationStatus: 'invalid_file' };
   return { tiktokVerification: { file, content }, tiktokVerificationStatus: 'ok' };
+}
+
+/** Entfernt versehentlich mitkopierte Leerzeichen und Anführungszeichen aus Dashboard-Werten. */
+function unquote(v?: string): string {
+  return (v ?? '').trim().replace(/^["']|["']$/g, '').trim();
 }

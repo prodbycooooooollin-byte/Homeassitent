@@ -178,6 +178,9 @@ describe('Offizieller Adapter (gegen Mock-API, Abnahme 2, 3, 13)', () => {
 
   it('akzeptiert die Redirect-URL auch mit abschließendem Schrägstrich', async () => {
     const { url } = await setup();
+    const h = await fetch(`${url}/healthz`).then((r) => r.json());
+    expect(h.tiktokRedirectUri).toBe('http://127.0.0.1/auth/tiktok/callback');
+    expect(JSON.stringify(h)).not.toContain('test-secret');
     const sec = secret();
     const login = await call(url, '/api/tiktok/login', sec, 'POST');
     const state = new URL(login.body.authorizeUrl).searchParams.get('state');
@@ -233,6 +236,18 @@ describe('TikTok-URL-Verifizierung', () => {
     expect((await fetch(`${s.url}/auth/tiktok/callback/andere.txt`)).status).toBe(404);
     expect((await fetch(`${s.url}/auth/tiktok/callback/tiktokAbCdEf123456.txt`, { method: 'HEAD' })).status).toBe(200);
     expect((await fetch(`${s.url}/healthz`).then((r) => r.json())).tiktokVerifyFile).toBe('tiktokAbCdEf123456.txt');
+  });
+});
+
+describe('TikTok-Konfiguration aus dem Dashboard', () => {
+  it('bereinigt Leerzeichen und Anführungszeichen und nutzt sonst die Standard-Redirect-URL', async () => {
+    const { loadConfig } = await import('../src/config.js');
+    const key = randomBytes(32).toString('base64');
+    const base = { TIKTOK_CLIENT_KEY: ' ck ', TIKTOK_CLIENT_SECRET: '"cs"', TOKEN_ENCRYPTION_KEY: key, RENDER_EXTERNAL_URL: 'https://x.onrender.com' };
+    const a = loadConfig({ ...base, TIKTOK_REDIRECT_URI: ' "https://x.onrender.com/auth/tiktok/callback/" ', TIKTOK_SCOPES: 'user.info.basic, portability.activity.single,' } as never);
+    expect(a.tiktok).toMatchObject({ clientKey: 'ck', clientSecret: 'cs', redirectUri: 'https://x.onrender.com/auth/tiktok/callback/', scopes: ['user.info.basic', 'portability.activity.single'] });
+    const b = loadConfig(base as never);
+    expect(b.tiktok!.redirectUri).toBe('https://x.onrender.com/auth/tiktok/callback');
   });
 });
 

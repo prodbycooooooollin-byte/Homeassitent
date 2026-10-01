@@ -85,6 +85,9 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
             uptimeSec: Math.round((now() - startedAt) / 1000),
             rooms: rooms.rooms.size,
             tiktokOfficialAdapter: auth ? 'configured' : 'not_configured',
+            // Öffentliche Werte (keine Secrets) zum Abgleich mit den Einstellungen der TikTok-App.
+            tiktokRedirectUri: config.tiktok?.redirectUri ?? null,
+            tiktokScopes: config.tiktok?.scopes ?? null,
             // Öffentlicher Dateiname (kein Secret) – hilft beim Prüfen der TikTok-Verifizierung.
             tiktokVerifyFile: config.tiktokVerification?.file ?? null,
             tiktokVerifyStatus: config.tiktokVerificationStatus,
