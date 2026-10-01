@@ -6,7 +6,7 @@ import { createLogger, type Logger } from './logger.js';
 import { RoomManager } from './rooms/room-manager.js';
 import { buildView } from './rooms/view.js';
 import { attachSocketHandlers } from './net/socket-handlers.js';
-import { TikTokAuthService } from './auth/tiktok-auth-service.js';
+import { isCallbackPath, TikTokAuthService } from './auth/tiktok-auth-service.js';
 import { RateLimiter } from './net/rate-limit.js';
 import { homePage, privacyPage, termsPage } from './legal.js';
 
@@ -69,9 +69,10 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
         res.end(homePage(config.operator, DOWNLOAD_URL));
         return;
       }
-      if (url.pathname === '/privacy' || url.pathname === '/terms') {
+      const page = url.pathname.replace(/\/$/, '');
+      if (page === '/privacy' || page === '/terms') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" });
-        res.end(url.pathname === '/privacy' ? privacyPage(config.operator, LEGAL_UPDATED) : termsPage(config.operator, LEGAL_UPDATED));
+        res.end(page === '/privacy' ? privacyPage(config.operator, LEGAL_UPDATED) : termsPage(config.operator, LEGAL_UPDATED));
         return;
       }
       if (url.pathname === '/healthz') {
@@ -92,7 +93,7 @@ export function createLikedServer(config: ServerConfig, opts: { log?: Logger; no
         );
         return;
       }
-      if (url.pathname.startsWith('/api/tiktok/') || url.pathname === '/auth/tiktok/callback') {
+      if (url.pathname.startsWith('/api/tiktok/') || isCallbackPath(url.pathname)) {
         if (!auth) {
           res.writeHead(503, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'not_configured', configured: false }));

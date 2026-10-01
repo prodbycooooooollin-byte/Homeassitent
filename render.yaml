@@ -25,3 +25,11 @@ services:
         value: '200'
       # TikTok-Werte (TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TOKEN_ENCRYPTION_KEY) erst nach der
       # TikTok-Freigabe im Render-Dashboard unter „Environment“ ergänzen – nie ins Repository.
+    # Hinweis: Im Free-Plan ist die Festplatte flüchtig. TikTok-Anmeldungen und laufende Exporte gehen bei
+    # Neustart, Deploy oder Ruhezustand verloren (Spieler müssen sich dann neu anmelden). Für den Dauerbetrieb:
+    # plan: starter, dazu
+    # disk:
+    #   name: liked-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # und die Umgebungsvariable DATA_DIR=/var/data setzen.

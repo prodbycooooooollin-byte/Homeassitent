@@ -98,12 +98,13 @@ export class TikTokAuthService {
   /* ---------------------------------------------------------- */
 
   async handle(req: IncomingMessage, res: ServerResponse, url: URL, ip: string): Promise<boolean> {
-    if (!url.pathname.startsWith('/api/tiktok/') && url.pathname !== '/auth/tiktok/callback') return false;
+    const isCallback = isCallbackPath(url.pathname);
+    if (!url.pathname.startsWith('/api/tiktok/') && !isCallback) return false;
     if (!this.limiter.take(ip)) {
       json(res, 429, { error: 'rate_limited' });
       return true;
     }
-    if (url.pathname === '/auth/tiktok/callback' && req.method === 'GET') {
+    if (isCallback && req.method === 'GET') {
       await this.callback(url, res);
       return true;
     }
@@ -405,4 +406,9 @@ function page(res: ServerResponse, status: number, title: string, text: string):
   res.end(`<!doctype html><html lang="de"><meta charset="utf-8"><title>LIKED – ${esc(title)}</title>
 <body style="background:#0c0c10;color:#eee;font-family:system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0">
 <div style="max-width:420px;text-align:center"><h1 style="color:#a855f7;letter-spacing:.08em">LIKED</h1><h2>${esc(title)}</h2><p style="color:#bbb">${esc(text)}</p></div></body></html>`);
+}
+
+/** Redirect-URL mit oder ohne abschließenden Schrägstrich (je nach Eintrag in der TikTok-App). */
+export function isCallbackPath(pathname: string): boolean {
+  return pathname === '/auth/tiktok/callback' || pathname === '/auth/tiktok/callback/';
 }

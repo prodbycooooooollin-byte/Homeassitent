@@ -176,6 +176,16 @@ describe('Offizieller Adapter (gegen Mock-API, Abnahme 2, 3, 13)', () => {
     expect((await call(url, '/api/tiktok/status', sec)).body.state).toBe('error');
   });
 
+  it('akzeptiert die Redirect-URL auch mit abschließendem Schrägstrich', async () => {
+    const { url } = await setup();
+    const sec = secret();
+    const login = await call(url, '/api/tiktok/login', sec, 'POST');
+    const state = new URL(login.body.authorizeUrl).searchParams.get('state');
+    const cb = await fetch(`${url}/auth/tiktok/callback/?code=abc&state=${state}`);
+    expect(cb.status).toBe(200);
+    expect((await call(url, '/api/tiktok/status', sec)).body.state).not.toBe('error');
+  });
+
   it('ohne Gerätegeheimnis kein Zugriff', async () => {
     const { url } = await setup();
     const r = await fetch(`${url}/api/tiktok/status`);
@@ -239,6 +249,8 @@ describe('Rechtstexte', () => {
     expect(home).toContain('/privacy');
     const terms = await fetch(`${s.url}/terms`);
     expect(terms.status).toBe(200);
+    expect((await fetch(`${s.url}/terms/`)).status).toBe(200);
+    expect((await fetch(`${s.url}/privacy/`)).status).toBe(200);
     expect(await terms.text()).toContain('Terms of Service');
   });
 });
