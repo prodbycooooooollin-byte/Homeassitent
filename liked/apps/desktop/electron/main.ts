@@ -7,7 +7,6 @@ import type { AppSettings, TikTokOverview, UpdateState } from '../src/shared/ipc
 import { DEFAULT_SERVER_URL, lastRoomStore, loadSettings, saveSettings, wipeLocalGameData } from './store.js';
 import { TikTokManager } from './tiktok-manager.js';
 import { Updater } from './updater.js';
-import { LocalServer } from './local-server.js';
 
 /* ------------------------------------------------------------------ */
 /* Grundeinstellungen & Sicherheit                                     */
@@ -156,7 +155,6 @@ app.whenReady().then(async () => {
     (o: TikTokOverview) => sendToRenderer('tiktok:status', o)
   );
   const updater = new Updater((s: UpdateState) => sendToRenderer('updates:status', s));
-  const localServer = new LocalServer();
 
   handle('app:info', None, () => ({
     version: app.getVersion(),
@@ -177,7 +175,6 @@ app.whenReady().then(async () => {
   const SettingsPatch = z
     .object({
       profile: z.object({ name: z.string().max(40), avatar: z.string().max(20), deviceId: z.string().max(64) }).partial(),
-      serverUrl: z.string().url().max(300).refine((u) => /^https?:\/\//.test(u)),
       audio: z
         .object({
           music: z.number().min(0).max(1),
@@ -209,7 +206,6 @@ app.whenReady().then(async () => {
       audio: { ...settings.audio, ...patch.audio },
       display: { ...settings.display, ...patch.display }
     };
-    if (patch.serverUrl !== undefined) settings.serverUrlCustom = patch.serverUrl.replace(/\/$/, '') !== DEFAULT_SERVER_URL.replace(/\/$/, '');
     saveSettings(settings);
     if (patch.display?.fullscreen !== undefined) mainWindow?.setFullScreen(patch.display.fullscreen);
     return settings;
@@ -250,9 +246,6 @@ app.whenReady().then(async () => {
   handle('updates:download', None, () => updater.download());
   handle('updates:installOnQuit', None, () => updater.installOnQuit());
 
-  handle('local:start', z.number().int(), (port) => localServer.start(port));
-  handle('local:stop', None, () => localServer.stop());
-  handle('local:status', None, () => localServer.status());
 
   const LastRoom = z
     .object({ serverUrl: z.string().max(300), code: z.string().regex(/^[A-Z0-9]{6}$/), token: z.string().max(64), at: z.number() })
@@ -274,7 +267,6 @@ app.whenReady().then(async () => {
 
   app.on('before-quit', () => {
     tiktok.dispose();
-    void localServer.stop();
   });
 });
 

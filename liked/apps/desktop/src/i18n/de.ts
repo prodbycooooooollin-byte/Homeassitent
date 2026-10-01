@@ -449,7 +449,7 @@ export const de = {
     serverLocked: 'Solange du in einem Raum bist, kann der Server nicht gewechselt werden. Verlasse zuerst den Raum.',
     serverUrl: 'Eigene Server-Adresse',
     serverHint: 'Alle Mitspieler müssen denselben Server verwenden.',
-    serverDefault: 'Standard-Server von LIKED – automatisch eingerichtet.',
+    serverDefault: 'LIKED verbindet sich automatisch mit dem offiziellen LIKED-Server. Alle Spieler sind dort, es muss nichts eingestellt werden.',
     serverCustom: 'Eigener Server gewählt. Alle Mitspieler müssen denselben Server verwenden.',
     useDefaultServer: 'Standard-Server verwenden',
     localHost: 'Server auf diesem PC',

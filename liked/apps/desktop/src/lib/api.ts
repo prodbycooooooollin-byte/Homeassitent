@@ -114,11 +114,6 @@ function browserMock(): LikedApi {
       installOnQuit: async () => undefined,
       onStatus: noop
     },
-    localServer: {
-      start: async () => ({ running: false, port: null, addresses: [], error: 'Nur in der Desktop-App' }),
-      stop: async () => ({ running: false, port: null, addresses: [] }),
-      status: async () => ({ running: false, port: null, addresses: [] })
-    },
     lastRoom: {
       get: async () => {
         try {

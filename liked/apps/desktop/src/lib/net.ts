@@ -227,9 +227,15 @@ export async function tryResumeLastRoom(): Promise<void> {
     if (last) await api.lastRoom.set(null);
     return;
   }
-  if (!(await connectTo(last.serverUrl))) return;
+  // Nur Räume auf dem eingebauten Server fortsetzen (ältere Versionen erlaubten eigene Server).
+  const serverUrl = get().settings!.serverUrl;
+  if (last.serverUrl.replace(/\/$/, '') !== serverUrl.replace(/\/$/, '')) {
+    await api.lastRoom.set(null);
+    return;
+  }
+  if (!(await connectTo(serverUrl))) return;
   const res = await emit<JoinResult & { mode: RoomMode }>('resumeRoom', { code: last.code, token: last.token });
-  if (res.ok) await enter(res, last.serverUrl);
+  if (res.ok) await enter(res, serverUrl);
   else await api.lastRoom.set(null);
 }
 

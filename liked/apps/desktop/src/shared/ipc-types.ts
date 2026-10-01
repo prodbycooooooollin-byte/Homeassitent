@@ -5,7 +5,7 @@ import type { AdapterId, ConnectionStatus, LikeIndexMeta } from '@liked/tiktok-c
 export interface AppSettings {
   profile: { name: string; avatar: string; deviceId: string };
   serverUrl: string;
-  /** true = Spieler hat bewusst einen anderen Server gewählt. */
+  /** Veraltet: Eigene Server sind nicht mehr wählbar; immer false. */
   serverUrlCustom?: boolean;
   audio: { music: number; sfx: number; musicMuted: boolean; sfxMuted: boolean; videoStartMuted: boolean };
   display: { fullscreen: boolean; reducedMotion: 'system' | 'on' | 'off'; effects: 'high' | 'low'; theme: 'dark' | 'light' | 'system' };
@@ -29,13 +29,6 @@ export interface UpdateState {
   notes?: string;
   percent?: number;
   message?: string;
-}
-
-export interface LocalServerState {
-  running: boolean;
-  port: number | null;
-  addresses: string[];
-  error?: string;
 }
 
 export interface ClipListEntry {
@@ -79,11 +72,6 @@ export interface LikedApi {
     download(): Promise<UpdateState>;
     installOnQuit(): Promise<void>;
     onStatus(cb: (s: UpdateState) => void): () => void;
-  };
-  localServer: {
-    start(port: number): Promise<LocalServerState>;
-    stop(): Promise<LocalServerState>;
-    status(): Promise<LocalServerState>;
   };
   lastRoom: {
     get(): Promise<{ serverUrl: string; code: string; token: string; at: number } | null>;

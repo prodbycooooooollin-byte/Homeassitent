@@ -66,9 +66,10 @@ export function loadSettings(): AppSettings {
     audio: { ...d.audio, ...s.audio },
     display: { ...d.display, ...s.display }
   };
-  // Ohne eigene Eingabe immer den Standard-Server des aktuellen Builds verwenden
-  // (auch wenn eine ältere Version eine andere Standardadresse gespeichert hat).
-  if (!merged.serverUrlCustom) merged.serverUrl = DEFAULT_SERVER_URL;
+  // Immer der fest eingebaute LIKED-Server – eine eigene Adresse ist nicht vorgesehen
+  // (auch frühere Einstellungen mit eigener Adresse werden überschrieben).
+  merged.serverUrl = DEFAULT_SERVER_URL;
+  merged.serverUrlCustom = false;
   if (!s.profile?.deviceId) writeJson('settings.json', merged);
   return merged;
 }

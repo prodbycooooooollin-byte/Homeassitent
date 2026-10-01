@@ -48,11 +48,6 @@ const api: LikedApi = {
     installOnQuit: () => invoke('updates:installOnQuit'),
     onStatus: subscribe('updates:status') as LikedApi['updates']['onStatus']
   },
-  localServer: {
-    start: (port) => invoke('local:start', port),
-    stop: () => invoke('local:stop'),
-    status: () => invoke('local:status')
-  },
   lastRoom: {
     get: () => invoke('lastRoom:get'),
     set: (v) => invoke('lastRoom:set', v)

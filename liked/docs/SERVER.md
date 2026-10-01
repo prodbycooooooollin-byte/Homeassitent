@@ -48,9 +48,10 @@ Healthcheck `/healthz`, `TRUST_PROXY=1`. Render stellt HTTPS/WSS automatisch ber
    Name vergeben war), die Konstante `DEFAULT_SERVER_URL` in `build-main.mjs` anpassen oder in GitHub die
    Actions-Variable `LIKED_SERVER_URL` setzen. Danach baut die CI einen neuen Installer.
 
-Die App verwendet immer den Standard-Server des installierten Builds. Nur wer unter *Einstellungen → Server* bewusst
-eine andere Adresse einträgt (z. B. den lokalen Hostmodus), weicht davon ab; „Standard-Server verwenden“ stellt
-das zurück. Ältere Installationen mit gespeicherter Adresse `localhost` werden beim Start automatisch umgestellt.
+Die App verbindet sich immer mit dem fest eingebauten Server des installierten Builds. Eine eigene Server-Adresse
+oder ein lokaler Hostmodus ist in der App nicht wählbar; *Einstellungen → Server* zeigt nur den Verbindungsstatus.
+Früher gespeicherte eigene Adressen werden beim Start überschrieben. (Für Entwicklung und Tests setzt die
+Umgebungsvariable `LIKED_SERVER_URL` beim Start der Desktop-App eine andere Adresse.)
 
 **Dienst manuell angelegt (ohne Blueprint)?** Unter *Settings* genau so eintragen:
 
@@ -137,9 +138,3 @@ Zielhardware ist damit **nicht** gemessen; bei Bedarf den Benchmark dort erneut 
 Kostenpflichtige Scraping-, Captcha- oder Proxy-Dienste werden nicht verwendet. Eine dauerhaft kostenlose
 Infrastruktur ist nicht zugesagt.
 
-## Lokaler Hostmodus (optional)
-
-*Einstellungen → Server → „Lokalen Server starten“* startet denselben Server im Desktop-Prozess (Standard-Port
-47800). Mitspieler im selben Netz verbinden sich über die angezeigte LAN-Adresse. Über das Internet sind
-Portweiterleitung oder ein VPN/Relay nötig; TLS gibt es dabei nicht. Der offizielle TikTok-Import ist im lokalen
-Modus nicht verfügbar, weil im Desktop-Build keine Secrets stecken.

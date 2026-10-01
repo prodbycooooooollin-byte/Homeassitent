@@ -3,10 +3,10 @@ import { t } from '../i18n/de';
 import { api } from '../lib/api';
 import { sound } from '../lib/sound';
 import { set, toast, useStore, type SettingsTab } from '../state/store';
-import { Button, Callout, Dialog, Disclosure, Icon, Panel, Segmented, Toggle, useSavedFlash } from '../components/ui';
+import { Button, Dialog, Disclosure, Icon, Panel, Segmented, Toggle, useSavedFlash } from '../components/ui';
 import { ProfileEditor } from './Menu';
 import { ClipsPanel, TikTokPanel } from './TikTokPanel';
-import type { AppSettings, LocalServerState } from '../shared/ipc-types';
+import type { AppSettings } from '../shared/ipc-types';
 
 async function patch(p: Partial<AppSettings>) {
   const s = await api.settings.set(p);
@@ -96,7 +96,7 @@ export function Settings() {
           {tab === 'clips' && <ClipsPanel />}
           {tab === 'display' && <DisplaySettings />}
           {tab === 'audio' && <AudioSettings />}
-          {tab === 'network' && <NetworkSettings locked={inRoom} />}
+          {tab === 'network' && <NetworkSettings />}
           {tab === 'about' && <AboutSettings />}
         </div>
       </div>
@@ -198,99 +198,25 @@ function useServerStatus(url: string): ['checking' | 'online' | 'offline', () =>
   return [state, () => setN((x) => x + 1)];
 }
 
-function NetworkSettings({ locked }: { locked: boolean }) {
+/** Nur Statusanzeige: LIKED verbindet sich immer mit dem fest eingebauten Server. */
+function NetworkSettings() {
   const s = useStore((st) => st.settings)!;
-  const solo = useStore((st) => !!st.session?.solo);
-  const [url, setUrl] = useState(s.serverUrl);
-  const [local, setLocal] = useState<LocalServerState | null>(null);
-  const [port, setPort] = useState(47800);
-  const [defaultUrl, setDefaultUrl] = useState('');
   const [status, recheck] = useServerStatus(s.serverUrl);
-  const [saved, flash] = useSavedFlash();
-  useEffect(() => {
-    void api.localServer.status().then(setLocal);
-    void api.app.info().then((i) => setDefaultUrl(i.defaultServerUrl));
-  }, []);
-  useEffect(() => setUrl(s.serverUrl), [s.serverUrl]);
-  const valid = /^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(url);
-  const applyUrl = async (next: string) => {
-    await patch({ serverUrl: next.replace(/\/$/, '') });
-    set({ tiktok: await api.tiktok.overview() });
-    flash();
-  };
-  const disabled = locked && !solo;
-
   return (
-    <div className="stack">
-      <Panel title={t.settings.serverStatus} actions={saved ? <SavedNote saved /> : null}>
-        <div className={`server-status st-${status}`} role="status">
-          <Icon name={status === 'online' ? 'check' : status === 'offline' ? 'wifiOff' : 'clock'} size={18} />
-          <div>
-            <strong>{status === 'online' ? t.settings.serverOnline : status === 'offline' ? t.settings.serverOffline : t.settings.serverChecking}</strong>
-            <code>{s.serverUrl}</code>
-          </div>
-          <Button size="sm" variant="quiet" icon="refresh" onClick={recheck} disabled={status === 'checking'}>
-            {t.common.retry}
-          </Button>
+    <Panel title={t.settings.serverStatus}>
+      <div className={`server-status st-${status}`} role="status">
+        <Icon name={status === 'online' ? 'check' : status === 'offline' ? 'wifiOff' : 'clock'} size={18} />
+        <div>
+          <strong>{status === 'online' ? t.settings.serverOnline : status === 'offline' ? t.settings.serverOffline : t.settings.serverChecking}</strong>
+          <code>{s.serverUrl}</code>
         </div>
-        {status === 'checking' && <p className="hint">{t.connection.waking}</p>}
-        <p className="hint">{s.serverUrlCustom ? t.settings.serverCustom : t.settings.serverDefault}</p>
-        {disabled && <Callout tone="info" title={t.settings.serverLocked} />}
-      </Panel>
-
-      <Disclosure summary={t.common.advanced} defaultOpen={!!s.serverUrlCustom}>
-        <div className="stack">
-          <label className="field">
-            <span className="field-label">{t.settings.serverUrl}</span>
-            <div className="input-row">
-              <input value={url} disabled={disabled} onChange={(e) => setUrl(e.target.value.trim())} aria-invalid={!valid} spellCheck={false} />
-              <Button variant="secondary" disabled={disabled || !valid || url.replace(/\/$/, '') === s.serverUrl} onClick={() => void applyUrl(url)}>
-                {t.common.save}
-              </Button>
-            </div>
-            <small className="hint">{t.settings.serverHint}</small>
-          </label>
-          {s.serverUrlCustom && defaultUrl && (
-            <div>
-              <Button variant="quiet" icon="refresh" disabled={disabled} onClick={() => void applyUrl(defaultUrl)}>
-                {t.settings.useDefaultServer}
-              </Button>
-            </div>
-          )}
-
-          <h4>{t.settings.localHost}</h4>
-          <p className="hint">{t.settings.localHostHint}</p>
-          {local?.running ? (
-            <>
-              <p>{t.settings.localAddresses}:</p>
-              <ul className="id-list">
-                {local.addresses.map((a) => (
-                  <li key={a}>
-                    <code>{a}</code>
-                    <Button size="sm" variant="quiet" disabled={disabled} onClick={() => void applyUrl(a)}>
-                      {t.settings.useLocal}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-              <div>
-                <Button variant="danger" onClick={async () => setLocal(await api.localServer.stop())}>
-                  {t.settings.localStop}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="input-row">
-              <input className="short" type="number" min={1024} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value))} aria-label="Port" />
-              <Button variant="secondary" onClick={async () => setLocal(await api.localServer.start(port))}>
-                {t.settings.localStart}
-              </Button>
-            </div>
-          )}
-          {local?.error && <Callout tone="error" title={local.error} />}
-        </div>
-      </Disclosure>
-    </div>
+        <Button size="sm" variant="quiet" icon="refresh" onClick={recheck} disabled={status === 'checking'}>
+          {t.common.retry}
+        </Button>
+      </div>
+      {status === 'checking' && <p className="hint">{t.connection.waking}</p>}
+      <p className="hint">{t.settings.serverDefault}</p>
+    </Panel>
   );
 }
 
