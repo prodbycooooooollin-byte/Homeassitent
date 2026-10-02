@@ -40,6 +40,7 @@ function Connection() {
   const serverReachable = useApp((s) => s.serverReachable);
   const toast = useUi((s) => s.toast);
   const l = statusLabel(status);
+  const [demoWeather, setDemoWeather] = useState("auto");
   const reconnect = () => useLive.getState().setSource(mode === "demo" ? getDemoSource() ?? new DemoSource() : new LiveSource());
   return (
     <section className="panel-flat space-y-3 p-4" aria-label="Verbindung">
@@ -90,6 +91,26 @@ function Connection() {
             <button className="btn-ghost" onClick={() => void startDemo(true)}>
               Demo zurücksetzen
             </button>
+            <div className="w-full">
+              <p className="label">Demo-Wetter (wirkt auch auf die PV-Leistung)</p>
+              <Segmented
+                label="Demo-Wetter"
+                size="sm"
+                value={demoWeather}
+                onChange={(v) => {
+                  setDemoWeather(v);
+                  getDemoSource()?.setWeather(v === "auto" ? null : v);
+                }}
+                options={[
+                  { value: "auto", label: "Automatisch" },
+                  { value: "sunny", label: "Sonne" },
+                  { value: "cloudy", label: "Wolken" },
+                  { value: "rainy", label: "Regen" },
+                  { value: "snowy", label: "Schnee" },
+                  { value: "lightning-rainy", label: "Gewitter" },
+                ]}
+              />
+            </div>
           </>
         )}
       </div>

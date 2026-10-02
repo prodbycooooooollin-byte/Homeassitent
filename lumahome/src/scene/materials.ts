@@ -39,6 +39,9 @@ const FLOOR_BASE: Record<FloorMaterial, string> = {
   stone: "#CFCBC2",
   carpet: "#D9D2C6",
   concrete: "#C9C9C4",
+  grass: "#9DB383",
+  decking: "#B88E66",
+  paving: "#C8C3B8",
 };
 
 function floorTexture(m: FloorMaterial): THREE.Texture {
@@ -50,7 +53,35 @@ function floorTexture(m: FloorMaterial): THREE.Texture {
       const r = rng(m.length * 97);
       ctx.fillStyle = base;
       ctx.fillRect(0, 0, s, s);
-      if (m === "oak" || m === "walnut") {
+      if (m === "grass") {
+        for (let i = 0; i < 4000; i++) {
+          const g = 120 + Math.floor(r() * 60);
+          ctx.fillStyle = `rgba(${g - 50},${g},${g - 70},${0.25 + r() * 0.35})`;
+          ctx.fillRect(r() * s, r() * s, 1 + r() * 2, 2 + r() * 4);
+        }
+      } else if (m === "decking") {
+        const board = s / 6;
+        for (let i = 0; i < 6; i++) {
+          ctx.fillStyle = `rgba(90,55,30,${0.05 + r() * 0.1})`;
+          ctx.fillRect(i * board, 0, board, s);
+          ctx.fillStyle = "rgba(50,30,15,0.45)";
+          ctx.fillRect(i * board, 0, 2, s);
+        }
+      } else if (m === "paving") {
+        const t = s / 4;
+        for (let x = 0; x < 4; x++)
+          for (let y = 0; y < 8; y++) {
+            ctx.fillStyle = `rgba(0,0,0,${r() * 0.06})`;
+            ctx.fillRect(x * t + (y % 2) * (t / 2), (y * t) / 2, t, t / 2);
+          }
+        ctx.strokeStyle = "rgba(110,105,95,0.35)";
+        for (let y = 0; y <= 8; y++) {
+          ctx.beginPath();
+          ctx.moveTo(0, (y * t) / 2);
+          ctx.lineTo(s, (y * t) / 2);
+          ctx.stroke();
+        }
+      } else if (m === "oak" || m === "walnut") {
         const plank = s / 8;
         for (let i = 0; i < 8; i++) {
           const off = r() * s;

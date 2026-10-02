@@ -1,7 +1,7 @@
 // Demo-Projekt „Haus am Lindenweg“ – ein eingerichtetes, zweigeschossiges
 // Beispielhaus mit Gerätezuordnungen und Messpunkten. Wird ausschließlich im
 // gekennzeichneten Demo-Modus verwendet.
-import type { DeviceBinding, EnergyMeter, FloorMaterial, Item, Opening, Project, Room } from "@/model/types";
+import { DEFAULT_SETTINGS, type DeviceBinding, type EnergyMeter, type FloorMaterial, type Item, type Opening, type Project, type Room } from "@/model/types";
 import { entryFor } from "@/catalog/catalog";
 
 const H = Math.PI / 2;
@@ -14,6 +14,7 @@ function rect(id: string, floorId: string, name: string, x: number, y: number, w
     floorMaterial,
     wallColor,
     openEdges: [],
+    outdoor: false,
     vertices: [
       { id: `${id}_v0`, x, y },
       { id: `${id}_v1`, x: x + w, y },
@@ -66,6 +67,8 @@ export function demoProject(): Project {
     rect("r_galerie", OG, "Galerie", 5.5, 3, 4.5, 2, "oak"),
     rect("r_bad_og", OG, "Bad oben", 0, 5, 4, 3.5, "tiles", "#EEF1EF"),
     rect("r_gast", OG, "Gästezimmer", 4, 5, 6, 3.5, "carpet"),
+    { ...rect("r_terrasse", EG, "Terrasse", -5, 0, 5, 5.5, "decking"), outdoor: true },
+    { ...rect("r_garten", EG, "Garten", -11, -1, 6, 9.5, "grass"), outdoor: true },
   ];
 
   const openings: Opening[] = [
@@ -140,7 +143,9 @@ export function demoProject(): Project {
     item("i_waschmaschine", EG, "washer", 7.4, 8.08, Math.PI),
     item("i_trockner", EG, "washer", 8.05, 8.08, Math.PI, { name: "Wäschetrockner" }),
     item("i_waermepumpe", EG, "heat-pump", 9.58, 6.2, H),
-    item("i_batterie", EG, "battery", 9.755, 7.0, H, { name: "Batteriespeicher" }),
+    item("i_batterie", EG, "battery", 9.755, 7.0, H, { name: "Akku 1" }),
+    item("i_batterie2", EG, "battery", 9.755, 7.62, H, { name: "Akku 2" }),
+    item("i_batterie3", EG, "battery", 8.75, 8.255, Math.PI, { name: "Akku 3" }),
     item("i_zaehler", EG, "fuse-box", 7.25, 5.16, 0, { elevation: 1.2, name: "Zählerschrank" }),
     item("i_hwr_decke", EG, "ceiling-light", 8.4, 6.75, 0, { elevation: 2.5, name: "Deckenleuchte HWR" }),
     // Schlafzimmer
@@ -165,6 +170,15 @@ export function demoProject(): Project {
     item("i_gast_sofa", OG, "sofa-2", 6.5, 7.9, Math.PI),
     item("i_gast_regal", OG, "bookshelf", 4.6, 6.6, -H),
     item("i_gast_decke", OG, "ceiling-light", 7.0, 6.75, 0, { elevation: 2.4, name: "Deckenleuchte Gästezimmer" }),
+    // Dach
+    item("i_pv", OG, "pv-array", 5.0, 2.2, 0, { name: "PV-Anlage Süddach", width: 9.2, depth: 3.6, elevation: 2.77 }),
+    // Terrasse & Garten
+    item("i_whirlpool", EG, "whirlpool", -3.5, 4.0),
+    item("i_gartentisch", EG, "garden-table", -2.2, 1.5),
+    item("i_liege", EG, "lounger", -8.2, 2.0),
+    item("i_schirm", EG, "parasol", -8.3, 5.6),
+    item("i_gartenlicht1", EG, "garden-light", -10.5, -0.4, 0, { name: "Gartenleuchte West" }),
+    item("i_gartenlicht2", EG, "garden-light", -10.5, 8.0, 0, { name: "Gartenleuchte Süd" }),
   ];
 
   const now = "2026-10-01T08:00:00.000Z";
@@ -213,6 +227,9 @@ export function demoProject(): Project {
     b("b34", "sensor.kinderzimmer_temperatur", "room", "r_kind", "sensor"),
     b("b35", "sensor.kueche_temperatur", "room", "r_kueche", "sensor"),
     b("b36", "climate.waermepumpe", "item", "i_waermepumpe", "climate"),
+    b("b37", "switch.whirlpool", "item", "i_whirlpool", "switch"),
+    b("b38", "climate.whirlpool", "item", "i_whirlpool", "climate"),
+    b("b39", "light.garten", "item", "i_gartenlicht1", "light"),
   ];
 
   const m = (id: string, label: string, p: Partial<EnergyMeter>): EnergyMeter => ({
@@ -227,6 +244,7 @@ export function demoProject(): Project {
     itemId: null,
     parentId: null,
     coversWholeRoom: false,
+    socEntityId: null,
     ...p,
   });
   const meters: EnergyMeter[] = [
@@ -234,11 +252,14 @@ export function demoProject(): Project {
     m("m_netz", "Netz (Saldo)", { flow: "grid_net", powerEntityId: "sensor.netz_leistung" }),
     m("m_netz_bezug", "Netzbezug", { flow: "grid_import", energyEntityId: "sensor.netzbezug_energie" }),
     m("m_netz_einsp", "Einspeisung", { flow: "grid_export", energyEntityId: "sensor.einspeisung_energie" }),
-    m("m_pv", "Photovoltaik", { flow: "pv_production", powerEntityId: "sensor.pv_leistung", energyEntityId: "sensor.pv_energie" }),
-    m("m_batterie", "Batteriespeicher", { flow: "battery_net", powerEntityId: "sensor.batterie_leistung", itemId: "i_batterie" }),
+    m("m_pv", "Photovoltaik", { flow: "pv_production", powerEntityId: "sensor.pv_leistung", energyEntityId: "sensor.pv_energie", itemId: "i_pv" }),
+    ...[1, 2, 3].map((n) =>
+      m(`m_akku${n}`, `Akku ${n}`, { flow: "battery_net", powerEntityId: `sensor.batterie_${n}_leistung`, socEntityId: `sensor.batterie_${n}_ladestand`, itemId: n === 1 ? "i_batterie" : `i_batterie${n}` }),
+    ),
     m("m_kueche", "Stromkreis Küche", { parentId: "m_haus", roomId: "r_kueche", coversWholeRoom: true, powerEntityId: "sensor.kueche_stromkreis_leistung", energyEntityId: "sensor.kueche_stromkreis_energie" }),
     m("m_kuehlschrank", "Kühlschrank", { parentId: "m_kueche", itemId: "i_kuehlschrank", powerEntityId: "sensor.kuehlschrank_leistung", energyEntityId: "sensor.kuehlschrank_energie" }),
-    m("m_herd", "Herd", { parentId: "m_kueche", itemId: "i_herd", powerEntityId: "sensor.herd_leistung" }),
+    m("m_whirlpool", "Whirlpool", { parentId: "m_haus", itemId: "i_whirlpool", powerEntityId: "sensor.whirlpool_leistung", energyEntityId: "sensor.whirlpool_energie" }),
+    m("m_herd", "Herd mit Backofen", { parentId: "m_kueche", itemId: "i_herd", powerEntityId: "sensor.herd_leistung" }),
     m("m_tv", "Fernseher", { parentId: "m_haus", itemId: "i_tv", powerEntityId: "sensor.tv_steckdose_leistung", energyEntityId: "sensor.tv_steckdose_energie" }),
     m("m_waschmaschine", "Waschmaschine", { parentId: "m_haus", itemId: "i_waschmaschine", powerEntityId: "sensor.waschmaschine_leistung", energyEntityId: "sensor.waschmaschine_energie" }),
     m("m_buero", "Steckdosenleiste Büro", { parentId: "m_haus", itemId: "i_buero_steckdose", powerEntityId: "sensor.buero_steckdosenleiste_leistung", energyEntityId: "sensor.buero_steckdosenleiste_energie" }),
@@ -262,6 +283,6 @@ export function demoProject(): Project {
     meters,
     underlays: [],
     assets: [],
-    settings: { gridSize: 0.1, noLocalGeneration: false },
+    settings: { ...DEFAULT_SETTINGS },
   };
 }

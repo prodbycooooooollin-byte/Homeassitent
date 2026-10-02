@@ -20,6 +20,10 @@ import { lightView } from "@/devices/state";
 import { previewPlacement } from "@/design/place";
 import { FloorLayer, ItemMesh, LightRig, RoofLayer, type Handlers } from "./HouseModel";
 import { useOverlay } from "./useOverlay";
+import { SceneLights, WeatherEffects } from "./Environment";
+import { EnergyFlows } from "./EnergyFlows";
+import { useEnvironment } from "@/environment/useEnvironment";
+import { livePowerValues } from "@/energy/live";
 import { bridge, isOverCanvas, pickPlan } from "./bridge";
 import { anchorOf } from "./anchors";
 
@@ -220,7 +224,7 @@ function groundTexture() {
   return groundTex;
 }
 
-function Ground({ project, onEmpty }: { project: Project | null; onEmpty: () => void }) {
+function Ground({ project, onEmpty, night }: { project: Project | null; onEmpty: () => void; night: boolean }) {
   const hb = useHouseBounds(project);
   const r = hb.size * 1.6 + 10;
   return (
@@ -234,54 +238,13 @@ function Ground({ project, onEmpty }: { project: Project | null; onEmpty: () => 
         }}
       >
         <planeGeometry args={[r * 2, r * 2]} />
-        <meshBasicMaterial map={groundTexture()} transparent depthWrite={false} toneMapped={false} />
+        <meshBasicMaterial map={groundTexture()} transparent depthWrite={false} toneMapped={false} color={night ? "#4A5260" : "#FFFFFF"} />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position={[hb.cx, -0.235, hb.cz]} receiveShadow>
         <planeGeometry args={[r * 2, r * 2]} />
         <shadowMaterial opacity={0.12} />
       </mesh>
     </group>
-  );
-}
-
-function Sun({ project, shadows, quality }: { project: Project | null; shadows: boolean; quality: string }) {
-  const hb = useHouseBounds(project);
-  const ref = useRef<THREE.DirectionalLight>(null);
-  const target = useMemo(() => new THREE.Object3D(), []);
-  useEffect(() => {
-    target.position.set(hb.cx, 0, hb.cz);
-    target.updateMatrixWorld();
-    if (ref.current) {
-      ref.current.target = target;
-      const cam = ref.current.shadow.camera;
-      const s = hb.size * 0.85 + 2;
-      cam.left = -s;
-      cam.right = s;
-      cam.top = s;
-      cam.bottom = -s;
-      cam.near = 1;
-      cam.far = 80;
-      cam.updateProjectionMatrix();
-    }
-  }, [hb, target]);
-  const mapSize = quality === "high" ? 2048 : 1024;
-  return (
-    <>
-      <hemisphereLight args={["#FFFFFF", "#D8D2C4", 1.15]} />
-      <ambientLight intensity={0.22} />
-      <directionalLight
-        ref={ref}
-        position={[hb.cx + 9, 18, hb.cz + 12]}
-        intensity={1.9}
-        color="#FFF6E8"
-        castShadow={shadows}
-        shadow-mapSize-width={mapSize}
-        shadow-mapSize-height={mapSize}
-        shadow-bias={-0.0004}
-        shadow-normalBias={0.02}
-        shadow-radius={4}
-      />
-    </>
   );
 }
 
@@ -293,9 +256,11 @@ function Badges({ project, floorId }: { project: Project; floorId: string }) {
   const pending = useLive((s) => s.pending);
   const layers = useUi((s) => s.layers);
   const tab = useUi((s) => s.tab);
+  const energyScene = useUi((s) => s.energyScene);
   const patch = useUi((s) => s.patch);
   const connected = isConnected(status);
-  if (tab === "design") return null;
+  // In der Außenansicht liegen die Geräte unter dem Dach – keine schwebenden Symbole
+  if (tab === "design" || (tab === "energy" && energyScene === "outside")) return null;
   const groups = new Map<string, { target: { kind: "item" | "opening" | "room"; id: string }; kinds: Set<BadgeKind>; on: boolean; warn: boolean; busy: boolean; label: string }>();
   for (const b of project.bindings) {
     if (b.target.kind === "room") continue;
@@ -399,18 +364,31 @@ function SceneContent() {
   const showIssues = ui.tab === "design";
   const overlay = useOverlay(project, states, connected, ui.layers, ui.tab, showIssues);
   const { invalidate } = useThree();
+  const env = useEnvironment();
+  const pvLevel = useMemo(() => {
+    if (!project) return null;
+    const pv = project.meters.filter((m) => m.flow === "pv_production");
+    if (!pv.length) return null;
+    const v = livePowerValues(pv, states, connected);
+    const sum = [...v.values()].reduce<number>((s, x) => s + (x ?? 0), 0);
+    return Math.min(1, sum / 6000);
+  }, [project, states, connected]);
 
   const floors = useMemo(() => [...(project?.floors ?? [])].sort((a, b) => a.elevation - b.elevation), [project?.floors]);
   const current = floors.find((f) => f.id === ui.floorId) ?? floors[0];
-  const visible = floors.filter((f) => ui.floorsMode === "stack" || f.elevation <= (current?.elevation ?? 0));
+  // Energie „Außen“: ganzes Haus mit Dach und PV
+  const outside = ui.tab === "energy" && ui.energyScene === "outside";
+  const stack = outside || ui.floorsMode === "stack";
+  const roofVisible = outside || (ui.showRoof && ui.floorsMode === "stack");
+  const visible = floors.filter((f) => stack || f.elevation <= (current?.elevation ?? 0));
   const cutFor = (f: (typeof floors)[number]) => {
-    if (f.id !== current?.id || ui.floorsMode === "stack") return f.height;
+    if (f.id !== current?.id || stack) return f.height;
     return ui.wallMode === "full" ? f.height : ui.wallMode === "cut" ? Math.min(1.35, f.height) : 0.12;
   };
 
   useEffect(() => {
     invalidate();
-  }, [overlay, project, ui.selection, ui.wallMode, ui.floorsMode, ui.floorId, ui.tab, invalidate]);
+  }, [overlay, project, ui.selection, ui.wallMode, ui.floorsMode, ui.floorId, ui.tab, ui.energyScene, ui.layers, env, invalidate]);
 
   // Ablage aus dem Katalog in der 3D-Ansicht
   useEffect(() => {
@@ -502,8 +480,9 @@ function SceneContent() {
   const top = floors[floors.length - 1];
   return (
     <>
-      <Sun project={project} shadows={shadows} quality={ui.quality} />
-      <Ground project={project} onEmpty={() => ui.patch({ selection: null, card: null })} />
+      <SceneLights project={project} env={env} shadows={shadows} quality={ui.quality} enabled={ui.layers.weather} />
+      {ui.layers.weather && <WeatherEffects project={project} env={env} quality={ui.quality} />}
+      <Ground project={project} night={ui.layers.weather && env.isNight} onEmpty={() => ui.patch({ selection: null, card: null })} />
       {visible.map((f) => (
         <FloorLayer
           key={f.id}
@@ -515,9 +494,11 @@ function SceneContent() {
           overlay={overlay}
           selection={f.id === current.id && ui.selection && "id" in ui.selection ? (ui.selection as { kind: string; id: string }) : null}
           handlers={handlers}
+          showRoofItems={roofVisible && f.id === top?.id}
         />
       ))}
-      {ui.showRoof && ui.floorsMode === "stack" && top && <RoofLayer project={project} floor={top} />}
+      {roofVisible && top && <RoofLayer project={project} floor={top} pvLevel={pvLevel} />}
+      {(ui.tab === "energy" || (ui.tab === "home" && ui.layers.flows)) && <EnergyFlows project={project} quality={ui.quality} />}
       <LightRig project={project} floors={visible} overlay={overlay} quality={ui.quality} />
       <Badges project={project} floorId={current.id} />
       <RoomLabels project={project} floorId={current.id} />

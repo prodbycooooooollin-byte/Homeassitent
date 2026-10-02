@@ -188,7 +188,7 @@ test("7. Verbrauchsverlauf mit erkennbaren Messlücken", async ({ page }) => {
   await page.goto("/");
   await tab(page, "Energie");
   await page.getByRole("radio", { name: "Verlauf" }).click();
-  await page.getByRole("radio", { name: "Tag" }).click();
+  await page.getByRole("radio", { name: "Tag", exact: true }).click();
   const chart = page.getByTestId("history-chart");
   await expect(chart).toBeVisible();
   const hour = new Date().getHours();
@@ -196,9 +196,9 @@ test("7. Verbrauchsverlauf mit erkennbaren Messlücken", async ({ page }) => {
   await expect(chart.locator("rect[data-gap]")).toHaveCount(3);
   await expect(chart).toContainText("Messlücke (3)");
   // Zeitraumauswahl Woche/Monat
-  await page.getByRole("radio", { name: "Woche" }).click();
+  await page.getByRole("radio", { name: "Woche", exact: true }).click();
   await expect(page.getByTestId("range-title")).toContainText("–");
-  await page.getByRole("radio", { name: "Monat" }).click();
+  await page.getByRole("radio", { name: "Monat", exact: true }).click();
   await expect(chart).toBeVisible();
 });
 

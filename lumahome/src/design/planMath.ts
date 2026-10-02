@@ -53,4 +53,7 @@ export const FLOOR_FILL: Record<string, string> = {
   stone: "#E4E1DA",
   carpet: "#E8E2D8",
   concrete: "#E1E1DD",
+  grass: "#D3E0C6",
+  decking: "#E2CDB5",
+  paving: "#E4E0D8",
 };

@@ -3,7 +3,7 @@
 // zwischen gesendetem Befehl und bestätigtem Zustand sichtbar bleibt.
 import type { HaContext, HaRegistry, HaState } from "@/devices/ha-types";
 import { isAllowedService } from "@/devices/ha-types";
-import { LIGHT_WATTS, POWER_SOURCES, demoHistory, demoStatistics, flows, initialStates, statisticMeta } from "@/demo/sim";
+import { BATTERY_SHARES, LIGHT_WATTS, POWER_SOURCES, batterySoc, demoHistory, demoStatistics, flows, initialStates, setDemoWeather, statisticMeta, sunState, weatherState } from "@/demo/sim";
 import type { DeviceSource, ServiceCall, SourceListener } from "./types";
 
 const REGISTRY: HaRegistry = {
@@ -77,12 +77,21 @@ export class DemoSource implements DeviceSource {
       let v = POWER_SOURCES[id](now);
       if (id === "sensor.hausverbrauch_leistung") v = f.house;
       if (id === "sensor.netz_leistung") v = f.grid;
-      if (id === "sensor.batterie_leistung") v = f.battery;
+      const bm = id.match(/^sensor\.batterie_(\d)_leistung$/);
+      if (bm) v = f.battery * BATTERY_SHARES[Number(bm[1]) - 1];
+      if (id === "sensor.whirlpool_leistung" && this.states.get("switch.whirlpool")?.state === "off") v = 0;
       if (id === "sensor.tv_steckdose_leistung" && this.states.get("switch.tv_steckdose")?.state === "off") v = 0;
       if (id === "sensor.buero_steckdosenleiste_leistung" && this.states.get("switch.buero_steckdosenleiste")?.state === "off") v = 0;
       if (id === "sensor.waschmaschine_leistung" && this.states.get("switch.waschmaschine")?.state === "off") v = 0;
       this.emit({ ...prev, state: v.toFixed(1), last_updated: iso, last_reported: iso, last_changed: iso });
     }
+    for (const i of [0, 1, 2]) {
+      const id = `sensor.batterie_${i + 1}_ladestand`;
+      const prev = this.states.get(id);
+      if (prev) this.emit({ ...prev, state: String(batterySoc(now, i)), last_updated: iso, last_reported: iso });
+    }
+    this.emit(weatherState(now));
+    this.emit(sunState(now));
   }
 
   /** Simuliert eine Änderung außerhalb von LumaHome (z. B. Wandschalter). */
@@ -100,6 +109,13 @@ export class DemoSource implements DeviceSource {
     }
     this.emit({ ...s, state: on ? "on" : "off", attributes: attrs, last_changed: iso, last_updated: iso, context: { id: "extern", parent_id: null, user_id: null } });
     return String(s.attributes.friendly_name ?? s.entity_id);
+  }
+
+  /** Wetter der Demo festlegen (z. B. „rainy“); null = automatischer Tagesverlauf. Wirkt auch auf die PV-Leistung. */
+  setWeather(condition: string | null) {
+    setDemoWeather(condition);
+    this.emit(weatherState(Date.now()));
+    this.tickPower();
   }
 
   /** Simuliert einen Verbindungsabbruch mit anschließender Neusynchronisierung. */

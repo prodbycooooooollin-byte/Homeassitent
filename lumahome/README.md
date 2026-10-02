@@ -13,8 +13,9 @@ Shop, keine Abos, keine Lizenzschlüssel.
 | Bereich | Inhalt |
 | --- | --- |
 | **Zuhause** | 3D-Haus mit Lichtwirkung und Statussymbolen, Steuerkarte am Objekt (Touch: Panel unten), Raumzusammenfassung, „Alle Lichter aus“, Ebenen (Klima, Fenster, Energie, Hinweise, Legende), Wände voll/geschnitten/Grundriss, Etagen, Dach |
-| **Gestalten** | Werkzeuge **Grundriss** (Rechteck, Freiform, Türen, Fenster, Durchgänge, Deckenöffnungen, Maßeingabe, Etagen, Grundrissbild), **Einrichten** (Katalog mit 46 Modellen, Ziehen oder „Platzieren“, Griffe zum Drehen/Skalieren, Einrasten an Wand/Boden/Möbeloberfläche) und **Verbinden** (Geräte zuordnen mit begründeten Vorschlägen). 2D, 3D oder geteilt. Rückgängig/Wiederholen |
-| **Energie** | Jetzt: Hausverbrauch mit offengelegter Grundlage, PV/Netz/Speicher, Energiefluss, Räume und Geräte. Verlauf: Tag/Woche/Monat, Energie (kWh) oder Leistung (W), sichtbare Messlücken, höchster Verbrauch, Räume, Zählerhierarchie. Messquellen: Zuordnung mit Einheiten-/Richtungsprüfung, Übernahme aus der HA-Energiekonfiguration |
+| **Gestalten** | Werkzeuge **Grundriss** (Rechteck, Freiform, Außenbereiche ohne Wände wie Terrasse und Garten, Türen, Fenster, Durchgänge, Deckenöffnungen, Maßeingabe, Etagen, Grundrissbild), **Einrichten** (Katalog mit 53 Modellen inkl. Whirlpool, Gartenmöbeln und PV-Modulfeld, Ziehen oder „Platzieren“, Griffe zum Drehen/Skalieren, Einrasten an Wand/Boden/Möbeloberfläche) und **Verbinden** (Geräte zuordnen mit begründeten Vorschlägen). 2D, 3D oder geteilt. Rückgängig/Wiederholen |
+| **Wetter & Tageszeit** | Himmel, Licht und Sonnenstand nach `sun.sun` (sonst aus Uhrzeit und Standort geschätzt), Wolken, Regen und Schnee nur außerhalb des Hauses, Nebel, Gewitter; Vorschau für Tageszeit und Wetter |
+| **Energie** | Modell „Außen“ mit Dach und leuchtendem PV-Modulfeld oder „Innen“; animierte Stromkabel über den Verteiler zu Geräten, Akkus (mit Ladestand) und Netz. Jetzt: Hausverbrauch mit offengelegter Grundlage, PV/Netz/Speicher, Energiefluss, Räume und Geräte. Verlauf: Tag/Woche/Monat, Energie (kWh) oder Leistung (W), sichtbare Messlücken, höchster Verbrauch, Räume, Zählerhierarchie. Analyse: Autarkie, Eigenverbrauch, Ersparnis und Einspeisevergütung (Schätzung nach eigenem Tarif), CO₂, Herkunft des Stroms je Stunde/Tag, Grundlast, Vergleich mit dem Vorzeitraum. Messquellen: Zuordnung mit Einheiten-/Richtungsprüfung, Ladestand für Akkus, Übernahme aus der HA-Energiekonfiguration |
 | **Geräte** | Verbindungsstatus, Moduswechsel Demo/Live, zugeordnete und nicht zugeordnete Geräte, Hinweise, Demo-Testwerkzeuge |
 
 ## Schnellstart
@@ -56,8 +57,8 @@ gespeichert und nie exportiert. Siehe [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md)
 ## Tests
 
 ```bash
-npm test             # 65 Unit-Tests (Geometrie, Energie, Geräte, Projektformat, Kontraste)
-npm run test:e2e     # 11 Abnahmetests (Playwright) gegen einen simulierten Home Assistant
+npm test             # 77 Unit-Tests (Geometrie, Energie, Analyse, Sonnenstand, Wetter, Stromflüsse, Geräte, Projektformat, Kontraste)
+npm run test:e2e     # 13 Abnahmetests (Playwright) gegen einen simulierten Home Assistant bzw. die Demo
 npm run perf         # Leistungsmessung mit dem Demo-Projekt (Server muss laufen)
 ```
 

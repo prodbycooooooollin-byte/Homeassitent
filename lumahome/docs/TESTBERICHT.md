@@ -11,7 +11,7 @@ vollständig echt; simuliert ist nur die Gegenstelle.
 
 ## Automatisierte Abnahme (Playwright, `npm run test:e2e`)
 
-Ergebnis des letzten Laufs: **11 von 11 bestanden** (Chromium 141 mit
+Ergebnis des letzten Laufs (02.10.2026): **13 von 13 bestanden** (Chromium 141 mit
 Softwarerendering, Desktop 1366×860 und emuliertes Pixel 7 mit Touch).
 
 | # | Abnahmepunkt | Test | Art | Ergebnis |
@@ -29,9 +29,12 @@ Softwarerendering, Desktop 1366×860 und emuliertes Pixel 7 mit Touch).
 | 11 | Kernabläufe mit Touch | `touch.spec.ts` – Leuchte im Modell antippen → Panel unten, schalten, schließen; Raum per Touch-Ziehen zeichnen; Möbel per „Platzieren“; Energie-Verlauf | Demo-Modus, Touch-Emulation | bestanden |
 | 12 | Ohne Kauf/Lizenz erreichbar | `free.spec.ts` – alle Katalogeinträge haben eine aktive „Platzieren“-Schaltfläche, keine Kauf-/Abo-/Lizenzbegriffe in allen vier Bereichen und im ausgelieferten Code | – | bestanden |
 
+| – | Wetter-Vorschau, Stromflüsse, drei Akkus, Analyse | `energy-scene.spec.ts` – Regen/Nacht-Vorschau mit Kennzeichnung, Akku- und PV-Anzeige im Modell, Autarkie/Eigenverbrauch/Ersparnis (bzw. Begründung, wenn noch keine PV-Erzeugung) | Demo-Modus | bestanden |
+| – | Außenbereich | `energy-scene.spec.ts` – Garten als Außenbereich, Whirlpool im Katalog | Demo-Modus | bestanden |
+
 ² Der Test wird automatisch übersprungen, wenn er vor 05:00 Uhr läuft (die simulierte Lücke liegt dann noch nicht vollständig in der Vergangenheit).
 
-## Unit-Tests (Vitest, `npm test`): 65 bestanden
+## Unit-Tests (Vitest, `npm test`): 77 bestanden
 
 - **Geometrie:** Fläche, Punkt-im-Polygon, Selbstüberschneidung, Überlappung
   benachbarter Räume, Innennormalen, gemeinsame Innenwand genau einmal, offene
@@ -47,6 +50,9 @@ Softwarerendering, Desktop 1366×860 und emuliertes Pixel 7 mit Touch).
   getrennte Integration von Netto-Flüssen, Statistiklücken, Zählerwechsel,
   Nichtverfügbarkeit mit Nachholwert, Leistungsintegration mit Lücke,
   Tag/Woche/Monat-Einteilung.
+- **Wetter & Sonne:** Sonnenstand (Berlin, Sommeranfang mittags ≈ 60° im Süden; Osten morgens, Westen abends), Abbildung der HA-Wetterzustände, Quellenkennzeichnung, kein erfundenes Wetter ohne Daten, Vorschau.
+- **Analyse:** Autarkie, Eigenverbrauch, Ersparnis, Vergütung, CO₂, Begründung bei fehlender Grundlage, Grundlast, Teilsummen.
+- **Stromflüsse:** Weg über den Verteiler, Richtung beim Laden/Entladen/Einspeisen, keine Kabel ohne Messwert, keine Doppeldarstellung von Stromkreis und Unterzähler; Außenbereiche ohne Wände.
 - **Geräte:** Fähigkeiten für Licht, Rollladen, Kontakt (inkl. Kippstellung),
   Heizung; unbekannt/nicht verfügbar/veraltet; Vorschläge; Dienstfreigabe.
 - **Projektformat:** verlustfreier Export/Import, verständliche Ablehnung,
@@ -83,5 +89,8 @@ Lichtschimmer-Färbung im 2D-Plan.
   nicht zeitanteilig aufgeteilt; ein Zählersprung wird der Stunde der späteren
   Messung zugeordnet. Rücksetzungserkennung: Rückgang > 10 %.
 - Veraltet-Erkennung für Sensoren nur, wenn Home Assistant `last_reported` liefert (ab 2024.3).
+- Stromkabel zeigen den gemessenen Austausch jedes Messpunkts mit dem Hausnetz über den Verteiler. Welcher Akku physisch welches Gerät versorgt, ist nicht messbar und wird nicht dargestellt. Kabelwege sind schematisch (rechtwinklig), nicht die echte Leitungsführung.
+- Wetter- und Tageszeit-Vorschau ändert nur die Darstellung, nicht die Messwerte (PV bleibt der echte Live-Wert).
+- Ersparnis und CO₂ sind Schätzungen aus Tarif und Faktor; Speicherverluste und zeitabhängige Tarife sind nicht berücksichtigt.
 - Draw-Calls (461 im Demo-Haus) sind noch nicht zusammengefasst – siehe `PERFORMANCE.md`.
 - Ohne PIN kann jeder, der den Server erreicht, bearbeiten (Standard daher nur `127.0.0.1`).

@@ -6,7 +6,8 @@ import { useUi } from "@/store/ui";
 import { useApp, startLive } from "@/app/boot";
 import { parseProjectFile, toProjectFile } from "@/model/schema";
 import type { Project } from "@/model/types";
-import { Dialog, Notice, Segmented, TextField } from "@/ui/primitives";
+import { Dialog, Notice, NumberField, Segmented, TextField } from "@/ui/primitives";
+import { useLive } from "@/store/live";
 import { api } from "@/sources/live";
 
 export function PinLogin() {
@@ -43,6 +44,43 @@ export function PinLogin() {
       </button>
       {err && <p className="w-full text-xs text-danger">{err}</p>}
     </form>
+  );
+}
+
+function WeatherSettings() {
+  const project = useProject((s) => s.project)!;
+  const apply = useProject((s) => s.apply);
+  const canEdit = useProject((s) => s.canEdit);
+  const states = useLive((s) => s.states);
+  const weathers = Object.values(states).filter((s) => s.entity_id.startsWith("weather."));
+  const set = (patch: Partial<typeof project.settings>) => apply((p) => ({ ...p, settings: { ...p.settings, ...patch } }));
+  const hasSun = !!states["sun.sun"];
+  return (
+    <section className="space-y-3">
+      <h3 className="section-title">Wetter & Sonne</h3>
+      <div>
+        <label className="label" htmlFor="weather-entity">
+          Wetter-Entität
+        </label>
+        <select id="weather-entity" className="input" disabled={!canEdit} value={project.settings.weatherEntityId ?? ""} onChange={(e) => set({ weatherEntityId: e.target.value || null })}>
+          <option value="">Automatisch ({weathers[0]?.entity_id ?? "keine gefunden"})</option>
+          {weathers.map((w) => (
+            <option key={w.entity_id} value={w.entity_id}>
+              {String(w.attributes.friendly_name ?? w.entity_id)} ({w.entity_id})
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="text-xs text-ink-2">
+        Sonnenstand: {hasSun ? "aus Home Assistant (sun.sun)" : "aus Uhrzeit und Standort geschätzt – Standort unten eintragen"}.
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        <NumberField label="Breitengrad" unit="°" value={project.settings.latitude} decimals={2} min={-90} max={90} disabled={!canEdit} onCommit={(latitude) => set({ latitude })} />
+        <NumberField label="Längengrad" unit="°" value={project.settings.longitude} decimals={2} min={-180} max={180} disabled={!canEdit} onCommit={(longitude) => set({ longitude })} />
+        <NumberField label="Plan-Nordrichtung" unit="°" value={project.settings.northAngle} min={-360} max={360} disabled={!canEdit} onCommit={(northAngle) => set({ northAngle })} />
+      </div>
+      <p className="text-xs text-ink-2">Nordrichtung: 0° = Planoberseite zeigt nach Norden. Positive Werte drehen im Uhrzeigersinn.</p>
+    </section>
   );
 }
 
@@ -163,6 +201,7 @@ export function SettingsSheet() {
             </Notice>
           )}
         </section>
+        {project && <WeatherSettings />}
         <section className="space-y-2">
           <h3 className="section-title">Darstellung</h3>
           <Segmented

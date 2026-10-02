@@ -5,7 +5,7 @@ import { createLiveProject, startDemo, startLive, useApp } from "@/app/boot";
 import { makeRoom, rectVertices } from "@/geometry/ops";
 import { newId } from "@/model/ids";
 import { parseProjectFile } from "@/model/schema";
-import type { Project } from "@/model/types";
+import { DEFAULT_SETTINGS, type Project } from "@/model/types";
 import { useUi } from "@/store/ui";
 import { Notice, TextField } from "@/ui/primitives";
 import { PinLogin } from "./SettingsSheet";
@@ -28,7 +28,7 @@ function newProject(name: string, withRoom: boolean): Project {
     meters: [],
     underlays: [],
     assets: [],
-    settings: { gridSize: 0.1, noLocalGeneration: false },
+    settings: { ...DEFAULT_SETTINGS },
   };
 }
 

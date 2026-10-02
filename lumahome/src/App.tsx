@@ -16,6 +16,8 @@ import { DevicesView } from "@/devicesui/DevicesView";
 import { useShortcuts } from "@/shell/useShortcuts";
 import { Notice } from "@/ui/primitives";
 import { FloorPlan } from "@/design/FloorPlan";
+import { useEnvironment } from "@/environment/useEnvironment";
+import { skyGradient } from "@/environment/weather";
 
 const SceneCanvas = lazy(() => import("@/scene/SceneCanvas"));
 
@@ -36,6 +38,9 @@ export function App() {
   const designView = useUi((s) => s.designView);
   const project = useProject((s) => s.project);
   const hasGl = useMemo(webglAvailable, []);
+  const env = useEnvironment();
+  const weatherOn = useUi((s) => s.layers.weather);
+  const [skyTop, skyBottom] = weatherOn ? skyGradient(env) : ["#F5F3EE", "#E7EAE3"];
   useShortcuts();
 
   useEffect(() => {
@@ -64,7 +69,7 @@ export function App() {
   const sceneVisible = tab === "home" || tab === "energy" || (tab === "design" && designView !== "2d");
   const split = tab === "design" && designView === "split";
   return (
-    <div className="relative h-full overflow-hidden bg-gradient-to-b from-canvas via-canvas to-[#E7EAE3]">
+    <div className="relative h-full overflow-hidden transition-[background] duration-700" style={{ background: `linear-gradient(to bottom, ${skyTop}, ${skyBottom})` }}>
       <div
         className={clsx("absolute inset-y-0 right-0 transition-[left] duration-200", split ? "left-1/2" : "left-0", !sceneVisible && "invisible")}
         aria-hidden={!sceneVisible}

@@ -283,9 +283,11 @@ export interface FloorLayerProps {
   selection: { kind: string; id: string } | null;
   handlers: Handlers;
   hiddenItemId?: string | null;
+  /** Dachobjekte (z. B. PV) nur zeigen, wenn das Dach sichtbar ist */
+  showRoofItems?: boolean;
 }
 
-export function FloorLayer({ project, floor, cutHeight, quality, interactive, overlay, selection, handlers, hiddenItemId }: FloorLayerProps) {
+export function FloorLayer({ project, floor, cutHeight, quality, interactive, overlay, selection, handlers, hiddenItemId, showRoofItems = false }: FloorLayerProps) {
   const rooms = useMemo(() => project.rooms.filter((r) => r.floorId === floor.id), [project.rooms, floor.id]);
   const voids = useMemo(
     () =>
@@ -331,7 +333,7 @@ export function FloorLayer({ project, floor, cutHeight, quality, interactive, ov
         <OpeningMesh key={o.id} o={o} rooms={rooms} cutHeight={cutHeight} overlay={overlay} interactive={interactive} handlers={handlers} thickness={0.12} />
       ))}
       {items
-        .filter((it) => it.id !== hiddenItemId)
+        .filter((it) => it.id !== hiddenItemId && (showRoofItems || entryFor(it.catalogId).mount !== "roof"))
         .map((it) => (
           <ItemMesh
             key={it.id}
@@ -369,15 +371,52 @@ export function LightRig({ project, floors, overlay, quality }: { project: Proje
   );
 }
 
-export function RoofLayer({ project, floor }: { project: Project; floor: Floor }) {
-  const rooms = project.rooms.filter((r) => r.floorId === floor.id);
+export function RoofLayer({ project, floor, pvLevel }: { project: Project; floor: Floor; pvLevel: number | null }) {
+  const rooms = project.rooms.filter((r) => r.floorId === floor.id && !r.outdoor);
+  const hasPvItem = project.items.some((i) => i.catalogId === "pv-array");
+  const hasPvMeter = project.meters.some((m) => m.flow === "pv_production");
   return (
     <group position-y={floor.elevation + floor.height + 0.25}>
       {rooms.map((r) => (
         <RoofSlab key={r.id} room={r} />
       ))}
+      {hasPvMeter && !hasPvItem && <AutoPv rooms={rooms} level={pvLevel ?? 0} />}
     </group>
   );
+}
+
+/** Modulfeld auf dem größten Dachraum, wenn PV gemessen wird, aber kein Modulfeld platziert ist. */
+function AutoPv({ rooms, level }: { rooms: Room[]; level: number }) {
+  const r = [...rooms].sort((a, b) => polyArea(b.vertices) - polyArea(a.vertices))[0];
+  if (!r) return null;
+  const xs = r.vertices.map((v) => v.x);
+  const ys = r.vertices.map((v) => v.y);
+  const w = (Math.max(...xs) - Math.min(...xs)) * 0.8;
+  const d = (Math.max(...ys) - Math.min(...ys)) * 0.6;
+  const cols = Math.max(1, Math.floor(w / 1.05));
+  const rows = Math.max(1, Math.floor(d / 1.75));
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+  const cz = (Math.max(...ys) + Math.min(...ys)) / 2;
+  const mat = level > 0.02 ? glowMaterial("#FFC861", 0.15 + 0.9 * level) : partMaterial("#22324A", "metall", "medium");
+  return (
+    <group position={[cx, 0.06, cz]}>
+      {Array.from({ length: cols * rows }, (_, i) => {
+        const c = i % cols;
+        const rr = Math.floor(i / cols);
+        return <mesh key={i} geometry={geometries.box} position={[(c - (cols - 1) / 2) * 1.05, 0, (rr - (rows - 1) / 2) * 1.75]} scale={[1.0, 0.05, 1.7]} material={mat} />;
+      })}
+    </group>
+  );
+}
+
+function polyArea(pts: { x: number; y: number }[]) {
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    s += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(s / 2);
 }
 
 function RoofSlab({ room }: { room: Room }) {

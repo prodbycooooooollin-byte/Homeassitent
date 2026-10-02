@@ -19,7 +19,7 @@ export interface Vertex extends Vec2 {
   id: Id;
 }
 
-export type FloorMaterial = "oak" | "walnut" | "tiles" | "stone" | "carpet" | "concrete";
+export type FloorMaterial = "oak" | "walnut" | "tiles" | "stone" | "carpet" | "concrete" | "grass" | "decking" | "paving";
 
 export interface Floor {
   id: Id;
@@ -40,6 +40,8 @@ export interface Room {
   wallColor: string;
   /** Kanten (identifiziert über ihre Startecke), an denen keine Wand steht */
   openEdges: Id[];
+  /** Außenbereich (Terrasse, Garten): keine Wände, wetterexponiert */
+  outdoor: boolean;
 }
 
 export type OpeningKind = "door" | "window" | "passage";
@@ -141,6 +143,8 @@ export interface EnergyMeter {
   parentId: Id | null;
   /** Misst dieser Zähler den gesamten Raum (z. B. Raumstromkreis)? */
   coversWholeRoom: boolean;
+  /** Ladestand in % (nur Speicher) */
+  socEntityId: string | null;
 }
 
 export interface Underlay {
@@ -170,6 +174,17 @@ export interface ProjectSettings {
    * Nur dann darf der Netzbezug als Hausverbrauch gelten.
    */
   noLocalGeneration: boolean;
+  /** Wetter-Entität (weather.*); null = automatisch die erste gefundene */
+  weatherEntityId: string | null;
+  /** Abweichung der Planoberseite von Norden in Grad (im Uhrzeigersinn) */
+  northAngle: number;
+  /** Standort für die Sonnenstands-Schätzung, falls sun.sun fehlt */
+  latitude: number;
+  longitude: number;
+  /** Tarif für Ersparnis-Schätzungen */
+  pricePerKwh: number;
+  feedInPerKwh: number;
+  co2PerKwh: number;
 }
 
 export interface Project {
@@ -207,3 +222,15 @@ export type Selection =
   | { kind: "vertex"; roomId: Id; id: Id }
   | { kind: "edge"; roomId: Id; id: Id }
   | null;
+
+export const DEFAULT_SETTINGS: ProjectSettings = {
+  gridSize: 0.1,
+  noLocalGeneration: false,
+  weatherEntityId: null,
+  northAngle: 0,
+  latitude: 51.2,
+  longitude: 10.4,
+  pricePerKwh: 0.32,
+  feedInPerKwh: 0.08,
+  co2PerKwh: 0.38,
+};

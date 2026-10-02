@@ -10,6 +10,10 @@ export type WallMode = "full" | "cut" | "low";
 export type Quality = "low" | "medium" | "high";
 
 export interface Layers {
+  /** Animierte Stromflüsse im Zuhause-Bereich */
+  flows: boolean;
+  /** Wetter und Tageszeit in der Szene */
+  weather: boolean;
   devices: boolean;
   labels: boolean;
   climate: boolean;
@@ -46,6 +50,10 @@ interface UiStore {
   energyAnchor: number;
   energyMeterId: Id | null;
   energyMode: "energy" | "power";
+  /** Energie-Ansicht im Modell: Außen (Dach, PV, Wetter) oder Innen (geschnittene Etage) */
+  energyScene: "outside" | "inside";
+  /** Vorschau von Wetter/Tageszeit (nicht live) */
+  envPreview: import("@/environment/weather").EnvPreview | null;
   toasts: Toast[];
   settingsOpen: boolean;
   set<K extends keyof UiStore>(k: K, v: UiStore[K]): void;
@@ -86,7 +94,7 @@ export const useUi = create<UiStore>((set, get) => ({
   designTool: "plan",
   planTool: "select",
   designView: prefs.designView ?? "2d",
-  layers: { devices: false, labels: false, climate: false, windows: false, energy: false, warnings: true, legend: false, ...(prefs.layers ?? {}) },
+  layers: { flows: false, weather: true, devices: false, labels: false, climate: false, windows: false, energy: false, warnings: true, legend: false, ...(prefs.layers ?? {}) },
   wallMode: prefs.wallMode ?? "cut",
   showRoof: false,
   floorsMode: "current",
@@ -97,6 +105,8 @@ export const useUi = create<UiStore>((set, get) => ({
   energyAnchor: Date.now(),
   energyMeterId: null,
   energyMode: "energy",
+  energyScene: "outside",
+  envPreview: null,
   toasts: [],
   settingsOpen: false,
   set: (k, v) => set({ [k]: v } as Partial<UiStore>),

@@ -28,7 +28,7 @@ const FLOW_HELP: Record<MeterFlow, string> = {
   battery_net: "Ein Sensor mit Vorzeichen: positiv = Entladen ins Haus, negativ = Laden.",
 };
 
-function EntityPicker({ label, value, onChange, quantity }: { label: string; value: string | null; onChange: (v: string | null) => void; quantity: "power" | "energy" }) {
+function EntityPicker({ label, value, onChange, quantity }: { label: string; value: string | null; onChange: (v: string | null) => void; quantity: "power" | "energy" | "soc" }) {
   const states = useLive((s) => s.states);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -38,12 +38,13 @@ function EntityPicker({ label, value, onChange, quantity }: { label: string; val
       .filter((s) => s.entity_id.startsWith("sensor."))
       .filter((s) => {
         const u = s.attributes.unit_of_measurement as string | undefined;
+        if (quantity === "soc") return u === "%" && (s.attributes.device_class === "battery" || /lade|soc|batter|akku/i.test(s.entity_id));
         return quantity === "power" ? isPowerUnit(u) : isEnergyUnit(u);
       })
       .filter((s) => !qq || s.entity_id.includes(qq) || friendlyName(s, "").toLowerCase().includes(qq))
       .slice(0, 40);
   }, [states, q, quantity]);
-  const check = value ? checkSource(states[value], quantity) : null;
+  const check = value && quantity !== "soc" ? checkSource(states[value], quantity) : null;
   return (
     <div>
       <p className="label">{label}</p>
@@ -67,7 +68,7 @@ function EntityPicker({ label, value, onChange, quantity }: { label: string; val
         <div className="mt-2 rounded-2xl border border-line p-2">
           <label className="relative block">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-2" />
-            <input className="input pl-9" value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Sensoren mit ${quantity === "power" ? "W/kW" : "Wh/kWh"} suchen`} aria-label="Sensor suchen" autoFocus />
+            <input className="input pl-9" value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Sensoren mit ${quantity === "power" ? "W/kW" : quantity === "soc" ? "%" : "Wh/kWh"} suchen`} aria-label="Sensor suchen" autoFocus />
           </label>
           <ul className="mt-2 max-h-48 overflow-y-auto">
             {list.map((s) => (
@@ -163,6 +164,42 @@ function MeterDialog({ meter, onClose }: { meter: EnergyMeter; onClose: () => vo
           </span>
         </div>
       )}
+      {m.flow.startsWith("battery") && (
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <EntityPicker label="Ladestand (%)" value={m.socEntityId} onChange={(socEntityId) => setM({ ...m, socEntityId })} quantity="soc" />
+          <div>
+            <label className="label" htmlFor="bitem">
+              Speicher im Haus (Objekt)
+            </label>
+            <select id="bitem" className="input" value={m.itemId ?? ""} onChange={(e) => setM({ ...m, itemId: e.target.value || null })}>
+              <option value="">– keines –</option>
+              {project.items.map((it) => (
+                <option key={it.id} value={it.id}>
+                  {it.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-ink-2">Für Anzeige von Ladestand und Fluss im Modell. Mehrere Akkus: je Akku ein Messpunkt.</p>
+          </div>
+        </div>
+      )}
+      {m.flow === "pv_production" && (
+        <div className="mt-3">
+          <label className="label" htmlFor="pvitem">
+            PV-Modulfeld im Modell
+          </label>
+          <select id="pvitem" className="input" value={m.itemId ?? ""} onChange={(e) => setM({ ...m, itemId: e.target.value || null })}>
+            <option value="">– automatisch auf dem Dach –</option>
+            {project.items
+              .filter((it) => it.catalogId === "pv-array")
+              .map((it) => (
+                <option key={it.id} value={it.id}>
+                  {it.name}
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
       {!m.energyEntityId && m.powerEntityId && <p className="mt-2 text-xs text-ink-2">Ohne Energiezähler wird der Verbrauch im Verlauf aus der Leistung berechnet und als „berechnet“ gekennzeichnet.</p>}
       {m.flow === "consumption" && (
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -227,7 +264,7 @@ function MeterDialog({ meter, onClose }: { meter: EnergyMeter; onClose: () => vo
 }
 
 function blankMeter(): EnergyMeter {
-  return { id: newId("meter"), label: "", flow: "consumption", powerEntityId: null, energyEntityId: null, invertPower: false, isHouseMain: false, roomId: null, itemId: null, parentId: null, coversWholeRoom: false };
+  return { id: newId("meter"), label: "", flow: "consumption", powerEntityId: null, energyEntityId: null, invertPower: false, isHouseMain: false, roomId: null, itemId: null, parentId: null, coversWholeRoom: false, socEntityId: null };
 }
 
 /** Vorschläge aus der Energie-Konfiguration von Home Assistant. */

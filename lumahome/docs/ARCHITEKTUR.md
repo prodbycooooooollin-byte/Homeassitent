@@ -121,6 +121,13 @@ Türschwenkbereichen/über Raumhöhe.
   Lücke hinweg wird als Nachholwert gekennzeichnet. Der laufende Zeitraum ist als
   „läuft noch“ markiert.
 
+## Wetter, Tageszeit und Stromflüsse
+
+- Sonnenstand aus `sun.sun` (Attribute `elevation`, `azimuth`), sonst NOAA-Näherung aus Uhrzeit und Standort (Einstellungen); Wetter aus der ersten bzw. gewählten `weather.*`-Entität. Ohne Wetter-Entität wird kein Wetter erfunden. Die Quelle (Home Assistant, geschätzt, Vorschau) wird angezeigt.
+- Niederschlag wird nur außerhalb geschlossener Räume erzeugt; Außenbereiche (`room.outdoor`) zählen als außen und erhalten keine Wände.
+- Stromflüsse (`src/energy/flows3d.ts`): Jeder Messpunkt tauscht Leistung mit dem Hausnetz; dargestellt über den Verteiler (Zählerschrank-Objekt, sonst Hauszähler-Objekt, sonst Hausmitte). Nur Blätter der Zählerhierarchie bekommen eigene Kabel, damit nichts doppelt erscheint. Akkus werden je Messpunkt mit Ladestand-Sensor geführt.
+- Analyse (`src/energy/insights.ts`): Autarkie = 1 − Netzbezug/Hausverbrauch, Eigenverbrauch = (PV − Einspeisung)/PV; Geld und CO₂ aus Projekteinstellungen.
+
 ## Speicherung
 
 - Live: `data/project.json` auf dem Server, atomar geschrieben, mit Revision

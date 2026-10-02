@@ -13,6 +13,10 @@ import { formatPower } from "@/energy/units";
 
 import { polygonArea } from "@/geometry/polygon";
 import { Segmented, Dialog } from "@/ui/primitives";
+import { BatteryMedium, Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Home, Moon, Sun } from "lucide-react";
+import { useEnvironment } from "@/environment/useEnvironment";
+import type { Sky } from "@/environment/weather";
+import { flowValues, houseConsumption } from "@/energy/aggregate";
 import { DeviceControl } from "./DeviceControls";
 import { insights, roomOfBinding } from "./insights";
 
@@ -40,6 +44,8 @@ function Popover({ label, icon, children, active }: { label: string; icon: React
 }
 
 const LAYER_LABELS: { key: keyof Layers; label: string; hint: string }[] = [
+  { key: "weather", label: "Wetter & Tageszeit", hint: "Himmel, Sonnenstand, Regen und Schnee um das Haus" },
+  { key: "flows", label: "Stromflüsse", hint: "Animierte Kabel vom Verteiler zu gemessenen Geräten" },
   { key: "devices", label: "Alle Gerätesymbole", hint: "Sonst nur eingeschaltete Lichter und Geräte mit Hinweis" },
   { key: "labels", label: "Raumnamen", hint: "Beschriftung der Räume" },
   { key: "climate", label: "Raumklima", hint: "Räume nach Temperatur einfärben" },
@@ -90,6 +96,7 @@ export function ViewControls({ showLayers = true }: { showLayers?: boolean }) {
               />
             </div>
           )}
+          <EnvPreviewControls />
           <label className="flex min-h-[40px] items-center justify-between gap-2 text-sm">
             Dach zeigen (bei „Ganzes Haus“)
             <input type="checkbox" className="h-5 w-5 accent-sage" checked={ui.showRoof} onChange={(e) => ui.patch({ showRoof: e.target.checked })} />
@@ -110,6 +117,99 @@ export function ViewControls({ showLayers = true }: { showLayers?: boolean }) {
             ))}
           </div>
         </Popover>
+      )}
+    </div>
+  );
+}
+
+const SKY_ICON: Record<Sky, typeof Sun> = { clear: Sun, partly: CloudSun, cloudy: Cloud, rain: CloudRain, pouring: CloudRain, snow: CloudSnow, fog: CloudFog, storm: CloudLightning, unknown: Cloud };
+
+export function EnvPreviewControls() {
+  const preview = useUi((s) => s.envPreview);
+  const patch = useUi((s) => s.patch);
+  const hour = preview?.hour;
+  return (
+    <div className="space-y-2">
+      <div>
+        <p className="label">Tageszeit</p>
+        <Segmented
+          label="Tageszeit"
+          size="sm"
+          value={hour === undefined ? "live" : String(hour)}
+          onChange={(v) => patch({ envPreview: v === "live" ? (preview?.sky ? { sky: preview.sky } : null) : { ...preview, hour: Number(v) } })}
+          options={[
+            { value: "live", label: "Live" },
+            { value: "8", label: "Morgen" },
+            { value: "13", label: "Mittag" },
+            { value: "19.5", label: "Abend" },
+            { value: "23", label: "Nacht" },
+          ]}
+        />
+      </div>
+      <div>
+        <p className="label">Wetter</p>
+        <Segmented
+          label="Wetter"
+          size="sm"
+          value={preview?.sky ?? "live"}
+          onChange={(v) => patch({ envPreview: v === "live" ? (hour !== undefined ? { hour } : null) : { ...preview, sky: v as Sky } })}
+          options={[
+            { value: "live", label: "Live" },
+            { value: "clear", label: "Sonne" },
+            { value: "cloudy", label: "Wolken" },
+            { value: "rain", label: "Regen" },
+            { value: "snow", label: "Schnee" },
+          ]}
+        />
+      </div>
+      {preview && <p className="text-xs text-warn">Vorschau – zeigt nicht das aktuelle Wetter.</p>}
+    </div>
+  );
+}
+
+/** Kompakte Wetter- und Energiezeile auf der Startseite. */
+export function WeatherEnergyChips() {
+  const env = useEnvironment();
+  const weatherOn = useUi((s) => s.layers.weather);
+  const patch = useUi((s) => s.patch);
+  const project = useProject((s) => s.project);
+  const states = useLive((s) => s.states);
+  const connected = useLive((s) => isConnected(s.status));
+  if (!project) return null;
+  const values = livePowerValues(project.meters, states, connected);
+  const flows = flowValues(project.meters, values);
+  const house = houseConsumption(project.meters, values, project.settings.noLocalGeneration);
+  const socs = project.meters.filter((m) => m.socEntityId).map((m) => numericState(states[m.socEntityId!])).filter((x): x is number => x !== null);
+  const soc = socs.length ? socs.reduce((a, b) => a + b, 0) / socs.length : null;
+  const bat = flows.hasBattery && flows.batteryDischarge !== null && flows.batteryCharge !== null ? flows.batteryDischarge - flows.batteryCharge : null;
+  const Icon = SKY_ICON[env.sky];
+  const time = new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  return (
+    <div className="pointer-events-auto flex flex-wrap gap-2">
+      {weatherOn && (
+        <span className="chip shadow-soft" title={`Wetter: ${env.weatherSource === "ha" ? "Home Assistant" : env.weatherSource === "preview" ? "Vorschau" : "keine Wetter-Entität"} · Sonnenstand: ${env.sunSource === "ha" ? "Home Assistant (sun.sun)" : env.sunSource === "preview" ? "Vorschau" : "aus Uhrzeit und Standort geschätzt"}`} data-testid="weather-chip">
+          {env.isNight && env.sky === "clear" ? <Moon size={15} /> : <Icon size={15} />}
+          {env.weatherSource === "none" ? (env.isNight ? "Nacht" : "Tag") : env.conditionText}
+          {env.temperature !== null && ` · ${env.temperature.toLocaleString("de-DE")} °C`}
+          {env.weatherSource !== "preview" && env.sunSource !== "preview" ? ` · ${time}` : " · Vorschau"}
+        </span>
+      )}
+      {project.meters.length > 0 && (
+        <button className="chip border-energy/30 bg-energy-soft text-energy-dark shadow-soft" onClick={() => patch({ tab: "energy" })} data-testid="energy-chip">
+          {flows.hasPv && (
+            <span className="inline-flex items-center gap-1">
+              <Sun size={14} /> {formatPower(flows.pv)}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1">
+            <Home size={14} /> {formatPower(house.value)}
+          </span>
+          {flows.hasBattery && (
+            <span className="inline-flex items-center gap-1">
+              <BatteryMedium size={14} /> {soc !== null ? `${Math.round(soc)} %` : ""} {bat !== null && Math.abs(bat) > 5 ? (bat > 0 ? "↓" : "↑") : ""}
+            </span>
+          )}
+        </button>
       )}
     </div>
   );
@@ -362,6 +462,7 @@ export function HomeView() {
     <>
       <div className="pointer-events-none absolute left-3 top-[calc(4.6rem+env(safe-area-inset-top))] z-20 flex max-w-[calc(100%-1.5rem)] flex-col items-start gap-2 sm:left-4">
         <ViewControls />
+        <WeatherEnergyChips />
         <Hints />
         <Legend />
       </div>

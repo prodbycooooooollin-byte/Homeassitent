@@ -22,9 +22,10 @@ const room = z.object({
   floorId: id,
   name: z.string().max(60),
   vertices: z.array(vertex).min(3).max(200),
-  floorMaterial: z.enum(["oak", "walnut", "tiles", "stone", "carpet", "concrete"]),
+  floorMaterial: z.enum(["oak", "walnut", "tiles", "stone", "carpet", "concrete", "grass", "decking", "paving"]),
   wallColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   openEdges: z.array(id).default([]),
+  outdoor: z.boolean().default(false),
 });
 
 const opening = z.object({
@@ -98,6 +99,7 @@ const meter = z.object({
   itemId: id.nullable(),
   parentId: id.nullable(),
   coversWholeRoom: z.boolean(),
+  socEntityId: entityRef.default(null),
 });
 
 const underlay = z.object({
@@ -132,8 +134,18 @@ export const projectSchema = z.object({
   underlays: z.array(underlay).max(20).default([]),
   assets: z.array(asset).max(20).default([]),
   settings: z
-    .object({ gridSize: len(0.01, 1), noLocalGeneration: z.boolean().default(false) })
-    .default({ gridSize: 0.1, noLocalGeneration: false }),
+    .object({
+      gridSize: len(0.01, 1).default(0.1),
+      noLocalGeneration: z.boolean().default(false),
+      weatherEntityId: entityRef.default(null),
+      northAngle: len(-360, 360).default(0),
+      latitude: len(-90, 90).default(51.2),
+      longitude: len(-180, 180).default(10.4),
+      pricePerKwh: len(0, 5).default(0.32),
+      feedInPerKwh: len(0, 5).default(0.08),
+      co2PerKwh: len(0, 2).default(0.38),
+    })
+    .default({}),
 });
 
 export const projectFileSchema = z.object({

@@ -2,6 +2,7 @@
 // deterministisch erzeugte Beispieldaten und werden in der Oberfläche stets
 // als Demo gekennzeichnet.
 import type { HaHistory, HaState, HaStatisticMeta, HaStatisticRow } from "@/devices/ha-types";
+import { solarPosition } from "@/environment/sun";
 
 const HOUR = 3.6e6;
 
@@ -54,6 +55,12 @@ export const PROFILES: Record<string, (t: number) => number> = {
     const wd = new Date(t).getDay();
     return wd > 0 && wd < 6 && h >= 8 && h < 17 ? 110 + noise("of", Math.floor(t / 300000)) * 60 : 6;
   },
+  whirlpool: (t) => {
+    const h = hourOf(t);
+    const m = (t / 60000) % 60;
+    // Heizstab taktet, Umwälzpumpe tagsüber
+    return (m < 14 ? 2800 : 0) + (h >= 7 && h < 23 ? 180 : 15);
+  },
   heatpump: (t) => {
     const h = hourOf(t);
     return 350 + (h < 7 || h > 20 ? 450 : 150) * noise("hp", Math.floor(t / 1800000));
@@ -67,16 +74,44 @@ export function kitchenCircuit(t: number) {
 
 export function houseLoad(t: number, extra = 0) {
   return (
-    kitchenCircuit(t) + PROFILES.tv(t) + PROFILES.washer(t) + PROFILES.office(t) + PROFILES.heatpump(t) + PROFILES.base(t) + extra
+    kitchenCircuit(t) + PROFILES.tv(t) + PROFILES.washer(t) + PROFILES.office(t) + PROFILES.heatpump(t) + PROFILES.whirlpool(t) + PROFILES.base(t) + extra
   );
 }
+
+/** Demo-Wetter: Bewölkung je Tag, Regenphasen an manchen Tagen. Optional überschrieben. */
+let weatherOverride: string | null = null;
+export function setDemoWeather(c: string | null) {
+  weatherOverride = c;
+}
+export function demoCondition(t: number): string {
+  if (weatherOverride) return weatherOverride;
+  const d = dayIndex(t);
+  const h = hourOf(t);
+  if (noise("rain", d) > 0.62 && h >= 9 && h < 17) return noise("rainh", Math.floor(t / 3.6e6)) > 0.35 ? "rainy" : "cloudy";
+  const c = noise("cl", d);
+  if (c < 0.3) return "cloudy";
+  if (c < 0.6) return "partlycloudy";
+  return "sunny";
+}
+
+const CLOUD_FACTOR: Record<string, number> = { sunny: 1, "clear-night": 1, partlycloudy: 0.65, cloudy: 0.3, rainy: 0.12, pouring: 0.06, snowy: 0.1, fog: 0.15, "lightning-rainy": 0.08 };
 
 export function pvPower(t: number) {
   const h = hourOf(t);
   if (h < 6.8 || h > 19) return 0;
   const x = (h - 12.9) / 3.4;
-  const clouds = 0.45 + 0.55 * noise("cl", dayIndex(t)) * (0.85 + 0.15 * noise("cl2", Math.floor(t / 900000)));
-  return Math.max(0, 5200 * Math.exp(-x * x) * clouds);
+  const clouds = (CLOUD_FACTOR[demoCondition(t)] ?? 0.6) * (0.9 + 0.1 * noise("cl2", Math.floor(t / 900000)));
+  return Math.max(0, 7800 * Math.exp(-x * x) * clouds);
+}
+
+/** Anteile der drei Demo-Akkus am Gesamtspeicher. */
+export const BATTERY_SHARES = [0.4, 0.35, 0.25];
+
+/** Ladestand (%) je Akku – grobe Tageskurve passend zu Laden/Entladen. */
+export function batterySoc(t: number, i: number): number {
+  const h = hourOf(t);
+  const base = h < 7 ? 45 - (h / 7) * 15 : h < 11 ? 30 : h < 16 ? 30 + ((h - 11) / 5) * 65 : h < 18 ? 95 : 95 - ((h - 18) / 6) * 50;
+  return Math.round(Math.max(8, Math.min(100, base + (i - 1) * 6 + noise("soc", i) * 4)));
 }
 
 /** Batteriesaldo: positiv = Entladen ins Haus, negativ = Laden. */
@@ -107,7 +142,10 @@ export const POWER_SOURCES: Record<string, (t: number) => number> = {
   "sensor.hausverbrauch_leistung": (t) => flows(t).house,
   "sensor.netz_leistung": (t) => flows(t).grid,
   "sensor.pv_leistung": (t) => flows(t).pv,
-  "sensor.batterie_leistung": (t) => flows(t).battery,
+  "sensor.batterie_1_leistung": (t) => flows(t).battery * BATTERY_SHARES[0],
+  "sensor.batterie_2_leistung": (t) => flows(t).battery * BATTERY_SHARES[1],
+  "sensor.batterie_3_leistung": (t) => flows(t).battery * BATTERY_SHARES[2],
+  "sensor.whirlpool_leistung": PROFILES.whirlpool,
   "sensor.kueche_stromkreis_leistung": kitchenCircuit,
   "sensor.kuehlschrank_leistung": PROFILES.fridge,
   "sensor.herd_leistung": PROFILES.stove,
@@ -128,6 +166,7 @@ export const ENERGY_SOURCES: Record<string, (t: number) => number> = {
   "sensor.waschmaschine_energie": PROFILES.washer,
   "sensor.buero_steckdosenleiste_energie": PROFILES.office,
   "sensor.waermepumpe_energie": PROFILES.heatpump,
+  "sensor.whirlpool_energie": PROFILES.whirlpool,
 };
 
 /** Diese Entitäten haben in der Demo bewusst keine Langzeitstatistik (Verlauf wird genutzt). */
@@ -361,6 +400,24 @@ export function initialStates(now = Date.now()): HaState[] {
     { ...sensor("sensor.kinderzimmer_temperatur", "Temperatur Kinderzimmer", "unavailable", "°C", "temperature") },
     { ...sensor("sensor.kueche_temperatur", "Temperatur Küche", "21.9", "°C", "temperature"), last_reported: at(now - 5 * 3600_000), last_updated: at(now - 5 * 3600_000) },
     sensor("sensor.gaeste_temperatur", "Temperatur Gästezimmer", "19.4", "°C", "temperature"),
+    ...[0, 1, 2].map((i) => sensor(`sensor.batterie_${i + 1}_ladestand`, `Akku ${i + 1} Ladestand`, String(batterySoc(now, i)), "%", "battery")),
+    light("light.garten", "Gartenbeleuchtung", false, ["brightness"]),
+    {
+      entity_id: "switch.whirlpool",
+      state: "on",
+      attributes: { friendly_name: "Whirlpool", device_class: "switch" },
+      last_changed: at(now - 7200_000),
+      last_updated: at(now - 7200_000),
+    },
+    {
+      entity_id: "climate.whirlpool",
+      state: "heat",
+      attributes: { friendly_name: "Whirlpool Wassertemperatur", hvac_modes: ["off", "heat"], hvac_action: "heating", current_temperature: 37.2, temperature: 38, min_temp: 20, max_temp: 40, target_temp_step: 0.5, supported_features: 1 | 128 | 256 },
+      last_changed: at(now - 7200_000),
+      last_updated: at(now - 300_000),
+    },
+    weatherState(now),
+    sunState(now),
   ];
   for (const id of Object.keys(POWER_SOURCES)) {
     const s = sensor(id, nameFor(id), POWER_SOURCES[id](now).toFixed(1), "W", "power");
@@ -371,6 +428,32 @@ export function initialStates(now = Date.now()): HaState[] {
     states.push(sensor(id, nameFor(id), (1000 + integrateKwh(ENERGY_SOURCES[id], now - 24 * HOUR, now) * 30).toFixed(2), "kWh", noStats ? null : "energy", noStats ? null : "total_increasing"));
   }
   return states;
+}
+
+export function weatherState(now: number): HaState {
+  const c = demoCondition(now);
+  const h = hourOf(now);
+  const night = h < 6.5 || h > 20.5;
+  return {
+    entity_id: "weather.home",
+    state: night && c === "sunny" ? "clear-night" : c,
+    attributes: { friendly_name: "Wetter (Demo)", temperature: Math.round((12 + 7 * Math.sin(((h - 9) / 24) * Math.PI * 2) + noise("tmp", dayIndex(now)) * 4) * 10) / 10, temperature_unit: "°C" },
+    last_changed: at(now - 600_000),
+    last_updated: at(now - 60_000),
+    last_reported: at(now - 60_000),
+  };
+}
+
+export function sunState(now: number): HaState {
+  const p = solarPosition(new Date(now), 51.2, 10.4);
+  return {
+    entity_id: "sun.sun",
+    state: p.elevation > -0.83 ? "above_horizon" : "below_horizon",
+    attributes: { friendly_name: "Sonne", elevation: Math.round(p.elevation * 100) / 100, azimuth: Math.round(p.azimuth * 100) / 100 },
+    last_changed: at(now - 600_000),
+    last_updated: at(now - 60_000),
+    last_reported: at(now - 60_000),
+  };
 }
 
 function climate(id: string, name: string, mode: string, current: number, target: number, action: string): HaState {
@@ -401,7 +484,11 @@ const NAMES: Record<string, string> = {
   "sensor.einspeisung_energie": "Einspeisung Zählerstand",
   "sensor.pv_leistung": "PV Leistung",
   "sensor.pv_energie": "PV Ertrag",
-  "sensor.batterie_leistung": "Batterie Leistung (Saldo)",
+  "sensor.batterie_1_leistung": "Akku 1 Leistung (Saldo)",
+  "sensor.batterie_2_leistung": "Akku 2 Leistung (Saldo)",
+  "sensor.batterie_3_leistung": "Akku 3 Leistung (Saldo)",
+  "sensor.whirlpool_leistung": "Whirlpool Leistung",
+  "sensor.whirlpool_energie": "Whirlpool Energie",
   "sensor.kueche_stromkreis_leistung": "Stromkreis Küche Leistung",
   "sensor.kueche_stromkreis_energie": "Stromkreis Küche Energie",
   "sensor.kuehlschrank_leistung": "Kühlschrank Leistung",

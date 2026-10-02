@@ -62,6 +62,13 @@ export function useOverlay(project: Project | null, states: Record<string, HaSta
         }
       }
     }
+    // PV-Modulfelder leuchten je nach aktueller Erzeugung
+    for (const m of project.meters) {
+      if (m.flow !== "pv_production" || !m.itemId) continue;
+      const w = livePowerValues([m], states, connected).get(m.id);
+      if (w === undefined || w === null) continue;
+      out.lights.set(m.itemId, { on: w > 20, color: "#FFC861", level: Math.min(1, w / 6000) });
+    }
     const energyView = layers.energy || tab === "energy";
     if (energyView) {
       const values = livePowerValues(project.meters, states, connected);

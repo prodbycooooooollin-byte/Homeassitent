@@ -123,7 +123,8 @@ export function placeOpening(o: Opening, rooms: Room[]): OpeningPlacement | null
 }
 
 export function buildWalls(project: Pick<Project, "rooms" | "openings">, floor: Floor): WallSegment[] {
-  const rooms = project.rooms.filter((r) => r.floorId === floor.id);
+  // Außenbereiche haben keine Wände und machen angrenzende Außenwände nicht zu Innenwänden
+  const rooms = project.rooms.filter((r) => r.floorId === floor.id && !r.outdoor);
   const roomIds = new Set(rooms.map((r) => r.id));
   const placements = project.openings
     .filter((o) => roomIds.has(o.roomId))

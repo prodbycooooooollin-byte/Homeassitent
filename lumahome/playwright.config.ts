@@ -18,7 +18,7 @@ export default defineConfig({
   reporter: [["list"], ["json", { outputFile: "test-results/e2e-report.json" }]],
   use: { baseURL: "http://127.0.0.1:8791", trace: "retain-on-failure", screenshot: "only-on-failure", acceptDownloads: true },
   projects: [
-    { name: "desktop", testMatch: /live\.spec\.ts|free\.spec\.ts|fallback\.spec\.ts/, use: { viewport: { width: 1366, height: 860 }, launchOptions } },
+    { name: "desktop", testMatch: /live\.spec\.ts|free\.spec\.ts|energy-scene\.spec\.ts/, use: { viewport: { width: 1366, height: 860 }, launchOptions } },
     { name: "touch", testMatch: /touch\.spec\.ts/, use: { ...devices["Pixel 7"], browserName: "chromium", launchOptions } },
   ],
   webServer: [
