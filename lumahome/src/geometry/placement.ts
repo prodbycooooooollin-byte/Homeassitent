@@ -79,14 +79,14 @@ export function placementIssues(item: Item, project: Project, walls?: WallSegmen
   const corners = itemCorners(item);
   const rooms = project.rooms.filter((r) => r.floorId === item.floorId);
   const room = roomAt({ x: item.x, y: item.y }, rooms);
-  if (!room) issues.push({ code: "outside", message: "Liegt außerhalb aller Räume." });
+  if (!room && entry.mount !== "roof") issues.push({ code: "outside", message: "Liegt außerhalb aller Räume." });
 
   if (!entry.throughCeiling && item.elevation + item.height > floor.height + 0.01) {
     issues.push({ code: "ceiling", message: "Ragt über die Raumhöhe hinaus." });
   }
 
   const ws = walls ?? buildWalls(project, floor);
-  if (entry.mount !== "wall") {
+  if (entry.mount !== "wall" && entry.mount !== "roof") {
     for (const w of ws) {
       // Nur Wandstücke berücksichtigen, die in der Höhe des Objekts tatsächlich Wand sind
       if (!convexOverlap(corners, wallRect(w), 0.02)) continue;
@@ -196,6 +196,7 @@ export function surfaceElevation(item: Pick<Item, "id" | "x" | "y" | "floorId">,
 /** Standard-Höhe je Montageart. */
 export function defaultElevation(mount: string, height: number, floor: Floor): number {
   if (mount === "ceiling") return Math.max(0, floor.height - height);
+  if (mount === "roof") return floor.height + 0.27;
   if (mount === "wall") return Math.min(Math.max(0, floor.height - height - 0.2), height < 0.15 ? 0.3 : 1.4);
   return 0;
 }

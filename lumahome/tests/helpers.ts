@@ -1,4 +1,4 @@
-import type { EnergyMeter, Project } from "@/model/types";
+import { DEFAULT_SETTINGS, type EnergyMeter, type Project } from "@/model/types";
 import { makeRoom, rectVertices } from "@/geometry/ops";
 
 export function emptyProject(): Project {
@@ -16,7 +16,7 @@ export function emptyProject(): Project {
     meters: [],
     underlays: [],
     assets: [],
-    settings: { gridSize: 0.1, noLocalGeneration: false },
+    settings: { ...DEFAULT_SETTINGS },
   };
 }
 
@@ -40,6 +40,7 @@ export function meter(p: Partial<EnergyMeter> & { id: string }): EnergyMeter {
     itemId: null,
     parentId: null,
     coversWholeRoom: false,
+    socEntityId: null,
     ...p,
   };
 }

@@ -3,10 +3,11 @@ import { Download, KeyRound, LogOut, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { useProject } from "@/store/project";
 import { useUi } from "@/store/ui";
-import { useApp, startLive } from "@/app/boot";
+import { useApp, logout, startLive } from "@/app/boot";
 import { parseProjectFile, toProjectFile } from "@/model/schema";
 import type { Project } from "@/model/types";
-import { Dialog, Notice, Segmented, TextField } from "@/ui/primitives";
+import { Dialog, Notice, NumberField, Segmented, TextField } from "@/ui/primitives";
+import { useLive } from "@/store/live";
 import { api } from "@/sources/live";
 
 export function PinLogin() {
@@ -46,6 +47,43 @@ export function PinLogin() {
   );
 }
 
+function WeatherSettings() {
+  const project = useProject((s) => s.project)!;
+  const apply = useProject((s) => s.apply);
+  const canEdit = useProject((s) => s.canEdit);
+  const states = useLive((s) => s.states);
+  const weathers = Object.values(states).filter((s) => s.entity_id.startsWith("weather."));
+  const set = (patch: Partial<typeof project.settings>) => apply((p) => ({ ...p, settings: { ...p.settings, ...patch } }));
+  const hasSun = !!states["sun.sun"];
+  return (
+    <section className="space-y-3">
+      <h3 className="section-title">Wetter & Sonne</h3>
+      <div>
+        <label className="label" htmlFor="weather-entity">
+          Wetter-Entität
+        </label>
+        <select id="weather-entity" className="input" disabled={!canEdit} value={project.settings.weatherEntityId ?? ""} onChange={(e) => set({ weatherEntityId: e.target.value || null })}>
+          <option value="">Automatisch ({weathers[0]?.entity_id ?? "keine gefunden"})</option>
+          {weathers.map((w) => (
+            <option key={w.entity_id} value={w.entity_id}>
+              {String(w.attributes.friendly_name ?? w.entity_id)} ({w.entity_id})
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="text-xs text-ink-2">
+        Sonnenstand: {hasSun ? "aus Home Assistant (sun.sun)" : "aus Uhrzeit und Standort geschätzt – Standort unten eintragen"}.
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        <NumberField label="Breitengrad" unit="°" value={project.settings.latitude} decimals={2} min={-90} max={90} disabled={!canEdit} onCommit={(latitude) => set({ latitude })} />
+        <NumberField label="Längengrad" unit="°" value={project.settings.longitude} decimals={2} min={-180} max={180} disabled={!canEdit} onCommit={(longitude) => set({ longitude })} />
+        <NumberField label="Plan-Nordrichtung" unit="°" value={project.settings.northAngle} min={-360} max={360} disabled={!canEdit} onCommit={(northAngle) => set({ northAngle })} />
+      </div>
+      <p className="text-xs text-ink-2">Nordrichtung: 0° = Planoberseite zeigt nach Norden. Positive Werte drehen im Uhrzeigersinn.</p>
+    </section>
+  );
+}
+
 function download(name: string, text: string) {
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -65,6 +103,8 @@ export function SettingsSheet() {
   const toast = useUi((s) => s.toast);
   const { project, apply, mode, canEdit, replace } = useProject();
   const session = useApp((s) => s.session);
+  const platform = useApp((s) => s.platform);
+  const haUrl = useApp((s) => s.haUrl);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pendingImport, setPendingImport] = useState<{ project: Project; warnings: string[] } | null>(null);
   const [importError, setImportError] = useState<string[] | null>(null);
@@ -109,7 +149,7 @@ export function SettingsSheet() {
           <h3 className="section-title">Projekt</h3>
           {project && <TextField label="Name des Zuhauses" value={project.name} onCommit={(name) => apply((p) => ({ ...p, name }))} />}
           <p className="text-xs text-ink-2">
-            {mode === "demo" ? "Demo-Projekt – im Browser gespeichert, getrennt vom Live-Projekt." : "Live-Projekt – auf dem lokalen LumaHome-Server gespeichert (mit Sicherungskopien)."}
+            {mode === "demo" ? "Demo-Projekt – im Browser gespeichert, getrennt vom Live-Projekt." : platform === "web" ? "Live-Projekt – in deinem Home-Assistant-Konto gespeichert, auf allen Geräten mit diesem Konto verfügbar." : "Live-Projekt – auf dem lokalen LumaHome-Server gespeichert (mit Sicherungskopien)."}
           </p>
           <div className="flex flex-wrap gap-2">
             <button className="btn-secondary" onClick={exportProject} disabled={!project} data-testid="export">
@@ -163,6 +203,7 @@ export function SettingsSheet() {
             </Notice>
           )}
         </section>
+        {project && <WeatherSettings />}
         <section className="space-y-2">
           <h3 className="section-title">Darstellung</h3>
           <Segmented
@@ -177,7 +218,17 @@ export function SettingsSheet() {
           />
           <p className="text-xs text-ink-2">Sparsam: keine Schatten, keine Texturen, kein Kantenglätten, keine Punktlichter – für ältere Wandtablets. Im Stillstand wird generell nicht neu gezeichnet. Reduzierte Bewegung wird aus den Systemeinstellungen übernommen.</p>
         </section>
-        {mode === "live" && session && (
+        {mode === "live" && platform === "web" && (
+          <section className="space-y-2">
+            <h3 className="section-title">Zugang</h3>
+            <p className="text-sm">Verbunden mit {haUrl ?? "Home Assistant"} über deinen langlebigen Zugriffstoken. Das Haus wird in den Benutzerdaten deines Home-Assistant-Kontos gespeichert.</p>
+            <button className="btn-secondary" onClick={() => void logout().then(close)}>
+              <LogOut size={16} /> Abmelden und Token von diesem Gerät entfernen
+            </button>
+            <p className="text-xs text-ink-2">Den Token selbst widerrufst du in Home Assistant unter Profil → Sicherheit → Langlebige Zugriffstoken.</p>
+          </section>
+        )}
+        {mode === "live" && platform === "server" && session && (
           <section className="space-y-2">
             <h3 className="section-title">Zugang</h3>
             <p className="text-sm">
@@ -201,7 +252,7 @@ export function SettingsSheet() {
         <section className="space-y-1 text-xs text-ink-2">
           <h3 className="section-title">Über</h3>
           <p>LumaHome {session?.version ?? "0.1.0"} · läuft lokal · alle Funktionen und Katalogmodelle frei nutzbar, ohne Konto, Kauf oder Freischaltung.</p>
-          <p>Zugangsdaten zu Home Assistant liegen ausschließlich auf dem lokalen Server und sind nie Teil von Projekt oder Export.</p>
+          <p>{platform === "web" ? "Der Zugriffstoken liegt nur in diesem Browser und ist nie Teil von Projekt oder Export." : "Zugangsdaten zu Home Assistant liegen ausschließlich auf dem lokalen Server und sind nie Teil von Projekt oder Export."}</p>
         </section>
       </div>
     </Dialog>

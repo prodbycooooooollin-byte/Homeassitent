@@ -188,7 +188,7 @@ test("7. Verbrauchsverlauf mit erkennbaren Messlücken", async ({ page }) => {
   await page.goto("/");
   await tab(page, "Energie");
   await page.getByRole("radio", { name: "Verlauf" }).click();
-  await page.getByRole("radio", { name: "Tag" }).click();
+  await page.getByRole("radio", { name: "Tag", exact: true }).click();
   const chart = page.getByTestId("history-chart");
   await expect(chart).toBeVisible();
   const hour = new Date().getHours();
@@ -196,9 +196,9 @@ test("7. Verbrauchsverlauf mit erkennbaren Messlücken", async ({ page }) => {
   await expect(chart.locator("rect[data-gap]")).toHaveCount(3);
   await expect(chart).toContainText("Messlücke (3)");
   // Zeitraumauswahl Woche/Monat
-  await page.getByRole("radio", { name: "Woche" }).click();
+  await page.getByRole("radio", { name: "Woche", exact: true }).click();
   await expect(page.getByTestId("range-title")).toContainText("–");
-  await page.getByRole("radio", { name: "Monat" }).click();
+  await page.getByRole("radio", { name: "Monat", exact: true }).click();
   await expect(chart).toBeVisible();
 });
 
@@ -228,7 +228,7 @@ test("10. Projekt exportieren und vollständig wieder importieren", async ({ pag
   await download.saveAs(file);
   const exported = JSON.parse(readFileSync(file, "utf8"));
   expect(exported.format).toBe("lumahome-project");
-  expect(JSON.stringify(exported)).not.toContain("e2e-token");
+  expect(JSON.stringify(exported)).not.toContain("e2e-token-0123456789");
   await page.getByRole("button", { name: "Schließen", exact: true }).click();
   // Projekt verändern: Küche löschen
   await tab(page, "Gestalten");

@@ -4,7 +4,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tab } from "./helpers";
 
-const FORBIDDEN = /(kaufen|preis|premium|abonnement|\babo\b|lizenzschlüssel|freischalt|in-app|€|upgrade auf)/i;
+// Euro-Beträge (z. B. Ersparnis) sind erlaubt – gesucht wird nach Kauf- und Freischaltlogik
+const FORBIDDEN = /(kaufen|kaufpreis|premium|abonnement|\babo\b|lizenzschlüssel|freischalt|in-app|upgrade auf)/i;
 
 test("12. Alle Katalogeinträge und Bereiche sind ohne Kauf erreichbar", async ({ page }) => {
   await page.goto("/");

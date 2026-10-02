@@ -6,7 +6,9 @@ import type { BindingTarget } from "@/model/types";
 import { useProject } from "@/store/project";
 import { useUi } from "@/store/ui";
 import { isConnected, useLive } from "@/store/live";
-import { useApp, getDemoSource, startDemo, switchMode } from "@/app/boot";
+import { useApp, getDemoSource, logout, startDemo, switchMode } from "@/app/boot";
+import { DirectSource } from "@/sources/direct";
+import { LogOut } from "lucide-react";
 import { capabilityOf, domainOf, friendlyName, roleForCapability } from "@/devices/capabilities";
 import { describeBinding } from "@/devices/view";
 import { stateSummary } from "@/devices/state";
@@ -38,9 +40,18 @@ function Connection() {
   const mode = useProject((s) => s.mode);
   const session = useApp((s) => s.session);
   const serverReachable = useApp((s) => s.serverReachable);
+  const platform = useApp((s) => s.platform);
+  const haUrl = useApp((s) => s.haUrl);
+  const source = useLive((s) => s.source);
+  const user = source instanceof DirectSource ? source.socket?.user ?? null : null;
   const toast = useUi((s) => s.toast);
   const l = statusLabel(status);
-  const reconnect = () => useLive.getState().setSource(mode === "demo" ? getDemoSource() ?? new DemoSource() : new LiveSource());
+  const [demoWeather, setDemoWeather] = useState("auto");
+  const reconnect = () => {
+    if (mode === "demo") useLive.getState().setSource(getDemoSource() ?? new DemoSource());
+    else if (platform === "web" && source instanceof DirectSource) useLive.getState().setSource(new DirectSource(source.url, source.token));
+    else useLive.getState().setSource(new LiveSource());
+  };
   return (
     <section className="panel-flat space-y-3 p-4" aria-label="Verbindung">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -61,12 +72,24 @@ function Connection() {
         {status.kind === "connected" && <p className="text-ink-2">Home Assistant {status.haVersion ?? ""} · {session?.ha.host} · verbunden {relTime(status.since)} · {count} Entitäten</p>}
         {status.kind === "reconnecting" && <p>Grund: {status.reason}. Versuch {status.attempt}. Angezeigte Zustände sind der letzte bekannte Stand und als veraltet markiert.</p>}
         {status.kind === "server_unreachable" && <p>{status.reason}. Die App versucht es automatisch erneut.</p>}
+        {status.kind === "auth_failed" && platform === "web" && <p>Bitte abmelden und mit einem neuen Token wieder anmelden.</p>}
         {status.kind === "not_configured" && <p>Auf dem LumaHome-Server sind HA_URL und HA_TOKEN nicht gesetzt (siehe README). Planen ist trotzdem möglich.</p>}
         {status.kind === "auth_failed" && <p>{status.reason}. Bitte den Zugriffstoken in der Server-Konfiguration prüfen.</p>}
         {status.kind === "demo" && <p>Simulierte Geräte und Beispieldaten – getrennt vom Live-Projekt. Nichts davon wird an Home Assistant gesendet.</p>}
         {lastEventAt && <p className="text-xs text-ink-2">Letzte Aktualisierung {relTime(lastEventAt)}</p>}
       </div>
-      {mode === "live" && !serverReachable && <Notice tone="warn">Der lokale LumaHome-Server ist nicht erreichbar. Diese Vorschau kann nur den Demo-Modus zeigen.</Notice>}
+      {mode === "live" && platform === "server" && !serverReachable && <Notice tone="warn">Der lokale LumaHome-Server ist nicht erreichbar.</Notice>}
+      {platform === "web" && haUrl && mode === "live" && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line px-3 py-2 text-sm" data-testid="ha-account">
+          <span>
+            Angemeldet bei <strong>{haUrl.replace(/^https?:\/\//, "")}</strong>
+            {user ? ` als ${user.name}${user.is_admin ? " (Administrator)" : ""}` : ""}
+          </span>
+          <button className="btn-secondary min-h-[40px] px-3 text-xs" onClick={() => void logout()} data-testid="logout">
+            <LogOut size={14} /> Abmelden
+          </button>
+        </div>
+      )}
       {status.kind === "forbidden" && <PinLogin />}
       <div className="flex flex-wrap gap-2">
         <button className="btn-secondary" onClick={reconnect}>
@@ -90,6 +113,26 @@ function Connection() {
             <button className="btn-ghost" onClick={() => void startDemo(true)}>
               Demo zurücksetzen
             </button>
+            <div className="w-full">
+              <p className="label">Demo-Wetter (wirkt auch auf die PV-Leistung)</p>
+              <Segmented
+                label="Demo-Wetter"
+                size="sm"
+                value={demoWeather}
+                onChange={(v) => {
+                  setDemoWeather(v);
+                  getDemoSource()?.setWeather(v === "auto" ? null : v);
+                }}
+                options={[
+                  { value: "auto", label: "Automatisch" },
+                  { value: "sunny", label: "Sonne" },
+                  { value: "cloudy", label: "Wolken" },
+                  { value: "rainy", label: "Regen" },
+                  { value: "snowy", label: "Schnee" },
+                  { value: "lightning-rainy", label: "Gewitter" },
+                ]}
+              />
+            </div>
           </>
         )}
       </div>

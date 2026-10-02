@@ -33,7 +33,7 @@ export function rectVertices(x: number, y: number, w: number, d: number): Vertex
 }
 
 export function makeRoom(floorId: Id, name: string, vertices: Vertex[], floorMaterial: FloorMaterial = "oak"): Room {
-  return { id: newId("room"), floorId, name, vertices, floorMaterial, wallColor: "#F2EFE8", openEdges: [] };
+  return { id: newId("room"), floorId, name, vertices, floorMaterial, wallColor: "#F2EFE8", openEdges: [], outdoor: false };
 }
 
 export function addRoom(p: Project, room: Room): Project {

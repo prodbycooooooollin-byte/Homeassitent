@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo } from "react";
 import { clsx } from "clsx";
-import { boot, useApp } from "@/app/boot";
+import { boot, logout, startDemo, useApp } from "@/app/boot";
 import { useUi } from "@/store/ui";
 import { useProject } from "@/store/project";
 import { TopBar } from "@/shell/TopBar";
@@ -16,6 +16,8 @@ import { DevicesView } from "@/devicesui/DevicesView";
 import { useShortcuts } from "@/shell/useShortcuts";
 import { Notice } from "@/ui/primitives";
 import { FloorPlan } from "@/design/FloorPlan";
+import { useEnvironment } from "@/environment/useEnvironment";
+import { skyGradient } from "@/environment/weather";
 
 const SceneCanvas = lazy(() => import("@/scene/SceneCanvas"));
 
@@ -36,6 +38,9 @@ export function App() {
   const designView = useUi((s) => s.designView);
   const project = useProject((s) => s.project);
   const hasGl = useMemo(webglAvailable, []);
+  const env = useEnvironment();
+  const weatherOn = useUi((s) => s.layers.weather);
+  const [skyTop, skyBottom] = weatherOn ? skyGradient(env) : ["#F5F3EE", "#E7EAE3"];
   useShortcuts();
 
   useEffect(() => {
@@ -55,6 +60,17 @@ export function App() {
           <Notice tone="error" title="Fehler beim Laden">
             {error}
           </Notice>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button className="btn-primary" onClick={() => location.reload()}>
+              Erneut versuchen
+            </button>
+            <button className="btn-secondary" onClick={() => void logout()}>
+              Abmelden
+            </button>
+            <button className="btn-ghost" onClick={() => void startDemo()}>
+              Demo ansehen
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -64,7 +80,7 @@ export function App() {
   const sceneVisible = tab === "home" || tab === "energy" || (tab === "design" && designView !== "2d");
   const split = tab === "design" && designView === "split";
   return (
-    <div className="relative h-full overflow-hidden bg-gradient-to-b from-canvas via-canvas to-[#E7EAE3]">
+    <div className="relative h-full overflow-hidden transition-[background] duration-700" style={{ background: `linear-gradient(to bottom, ${skyTop}, ${skyBottom})` }}>
       <div
         className={clsx("absolute inset-y-0 right-0 transition-[left] duration-200", split ? "left-1/2" : "left-0", !sceneVisible && "invisible")}
         aria-hidden={!sceneVisible}

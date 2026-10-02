@@ -58,6 +58,7 @@ const registry = {
 };
 
 const clients = new Set();
+const userData = new Map();
 const calls = [];
 let refuseUntil = 0;
 
@@ -195,6 +196,13 @@ function handle(c, msg) {
       return reply(statistics(msg.statistic_ids, Date.parse(msg.start_time), Date.parse(msg.end_time), msg.period));
     case "history/history_during_period":
       return reply({});
+    case "auth/current_user":
+      return reply({ id: "u1", name: "Test-Benutzer", is_admin: true });
+    case "frontend/get_user_data":
+      return reply({ value: userData.get(msg.key) ?? null });
+    case "frontend/set_user_data":
+      userData.set(msg.key, msg.value);
+      return reply(null);
     case "energy/get_prefs":
       return reply({ energy_sources: [{ type: "grid", flow_from: [{ stat_energy_from: "sensor.hauszaehler_energie" }], flow_to: [] }], device_consumption: [{ stat_consumption: "sensor.tv_energie" }] });
     default:
@@ -222,8 +230,10 @@ const server = http.createServer(async (req, res) => {
     return json(200, { refuseUntil });
   }
   if (req.url === "/control/calls") return json(200, calls);
+  if (req.url === "/control/userdata") return json(200, Object.fromEntries(userData));
   if (req.url === "/control/reset" && req.method === "POST") {
     reset();
+    userData.clear();
     calls.length = 0;
     return json(200, { ok: true });
   }

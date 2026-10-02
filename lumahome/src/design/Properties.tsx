@@ -36,6 +36,13 @@ const FLOOR_MATERIALS: { value: FloorMaterial; label: string }[] = [
   { value: "concrete", label: "Beton" },
 ];
 
+const OUTDOOR_MATERIALS: { value: FloorMaterial; label: string }[] = [
+  { value: "decking", label: "Holzdielen" },
+  { value: "paving", label: "Pflaster" },
+  { value: "grass", label: "Rasen" },
+  { value: "stone", label: "Naturstein" },
+];
+
 const WALL_COLORS = ["#F2EFE8", "#F7F5F0", "#EDF2EE", "#EEF1EF", "#F1ECE4", "#E9E4DA", "#E3E9EE", "#EFE7E1"];
 
 function Card({ title, children, onClose, actions }: { title: string; children: React.ReactNode; onClose: () => void; actions?: React.ReactNode }) {
@@ -168,10 +175,24 @@ function RoomProps({ project, roomId, onClose }: { project: Project; roomId: str
           ))}
         </ul>
       </details>
+      <label className="flex min-h-[44px] items-center justify-between gap-2 rounded-2xl bg-surface-2 px-3 text-sm">
+        <span>
+          Außenbereich
+          <span className="block text-xs text-ink-2s">Terrasse oder Garten – ohne Wände, Regen fällt hier</span>
+        </span>
+        <input
+          type="checkbox"
+          className="h-5 w-5 accent-sage"
+          checked={room.outdoor}
+          disabled={!canEdit}
+          onChange={(e) => apply((p) => updateRoom(p, room.id, { outdoor: e.target.checked, floorMaterial: e.target.checked ? "decking" : "oak" }))}
+          data-testid="room-outdoor"
+        />
+      </label>
       <div>
         <p className="label">Bodenbelag</p>
         <div className="flex flex-wrap gap-1.5">
-          {FLOOR_MATERIALS.map((m) => (
+          {(room.outdoor ? OUTDOOR_MATERIALS : FLOOR_MATERIALS).map((m) => (
             <button key={m.value} disabled={!canEdit} className={clsx("chip", room.floorMaterial === m.value && "chip-active")} onClick={() => apply((p) => updateRoom(p, room.id, { floorMaterial: m.value }))}>
               {m.label}
             </button>

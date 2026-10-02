@@ -7,8 +7,8 @@
 // Skalieren stimmig.
 import type { BindingRole } from "@/model/types";
 
-export type Mount = "floor" | "wall" | "ceiling" | "surface";
-export type CategoryId = "wohnen" | "kueche" | "schlafen" | "bad" | "arbeiten" | "licht" | "technik";
+export type Mount = "floor" | "wall" | "ceiling" | "surface" | "roof";
+export type CategoryId = "wohnen" | "kueche" | "schlafen" | "bad" | "arbeiten" | "licht" | "technik" | "aussen";
 
 export type PartColor = "main" | "accent" | "dark" | "metal" | "glass" | "light" | "fabric2" | `#${string}`;
 
@@ -54,6 +54,7 @@ export const CATEGORIES: { id: CategoryId; label: string }[] = [
   { id: "arbeiten", label: "Arbeiten" },
   { id: "licht", label: "Beleuchtung" },
   { id: "technik", label: "Technik & Klima" },
+  { id: "aussen", label: "Außen & Garten" },
 ];
 
 export interface MaterialDef {
@@ -453,6 +454,56 @@ export const CATALOG: CatalogEntry[] = [
     id: "fuse-box", name: "Zählerschrank", category: "technik", keywords: ["zähler", "sicherungskasten", "strom"],
     size: { w: 0.6, d: 0.2, h: 0.9 }, mount: "wall", defaultColor: "#E9EAE6", accent: "#9A9C97",
     materials: ["lack", "metall"], defaultMaterial: "lack", parts: [box(0, 0.5, 0, 1, 1, 1), box(0, 0.5, 0.505, 0.9, 0.9, 0.01, "accent")],
+    deviceRoles: [],
+  },
+  // Außen & Garten
+  {
+    id: "whirlpool", name: "Whirlpool", category: "aussen", keywords: ["pool", "jacuzzi", "spa", "garten"],
+    size: { w: 2.2, d: 2.2, h: 0.95 }, mount: "floor", defaultColor: "#8A6B4E", accent: "#7FC4D6",
+    materials: ["holz", "lack"], defaultMaterial: "holz",
+    parts: [box(0, 0.47, 0, 1, 0.94, 1), box(0, 0.93, 0, 0.86, 0.04, 0.86, "accent"), box(0, 0.975, 0, 1.02, 0.05, 1.02, "#D8D4CC")],
+    deviceRoles: ["climate", "switch"],
+  },
+  {
+    id: "garden-light", name: "Gartenleuchte", category: "aussen", keywords: ["licht", "weg", "poller", "garten"],
+    size: { w: 0.18, d: 0.18, h: 0.7 }, mount: "floor", defaultColor: "#363B39", accent: "#FFF6DD",
+    materials: ["metall"], defaultMaterial: "metall",
+    parts: [cyl(0, 0.42, 0, 0.6, 0.84, 0.6), cyl(0, 0.9, 0, 0.75, 0.16, 0.75, "accent", true), cyl(0, 0.99, 0, 1, 0.03, 1, "dark")],
+    light: { y: 0.9, kind: "point" }, deviceRoles: ["light", "switch"],
+  },
+  {
+    id: "garden-table", name: "Gartentisch", category: "aussen", keywords: ["tisch", "terrasse"],
+    size: { w: 1.6, d: 0.9, h: 0.74 }, mount: "floor", surfaceAt: 1, defaultColor: "#9A9C97", accent: "#5E625F",
+    materials: ["metall", "holz"], defaultMaterial: "metall", parts: table(0.04, 0.05, "accent"), deviceRoles: [],
+  },
+  {
+    id: "lounger", name: "Sonnenliege", category: "aussen", keywords: ["liege", "terrasse", "garten"],
+    size: { w: 0.7, d: 1.95, h: 0.45 }, mount: "floor", defaultColor: "#E6DFD3", accent: "#5E625F",
+    materials: ["stoff", "holz"], defaultMaterial: "stoff",
+    parts: [box(0, 0.12, 0, 0.9, 0.08, 0.98, "accent"), box(0, 0.25, 0.12, 1, 0.12, 0.72), box(0, 0.62, -0.36, 1, 0.12, 0.3)],
+    deviceRoles: [],
+  },
+  {
+    id: "parasol", name: "Sonnenschirm", category: "aussen", keywords: ["schirm", "schatten"],
+    size: { w: 2.6, d: 2.6, h: 2.4 }, mount: "floor", defaultColor: "#F1ECE4", accent: "#5E625F",
+    materials: ["stoff"], defaultMaterial: "stoff",
+    parts: [cyl(0, 0.02, 0, 0.18, 0.04, 0.18, "dark"), cyl(0, 0.45, 0, 0.02, 0.88, 0.02, "accent"), cone(0, 0.9, 0, 1, 0.16, 1)],
+    deviceRoles: [],
+  },
+  {
+    id: "garden-socket", name: "Außensteckdose", category: "aussen", keywords: ["steckdose", "strom", "garten"],
+    size: { w: 0.12, d: 0.12, h: 0.55 }, mount: "floor", defaultColor: "#363B39", accent: "#9A9C97",
+    materials: ["metall"], defaultMaterial: "metall", parts: [box(0, 0.5, 0, 1, 1, 1), box(0, 0.75, 0.52, 0.6, 0.25, 0.05, "accent")],
+    deviceRoles: ["switch"],
+  },
+  {
+    id: "pv-array", name: "PV-Modulfeld (Dach)", category: "technik", keywords: ["photovoltaik", "solar", "pv", "dach", "module"],
+    size: { w: 6.0, d: 3.4, h: 0.12 }, mount: "roof", defaultColor: "#22324A", accent: "#C9CED6",
+    materials: ["metall"], defaultMaterial: "metall", throughCeiling: true,
+    parts: [
+      box(0, 0.15, 0, 1, 0.3, 1, "accent"),
+      ...Array.from({ length: 12 }, (_, i) => box(-0.5 + ((i % 6) + 0.5) / 6, 0.65, i < 6 ? -0.25 : 0.25, 1 / 6 - 0.01, 0.4, 0.48, "main", true)),
+    ],
     deviceRoles: [],
   },
 ];

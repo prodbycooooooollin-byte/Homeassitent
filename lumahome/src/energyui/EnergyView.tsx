@@ -15,6 +15,7 @@ import { FlowDiagram } from "./FlowDiagram";
 import { useHistory } from "./useHistory";
 import { FLOW_LABEL, roomPeriod, summarize, topConsumers } from "./derive";
 import { MeterSetup } from "./MeterSetup";
+import { InsightsPanel } from "./Insights";
 import { useTouchLayout } from "@/home/useMedia";
 
 function Stat({ label, value, note, tone = "energy", testId }: { label: string; value: string; note?: string | null; tone?: "energy" | "plain"; testId?: string }) {
@@ -280,7 +281,9 @@ function History() {
 
 export function EnergyView() {
   const project = useProject((s) => s.project);
-  const [section, setSection] = useState<"overview" | "history" | "sources">("overview");
+  const [section, setSection] = useState<"overview" | "history" | "insights" | "sources">("overview");
+  const energyScene = useUi((s) => s.energyScene);
+  const patchUi = useUi((s) => s.patch);
   const [collapsed, setCollapsed] = useState(false);
   const touch = useTouchLayout();
   if (!project) return null;
@@ -305,6 +308,7 @@ export function EnergyView() {
             options={[
               { value: "overview", label: "Jetzt" },
               { value: "history", label: "Verlauf" },
+              { value: "insights", label: "Analyse" },
               { value: "sources", label: <><Settings2 size={13} /> Messquellen</> },
             ]}
           />
@@ -318,15 +322,30 @@ export function EnergyView() {
           <div className="overflow-y-auto px-3 py-3">
             {section === "overview" && <Overview />}
             {section === "history" && <History />}
+            {section === "insights" && <InsightsPanel />}
             {section === "sources" && <MeterSetup />}
           </div>
         )}
       </section>
-      {!touch && (
-        <p className="pointer-events-auto ml-3 mt-auto flex max-w-xs items-start gap-1.5 self-end rounded-xl bg-surface/90 px-3 py-2 text-[11px] text-ink-2 shadow-soft">
-          <Info size={13} className="mt-0.5 shrink-0" /> Im Modell sind Räume mit gemessener Leistung violett eingefärbt – je kräftiger, desto mehr.
-        </p>
-      )}
+      <div className={clsx("pointer-events-auto flex flex-col gap-2", touch ? "absolute -top-14 left-2" : "ml-3 mt-auto self-end")}>
+        <div className="rounded-2xl border border-line/70 bg-surface/95 p-1 shadow-soft">
+          <Segmented
+            label="Modellansicht"
+            size="sm"
+            value={energyScene}
+            onChange={(v) => patchUi({ energyScene: v })}
+            options={[
+              { value: "outside", label: "Außen: Dach & PV" },
+              { value: "inside", label: "Innen: Etage" },
+            ]}
+          />
+        </div>
+        {!touch && (
+          <p className="flex max-w-xs items-start gap-1.5 rounded-xl bg-surface/90 px-3 py-2 text-[11px] text-ink-2 shadow-soft">
+            <Info size={13} className="mt-0.5 shrink-0" /> Kabel zeigen gemessene Flüsse über den Verteiler – dicker und schneller heißt mehr Leistung. Welcher Akku genau welches Gerät versorgt, ist nicht messbar.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

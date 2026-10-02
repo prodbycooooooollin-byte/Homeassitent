@@ -1,6 +1,22 @@
 # Architektur und Entscheidungen
 
-## Betriebsform: eigenständige lokale Anwendung
+## Betriebsformen
+
+**Webseite (Standard, z. B. GitHub Pages):** Die gebaute Oberfläche ist rein
+statisch. Ist kein LumaHome-Server erreichbar (`/api/session`), zeigt sie die
+Anmeldung: Adresse + langlebiger Zugriffstoken. Der Browser verbindet sich per
+WebSocket direkt mit `wss://<ha>/api/websocket` (`src/sources/haSocket.ts`,
+`src/sources/direct.ts`) – mit denselben Befehlen und Regeln wie der Server
+(Dienst-Freigabeliste, Kontext-IDs, Wiederverbinden). Der Token liegt nur im
+Browser (`localStorage` bei „Angemeldet bleiben“, sonst `sessionStorage`). Das
+Haus wird über `frontend/set_user_data` (Schlüssel `lumahome_project`, mit
+Revision gegen gleichzeitige Änderungen) im HA-Konto gespeichert, zusätzlich als
+Kopie im Browser für den Start ohne Verbindung. Eine Content-Security-Policy
+erlaubt nur eigene Skripte. Von einer https-Seite ist nur `wss://` möglich.
+
+**Lokal mit eigenem Server:** wie unten beschrieben (Token in `.env` auf dem Server).
+
+## Betriebsform mit eigenem Server
 
 LumaHome läuft **nicht innerhalb** von Home Assistant, sondern als eigenständige
 lokale Anwendung aus zwei Teilen:
@@ -120,6 +136,13 @@ Türschwenkbereichen/über Raumhöhe.
   integriert. Lücken bleiben leer und sind schraffiert; ein Verbrauch über eine
   Lücke hinweg wird als Nachholwert gekennzeichnet. Der laufende Zeitraum ist als
   „läuft noch“ markiert.
+
+## Wetter, Tageszeit und Stromflüsse
+
+- Sonnenstand aus `sun.sun` (Attribute `elevation`, `azimuth`), sonst NOAA-Näherung aus Uhrzeit und Standort (Einstellungen); Wetter aus der ersten bzw. gewählten `weather.*`-Entität. Ohne Wetter-Entität wird kein Wetter erfunden. Die Quelle (Home Assistant, geschätzt, Vorschau) wird angezeigt.
+- Niederschlag wird nur außerhalb geschlossener Räume erzeugt; Außenbereiche (`room.outdoor`) zählen als außen und erhalten keine Wände.
+- Stromflüsse (`src/energy/flows3d.ts`): Jeder Messpunkt tauscht Leistung mit dem Hausnetz; dargestellt über den Verteiler (Zählerschrank-Objekt, sonst Hauszähler-Objekt, sonst Hausmitte). Nur Blätter der Zählerhierarchie bekommen eigene Kabel, damit nichts doppelt erscheint. Akkus werden je Messpunkt mit Ladestand-Sensor geführt.
+- Analyse (`src/energy/insights.ts`): Autarkie = 1 − Netzbezug/Hausverbrauch, Eigenverbrauch = (PV − Einspeisung)/PV; Geld und CO₂ aus Projekteinstellungen.
 
 ## Speicherung
 

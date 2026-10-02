@@ -13,11 +13,42 @@ Shop, keine Abos, keine Lizenzschlüssel.
 | Bereich | Inhalt |
 | --- | --- |
 | **Zuhause** | 3D-Haus mit Lichtwirkung und Statussymbolen, Steuerkarte am Objekt (Touch: Panel unten), Raumzusammenfassung, „Alle Lichter aus“, Ebenen (Klima, Fenster, Energie, Hinweise, Legende), Wände voll/geschnitten/Grundriss, Etagen, Dach |
-| **Gestalten** | Werkzeuge **Grundriss** (Rechteck, Freiform, Türen, Fenster, Durchgänge, Deckenöffnungen, Maßeingabe, Etagen, Grundrissbild), **Einrichten** (Katalog mit 46 Modellen, Ziehen oder „Platzieren“, Griffe zum Drehen/Skalieren, Einrasten an Wand/Boden/Möbeloberfläche) und **Verbinden** (Geräte zuordnen mit begründeten Vorschlägen). 2D, 3D oder geteilt. Rückgängig/Wiederholen |
-| **Energie** | Jetzt: Hausverbrauch mit offengelegter Grundlage, PV/Netz/Speicher, Energiefluss, Räume und Geräte. Verlauf: Tag/Woche/Monat, Energie (kWh) oder Leistung (W), sichtbare Messlücken, höchster Verbrauch, Räume, Zählerhierarchie. Messquellen: Zuordnung mit Einheiten-/Richtungsprüfung, Übernahme aus der HA-Energiekonfiguration |
+| **Gestalten** | Werkzeuge **Grundriss** (Rechteck, Freiform, Außenbereiche ohne Wände wie Terrasse und Garten, Türen, Fenster, Durchgänge, Deckenöffnungen, Maßeingabe, Etagen, Grundrissbild), **Einrichten** (Katalog mit 53 Modellen inkl. Whirlpool, Gartenmöbeln und PV-Modulfeld, Ziehen oder „Platzieren“, Griffe zum Drehen/Skalieren, Einrasten an Wand/Boden/Möbeloberfläche) und **Verbinden** (Geräte zuordnen mit begründeten Vorschlägen). 2D, 3D oder geteilt. Rückgängig/Wiederholen |
+| **Wetter & Tageszeit** | Himmel, Licht und Sonnenstand nach `sun.sun` (sonst aus Uhrzeit und Standort geschätzt), Wolken, Regen und Schnee nur außerhalb des Hauses, Nebel, Gewitter; Vorschau für Tageszeit und Wetter |
+| **Energie** | Modell „Außen“ mit Dach und leuchtendem PV-Modulfeld oder „Innen“; animierte Stromkabel über den Verteiler zu Geräten, Akkus (mit Ladestand) und Netz. Jetzt: Hausverbrauch mit offengelegter Grundlage, PV/Netz/Speicher, Energiefluss, Räume und Geräte. Verlauf: Tag/Woche/Monat, Energie (kWh) oder Leistung (W), sichtbare Messlücken, höchster Verbrauch, Räume, Zählerhierarchie. Analyse: Autarkie, Eigenverbrauch, Ersparnis und Einspeisevergütung (Schätzung nach eigenem Tarif), CO₂, Herkunft des Stroms je Stunde/Tag, Grundlast, Vergleich mit dem Vorzeitraum. Messquellen: Zuordnung mit Einheiten-/Richtungsprüfung, Ladestand für Akkus, Übernahme aus der HA-Energiekonfiguration |
 | **Geräte** | Verbindungsstatus, Moduswechsel Demo/Live, zugeordnete und nicht zugeordnete Geräte, Hinweise, Demo-Testwerkzeuge |
 
-## Schnellstart
+## Als Webseite nutzen (empfohlen)
+
+LumaHome läuft als normale Webseite – ohne Installation und ohne Konsole:
+**https://prodbycooooooollin-byte.github.io/Homeassitent/**
+
+1. Seite öffnen (PC, Tablet oder Handy).
+2. Adresse deiner Home-Assistant-Instanz eingeben, z. B. `https://xxxx.ui.nabu.casa`.
+3. In Home Assistant einen **langlebigen Zugriffstoken** erstellen:
+   Profil (unten links auf deinen Namen) → Reiter **Sicherheit** → ganz unten
+   **Langlebige Zugriffstoken** → **Token erstellen** → Namen „LumaHome“ →
+   Token kopieren (wird nur einmal angezeigt).
+4. Token auf der LumaHome-Seite einfügen → **Mit Home Assistant verbinden**.
+
+Der Browser verbindet sich direkt mit Home Assistant, es gibt keinen
+Zwischenserver. Der Token bleibt nur in diesem Browser (bei „Angemeldet
+bleiben“ dauerhaft, sonst bis zum Schließen des Tabs). Dein Haus wird in den
+Benutzerdaten deines Home-Assistant-Kontos gespeichert – jedes Gerät, das sich
+mit demselben Konto anmeldet, sieht dasselbe Haus.
+
+**Wichtig – https:** Die Seite läuft über https. Browser erlauben von dort aus
+keine unverschlüsselte Verbindung zu `http://homeassistant.local:8123`. Du
+brauchst eine **https-Adresse** für Home Assistant, z. B. über Home Assistant
+Cloud (Nabu Casa) oder eine eigene Domain mit Zertifikat. Die Anmeldeseite
+weist darauf hin, wenn eine http-Adresse eingegeben wird.
+
+**Veröffentlichung (einmalig, für Repository-Besitzer):** GitHub → Repository
+→ *Settings* → *Pages* → *Source*: **GitHub Actions**. Danach baut und
+veröffentlicht der Workflow `deploy-lumahome-pages.yml` die Seite bei jeder
+Änderung auf `main` automatisch.
+
+## Lokal mit eigenem Server (optional)
 
 Voraussetzung: Node.js 22 oder neuer.
 
@@ -56,8 +87,8 @@ gespeichert und nie exportiert. Siehe [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md)
 ## Tests
 
 ```bash
-npm test             # 65 Unit-Tests (Geometrie, Energie, Geräte, Projektformat, Kontraste)
-npm run test:e2e     # 11 Abnahmetests (Playwright) gegen einen simulierten Home Assistant
+npm test             # 77 Unit-Tests (Geometrie, Energie, Analyse, Sonnenstand, Wetter, Stromflüsse, Geräte, Projektformat, Kontraste)
+npm run test:e2e     # 17 Abnahmetests (Playwright): lokaler Server, Webseiten-Betrieb, Demo, Touch – gegen einen simulierten Home Assistant
 npm run perf         # Leistungsmessung mit dem Demo-Projekt (Server muss laufen)
 ```
 
