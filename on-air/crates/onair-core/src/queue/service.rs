@@ -1,0 +1,1084 @@
+//! Request-Verarbeitung: Einreichung, Moderation, Übergabestrategie, Beobachtung
+//! und Abgleich mit Spotify.
+//!
+//! Übergabestrategie (sparsam): Es liegen höchstens `handoff_ahead` Requests
+//! gleichzeitig in Spotifys Queue (Standard 1). Alles andere bleibt lokal und damit
+//! umsortierbar. Spotify erlaubt über die Web API weder Entfernen noch Umordnen
+//! bereits eingereihter Elemente.
+//!
+//! Schreibende Übergaben werden vor dem Senden als `HandingOff` gespeichert. Bei
+//! unklarem Ausgang (Timeout, 5xx, Absturz) wird abgeglichen statt wiederholt.
+
+use super::rules::{self, Rejection};
+use super::store::QueueStore;
+use super::{PendingReason, RequestStatus, Requester, SongRequest, Source, SubmitOutcome};
+use crate::activity::ActivityLog;
+use crate::clock::SharedClock;
+use crate::error::ApiError;
+use crate::events::{EventBus, Topic};
+use crate::model::{PlaybackView, Track};
+use crate::plan::{self, CurrentTrack, FitError, PlanConfig, PlanItem, PlanStatus};
+use crate::settings::{self as cfg, AcceptMode, SharedSettings};
+use crate::resolve::{Origin, Resolution, ResolveError, Resolver};
+use crate::selection::SelectionStore;
+use crate::spotify::service::SpotifyState;
+use crate::spotify::SpotifyClient;
+use serde_json::json;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
+use tokio::sync::watch;
+
+pub type SharedPlan = Arc<std::sync::RwLock<PlanConfig>>;
+
+/// Wirksames Annahme-Gate je Quelle (manuelle Pause, Quelle aus, Zeitplanung, Update …).
+pub type Gate = Arc<dyn Fn(Source) -> Result<(), Rejection> + Send + Sync>;
+
+/// Rückkanal für Chatantworten zu Requests, die verzögert entschieden werden.
+pub trait ChatNotifier: Send + Sync + 'static {
+    fn notify(&self, text: String, reply_to: Option<String>);
+}
+
+/// Ab diesem Alter wird ein übergebener, nicht erkannter Titel mit Spotifys Queue abgeglichen.
+const HANDED_OFF_CHECK_AFTER_MS: i64 = 90_000;
+/// Höchstens so oft (ohne Titelwechsel) die Spotify-Queue dafür abfragen.
+const HANDED_OFF_SWEEP_INTERVAL_MS: i64 = 60_000;
+
+pub struct QueueService {
+    pub store: QueueStore,
+    spotify: Arc<SpotifyClient>,
+    sp_state: watch::Receiver<SpotifyState>,
+    settings: SharedSettings,
+    activity: ActivityLog,
+    bus: EventBus,
+    clock: SharedClock,
+    handoff_lock: tokio::sync::Mutex<()>,
+    decide_lock: tokio::sync::Mutex<()>,
+    last_track_uri: Mutex<Option<String>>,
+    last_sweep_ms: Mutex<i64>,
+    notifier: OnceLock<Arc<dyn ChatNotifier>>,
+    gate: OnceLock<Gate>,
+    plan: SharedPlan,
+    session_started_ms: i64,
+    pub resolver: Arc<Resolver>,
+    pub selections: SelectionStore,
+    /// Serialisiert Auswahl-Vorgänge (Bestätigen, Blättern, Abbrechen, Ablauf).
+    pub(crate) select_lock: tokio::sync::Mutex<()>,
+    /// Twitch-Kanal (Broadcaster-ID), an den Auswahlen gebunden werden.
+    channel: Mutex<String>,
+    /// Erste Beobachtung nach dem Start: Doppeleintrag im Verlauf vermeiden.
+    first_observation: Mutex<bool>,
+}
+
+/// Neue Wiedergabe-Session nach so langer Zeit ohne Titelwechsel.
+pub const SESSION_GAP_MS: i64 = 3 * 3_600_000;
+
+pub(crate) enum Resolve {
+    Found(Track, Option<Origin>),
+    Offline,
+    Rejected(Rejection),
+}
+
+impl QueueService {
+    pub fn new(
+        store: QueueStore,
+        spotify: Arc<SpotifyClient>,
+        sp_state: watch::Receiver<SpotifyState>,
+        settings: SharedSettings,
+        activity: ActivityLog,
+        bus: EventBus,
+        clock: SharedClock,
+        plan: SharedPlan,
+        resolver: Arc<Resolver>,
+    ) -> Arc<Self> {
+        let now = clock.now_ms();
+        let selections = SelectionStore::new(store.db().clone());
+        Arc::new(Self {
+            resolver,
+            selections,
+            select_lock: tokio::sync::Mutex::new(()),
+            channel: Mutex::new("twitch".into()),
+            first_observation: Mutex::new(true),
+            store,
+            spotify,
+            sp_state,
+            settings,
+            activity,
+            bus,
+            clock,
+            handoff_lock: tokio::sync::Mutex::new(()),
+            decide_lock: tokio::sync::Mutex::new(()),
+            last_track_uri: Mutex::new(None),
+            last_sweep_ms: Mutex::new(0),
+            notifier: OnceLock::new(),
+            gate: OnceLock::new(),
+            plan,
+            session_started_ms: now,
+        })
+    }
+
+    pub fn set_notifier(&self, n: Arc<dyn ChatNotifier>) {
+        let _ = self.notifier.set(n);
+    }
+
+    /// Chatnachricht über den Twitch-Dienst – nur, wenn Antworten im Chat eingeschaltet sind.
+    pub fn chat(&self, text: String, reply_to: Option<String>) {
+        if text.trim().is_empty() || !cfg::read(&self.settings).commands.reply_in_chat {
+            return;
+        }
+        if let Some(n) = self.notifier.get() {
+            n.notify(text, reply_to);
+        }
+    }
+
+    pub fn set_gate(&self, g: Gate) {
+        let _ = self.gate.set(g);
+    }
+
+    /// Verbundener Twitch-Kanal (Broadcaster-ID).
+    pub fn set_channel(&self, broadcaster_id: &str) {
+        if !broadcaster_id.is_empty() {
+            *self.channel.lock().unwrap() = format!("twitch:{broadcaster_id}");
+        }
+    }
+
+    pub fn channel(&self) -> String {
+        self.channel.lock().unwrap().clone()
+    }
+
+    pub(crate) fn gate_check(&self, source: Source) -> Result<(), Rejection> {
+        match self.gate.get() {
+            Some(g) => g(source),
+            None => Ok(()),
+        }
+    }
+
+    pub(crate) fn clock_now(&self) -> i64 {
+        self.now()
+    }
+
+    pub(crate) fn activity(&self) -> &ActivityLog {
+        &self.activity
+    }
+
+    pub(crate) fn settings(&self) -> &SharedSettings {
+        &self.settings
+    }
+
+    pub(crate) fn spotify_state(&self) -> SpotifyState {
+        self.sp_state.borrow().clone()
+    }
+
+    pub(crate) fn notify_changed(&self) {
+        self.changed();
+    }
+
+    pub(crate) async fn decide_lock_guard(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.decide_lock.lock().await
+    }
+
+    pub(crate) fn first_observation_lock(&self) -> std::sync::MutexGuard<'_, bool> {
+        self.first_observation.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub(crate) fn bus_changed(&self, t: Topic) {
+        self.bus.changed(t);
+    }
+
+    pub fn plan_config(&self) -> PlanConfig {
+        self.plan.read().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// Aktueller Titel aus dem synchronisierten Zustand (keine zusätzliche Abfrage).
+    fn current_for_plan(&self) -> (Option<CurrentTrack>, bool) {
+        let st = self.sp_state.borrow().clone();
+        let now = self.now();
+        match &st.playback {
+            PlaybackView::Active(p) => {
+                let stale = !st.is_online() || now - p.fetched_at_ms > 20_000;
+                let dur = p.track.as_ref().map(|t| t.duration_ms).or(p.episode.as_ref().map(|e| e.duration_ms)).unwrap_or(0) as i64;
+                let progress = p.progress_ms as i64 + if p.is_playing { (now - p.fetched_at_ms).max(0) } else { 0 };
+                let cur = CurrentTrack {
+                    remaining_ms: if dur > 0 { (dur - progress).max(0) } else { 0 },
+                    is_playing: p.is_playing,
+                    repeat_track: p.repeat == "track",
+                    duration_known: dur > 0,
+                };
+                (Some(cur), stale)
+            }
+            PlaybackView::Idle { .. } => (None, !st.is_online()),
+            PlaybackView::Unknown => (None, true),
+        }
+    }
+
+    /// Planungsstatus; `exclude` = gerade geprüfter Request (wird nicht mitgezählt).
+    pub fn plan_status_excluding(&self, exclude: Option<&str>) -> PlanStatus {
+        let cfg = self.plan_config();
+        let now = self.now();
+        if !cfg.is_active() {
+            return PlanStatus::inactive(now);
+        }
+        let (current, unconfirmed) = self.current_for_plan();
+        let pending = self.store.pending();
+        let mut unresolved = false;
+        let items: Vec<PlanItem> = pending
+            .iter()
+            .filter(|r| Some(r.id.as_str()) != exclude)
+            .filter_map(|r| match r.status {
+                RequestStatus::Playing | RequestStatus::Received if r.track.is_none() => None,
+                RequestStatus::Playing => None,
+                RequestStatus::Uncertain => {
+                    unresolved = true;
+                    Some(PlanItem { id: r.id.clone(), duration_ms: r.track.as_ref().map(|t| t.duration_ms), reserved_only: false })
+                }
+                RequestStatus::PendingReview => Some(PlanItem { id: r.id.clone(), duration_ms: r.track.as_ref().map(|t| t.duration_ms), reserved_only: true }),
+                _ => Some(PlanItem { id: r.id.clone(), duration_ms: r.track.as_ref().map(|t| t.duration_ms), reserved_only: false }),
+            })
+            .collect();
+        plan::compute(&cfg, now, current.as_ref(), &items, &plan::Context { playback_unconfirmed: unconfirmed, unresolved_handoff: unresolved })
+    }
+
+    /// Wartet, bis keine Übergabe oder Entscheidung mehr läuft (vor einem Update).
+    pub async fn quiesce(&self) {
+        let _a = self.decide_lock.lock().await;
+        let _b = self.handoff_lock.lock().await;
+    }
+
+    pub fn plan_status(&self) -> PlanStatus {
+        self.plan_status_excluding(None)
+    }
+
+    pub(crate) fn check_plan_fit(&self, req: &SongRequest, track: &Track) -> Result<(), Rejection> {
+        if req.source == Source::App {
+            return Ok(());
+        }
+        let st = self.plan_status_excluding(Some(&req.id));
+        match plan::check_fit(&st, track.duration_ms) {
+            Ok(()) => Ok(()),
+            Err(FitError::Ended) => Err(Rejection::StreamEnded),
+            Err(FitError::TooLong { duration_ms, free_ms }) => {
+                if free_ms < plan::MIN_SLOT_MS {
+                    Err(Rejection::BudgetExhausted)
+                } else {
+                    Err(Rejection::TooLongForPlan { duration_ms, free_ms })
+                }
+            }
+        }
+    }
+
+    pub fn session_started_ms(&self) -> i64 {
+        self.session_started_ms
+    }
+
+    fn now(&self) -> i64 {
+        self.clock.now_ms()
+    }
+
+    fn changed(&self) {
+        self.bus.changed(Topic::Queue);
+    }
+
+    pub(crate) fn spotify_online(&self) -> bool {
+        self.sp_state.borrow().is_online()
+    }
+
+    // ------------------------------------------------------------------
+    // Einreichung
+    // ------------------------------------------------------------------
+
+    /// Request per Suchbegriff oder Spotify-Link (Chat oder App).
+    pub async fn submit_query(
+        &self,
+        query: &str,
+        requester: Requester,
+        source: Source,
+        event_id: Option<&str>,
+        chat_message_id: Option<&str>,
+    ) -> SubmitOutcome {
+        let now = self.now();
+        let req = SongRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            track: None,
+            query: query.trim().chars().take(200).collect(),
+            requester,
+            source,
+            source_event: event_id.map(str::to_string),
+            received_at: now,
+            status: RequestStatus::Received,
+            pending_reason: None,
+            reason: None,
+            reason_text: None,
+            position: 0.0,
+            priority: false,
+            updated_at: now,
+            handoff_at: None,
+            observed_at: None,
+            finished_at: None,
+            chat_message_id: chat_message_id.map(str::to_string),
+            redemption: None,
+            origin: None,
+            rev: 0,
+        };
+        self.submit_new(req).await
+    }
+
+    /// Request aus einer Kanalpunkte-Einlösung. Dedupliziert über die Redemption-ID.
+    pub async fn submit_redemption(&self, query: &str, requester: Requester, reward_id: &str, redemption_id: &str) -> SubmitOutcome {
+        self.submit_points(query, requester, Some(reward_id), redemption_id).await
+    }
+
+    /// Einlösung einer nicht von ON AIR angelegten Belohnung: Wunsch wird angenommen, die
+    /// Einlösung aber nicht auf Twitch abgewickelt (Twitch erlaubt das nur dem Ersteller).
+    pub async fn submit_unmanaged_redemption(&self, query: &str, requester: Requester, redemption_id: &str) -> SubmitOutcome {
+        self.submit_points(query, requester, None, redemption_id).await
+    }
+
+    async fn submit_points(&self, query: &str, requester: Requester, reward_id: Option<&str>, redemption_id: &str) -> SubmitOutcome {
+        if self.store.by_redemption(redemption_id).is_some() {
+            return SubmitOutcome::Duplicate;
+        }
+        let now = self.now();
+        let req = SongRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            track: None,
+            query: query.trim().chars().take(200).collect(),
+            requester,
+            source: Source::ChannelPoints,
+            source_event: Some(format!("cp:{redemption_id}")),
+            received_at: now,
+            status: RequestStatus::Received,
+            pending_reason: None,
+            reason: None,
+            reason_text: None,
+            position: 0.0,
+            priority: false,
+            updated_at: now,
+            handoff_at: None,
+            observed_at: None,
+            finished_at: None,
+            chat_message_id: None,
+            redemption: reward_id.map(|reward_id| super::Redemption {
+                reward_id: reward_id.into(),
+                redemption_id: redemption_id.into(),
+                status: super::RedemptionStatus::Unfulfilled,
+                target: None,
+                last_error: None,
+            }),
+            origin: None,
+            rev: 0,
+        };
+        self.submit_new(req).await
+    }
+
+    async fn submit_new(&self, req: SongRequest) -> SubmitOutcome {
+        let now = req.received_at;
+        // Ereignis-Deduplizierung und Anlage in einer Transaktion.
+        match self.store.insert_with_event(&req, "twitch", now) {
+            Ok(true) => {}
+            Ok(false) => return SubmitOutcome::Duplicate,
+            Err(e) => {
+                tracing::error!(target: "queue", error = %e, "Request konnte nicht gespeichert werden");
+                return SubmitOutcome::Rejected { code: "storage".into(), text: "interner Fehler".into(), request: None };
+            }
+        }
+
+        // Vorprüfung ohne API-Aufruf (Cooldown, Rolle, Limits).
+        if let Err(r) = self.check_requester(&req) {
+            return self.reject(&req, r);
+        }
+        self.resolve_and_decide(req, true).await
+    }
+
+    /// Auflösen (Universal Request) und – je nach Ergebnis – annehmen, Auswahl öffnen,
+    /// zurückstellen oder mit konkretem Grund ablehnen.
+    async fn resolve_and_decide(&self, req: SongRequest, fresh: bool) -> SubmitOutcome {
+        match self.resolve(&req.query).await {
+            (Resolve::Found(t, o), _) => self.decide(req, Resolve::Found(t, o), fresh).await,
+            (other, None) => self.decide(req, other, fresh).await,
+            (_, Some(choice)) => self.open_new_selection(req, choice).await,
+        }
+    }
+
+    /// Request für einen bereits ausgewählten Track (Suchergebnis in der App, Verlauf).
+    pub async fn submit_track(&self, track: Track, requester: Requester, source: Source) -> SubmitOutcome {
+        self.submit_track_with_origin(track, requester, source, None).await
+    }
+
+    /// Wie [`submit_track`](Self::submit_track), mit bekannter Herkunft (Universal Request in der App).
+    pub async fn submit_track_with_origin(&self, track: Track, requester: Requester, source: Source, origin: Option<Origin>) -> SubmitOutcome {
+        let now = self.now();
+        let req = SongRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            query: track.uri.clone(),
+            track: None,
+            requester,
+            source,
+            source_event: None,
+            received_at: now,
+            status: RequestStatus::Received,
+            pending_reason: None,
+            reason: None,
+            reason_text: None,
+            position: 0.0,
+            priority: false,
+            updated_at: now,
+            handoff_at: None,
+            observed_at: None,
+            finished_at: None,
+            chat_message_id: None,
+            redemption: None,
+            origin: None,
+            rev: 0,
+        };
+        if let Err(e) = self.store.insert(&req) {
+            return SubmitOutcome::Rejected { code: "storage".into(), text: e, request: None };
+        }
+        if let Err(r) = self.check_requester(&req) {
+            return self.reject(&req, r);
+        }
+        self.decide(req, Resolve::Found(track, origin), true).await
+    }
+
+    fn check_requester(&self, req: &SongRequest) -> Result<(), Rejection> {
+        let rules = cfg::read(&self.settings).requests.clone();
+        if req.source != Source::App {
+            match self.gate.get() {
+                Some(g) => g(req.source)?,
+                // Ohne Runtime (Tests): nur die manuelle Pause berücksichtigen.
+                None if !rules.open && req.requester.role != crate::settings::Role::Broadcaster => return Err(Rejection::Closed),
+                None => {}
+            }
+        }
+        let stats = self.store.stats(&req.requester.id, None, &req.id);
+        rules::check_requester(
+            &rules,
+            &self.store.blocklist(),
+            &req.requester.id,
+            &req.requester.name,
+            req.requester.role,
+            &stats,
+            req.received_at,
+            req.source == Source::ChannelPoints,
+        )
+    }
+
+    /// Liefert entweder ein Ergebnis für `decide` oder eine Auswahl (Version/Playlist).
+    pub(crate) async fn resolve(&self, query: &str) -> (Resolve, Option<Resolution>) {
+        if query.trim().is_empty() {
+            return (Resolve::Rejected(Rejection::NotFound), None);
+        }
+        if !self.spotify_online() {
+            return (Resolve::Offline, None);
+        }
+        match self.resolver.resolve(query).await {
+            Resolution::Track { track, origin } => (Resolve::Found(track, Some(origin)), None),
+            r @ (Resolution::Versions { .. } | Resolution::Collection { .. }) => (Resolve::Offline, Some(r)),
+            Resolution::Failed { error: ResolveError::SpotifyOffline } => (Resolve::Offline, None),
+            Resolution::Failed { error: ResolveError::NotFound } => (Resolve::Rejected(Rejection::NotFound), None),
+            Resolution::Failed { error } => (Resolve::Rejected(Rejection::Resolve { error }), None),
+        }
+    }
+
+    /// Gemeinsame Regelprüfung für Vorprüfung und endgültige Annahme (keine Schreibzugriffe).
+    /// Liefert, ob eine Moderationsfreigabe nötig ist. `final_check`: unter Sperre bei der
+    /// Annahme – Cooldowns zählen dann nur früher eingegangene Wünsche.
+    pub(crate) fn evaluate(&self, req: &SongRequest, track: &Track, check_gate: bool, final_check: bool) -> Result<bool, Rejection> {
+        if check_gate && req.source != Source::App {
+            self.gate_check(req.source)?;
+        }
+        let rules = cfg::read(&self.settings).requests.clone();
+        let block = self.store.blocklist();
+        let before = final_check.then_some((req.received_at, req.id.as_str()));
+        let stats = self.store.stats_before(&req.requester.id, Some(&track.uri), &req.id, before);
+        let now = if final_check { req.received_at } else { self.now() };
+        rules::check_requester(&rules, &block, &req.requester.id, &req.requester.name, req.requester.role, &stats, now, req.source == Source::ChannelPoints)?;
+        rules::check_track(&rules, &block, track, req.requester.role, &stats)?;
+        self.check_plan_fit(req, track)?;
+        let mode = if req.source == Source::ChannelPoints { cfg::read(&self.settings).channel_points.mode } else { rules.mode };
+        Ok(mode == AcceptMode::Moderation && req.requester.role != crate::settings::Role::Broadcaster)
+    }
+
+    /// Endgültige Prüfung unter Sperre (verhindert, dass parallele Requests Limits umgehen).
+    pub(crate) async fn decide(&self, req: SongRequest, resolved: Resolve, fresh: bool) -> SubmitOutcome {
+        let _g = self.decide_lock.lock().await;
+        let now = self.now();
+        let from = RequestStatus::parse(
+            self.store.get(&req.id).map(|r| r.status.as_str()).unwrap_or("received"),
+        );
+        let track = match resolved {
+            Resolve::Rejected(r) => return self.reject(&req, r),
+            Resolve::Offline => {
+                let _ = self.store.transition(&req.id, &[from], RequestStatus::PendingReview, now, None);
+                let _ = self.set_pending_reason(&req.id, PendingReason::Offline);
+                self.activity.warn(
+                    "request.pending_offline",
+                    format!("Request von {} gespeichert – Prüfung, sobald Spotify erreichbar ist", req.requester.name),
+                    json!({ "user": req.requester.name, "query": req.query }),
+                );
+                self.changed();
+                let r = self.store.get(&req.id).unwrap_or(req);
+                return SubmitOutcome::PendingOffline { request: r };
+            }
+            Resolve::Found(t, o) => {
+                let _ = self.store.set_origin(&req.id, o.as_ref());
+                t
+            }
+        };
+        // Alle Regeln erneut unter der Annahmesperre: Limits, Duplikate und Zeitbudget können
+        // von gleichzeitigen Wünschen nicht umgangen werden (keine doppelte Reservierung).
+        let moderated = match self.evaluate(&req, &track, fresh, true) {
+            Ok(m) => m,
+            Err(r) => {
+                let _ = self.store.set_track_and_status(&req.id, &track, from, from, None, now);
+                return self.reject(&req, r);
+            }
+        };
+        let rules = cfg::read(&self.settings).requests.clone();
+        let position = self.insertion_position(&req.requester.id, rules.fair_order);
+        let _ = self.store.set_position(&req.id, position, now);
+        let (to, pending) = if moderated {
+            (RequestStatus::PendingReview, Some(PendingReason::Moderation))
+        } else {
+            (RequestStatus::Accepted, None)
+        };
+        let _ = self.store.set_track_and_status(&req.id, &track, from, to, pending, now);
+        let stored = self.store.get(&req.id).unwrap_or(req);
+        self.changed();
+        if moderated {
+            self.activity.info(
+                "request.pending_review",
+                format!("{} wünscht „{}“ – Freigabe ausstehend", stored.requester.name, track.title),
+                json!({ "user": stored.requester.name, "title": track.title, "artist": track.artist_line() }),
+            );
+            SubmitOutcome::PendingReview { request: stored }
+        } else {
+            let pos = self.display_position(&stored.id);
+            self.activity.success(
+                "request.accepted",
+                format!("Request angenommen: „{}“ von {} (für {})", track.title, track.artist_line(), stored.requester.name),
+                json!({ "user": stored.requester.name, "title": track.title, "artist": track.artist_line(), "position": pos }),
+            );
+            SubmitOutcome::Accepted { request: stored, position: pos }
+        }
+    }
+
+    fn set_pending_reason(&self, id: &str, r: PendingReason) -> Result<(), String> {
+        let v = match r {
+            PendingReason::Moderation => "moderation",
+            PendingReason::Offline => "offline",
+        };
+        self.store
+            .db()
+            .conn()
+            .execute("UPDATE requests SET pending_reason = ?2 WHERE id = ?1", rusqlite::params![id, v])
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    fn reject(&self, req: &SongRequest, r: Rejection) -> SubmitOutcome {
+        let now = self.now();
+        let cur = self.store.get(&req.id).map(|x| x.status).unwrap_or(RequestStatus::Received);
+        let _ = self.store.transition(&req.id, &[cur], RequestStatus::Rejected, now, Some((r.code(), &r.text())));
+        self.activity.info(
+            "request.rejected",
+            format!("Request von {} abgelehnt: {}", req.requester.name, r.text()),
+            json!({ "user": req.requester.name, "code": r.code(), "query": req.query }),
+        );
+        self.changed();
+        SubmitOutcome::Rejected { code: r.code().into(), text: r.text(), request: self.store.get(&req.id) }
+    }
+
+    /// Faire Reihenfolge: Ein neuer Request wird vor dem ersten Eintrag einsortiert,
+    /// dessen Anfragender bereits mehr offene Requests hat als der neue.
+    fn insertion_position(&self, requester_id: &str, fair: bool) -> f64 {
+        let end = self.store.max_position() + 1.0;
+        if !fair {
+            return end;
+        }
+        let movable: Vec<SongRequest> = self
+            .store
+            .pending()
+            .into_iter()
+            .filter(|r| r.status.is_movable() && !r.priority)
+            .collect();
+        let mine = movable.iter().filter(|r| r.requester.id == requester_id).count();
+        let mut seen: HashMap<&str, usize> = HashMap::new();
+        let mut prev: Option<f64> = None;
+        for r in &movable {
+            let rank = seen.entry(r.requester.id.as_str()).or_insert(0);
+            if *rank > mine {
+                return match prev {
+                    Some(p) => (p + r.position) / 2.0,
+                    None => r.position - 1.0,
+                };
+            }
+            *rank += 1;
+            prev = Some(r.position);
+        }
+        end
+    }
+
+    /// 1-basierte Position unter den noch nicht gespielten Requests.
+    pub fn display_position(&self, id: &str) -> usize {
+        self.store
+            .pending()
+            .iter()
+            .filter(|r| r.status != RequestStatus::Playing)
+            .position(|r| r.id == id)
+            .map(|p| p + 1)
+            .unwrap_or(0)
+    }
+
+    // ------------------------------------------------------------------
+    // Moderation und manuelle Bearbeitung
+    // ------------------------------------------------------------------
+
+    pub async fn approve(&self, id: &str) -> Result<(), String> {
+        let r = self.store.get(id).ok_or("Request nicht gefunden")?;
+        if r.pending_reason == Some(PendingReason::Offline) || r.track.is_none() {
+            return Err("Dieser Request wird erst geprüft, wenn Spotify erreichbar ist.".into());
+        }
+        if let Some(t) = &r.track {
+            if let Err(rej) = self.check_plan_fit(&r, t) {
+                return Err(format!("Passt nicht mehr ins Zeitbudget: {}", rej.text()));
+            }
+        }
+        if !self.store.transition(id, &[RequestStatus::PendingReview], RequestStatus::Accepted, self.now(), None)? {
+            return Err("Request ist nicht mehr in Prüfung.".into());
+        }
+        self.activity.success(
+            "request.approved",
+            format!("Freigegeben: „{}“ für {}", r.track.as_ref().map(|t| t.title.as_str()).unwrap_or(""), r.requester.name),
+            json!({ "user": r.requester.name }),
+        );
+        self.changed();
+        self.maybe_handoff().await;
+        Ok(())
+    }
+
+    pub fn reject_manual(&self, id: &str, code: &str) -> Result<(), String> {
+        let r = self.store.get(id).ok_or("Request nicht gefunden")?;
+        let text = match code {
+            "removed_by_streamer" => "vom Streamer entfernt",
+            "removed_by_user" => "selbst entfernt",
+            "canceled_on_twitch" => "auf Twitch storniert",
+            _ => "abgelehnt",
+        };
+        if !self.store.transition(
+            id,
+            &[RequestStatus::Received, RequestStatus::AwaitingSelection, RequestStatus::PendingReview, RequestStatus::Accepted],
+            RequestStatus::Rejected,
+            self.now(),
+            Some((code, text)),
+        )? {
+            return Err("Nur noch nicht übergebene Requests können entfernt werden.".into());
+        }
+        if let Some(sel) = self.selections.for_request(id) {
+            let _ = self.selections.finish(&sel.id, "canceled", self.now());
+        }
+        self.activity.info(
+            "request.removed",
+            format!("Request von {} entfernt", r.requester.name),
+            json!({ "user": r.requester.name, "code": code }),
+        );
+        self.changed();
+        Ok(())
+    }
+
+    /// Verschiebt einen lokalen Request an `index` innerhalb der umsortierbaren Einträge.
+    pub fn move_to(&self, id: &str, index: usize) -> Result<(), String> {
+        let movable: Vec<SongRequest> = self.store.pending().into_iter().filter(|r| r.status.is_movable()).collect();
+        let me = movable.iter().find(|r| r.id == id).ok_or("Nur noch nicht übergebene Requests sind verschiebbar.")?;
+        let others: Vec<&SongRequest> = movable.iter().filter(|r| r.id != id && r.priority == me.priority).collect();
+        let idx = index.min(others.len());
+        let pos = match (idx.checked_sub(1).and_then(|i| others.get(i)), others.get(idx)) {
+            (None, None) => me.position,
+            (None, Some(n)) => n.position - 1.0,
+            (Some(p), None) => p.position + 1.0,
+            (Some(p), Some(n)) => (p.position + n.position) / 2.0,
+        };
+        self.store.set_position(id, pos, self.now())?;
+        self.changed();
+        Ok(())
+    }
+
+    pub fn set_priority(&self, id: &str, priority: bool) -> Result<(), String> {
+        let r = self.store.get(id).ok_or("Request nicht gefunden")?;
+        if !r.status.is_movable() {
+            return Err("Bereits an Spotify übergeben.".into());
+        }
+        self.store.set_priority(id, priority, self.now())?;
+        self.changed();
+        Ok(())
+    }
+
+    /// Entscheidung bei unklarem Ausgang: erneut übergeben.
+    pub async fn retry(&self, id: &str) -> Result<(), String> {
+        if !self.store.transition(id, &[RequestStatus::Uncertain, RequestStatus::Failed], RequestStatus::Accepted, self.now(), None)? {
+            return Err("Request ist nicht in einem wiederholbaren Zustand.".into());
+        }
+        self.activity.info("request.retry", "Request wird erneut übergeben", json!({ "id": id }));
+        self.changed();
+        self.maybe_handoff().await;
+        Ok(())
+    }
+
+    /// Als erledigt betrachten (nicht erneut senden): bei unklarem Ausgang, und für Einträge,
+    /// die an Spotify übergeben sind bzw. laufen, aber hängen geblieben sind.
+    pub fn dismiss(&self, id: &str) -> Result<(), String> {
+        let from = [RequestStatus::Uncertain, RequestStatus::HandedOff, RequestStatus::Playing];
+        if !self.store.transition(id, &from, RequestStatus::Completed, self.now(), Some(("dismissed", "manuell abgeschlossen")))? {
+            return Err("Request kann nicht als erledigt markiert werden.".into());
+        }
+        self.changed();
+        Ok(())
+    }
+
+    /// `!remove`: jüngster eigener, noch nicht übergebener Request.
+    pub fn remove_own(&self, requester_id: &str) -> Option<SongRequest> {
+        let mine = self
+            .store
+            .pending()
+            .into_iter()
+            .filter(|r| r.requester.id == requester_id && r.status.is_movable())
+            .max_by_key(|r| r.received_at)?;
+        self.reject_manual(&mine.id, "removed_by_user").ok()?;
+        Some(mine)
+    }
+
+    // ------------------------------------------------------------------
+    // Übergabe an Spotify
+    // ------------------------------------------------------------------
+
+    pub async fn maybe_handoff(&self) {
+        let _g = self.handoff_lock.lock().await;
+        loop {
+            let st = self.sp_state.borrow().clone();
+            if !st.is_online() {
+                return;
+            }
+            let PlaybackView::Active(pb) = &st.playback else { return };
+            let Some(device) = &pb.device else { return };
+            if device.is_restricted {
+                return;
+            }
+            // Nie auf Basis alter Daten handeln (z. B. nach Standby).
+            if self.now() - pb.fetched_at_ms > 15_000 {
+                return;
+            }
+            let ahead = cfg::read(&self.settings).requests.handoff_ahead as usize;
+            let in_flight = self.store.by_status(RequestStatus::HandedOff).len()
+                + self.store.by_status(RequestStatus::HandingOff).len();
+            if in_flight >= ahead {
+                return;
+            }
+            let Some(next) = self.store.by_status(RequestStatus::Accepted).into_iter().find(|r| r.track.is_some()) else {
+                return;
+            };
+            let now = self.now();
+            match self.store.transition(&next.id, &[RequestStatus::Accepted], RequestStatus::HandingOff, now, None) {
+                Ok(true) => {}
+                _ => continue,
+            }
+            // Erst nach dem Statuswechsel lesen: Ein gleichzeitiger Austausch ist ab jetzt
+            // ausgeschlossen, und es wird garantiert der aktuelle Song übergeben.
+            let Some(track) = self.store.get(&next.id).and_then(|r| r.track) else { continue };
+            self.changed();
+            let result = self.spotify.add_to_queue(&track.uri, device.id.as_deref()).await;
+            let now = self.now();
+            match result {
+                Ok(()) => {
+                    let _ = self.store.transition(&next.id, &[RequestStatus::HandingOff], RequestStatus::HandedOff, now, None);
+                    self.activity.success(
+                        "request.handed_off",
+                        format!("„{}“ an Spotify übergeben", track.title),
+                        json!({ "title": track.title, "user": next.requester.name }),
+                    );
+                    self.changed();
+                }
+                Err(e) if e.is_ambiguous_write() => {
+                    let _ = self.store.transition(
+                        &next.id,
+                        &[RequestStatus::HandingOff],
+                        RequestStatus::Uncertain,
+                        now,
+                        Some(("handoff_unclear", "Antwort von Spotify fehlt")),
+                    );
+                    self.activity.warn(
+                        "request.uncertain",
+                        format!("Übergabe von „{}“ unklar – wird abgeglichen, nicht wiederholt", track.title),
+                        json!({ "title": track.title, "code": e.code() }),
+                    );
+                    self.changed();
+                    return;
+                }
+                Err(e @ (ApiError::BadRequest { .. } | ApiError::NotFound | ApiError::Decode { .. })) => {
+                    let _ = self.store.transition(
+                        &next.id,
+                        &[RequestStatus::HandingOff],
+                        RequestStatus::Failed,
+                        now,
+                        Some(("handoff_failed", &e.to_string())),
+                    );
+                    self.activity.error(
+                        "request.failed",
+                        format!("„{}“ konnte nicht übergeben werden", track.title),
+                        json!({ "title": track.title, "code": e.code() }),
+                    );
+                    self.changed();
+                }
+                Err(e) => {
+                    // Vom Server abgelehnt oder nicht gesendet: sicher zurück in die lokale Queue.
+                    let _ = self.store.transition(&next.id, &[RequestStatus::HandingOff], RequestStatus::Accepted, now, None);
+                    tracing::info!(target: "queue", code = e.code(), "Übergabe zurückgestellt");
+                    if matches!(e, ApiError::NoActiveDevice) {
+                        self.activity.warn("spotify.no_device", "Kein aktives Spotify-Gerät – Übergabe wartet", json!({}));
+                    }
+                    self.changed();
+                    return;
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Beobachtung und Abgleich
+    // ------------------------------------------------------------------
+
+    /// Verarbeitet einen neuen bestätigten Wiedergabezustand.
+    pub async fn on_spotify_state(&self, st: &SpotifyState) {
+        if !st.is_online() {
+            return;
+        }
+        let now = self.now();
+        let current = match &st.playback {
+            PlaybackView::Active(pb) => pb.track.clone(),
+            _ => None,
+        };
+        let current_uri = current.as_ref().map(|t| t.uri.clone());
+        let track_changed = {
+            let mut last = self.last_track_uri.lock().unwrap();
+            let changed = *last != current_uri;
+            *last = current_uri.clone();
+            changed
+        };
+        let mut dirty = false;
+
+        // Laufende Requests abschließen, wenn ein anderer Titel läuft.
+        for r in self.store.by_status(RequestStatus::Playing) {
+            if r.track.as_ref().map(|t| Some(&t.uri) != current_uri.as_ref()).unwrap_or(true) {
+                dirty |= self.store.transition(&r.id, &[RequestStatus::Playing], RequestStatus::Completed, now, None).unwrap_or(false);
+            }
+        }
+
+        let mut matched: Option<SongRequest> = None;
+        if let Some(uri) = &current_uri {
+            let mut handed: Vec<SongRequest> = self
+                .store
+                .pending()
+                .into_iter()
+                .filter(|r| matches!(r.status, RequestStatus::HandedOff | RequestStatus::Uncertain))
+                .collect();
+            handed.sort_by_key(|r| r.handoff_at.unwrap_or(i64::MAX));
+            if let Some(idx) = handed.iter().position(|r| r.track.as_ref().map(|t| &t.uri) == Some(uri)) {
+                let hit = handed[idx].clone();
+                if self
+                    .store
+                    .transition(&hit.id, &[RequestStatus::HandedOff, RequestStatus::Uncertain], RequestStatus::Playing, now, None)
+                    .unwrap_or(false)
+                {
+                    self.activity.info(
+                        "request.playing",
+                        format!("Läuft: „{}“ (Wunsch von {})", hit.track.as_ref().map(|t| t.title.as_str()).unwrap_or(""), hit.requester.name),
+                        json!({ "user": hit.requester.name }),
+                    );
+                    dirty = true;
+                }
+                // Spotify spielt die Queue in Reihenfolge: früher übergebene sind vorbei.
+                for older in handed[..idx].iter().filter(|r| r.status == RequestStatus::HandedOff) {
+                    dirty |= self
+                        .store
+                        .transition(&older.id, &[RequestStatus::HandedOff], RequestStatus::Completed, now, Some(("not_observed", "Wiedergabe nicht beobachtet")))
+                        .unwrap_or(false);
+                }
+                matched = Some(hit);
+            }
+        }
+
+        if track_changed {
+            if let Some(t) = &current {
+                self.record_play(t, now, matched.as_ref());
+            }
+        }
+        if dirty {
+            self.changed();
+        }
+        self.process_offline_pending().await;
+        self.reconcile().await;
+        self.sweep_handed_off(track_changed, current_uri.as_deref()).await;
+        self.maybe_handoff().await;
+    }
+
+    /// Übergebene Wünsche, die nie als laufend erkannt wurden (z. B. übersprungen, bevor ON AIR
+    /// nachsah, Spotify-Queue geleert, Titel nicht verfügbar), blockieren sonst dauerhaft die
+    /// nächste Übergabe. Liegen sie nicht mehr in Spotifys Queue, gelten sie als erledigt.
+    async fn sweep_handed_off(&self, track_changed: bool, current_uri: Option<&str>) {
+        let now = self.now();
+        let stale: Vec<SongRequest> = self
+            .store
+            .by_status(RequestStatus::HandedOff)
+            .into_iter()
+            .filter(|r| now - r.handoff_at.unwrap_or(now) >= HANDED_OFF_CHECK_AFTER_MS)
+            .filter(|r| r.track.as_ref().map(|t| t.uri.as_str()) != current_uri)
+            .collect();
+        if stale.is_empty() {
+            return;
+        }
+        {
+            let mut last = self.last_sweep_ms.lock().unwrap();
+            if !track_changed && now - *last < HANDED_OFF_SWEEP_INTERVAL_MS {
+                return;
+            }
+            *last = now;
+        }
+        let q = match self.spotify.queue().await {
+            Ok(q) => q,
+            Err(e) => {
+                tracing::info!(target: "queue", code = e.code(), "Prüfung übergebener Titel verschoben");
+                return;
+            }
+        };
+        let playing = q.currently_playing.as_ref().map(|t| t.uri.clone());
+        let mut dirty = false;
+        for r in stale {
+            let Some(uri) = r.track.as_ref().map(|t| t.uri.clone()) else { continue };
+            if playing.as_deref() == Some(uri.as_str()) || q.uris.contains(&uri) {
+                continue;
+            }
+            if self
+                .store
+                .transition(&r.id, &[RequestStatus::HandedOff], RequestStatus::Completed, now, Some(("not_observed", "Wiedergabe nicht beobachtet")))
+                .unwrap_or(false)
+            {
+                dirty = true;
+                self.activity.warn(
+                    "request.not_observed",
+                    format!("„{}“ liegt nicht mehr in der Spotify-Queue und wurde nicht als laufend erkannt – als erledigt markiert", r.track.as_ref().map(|t| t.title.as_str()).unwrap_or("")),
+                    json!({ "id": r.id, "user": r.requester.name }),
+                );
+            }
+        }
+        if dirty {
+            self.changed();
+        }
+    }
+
+    /// Unklare Übergaben mit Spotifys Queue abgleichen. Nie blind erneut senden.
+    pub async fn reconcile(&self) {
+        let candidates: Vec<SongRequest> = self
+            .store
+            .by_status(RequestStatus::Uncertain)
+            .into_iter()
+            .filter(|r| matches!(r.reason.as_deref(), Some("handoff_unclear") | Some("crash_recovery")))
+            .collect();
+        if candidates.is_empty() || !self.spotify_online() {
+            return;
+        }
+        let q = match self.spotify.queue().await {
+            Ok(q) => q,
+            Err(e) => {
+                tracing::info!(target: "queue", code = e.code(), "Abgleich verschoben");
+                return;
+            }
+        };
+        let now = self.now();
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for u in &q.uris {
+            *counts.entry(u.as_str()).or_insert(0) += 1;
+        }
+        let playing = q.currently_playing.as_ref().map(|t| t.uri.clone());
+        for r in candidates {
+            let Some(uri) = r.track.as_ref().map(|t| t.uri.as_str()) else { continue };
+            if playing.as_deref() == Some(uri) {
+                let _ = self.store.transition(&r.id, &[RequestStatus::Uncertain], RequestStatus::Playing, now, None);
+            } else if let Some(c) = counts.get_mut(uri).filter(|c| **c > 0) {
+                *c -= 1;
+                let _ = self.store.transition(&r.id, &[RequestStatus::Uncertain], RequestStatus::HandedOff, now, None);
+                self.activity.success("request.reconciled", "Unklare Übergabe bestätigt: Titel liegt in der Spotify-Queue", json!({ "id": r.id }));
+            } else {
+                let _ = self.store.transition(
+                    &r.id,
+                    &[RequestStatus::Uncertain],
+                    RequestStatus::Uncertain,
+                    now,
+                    Some(("not_in_spotify_queue", "Nicht in der Spotify-Queue gefunden – bitte entscheiden")),
+                );
+                self.activity.warn(
+                    "request.needs_decision",
+                    "Übergabe nicht bestätigbar – bitte „Erneut übergeben“ oder „Erledigt“ wählen",
+                    json!({ "id": r.id }),
+                );
+            }
+        }
+        self.changed();
+    }
+
+    /// Requests, die offline eingingen, jetzt prüfen.
+    async fn process_offline_pending(&self) {
+        let items: Vec<SongRequest> = self
+            .store
+            .by_status(RequestStatus::PendingReview)
+            .into_iter()
+            .filter(|r| r.pending_reason == Some(PendingReason::Offline))
+            .collect();
+        for r in items {
+            if !self.spotify_online() {
+                return;
+            }
+            let (resolved, choice) = self.resolve(&r.query).await;
+            if matches!(resolved, Resolve::Offline) && choice.is_none() {
+                return;
+            }
+            let reply_to = r.chat_message_id.clone();
+            let outcome = match choice {
+                Some(c) => self.open_new_selection(r, c).await,
+                None => self.decide(r, resolved, false).await,
+            };
+            if let Some(text) = super::super::twitch::commands::reply_for_outcome(&cfg::read(&self.settings).commands.replies, &outcome) {
+                self.chat(text, reply_to);
+            }
+        }
+    }
+
+    /// Nach App-Start: Zwischenzustände eines Absturzes auflösen.
+    pub async fn recover_after_start(&self) {
+        let now = self.now();
+        let mut n = 0;
+        for r in self.store.by_status(RequestStatus::HandingOff) {
+            // Unklar, ob Spotify die Anfrage noch erhalten hat – abgleichen statt senden.
+            if self
+                .store
+                .transition(&r.id, &[RequestStatus::HandingOff], RequestStatus::Uncertain, now, Some(("crash_recovery", "Übergabe beim Beenden unterbrochen")))
+                .unwrap_or(false)
+            {
+                n += 1;
+            }
+        }
+        for r in self.store.by_status(RequestStatus::Received) {
+            // Vor dem Absturz nicht fertig geprüft: als „Prüfung ausstehend“ neu einplanen.
+            let _ = self.store.transition(&r.id, &[RequestStatus::Received], RequestStatus::PendingReview, now, None);
+            let _ = self.set_pending_reason(&r.id, PendingReason::Offline);
+        }
+        if n > 0 {
+            self.activity.warn(
+                "queue.recovered",
+                format!("{n} Übergabe(n) wurden unterbrochen und werden mit Spotify abgeglichen"),
+                json!({ "count": n }),
+            );
+        }
+        self.changed();
+    }
+
+    pub fn session_summary(&self) -> HashMap<String, i64> {
+        self.store.session_counts(self.session_started_ms).into_iter().collect()
+    }
+}

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ON AIR Setup</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body data-step="intro">
+    <!-- Klangwellen (Canvas) und Licht – die Bühne des Installers -->
+    <canvas id="waves" aria-hidden="true"></canvas>
+    <div class="glow" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <header class="titlebar" data-tauri-drag-region>
+      <div class="tb-brand" data-tauri-drag-region>
+        <svg class="tb-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8a5.6 5.6 0 0 0 0 8M16 8a5.6 5.6 0 0 1 0 8M5.2 5.2a9.6 9.6 0 0 0 0 13.6M18.8 5.2a9.6 9.6 0 0 1 0 13.6" /><circle cx="12" cy="12" r="1.7" /></svg>
+        <span data-tauri-drag-region>ON AIR</span>
+        <span class="tb-sub" id="tb-version" data-tauri-drag-region></span>
+      </div>
+      <div class="tb-actions">
+        <button class="tb-btn" id="btn-min" aria-label="Minimieren" title="Minimieren"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" /></svg></button>
+        <button class="tb-btn close" id="btn-close" aria-label="Schließen" title="Schließen"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" /></svg></button>
+      </div>
+    </header>
+
+    <main class="scene">
+      <!-- Intro: großes Wortzeichen, dann gleitet die Bühne auf -->
+      <section class="step intro" data-show="intro" aria-hidden="true">
+        <div class="intro-mark">
+          <svg viewBox="0 0 24 24"><path d="M8 8a5.6 5.6 0 0 0 0 8M16 8a5.6 5.6 0 0 1 0 8M5.2 5.2a9.6 9.6 0 0 0 0 13.6M18.8 5.2a9.6 9.6 0 0 1 0 13.6" /><circle cx="12" cy="12" r="1.7" /></svg>
+        </div>
+        <h1 class="intro-word">ON AIR</h1>
+        <p class="intro-line">Musik &amp; Songwünsche für deinen Stream</p>
+      </section>
+
+      <!-- Willkommen -->
+      <section class="step welcome" data-show="welcome">
+        <div class="w-left">
+          <span class="kicker" id="kicker">Willkommen</span>
+          <h1 class="display" id="welcome-title">Dein Stream.<br /><em>Deine Musik.</em></h1>
+          <p class="lead" id="welcome-sub">Now Playing aus Spotify, Songwünsche aus Chat und Kanalpunkten, OBS-Overlays – eingerichtet in Sekunden.</p>
+          <div class="note warn" id="running-note" hidden>ON AIR läuft gerade und wird für die Installation kurz beendet.</div>
+          <div class="note error" id="payload-note" hidden>Diesem Build fehlt das Installationspaket. Bitte den Installer aus dem Release verwenden.</div>
+          <div class="cta">
+            <button class="primary" id="btn-install">
+              <span id="install-label">Installieren</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+            </button>
+            <button class="link" id="btn-options" aria-expanded="false" aria-controls="options">Optionen</button>
+          </div>
+          <div class="options" id="options" hidden>
+            <label class="opt"><input type="checkbox" id="opt-desktop" checked /><span class="switch" aria-hidden="true"></span><span>Desktop-Verknüpfung anlegen</span></label>
+            <label class="opt"><input type="checkbox" id="opt-launch" checked /><span class="switch" aria-hidden="true"></span><span>ON AIR danach starten</span></label>
+          </div>
+          <p class="fine">Keine Administratorrechte nötig · Updates kommen automatisch · jederzeit über Windows deinstallierbar</p>
+        </div>
+        <ul class="w-right" aria-label="Das kann ON AIR">
+          <li style="--i: 0"><span class="n">01</span><b>Jetzt läuft</b><small>Titel, Cover und Fortschritt – stabil, auch bei wackeligem Netz</small></li>
+          <li style="--i: 1"><span class="n">02</span><b>Songwünsche</b><small>per <code>!sr</code> im Chat und mit Kanalpunkten</small></li>
+          <li style="--i: 2"><span class="n">03</span><b>OBS-Overlays</b><small>Widgets und Dock, lokal und ohne Zugangsdaten</small></li>
+          <li style="--i: 3"><span class="n">04</span><b>Immer aktuell</b><small>Updates im Hintergrund – nie während du live bist</small></li>
+        </ul>
+      </section>
+
+      <!-- Installation -->
+      <section class="step installing" data-show="installing">
+        <span class="kicker" id="phase-title">Wird vorbereitet …</span>
+        <div class="big-pct" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="pct-wrap"><span id="pct">0</span><small>%</small></div>
+        <div class="tour" aria-live="polite">
+          <div class="tour-card" id="tour-card"><b id="tour-title">Songwünsche aus dem Chat</b><span id="tour-text">Zuschauer wünschen sich Songs mit !sr – ON AIR prüft, sortiert und übergibt an Spotify.</span></div>
+        </div>
+        <div class="bar" aria-hidden="true"><i id="bar-fill"></i></div>
+      </section>
+
+      <!-- Fertig -->
+      <section class="step done" data-show="done">
+        <div class="onair-sign" aria-hidden="true"><span class="dot"></span>ON AIR</div>
+        <h1 class="display">Du bist <em>ON AIR.</em></h1>
+        <p class="lead" id="done-sub">Alles eingerichtet. Viel Spaß beim Streamen.</p>
+        <div class="cta">
+          <button class="primary" id="btn-launch">ON AIR starten<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
+          <button class="link" id="btn-finish">Schließen</button>
+        </div>
+      </section>
+
+      <!-- Fehler -->
+      <section class="step error" data-show="error">
+        <span class="kicker warn">Installation unterbrochen</span>
+        <h1 class="display small">Das hat nicht geklappt.</h1>
+        <p class="lead" id="error-text">Unbekannter Fehler.</p>
+        <div class="cta">
+          <button class="primary" id="btn-retry">Erneut versuchen</button>
+          <button class="link" id="btn-classic">Klassischen Installer öffnen</button>
+        </div>
+      </section>
+    </main>
+
+    <button class="skip" id="btn-skip" aria-label="Intro überspringen">Überspringen</button>
+    <script src="app.js"></script>
+  </body>
+</html>
