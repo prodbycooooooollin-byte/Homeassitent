@@ -1,0 +1,38 @@
+{
+  "key": "Zed", "name": "Zed", "profileVersion": "1.0.0",
+  "authoredAgainst": "Wissensstand Patch 25.x", "reviewStatus": "fachlich nicht validiert",
+  "supportLevel": "supported", "cls": "assassin", "ranged": false, "attackRange": 125, "resource": "energy",
+  "base": { "hp": 654, "hpg": 99, "ar": 32, "arg": 4.7, "mr": 32, "mrg": 2.05, "ad": 63, "adg": 3.4, "as": 0.651, "asg": 0.033, "asRatio": 0.651 },
+  "skillOrder": ["Q", "E", "W"],
+  "abilities": {
+    "P": { "name": "Contempt for the Weak", "damageType": "magic", "targetMaxHpPctByLevel": [0.06,0.06,0.06,0.06,0.06,0.06,0.08,0.08,0.08,0.08,0.08,0.08,0.08,0.08,0.08,0.08,0.1,0.1], "maxRank": 1, "note": "Nur gegen Ziele unter 50 % Leben; einmal je Combo angenommen." },
+    "Q": { "name": "Razor Shuriken", "damageType": "physical", "base": [80, 115, 150, 185, 220], "bonusAdRatio": 1.1, "cooldown": [6, 5.5, 5, 4.5, 4], "maxRank": 5, "triggersSpellblade": true },
+    "E": { "name": "Shadow Slash", "damageType": "physical", "base": [65, 85, 105, 125, 145], "bonusAdRatio": 0.65, "cooldown": [5, 4.5, 4, 3.5, 3], "maxRank": 5 },
+    "R": { "name": "Death Mark", "damageType": "physical", "base": [0, 0, 0], "adRatio": 1.0, "markPct": [0.25, 0.4, 0.55], "cooldown": [120, 100, 80], "maxRank": 3 }
+  },
+  "coverage": {
+    "modeled": ["Combo Q (mit Schattentreffer), E, R-Markierung, Passiv", "Lethalität und prozentuale Durchdringung", "Energie ohne Manabedarf"],
+    "unmodeled": ["Schatten-Positionierung (Trefferquote als Annahme)", "W-Energiegewinn", "Ausweichen durch R-Unverwundbarkeit (nur qualitativ)"]
+  },
+  "playstyles": [
+    {
+      "id": "lethality", "name": "Lethalitäts-Assassine",
+      "description": "Schneller Burst auf ein erreichbares Backline-Ziel; kurze Kämpfe.",
+      "roles": ["MIDDLE", "JUNGLE", "TOP"],
+      "weights": { "offense": 0.7, "defense": 0.22, "utility": 0.08 },
+      "itemTags": ["lethality"],
+      "extraCandidates": [3071, 3047, 3111, 3158, 3814, 3026, 6333, 3156],
+      "excluded": [6676],
+      "targetAccess": { "frontline": 0.35, "backline": 1.0 },
+      "manaNeed": 0,
+      "scenarios": [
+        { "id": "burst", "name": "Combo auf ein Ziel", "duration": 3, "autoUptime": 0.35, "weight": 0.75, "casts": { "P": 1, "Q": 1.5, "E": 1, "R": 1 }, "targetMissingHp": 0.3, "note": "1,5 Q-Treffer (Schatten) angenommen." },
+        { "id": "extended", "name": "Längerer Kampf", "duration": 6, "autoUptime": 0.6, "weight": 0.25, "casts": { "P": 1, "Q": "cd", "E": "cd", "R": 1 }, "targetMissingHp": 0.4 }
+      ],
+      "synergies": [
+        { "item": 3142, "note": "Lethalität wirkt voll auf den physischen Burst." }
+      ]
+    }
+  ],
+  "defaultPlaystyle": { "MIDDLE": "lethality", "JUNGLE": "lethality", "TOP": "lethality" }
+}

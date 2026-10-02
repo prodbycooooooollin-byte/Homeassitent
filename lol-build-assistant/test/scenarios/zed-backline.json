@@ -1,0 +1,21 @@
+{
+  "id": "zed-backline",
+  "name": "Zed mit Backline-Fokus",
+  "gameVersion": null,
+  "gameTime": 900,
+  "goldRate": 6.6,
+  "me": { "champion": "Zed", "role": "MIDDLE", "level": 11, "gold": 1100, "items": [3158, 3142] },
+  "allies": [
+    { "champion": "Darius", "role": "TOP", "level": 11, "items": [3047, 3071] },
+    { "champion": "Vi", "role": "JUNGLE", "level": 10, "items": [3047, 3071] },
+    { "champion": "Caitlyn", "role": "BOTTOM", "level": 11, "items": [3006, 3031] },
+    { "champion": "Leona", "role": "UTILITY", "level": 9, "items": [3047] }
+  ],
+  "enemies": [
+    { "champion": "Ornn", "role": "TOP", "level": 11, "items": [3047, 3068] },
+    { "champion": "Sejuani", "role": "JUNGLE", "level": 10, "items": [3111, 3065] },
+    { "champion": "Syndra", "role": "MIDDLE", "level": 11, "items": [3020, 6655] },
+    { "champion": "Jinx", "role": "BOTTOM", "level": 11, "items": [3006, 3031] },
+    { "champion": "Lulu", "role": "UTILITY", "level": 9, "items": [3158] }
+  ]
+}

@@ -1,0 +1,186 @@
+{
+  "id": "syndra-armor-stack",
+  "name": "Syndra – gleiche Rüstungskäufe, magischer Schaden",
+  "description": "Gleiche Gegner und Rüstungskäufe wie im Jinx-Szenario. Erwartung: keine physische Durchdringung; spätere MR-Käufe lösen magische Antworten aus.",
+  "gameVersion": null,
+  "gameTime": 840,
+  "goldRate": 6.2,
+  "me": {
+    "champion": "Syndra",
+    "role": "MIDDLE",
+    "level": 11,
+    "gold": 900,
+    "items": [
+      3020,
+      6655
+    ]
+  },
+  "allies": [
+    {
+      "champion": "Ornn",
+      "role": "TOP",
+      "level": 11,
+      "items": [
+        3047,
+        3068
+      ]
+    },
+    {
+      "champion": "LeeSin",
+      "role": "JUNGLE",
+      "level": 10,
+      "items": [
+        3047,
+        3071
+      ]
+    },
+    {
+      "champion": "Jinx",
+      "role": "BOTTOM",
+      "level": 11,
+      "items": [
+        3006,
+        3031
+      ]
+    },
+    {
+      "champion": "Thresh",
+      "role": "UTILITY",
+      "level": 9,
+      "items": [
+        3111
+      ]
+    }
+  ],
+  "enemies": [
+    {
+      "champion": "Malphite",
+      "role": "TOP",
+      "level": 11,
+      "items": [
+        3111,
+        1011
+      ]
+    },
+    {
+      "champion": "Sejuani",
+      "role": "JUNGLE",
+      "level": 10,
+      "items": [
+        3047,
+        3068
+      ]
+    },
+    {
+      "champion": "Ahri",
+      "role": "MIDDLE",
+      "level": 11,
+      "items": [
+        3020,
+        6655
+      ]
+    },
+    {
+      "champion": "Kaisa",
+      "role": "BOTTOM",
+      "level": 11,
+      "items": [
+        3006,
+        6672
+      ]
+    },
+    {
+      "champion": "Nautilus",
+      "role": "UTILITY",
+      "level": 9,
+      "items": [
+        3047
+      ]
+    }
+  ],
+  "timeline": [
+    {
+      "t": 960,
+      "label": "Malphite schließt Thornmail ab",
+      "changes": [
+        {
+          "who": "Malphite",
+          "add": [
+            3075
+          ]
+        }
+      ]
+    },
+    {
+      "t": 1080,
+      "label": "Sejuani kauft Randuin's Omen",
+      "changes": [
+        {
+          "who": "Sejuani",
+          "add": [
+            3143
+          ]
+        },
+        {
+          "who": "me",
+          "gold": 1700
+        }
+      ]
+    },
+    {
+      "t": 1200,
+      "label": "Malphite kauft Force of Nature, Sejuani Spirit Visage",
+      "changes": [
+        {
+          "who": "Malphite",
+          "add": [
+            4401
+          ]
+        },
+        {
+          "who": "Sejuani",
+          "add": [
+            3065
+          ]
+        },
+        {
+          "who": "me",
+          "gold": 2400,
+          "level": 12
+        }
+      ]
+    },
+    {
+      "t": 1260,
+      "label": "Ahri kauft Banshee's Veil",
+      "changes": [
+        {
+          "who": "Ahri",
+          "add": [
+            3102
+          ]
+        },
+        {
+          "who": "me",
+          "gold": 2800
+        }
+      ]
+    },
+    {
+      "t": 1320,
+      "label": "Kai'Sa kauft Wit's End (MR auf Backline-Ziel)",
+      "changes": [
+        {
+          "who": "Kaisa",
+          "add": [
+            3091
+          ]
+        },
+        {
+          "who": "me",
+          "gold": 3000
+        }
+      ]
+    }
+  ]
+}

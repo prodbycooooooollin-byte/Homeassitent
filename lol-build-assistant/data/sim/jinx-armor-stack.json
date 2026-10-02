@@ -1,0 +1,211 @@
+{
+  "id": "jinx-armor-stack",
+  "name": "Jinx – Gegner stapeln Rüstung",
+  "description": "Jinx (Bot) mit Berserker's und Infinity Edge. Garen, Viego und Nautilus kaufen im Lauf der Partie zunehmend Rüstung; Ahri kauft Banshee's Veil (reine MR) als Gegenbeispiel.",
+  "gameVersion": null,
+  "gameTime": 840,
+  "goldRate": 6.4,
+  "me": {
+    "champion": "Jinx",
+    "role": "BOTTOM",
+    "level": 11,
+    "gold": 900,
+    "items": [
+      3006,
+      3031
+    ]
+  },
+  "allies": [
+    {
+      "champion": "Ornn",
+      "role": "TOP",
+      "level": 11,
+      "items": [
+        3047,
+        3068
+      ]
+    },
+    {
+      "champion": "LeeSin",
+      "role": "JUNGLE",
+      "level": 10,
+      "items": [
+        3047,
+        3071
+      ]
+    },
+    {
+      "champion": "Orianna",
+      "role": "MIDDLE",
+      "level": 11,
+      "items": [
+        3020,
+        6655
+      ]
+    },
+    {
+      "champion": "Thresh",
+      "role": "UTILITY",
+      "level": 9,
+      "items": [
+        3111
+      ]
+    }
+  ],
+  "enemies": [
+    {
+      "champion": "Garen",
+      "role": "TOP",
+      "level": 11,
+      "items": [
+        3047,
+        1011
+      ]
+    },
+    {
+      "champion": "Viego",
+      "role": "JUNGLE",
+      "level": 10,
+      "items": [
+        3047,
+        3153
+      ]
+    },
+    {
+      "champion": "Ahri",
+      "role": "MIDDLE",
+      "level": 11,
+      "items": [
+        3020,
+        6655
+      ]
+    },
+    {
+      "champion": "Kaisa",
+      "role": "BOTTOM",
+      "level": 11,
+      "items": [
+        3006,
+        6672
+      ]
+    },
+    {
+      "champion": "Nautilus",
+      "role": "UTILITY",
+      "level": 9,
+      "items": [
+        3047
+      ]
+    }
+  ],
+  "timeline": [
+    {
+      "t": 900,
+      "label": "Garen kauft Dornenweste (Komponente)",
+      "changes": [
+        {
+          "who": "Garen",
+          "add": [
+            3076
+          ]
+        }
+      ]
+    },
+    {
+      "t": 960,
+      "label": "Garen schließt Thornmail ab",
+      "changes": [
+        {
+          "who": "Garen",
+          "remove": [
+            3076
+          ],
+          "add": [
+            3075
+          ]
+        }
+      ]
+    },
+    {
+      "t": 1020,
+      "label": "Ahri kauft Banshee's Veil (nur MR – Gegenbeispiel)",
+      "changes": [
+        {
+          "who": "Ahri",
+          "add": [
+            3102
+          ]
+        },
+        {
+          "who": "me",
+          "gold": 1500
+        }
+      ]
+    },
+    {
+      "t": 1080,
+      "label": "Viego kauft Death's Dance",
+      "changes": [
+        {
+          "who": "Viego",
+          "add": [
+            6333
+          ]
+        },
+        {
+          "who": "me",
+          "gold": 1900
+        }
+      ]
+    },
+    {
+      "t": 1140,
+      "label": "Nautilus kauft Frozen Heart",
+      "changes": [
+        {
+          "who": "Nautilus",
+          "add": [
+            3110
+          ]
+        },
+        {
+          "who": "me",
+          "gold": 2300
+        }
+      ]
+    },
+    {
+      "t": 1200,
+      "label": "Garen kauft Randuin's Omen",
+      "changes": [
+        {
+          "who": "Garen",
+          "add": [
+            3143
+          ]
+        },
+        {
+          "who": "me",
+          "gold": 2700,
+          "level": 12
+        }
+      ]
+    },
+    {
+      "t": 1260,
+      "label": "Kai'Sa kauft Guardian Angel",
+      "changes": [
+        {
+          "who": "Kaisa",
+          "add": [
+            3026
+          ]
+        },
+        {
+          "who": "me",
+          "gold": 3000
+        }
+      ]
+    }
+  ]
+}

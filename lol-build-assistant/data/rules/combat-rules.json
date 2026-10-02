@@ -1,0 +1,20 @@
+{
+  "version": "rules-2025.1",
+  "provenance": "Manuell aus Wissensstand zu Patch 25.x zusammengestellt. NICHT gegen 26.19 geprüft. Jede Regel muss vor Veröffentlichung gegen die aktuellen Patchnotes/Wiki verifiziert werden.",
+  "baseCritDamage": 1.75,
+  "attackSpeedCap": 2.5,
+  "lethalityScalesWithLevel": false,
+  "grievousWoundsDefault": 0.4,
+  "sellRatio": 0.7,
+  "inventorySlots": 6,
+  "statGrowth": { "a": 0.7025, "b": 0.0175 },
+  "penetrationOrder": [
+    "flache Resistenzreduktion",
+    "prozentuale Resistenzreduktion",
+    "prozentuale Durchdringung (mehrere Quellen multiplikativ)",
+    "flache Durchdringung / Lethalität (nicht unter 0)"
+  ],
+  "cleansableCc": ["stun", "root", "charm", "taunt", "fear", "slow", "silence", "polymorph", "sleep", "suppression"],
+  "nonCleansableCc": ["knockup", "knockback", "pull"],
+  "tenacityIgnores": ["knockup", "knockback", "pull", "suppression"]
+}

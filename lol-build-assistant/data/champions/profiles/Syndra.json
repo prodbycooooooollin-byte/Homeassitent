@@ -1,0 +1,39 @@
+{
+  "key": "Syndra", "name": "Syndra", "profileVersion": "1.0.0",
+  "authoredAgainst": "Wissensstand Patch 25.x", "reviewStatus": "fachlich nicht validiert",
+  "supportLevel": "supported", "cls": "burstMage", "ranged": true, "attackRange": 550, "resource": "mana",
+  "base": { "hp": 563, "hpg": 104, "ar": 25, "arg": 4.6, "mr": 30, "mrg": 1.3, "ad": 54, "adg": 2.9, "as": 0.625, "asg": 0.02, "asRatio": 0.625, "mana": 480, "manag": 28 },
+  "skillOrder": ["Q", "W", "E"],
+  "abilities": {
+    "Q": { "name": "Dark Sphere", "damageType": "magic", "base": [75, 110, 145, 180, 215], "apRatio": 0.65, "cooldown": [7, 6.5, 6, 5.5, 5], "maxRank": 5, "triggersSpellblade": true },
+    "W": { "name": "Force of Will", "damageType": "magic", "base": [70, 105, 140, 175, 210], "apRatio": 0.65, "cooldown": [12, 11, 10, 9, 8], "maxRank": 5 },
+    "E": { "name": "Scatter the Weak", "damageType": "magic", "base": [85, 130, 175, 220, 265], "apRatio": 0.6, "cooldown": [15, 14, 13, 12, 11], "maxRank": 5 },
+    "R": { "name": "Unleashed Power", "damageType": "magic", "base": [90, 130, 170], "apRatio": 0.17, "hits": 6, "cooldown": [120, 100, 80], "maxRank": 3, "note": "6 Kugeln angenommen (3 Basis + 3 im Feld)." }
+  },
+  "coverage": {
+    "modeled": ["Q-W-E-R-Combo mit 6 Kugeln", "prozentuale und flache Magiedurchdringung", "Manabedarf (Utility)"],
+    "unmodeled": ["Passiv 'Transcendent' (Stapel-Boni, Durchdringung)", "R-Hinrichtung", "Trefferquote"]
+  },
+  "playstyles": [
+    {
+      "id": "burst", "name": "Burst-Magierin",
+      "description": "Hoher Burst aus Distanz auf das erste erreichbare Ziel; Kontrolle durch E.",
+      "roles": ["MIDDLE"],
+      "weights": { "offense": 0.68, "defense": 0.22, "utility": 0.1 },
+      "itemTags": ["ap"],
+      "extraCandidates": [3020, 3158, 3111, 3047],
+      "excluded": [3124, 3115, 3100, 3091, 6653],
+      "targetAccess": { "frontline": 0.85, "backline": 0.65 },
+      "manaNeed": 0.6,
+      "scenarios": [
+        { "id": "burst", "name": "Volle Combo", "duration": 3, "autoUptime": 0.1, "weight": 0.7, "casts": { "Q": 1, "W": 1, "E": 1, "R": 1 }, "targetMissingHp": 0.25 },
+        { "id": "extended", "name": "Längerer Teamkampf", "duration": 8, "autoUptime": 0.15, "weight": 0.3, "casts": { "Q": "cd", "W": "cd", "E": "cd", "R": 1 }, "targetMissingHp": 0.4 }
+      ],
+      "synergies": [
+        { "item": 3089, "note": "Hohe AP-Ratios auf R-Kugeln." },
+        { "item": 6655, "note": "Mana und Tempo für Q-Spam." }
+      ]
+    }
+  ],
+  "defaultPlaystyle": { "MIDDLE": "burst" }
+}
