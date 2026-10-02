@@ -3,6 +3,16 @@ import { create } from "zustand";
 import type { Project } from "@/model/types";
 import { touch } from "@/geometry/ops";
 import { loadDraft, saveDemo, saveDraft, saveLive } from "@/storage/persistence";
+import { saveToHa } from "@/storage/haProject";
+import { DirectSource } from "@/sources/direct";
+import { useLive } from "./live";
+
+/** Wohin das Live-Projekt gespeichert wird: lokaler LumaHome-Server oder Home Assistant (Webseiten-Betrieb). */
+let liveBackend: "server" | "ha" = "server";
+export function setLiveBackend(b: "server" | "ha") {
+  liveBackend = b;
+}
+export const getLiveBackend = () => liveBackend;
 
 export type SaveStatus = "saved" | "dirty" | "saving" | "error" | "conflict" | "readonly" | "local";
 
@@ -125,8 +135,14 @@ export const useProject = create<ProjectStore>((set, get) => {
         return;
       }
       set({ saveStatus: "saving" });
-      saveDraft({ baseRevision: revision, project, at: Date.now() });
-      const r = await saveLive(project, force ? null : revision);
+      let r;
+      if (liveBackend === "ha") {
+        const src = useLive.getState().source;
+        r = src instanceof DirectSource ? await saveToHa(src, project, force ? null : revision) : { ok: false as const, conflict: false, forbidden: false, message: "Keine Verbindung zu Home Assistant" };
+      } else {
+        saveDraft({ baseRevision: revision, project, at: Date.now() });
+        r = await saveLive(project, force ? null : revision);
+      }
       if (get().project !== project) {
         // Während des Speicherns geändert → erneut speichern
         if (r.ok) set({ revision: r.revision });
@@ -135,7 +151,7 @@ export const useProject = create<ProjectStore>((set, get) => {
         return;
       }
       if (r.ok) {
-        saveDraft(null);
+        if (liveBackend === "server") saveDraft(null);
         set({ saveStatus: "saved", revision: r.revision, savedAt: Date.now(), saveError: null });
       } else if (r.conflict) {
         set({ saveStatus: "conflict", saveError: r.message });
@@ -162,7 +178,7 @@ if (typeof window !== "undefined") {
     const s = useProject.getState();
     if (s.mode === "demo" && s.project && s.saveStatus === "dirty") saveDemo(s.project);
     if (s.mode === "live" && s.project && (s.saveStatus === "dirty" || s.saveStatus === "saving" || s.saveStatus === "error")) {
-      saveDraft({ baseRevision: s.revision, project: s.project, at: Date.now() });
+      if (liveBackend === "server") saveDraft({ baseRevision: s.revision, project: s.project, at: Date.now() });
       e.preventDefault();
     }
   });

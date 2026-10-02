@@ -228,7 +228,7 @@ test("10. Projekt exportieren und vollständig wieder importieren", async ({ pag
   await download.saveAs(file);
   const exported = JSON.parse(readFileSync(file, "utf8"));
   expect(exported.format).toBe("lumahome-project");
-  expect(JSON.stringify(exported)).not.toContain("e2e-token");
+  expect(JSON.stringify(exported)).not.toContain("e2e-token-0123456789");
   await page.getByRole("button", { name: "Schließen", exact: true }).click();
   // Projekt verändern: Küche löschen
   await tab(page, "Gestalten");

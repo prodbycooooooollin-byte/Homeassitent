@@ -11,7 +11,7 @@ vollständig echt; simuliert ist nur die Gegenstelle.
 
 ## Automatisierte Abnahme (Playwright, `npm run test:e2e`)
 
-Ergebnis des letzten Laufs (02.10.2026): **13 von 13 bestanden** (Chromium 141 mit
+Ergebnis des letzten Laufs (02.10.2026): **17 von 17 bestanden** (Chromium 141 mit
 Softwarerendering, Desktop 1366×860 und emuliertes Pixel 7 mit Touch).
 
 | # | Abnahmepunkt | Test | Art | Ergebnis |
@@ -31,6 +31,8 @@ Softwarerendering, Desktop 1366×860 und emuliertes Pixel 7 mit Touch).
 
 | – | Wetter-Vorschau, Stromflüsse, drei Akkus, Analyse | `energy-scene.spec.ts` – Regen/Nacht-Vorschau mit Kennzeichnung, Akku- und PV-Anzeige im Modell, Autarkie/Eigenverbrauch/Ersparnis (bzw. Begründung, wenn noch keine PV-Erzeugung) | Demo-Modus | bestanden |
 | – | Außenbereich | `energy-scene.spec.ts` – Garten als Außenbereich, Whirlpool im Katalog | Demo-Modus | bestanden |
+
+| – | Webseiten-Betrieb | `web.spec.ts` – statisch ausgeliefert (wie GitHub Pages), Token-Anleitung, falscher Token abgelehnt, Anmeldung, Haus anlegen, Lampe zuordnen und schalten, Speicherung in den HA-Benutzerdaten (ohne Token), zweites Gerät sieht dasselbe Haus, „angemeldet bleiben“, Abmelden entfernt den Token | simuliertes HA | bestanden |
 
 ² Der Test wird automatisch übersprungen, wenn er vor 05:00 Uhr läuft (die simulierte Lücke liegt dann noch nicht vollständig in der Vergangenheit).
 

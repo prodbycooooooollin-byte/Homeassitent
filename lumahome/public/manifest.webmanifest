@@ -1,9 +1,10 @@
 {
   "name": "LumaHome",
   "short_name": "LumaHome",
-  "start_url": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#F5F3EE",
   "theme_color": "#F5F3EE",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
 }

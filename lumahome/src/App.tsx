@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo } from "react";
 import { clsx } from "clsx";
-import { boot, useApp } from "@/app/boot";
+import { boot, logout, startDemo, useApp } from "@/app/boot";
 import { useUi } from "@/store/ui";
 import { useProject } from "@/store/project";
 import { TopBar } from "@/shell/TopBar";
@@ -60,6 +60,17 @@ export function App() {
           <Notice tone="error" title="Fehler beim Laden">
             {error}
           </Notice>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button className="btn-primary" onClick={() => location.reload()}>
+              Erneut versuchen
+            </button>
+            <button className="btn-secondary" onClick={() => void logout()}>
+              Abmelden
+            </button>
+            <button className="btn-ghost" onClick={() => void startDemo()}>
+              Demo ansehen
+            </button>
+          </div>
         </div>
       </div>
     );

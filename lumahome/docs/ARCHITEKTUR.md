@@ -1,6 +1,22 @@
 # Architektur und Entscheidungen
 
-## Betriebsform: eigenständige lokale Anwendung
+## Betriebsformen
+
+**Webseite (Standard, z. B. GitHub Pages):** Die gebaute Oberfläche ist rein
+statisch. Ist kein LumaHome-Server erreichbar (`/api/session`), zeigt sie die
+Anmeldung: Adresse + langlebiger Zugriffstoken. Der Browser verbindet sich per
+WebSocket direkt mit `wss://<ha>/api/websocket` (`src/sources/haSocket.ts`,
+`src/sources/direct.ts`) – mit denselben Befehlen und Regeln wie der Server
+(Dienst-Freigabeliste, Kontext-IDs, Wiederverbinden). Der Token liegt nur im
+Browser (`localStorage` bei „Angemeldet bleiben“, sonst `sessionStorage`). Das
+Haus wird über `frontend/set_user_data` (Schlüssel `lumahome_project`, mit
+Revision gegen gleichzeitige Änderungen) im HA-Konto gespeichert, zusätzlich als
+Kopie im Browser für den Start ohne Verbindung. Eine Content-Security-Policy
+erlaubt nur eigene Skripte. Von einer https-Seite ist nur `wss://` möglich.
+
+**Lokal mit eigenem Server:** wie unten beschrieben (Token in `.env` auf dem Server).
+
+## Betriebsform mit eigenem Server
 
 LumaHome läuft **nicht innerhalb** von Home Assistant, sondern als eigenständige
 lokale Anwendung aus zwei Teilen:

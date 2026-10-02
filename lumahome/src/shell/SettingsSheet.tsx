@@ -3,7 +3,7 @@ import { Download, KeyRound, LogOut, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { useProject } from "@/store/project";
 import { useUi } from "@/store/ui";
-import { useApp, startLive } from "@/app/boot";
+import { useApp, logout, startLive } from "@/app/boot";
 import { parseProjectFile, toProjectFile } from "@/model/schema";
 import type { Project } from "@/model/types";
 import { Dialog, Notice, NumberField, Segmented, TextField } from "@/ui/primitives";
@@ -103,6 +103,8 @@ export function SettingsSheet() {
   const toast = useUi((s) => s.toast);
   const { project, apply, mode, canEdit, replace } = useProject();
   const session = useApp((s) => s.session);
+  const platform = useApp((s) => s.platform);
+  const haUrl = useApp((s) => s.haUrl);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pendingImport, setPendingImport] = useState<{ project: Project; warnings: string[] } | null>(null);
   const [importError, setImportError] = useState<string[] | null>(null);
@@ -147,7 +149,7 @@ export function SettingsSheet() {
           <h3 className="section-title">Projekt</h3>
           {project && <TextField label="Name des Zuhauses" value={project.name} onCommit={(name) => apply((p) => ({ ...p, name }))} />}
           <p className="text-xs text-ink-2">
-            {mode === "demo" ? "Demo-Projekt – im Browser gespeichert, getrennt vom Live-Projekt." : "Live-Projekt – auf dem lokalen LumaHome-Server gespeichert (mit Sicherungskopien)."}
+            {mode === "demo" ? "Demo-Projekt – im Browser gespeichert, getrennt vom Live-Projekt." : platform === "web" ? "Live-Projekt – in deinem Home-Assistant-Konto gespeichert, auf allen Geräten mit diesem Konto verfügbar." : "Live-Projekt – auf dem lokalen LumaHome-Server gespeichert (mit Sicherungskopien)."}
           </p>
           <div className="flex flex-wrap gap-2">
             <button className="btn-secondary" onClick={exportProject} disabled={!project} data-testid="export">
@@ -216,7 +218,17 @@ export function SettingsSheet() {
           />
           <p className="text-xs text-ink-2">Sparsam: keine Schatten, keine Texturen, kein Kantenglätten, keine Punktlichter – für ältere Wandtablets. Im Stillstand wird generell nicht neu gezeichnet. Reduzierte Bewegung wird aus den Systemeinstellungen übernommen.</p>
         </section>
-        {mode === "live" && session && (
+        {mode === "live" && platform === "web" && (
+          <section className="space-y-2">
+            <h3 className="section-title">Zugang</h3>
+            <p className="text-sm">Verbunden mit {haUrl ?? "Home Assistant"} über deinen langlebigen Zugriffstoken. Das Haus wird in den Benutzerdaten deines Home-Assistant-Kontos gespeichert.</p>
+            <button className="btn-secondary" onClick={() => void logout().then(close)}>
+              <LogOut size={16} /> Abmelden und Token von diesem Gerät entfernen
+            </button>
+            <p className="text-xs text-ink-2">Den Token selbst widerrufst du in Home Assistant unter Profil → Sicherheit → Langlebige Zugriffstoken.</p>
+          </section>
+        )}
+        {mode === "live" && platform === "server" && session && (
           <section className="space-y-2">
             <h3 className="section-title">Zugang</h3>
             <p className="text-sm">
@@ -240,7 +252,7 @@ export function SettingsSheet() {
         <section className="space-y-1 text-xs text-ink-2">
           <h3 className="section-title">Über</h3>
           <p>LumaHome {session?.version ?? "0.1.0"} · läuft lokal · alle Funktionen und Katalogmodelle frei nutzbar, ohne Konto, Kauf oder Freischaltung.</p>
-          <p>Zugangsdaten zu Home Assistant liegen ausschließlich auf dem lokalen Server und sind nie Teil von Projekt oder Export.</p>
+          <p>{platform === "web" ? "Der Zugriffstoken liegt nur in diesem Browser und ist nie Teil von Projekt oder Export." : "Zugangsdaten zu Home Assistant liegen ausschließlich auf dem lokalen Server und sind nie Teil von Projekt oder Export."}</p>
         </section>
       </div>
     </Dialog>
