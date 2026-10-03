@@ -1,0 +1,18 @@
+<Application x:Class="Clearspace.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:Clearspace.App.Services"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <services:NullToCollapsedConverter x:Key="NullToCollapsed" />
+            <services:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+            <services:PathToIconConverter x:Key="PathToIcon" />
+            <services:CountToVisibilityConverter x:Key="CountToVisibility" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

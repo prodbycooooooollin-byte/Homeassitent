@@ -1,0 +1,46 @@
+<UserControl x:Class="Clearspace.App.Views.HistoryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Verlauf und Wiederherstellung" Style="{StaticResource PageTitle}" />
+            <TextBlock Style="{StaticResource Caption}"
+                       Text="Jede Dateiaktion wird dauerhaft protokolliert. Deshalb funktioniert Rueckgaengig auch nach einem Neustart." />
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="Aufraeumaktionen" Style="{StaticResource SectionTitle}" />
+                <ListBox ItemsSource="{Binding PlanIds}" SelectedItem="{Binding SelectedPlanId, Mode=TwoWay}" />
+                <Button Content="Diese Aktion rueckgaengig machen" Margin="0,10,0,0"
+                        Command="{Binding UndoPlanCommand}" />
+            </StackPanel>
+
+            <ListView Grid.Column="1" Margin="14,0,0,0" ItemsSource="{Binding Rows}"
+                      Background="Transparent" BorderThickness="0">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="Eintrag" Width="180" DisplayMemberBinding="{Binding EntryName}" />
+                        <GridViewColumn Header="Status" Width="150" DisplayMemberBinding="{Binding StatusLabel}" />
+                        <GridViewColumn Header="Bisher" Width="240" DisplayMemberBinding="{Binding From}" />
+                        <GridViewColumn Header="Neu" Width="240" DisplayMemberBinding="{Binding To}" />
+                        <GridViewColumn Header="Hinweis" Width="240" DisplayMemberBinding="{Binding Message}" />
+                    </GridView>
+                </ListView.View>
+            </ListView>
+        </Grid>
+
+        <TextBlock Grid.Row="2" Style="{StaticResource Caption}" Margin="0,8,0,0" Text="{Binding Status}" />
+    </Grid>
+</UserControl>

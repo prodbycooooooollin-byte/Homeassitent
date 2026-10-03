@@ -1,0 +1,53 @@
+<UserControl x:Class="Clearspace.App.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="720" HorizontalAlignment="Left">
+            <TextBlock Text="Einstellungen" Style="{StaticResource PageTitle}" />
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Darstellung" FontWeight="SemiBold" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <RadioButton x:Name="ThemeSystem" Content="Wie Windows" Checked="Theme_Checked"
+                                     Tag="System" Margin="0,0,14,0" />
+                        <RadioButton x:Name="ThemeLight" Content="Hell" Checked="Theme_Checked" Tag="Light" Margin="0,0,14,0" />
+                        <RadioButton x:Name="ThemeDark" Content="Dunkel" Checked="Theme_Checked" Tag="Dark" />
+                    </StackPanel>
+                    <CheckBox x:Name="TransparencyBox" Content="Dezente Transparenz verwenden"
+                              Margin="0,10,0,0" Click="Transparency_Click" />
+                    <TextBlock Style="{StaticResource Caption}"
+                               Text="Bei hohem Kontrast wird Transparenz automatisch abgeschaltet. Lesbarkeit geht vor." />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Zugriff" FontWeight="SemiBold" />
+                    <TextBlock Style="{StaticResource Caption}" Margin="0,6,0,0"
+                               Text="Tastenkuerzel (Beispiel: Strg+Alt+Space). Belegte Kombinationen werden gemeldet." />
+                    <TextBox x:Name="HotkeyBox" Margin="0,6,0,0" Width="260" HorizontalAlignment="Left" />
+                    <Button Content="Tastenkuerzel speichern" Margin="0,8,0,0" Click="SaveHotkey_Click"
+                            HorizontalAlignment="Left" />
+                    <CheckBox x:Name="AutostartBox" Content="Clearspace mit Windows starten (im Infobereich)"
+                              Margin="0,12,0,0" Click="Autostart_Click" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Datenschutz" FontWeight="SemiBold" />
+                    <CheckBox x:Name="StatisticsBox" Content="Starts aus Clearspace mitzaehlen"
+                              Margin="0,8,0,0" Click="Statistics_Click" />
+                    <TextBlock Style="{StaticResource Caption}"
+                               Text="Gezaehlt werden ausschliesslich Starts aus Clearspace. Es gibt keine Prozessbeobachtung und keine Uebertragung nach aussen. Alle Daten bleiben lokal." />
+                    <Button Content="Startstatistik loeschen" Margin="0,10,0,0" HorizontalAlignment="Left"
+                            Click="ClearStatistics_Click" />
+                    <TextBlock x:Name="DatabaseHint" Style="{StaticResource Caption}" Margin="0,10,0,0" />
+                </StackPanel>
+            </Border>
+
+            <TextBlock x:Name="SettingsStatus" Style="{StaticResource Caption}" Margin="0,8,0,0" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
