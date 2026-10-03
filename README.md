@@ -78,3 +78,4 @@ jeweiligen Haushalts gemappt werden (Kommentare markieren die Stellen).
 - [`lumahome/`](lumahome/README.md) – LumaHome: eigenständiger 3D-Hausplaner mit Home-Assistant-Steuerung und Energieansicht (lokale Anwendung, eigenständiges npm-Projekt).
 - [`lol-build-assistant/`](lol-build-assistant/README.md) – Windows-Desktop-App mit Ingame-Overlay für dynamische, erklärbare Item-Empfehlungen in League of Legends (Electron + TypeScript, eigenständiges npm-Projekt).
 
+- [`citadel/`](citadel/README.md) – CITADEL: Deadlock Settings & Performance. Windows-Desktop-App (Tauri 2 + React + Rust) zum sicheren Bearbeiten, Vergleichen und Anwenden von Deadlock-Configs, mit Performance Advisor, Crosshair Studio, Benchmarks und automatischem Recherche-Backend für belegte Spieler-Settings (eigenständiges npm-/Cargo-Projekt).

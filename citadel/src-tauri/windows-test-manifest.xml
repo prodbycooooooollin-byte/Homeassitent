@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Nur für Test-Binaries: Tauri/WebView2-Abhängigkeiten importieren Funktionen aus
+     Common Controls v6 (z. B. TaskDialogIndirect). Ohne dieses Manifest bricht der Test unter
+     Windows mit STATUS_ENTRYPOINT_NOT_FOUND ab. Die App selbst erhält ihr Manifest über tauri-build. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*" />
+    </dependentAssembly>
+  </dependency>
+</assembly>

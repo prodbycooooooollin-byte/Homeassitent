@@ -1,0 +1,11 @@
+node_modules
+dist
+src-tauri/target
+crates/*/target
+target
+server/data
+*.sqlite
+*.sqlite-journal
+.env
+screenshots-tmp
+src-tauri/gen
