@@ -1,0 +1,44 @@
+name: Impostor (Tests)
+
+# Typprüfung, Regel-/Geheimhaltungs-/Multiplayer-Tests und Build von Client + Server.
+# Die Windows-EXE baut der separate Workflow "Release Impostor (Windows-EXE)".
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'impostor/**'
+      - '.github/workflows/impostor.yml'
+  pull_request:
+    paths:
+      - 'impostor/**'
+      - '.github/workflows/impostor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: impostor
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: impostor/package-lock.json
+      - run: npm ci
+      - name: Typprüfung
+        run: npm run typecheck
+      - name: Regel-, Geheimhaltungs- und Multiplayer-Tests
+        run: npm test
+      - name: Build (Client + Server)
+        run: npm run build:client && npm run build:server
