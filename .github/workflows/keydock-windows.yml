@@ -1,0 +1,145 @@
+name: KeyDock Windows Build
+
+# Builds the VST3 plugin and the overlay on real Windows with MSVC and
+# publishes them as a downloadable artifact, so the plugin can be installed
+# without a local toolchain.
+on:
+  push:
+    # Only the long-lived branches here; pull_request already covers feature
+    # branches, and running both would build every push twice.
+    branches: [main, master]
+    paths:
+      - "keydock/**"
+      - ".github/workflows/keydock-windows.yml"
+  pull_request:
+    paths:
+      - "keydock/**"
+      - ".github/workflows/keydock-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  engine-tests:
+    name: Engine tests (Linux)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: keydock
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+  windows:
+    name: VST3 + overlay (Windows/MSVC)
+    # Pinned: windows-latest no longer carries a Visual Studio 2022 instance,
+    # so CMake's VS 17 generator cannot find a toolchain there.
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      # JUCE is fetched by CMake; caching it keeps rebuilds to a few minutes.
+      - name: Cache JUCE
+        uses: actions/cache@v4
+        with:
+          path: keydock/build/_deps
+          key: juce-${{ runner.os }}-8.0.8
+
+      # Printed unconditionally: if the generator ever fails to find a
+      # toolchain again, the log says exactly what the image provides.
+      - name: Toolchain diagnostics
+        shell: pwsh
+        run: |
+          cmake --version
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            & $vswhere -all -products * -format value -property displayName
+            & $vswhere -all -products * -format value -property installationVersion
+          } else {
+            Write-Host "vswhere.exe not present on this image"
+          }
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+        working-directory: keydock
+
+      - name: Build
+        run: cmake --build build --config Release
+        working-directory: keydock
+
+      # The engine runs under MSVC with /fp:fast here, not GCC. Building the
+      # test binaries without running them would leave that unverified in
+      # exactly the build that gets shipped.
+      - name: Run tests
+        run: ctest --test-dir build -C Release --output-on-failure
+        working-directory: keydock
+
+      - name: Collect install layout
+        shell: pwsh
+        run: |
+          # The overlay must sit next to the .vst3 bundle: the plugin resolves
+          # it relative to its own module, not through PATH or the registry.
+          $out = "keydock-windows"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          # -Directory matters: JUCE names both the bundle folder and the DLL
+          # inside it "KeyDock.vst3", and only the folder is installable.
+          $vst3 = Get-ChildItem -Path keydock\build -Recurse -Directory -Filter "KeyDock.vst3" | Select-Object -First 1
+          if (-not $vst3) { throw "KeyDock.vst3 bundle was not produced by the build" }
+          Copy-Item $vst3.FullName -Destination $out -Recurse
+
+          $overlay = Get-ChildItem -Path keydock\build -Recurse -File -Filter "KeyDockOverlay.exe" | Select-Object -First 1
+          if (-not $overlay) { throw "KeyDockOverlay.exe was not produced by the build" }
+          Copy-Item $overlay.FullName -Destination $out
+
+          $cli = Get-ChildItem -Path keydock\build -Recurse -File -Filter "keydock-analyze.exe" | Select-Object -First 1
+          if ($cli) { Copy-Item $cli.FullName -Destination $out }
+
+          Copy-Item keydock\docs\04-einrichtung-fl-studio.md -Destination "$out\EINRICHTUNG.md"
+          Copy-Item keydock\docs\05-tests.md -Destination "$out\TESTSTATUS.md"
+          Copy-Item keydock\docs\07-neue-funktionen.md -Destination "$out\NEUE-FUNKTIONEN.md"
+
+          # The tempo handover is unusable without this script, so it ships
+          # inside the artifact rather than only in the repository.
+          New-Item -ItemType Directory -Force -Path "$out\FL-Studio-Skript" | Out-Null
+          Copy-Item keydock\integration\FLStudio\device_KeyDock.py `
+                    -Destination "$out\FL-Studio-Skript\device_KeyDock.py"
+
+          $readme = @(
+            'KeyDock - Installation',
+            '',
+            '1. KeyDock.vst3 UND KeyDockOverlay.exe gemeinsam nach',
+            '   C:\Program Files\Common Files\VST3\ kopieren.',
+            '   Beide muessen im selben Ordner liegen: das Plugin sucht die',
+            '   EXE relativ zu sich selbst.',
+            '2. FL Studio: Options -> Manage plugins -> Find more plugins.',
+            '3. Mixer (F9) -> Master -> freier Slot -> KeyDock.',
+            '',
+            'Details in EINRICHTUNG.md.',
+            'Neue Funktionen (Zieltonart, Rueckblick, Feinstimmung,',
+            'Tempo-Uebernahme): NEUE-FUNKTIONEN.md',
+            'Was getestet ist und was nicht: TESTSTATUS.md.',
+            '',
+            'Tempo-Uebernahme an FL Studio braucht eine einmalige',
+            'Einrichtung. Das noetige Skript liegt in FL-Studio-Skript\.',
+            'Schritt fuer Schritt in NEUE-FUNKTIONEN.md, Abschnitt 7.4.',
+            '',
+            'keydock-analyze.exe prueft WAV-Dateien ohne FL Studio:',
+            '   keydock-analyze.exe meintrack.wav'
+          )
+          Set-Content -Path "$out\LIESMICH.txt" -Value $readme -Encoding utf8
+
+          Get-ChildItem $out
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KeyDock-Windows-x64
+          path: keydock-windows/
+          retention-days: 30
