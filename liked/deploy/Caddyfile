@@ -1,0 +1,9 @@
+# Domain anpassen. Caddy besorgt das TLS-Zertifikat automatisch; WebSockets werden durchgereicht.
+liked.example.org {
+	encode gzip
+	reverse_proxy liked:8787
+	# Zugriffslogs bewusst aus (keine Raumcodes/IPs sammeln)
+	log {
+		output discard
+	}
+}

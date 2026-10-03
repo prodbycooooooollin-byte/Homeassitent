@@ -1,0 +1,35 @@
+# Render-Blueprint für den LIKED-Spielserver (zentraler Server für alle Spieler).
+# Einrichten: render.com → New → Blueprint → dieses Repository wählen.
+# Details: liked/docs/SERVER.md, Abschnitt „Render“.
+services:
+  - type: web
+    # Der Name bestimmt die Adresse https://liked-partyspiel.onrender.com, die fest in der App steht.
+    name: liked-partyspiel
+    runtime: node
+    region: frankfurt
+    plan: free
+    # Befehle laufen im Repo-Root (Root Directory leer lassen). Gebaut wird nur der LIKED-Server.
+    buildCommand: bash liked/scripts/render-build.sh
+    startCommand: node liked/apps/server/dist/index.js
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      # Render sitzt als Proxy davor: Client-IP für Rate-Limits aus X-Forwarded-For.
+      - key: TRUST_PROXY
+        value: '1'
+      - key: LOG_LEVEL
+        value: info
+      - key: MAX_ROOMS
+        value: '200'
+      # TikTok-Werte (TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TOKEN_ENCRYPTION_KEY) erst nach der
+      # TikTok-Freigabe im Render-Dashboard unter „Environment“ ergänzen – nie ins Repository.
+    # Hinweis: Im Free-Plan ist die Festplatte flüchtig. TikTok-Anmeldungen und laufende Exporte gehen bei
+    # Neustart, Deploy oder Ruhezustand verloren (Spieler müssen sich dann neu anmelden). Für den Dauerbetrieb:
+    # plan: starter, dazu
+    # disk:
+    #   name: liked-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # und die Umgebungsvariable DATA_DIR=/var/data setzen.

@@ -78,3 +78,4 @@ jeweiligen Haushalts gemappt werden (Kommentare markieren die Stellen).
 - [`lumahome/`](lumahome/README.md) – LumaHome: eigenständiger 3D-Hausplaner mit Home-Assistant-Steuerung und Energieansicht (lokale Anwendung, eigenständiges npm-Projekt).
 - [`lol-build-assistant/`](lol-build-assistant/README.md) – Windows-Desktop-App mit Ingame-Overlay für dynamische, erklärbare Item-Empfehlungen in League of Legends (Electron + TypeScript, eigenständiges npm-Projekt).
 
+- [`liked/`](liked/README.md) – LIKED: Multiplayer-Partyspiel für Windows („Aus wessen TikTok-Likes stammt dieser Clip?“), Electron + Node/Socket.IO, eigenständiges npm-Workspace-Projekt.
