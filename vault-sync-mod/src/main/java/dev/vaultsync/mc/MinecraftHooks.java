@@ -2,7 +2,7 @@ package dev.vaultsync.mc;
 
 import dev.vaultsync.core.SyncEngine;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.server.level.ServerLevel;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -22,8 +22,8 @@ final class MinecraftHooks implements SyncEngine.Hooks {
         CompletableFuture<Void> done = new CompletableFuture<>();
         server.execute(() -> {
             try {
-                server.saveAll(true, true, true);
-                for (ServerWorld w : server.getWorlds()) w.savingDisabled = true;
+                server.saveEverything(true, true, true);
+                for (ServerLevel w : server.getAllLevels()) w.noSave = true;
                 done.complete(null);
             } catch (Throwable t) { done.completeExceptionally(t); }
         });
@@ -31,6 +31,6 @@ final class MinecraftHooks implements SyncEngine.Hooks {
     }
 
     @Override public void unfreeze() {
-        server.execute(() -> { for (ServerWorld w : server.getWorlds()) w.savingDisabled = false; });
+        server.execute(() -> { for (ServerLevel w : server.getAllLevels()) w.noSave = false; });
     }
 }

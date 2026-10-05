@@ -1,21 +1,19 @@
 package dev.vaultsync.mc;
 
 import net.minecraft.SharedConstants;
-import net.minecraft.advancement.AdvancementEntry;
-import net.minecraft.block.Block;
-import net.minecraft.entity.EntityType;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.Registries;
+import net.minecraft.advancements.AdvancementHolder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.stat.ServerStatHandler;
-import net.minecraft.stat.Stat;
-import net.minecraft.stat.Stats;
-import net.minecraft.util.Identifier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.stats.ServerStatsCounter;
+import net.minecraft.stats.Stats;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 
 import java.util.*;
 
@@ -24,33 +22,30 @@ final class StatsCollector {
     private StatsCollector() { }
 
     static Map<String, Object> collect(MinecraftServer server) {
-        var players = server.getPlayerManager().getPlayerList();
+        var players = server.getPlayerList().getPlayers();
         if (players.isEmpty()) return null;
-        ServerPlayerEntity p = players.get(0);
-        ServerWorld overworld = server.getOverworld();
-        ServerStatHandler st = p.getStatHandler();
-        var props = server.getSaveProperties();
+        ServerPlayer p = players.get(0);
+        ServerLevel overworld = server.overworld();
+        ServerStatsCounter st = p.getStats();
+        var data = server.getWorldData();
 
         Map<String, Object> d = new LinkedHashMap<>();
-        d.put("world_name", props.getLevelName());
-        d.put("mc_version", SharedConstants.getGameVersion().getName());
-        d.put("game_mode", p.interactionManager.getGameMode().getName());
-        d.put("difficulty", props.getDifficulty().getName());
+        d.put("world_name", data.getLevelName());
+        d.put("mc_version", SharedConstants.getCurrentVersion().name());
+        d.put("game_mode", p.gameMode.getGameModeForPlayer().getName());
+        d.put("difficulty", data.getDifficulty().getKey());
         d.put("seed", overworld.getSeed());
-        d.put("dimension", p.getWorld().getRegistryKey().getValue().toString());
+        d.put("dimension", p.level().dimension().identifier().toString());
         d.put("player_x", Math.round(p.getX() * 10) / 10.0);
         d.put("player_y", Math.round(p.getY() * 10) / 10.0);
         d.put("player_z", Math.round(p.getZ() * 10) / 10.0);
-        d.put("spawn_x", overworld.getSpawnPos().getX());
-        d.put("spawn_z", overworld.getSpawnPos().getZ());
         d.put("xp_level", p.experienceLevel);
         d.put("health", p.getHealth());
-        d.put("food_level", p.getHungerManager().getFoodLevel());
-        d.put("game_time_ticks", overworld.getTime());
-        d.put("day_time", overworld.getTimeOfDay());
+        d.put("food_level", p.getFoodData().getFoodLevel());
+        d.put("game_time_ticks", overworld.getGameTime());
+        d.put("day_time", overworld.getDayTime());
         d.put("weather", overworld.isThundering() ? "thunder" : overworld.isRaining() ? "rain" : "clear");
-        d.put("hardcore", props.isHardcore());
-        d.put("allow_commands", props.areCommandsAllowed());
+        d.put("hardcore", data.isHardcore());
 
         d.put("play_time_ticks", custom(st, Stats.PLAY_TIME));
         d.put("deaths", custom(st, Stats.DEATHS));
@@ -64,17 +59,17 @@ final class StatsCollector {
         d.put("nights_slept", custom(st, Stats.SLEEP_IN_BED));
 
         long mined = 0, bestMined = 0; String topBlock = null;
-        for (Block b : Registries.BLOCK) {
-            int v = st.getStat(Stats.MINED.getOrCreateStat(b));
+        for (Block b : BuiltInRegistries.BLOCK) {
+            int v = st.getValue(Stats.BLOCK_MINED.get(b));
             mined += v;
-            if (v > bestMined) { bestMined = v; topBlock = Registries.BLOCK.getId(b).toString(); }
+            if (v > bestMined) { bestMined = v; topBlock = BuiltInRegistries.BLOCK.getKey(b).toString(); }
         }
         long crafted = 0;
-        for (Item i : Registries.ITEM) crafted += st.getStat(Stats.CRAFTED.getOrCreateStat(i));
+        for (Item i : BuiltInRegistries.ITEM) crafted += st.getValue(Stats.ITEM_CRAFTED.get(i));
         int bestKill = 0; String topMob = null;
-        for (EntityType<?> t : Registries.ENTITY_TYPE) {
-            int v = st.getStat(Stats.KILLED.getOrCreateStat(t));
-            if (v > bestKill) { bestKill = v; topMob = Registries.ENTITY_TYPE.getId(t).toString(); }
+        for (EntityType<?> t : BuiltInRegistries.ENTITY_TYPE) {
+            int v = st.getValue(Stats.ENTITY_KILLED.get(t));
+            if (v > bestKill) { bestKill = v; topMob = BuiltInRegistries.ENTITY_TYPE.getKey(t).toString(); }
         }
         long cm = 0;
         for (Identifier id : List.of(Stats.WALK_ONE_CM, Stats.SPRINT_ONE_CM, Stats.CROUCH_ONE_CM, Stats.SWIM_ONE_CM,
@@ -88,33 +83,25 @@ final class StatsCollector {
         if (topMob != null) d.put("top_mob", topMob);
 
         List<String> done = new ArrayList<>();
-        for (AdvancementEntry a : server.getAdvancementLoader().getAdvancements())
-            if (p.getAdvancementTracker().getProgress(a).isDone() && !a.id().getPath().startsWith("recipes/")) done.add(a.id().toString());
+        for (AdvancementHolder a : server.getAdvancements().getAllAdvancements())
+            if (p.getAdvancements().getOrStartProgress(a).isDone() && !a.id().getPath().startsWith("recipes/")) done.add(a.id().toString());
         d.put("advancements", done.size());
         d.put("advancement_list", done);
-
-        Map<String, Object> rules = new LinkedHashMap<>();
-        NbtCompound nbt = server.getGameRules().toNbt();
-        for (String k : nbt.getKeys()) rules.put(k, nbt.getString(k));
-        d.put("game_rules", rules);
 
         d.put("inventory", items(p.getInventory()));
         d.put("ender_items", items(p.getEnderChestInventory()));
         return d;
     }
 
-    private static int custom(ServerStatHandler st, Identifier id) {
-        Stat<Identifier> s = Stats.CUSTOM.getOrCreateStat(id);
-        return st.getStat(s);
-    }
+    private static int custom(ServerStatsCounter st, Identifier id) { return st.getValue(Stats.CUSTOM.get(id)); }
 
-    private static List<Map<String, Object>> items(Inventory inv) {
+    private static List<Map<String, Object>> items(Container inv) {
         List<Map<String, Object>> out = new ArrayList<>();
-        for (int i = 0; i < inv.size(); i++) {
-            ItemStack s = inv.getStack(i);
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack s = inv.getItem(i);
             if (s.isEmpty()) continue;
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("slot", i); m.put("id", Registries.ITEM.getId(s.getItem()).toString()); m.put("count", s.getCount());
+            m.put("slot", i); m.put("id", BuiltInRegistries.ITEM.getKey(s.getItem()).toString()); m.put("count", s.getCount());
             out.add(m);
         }
         return out;
