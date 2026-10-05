@@ -82,9 +82,15 @@ final class StatsCollector {
         if (topBlock != null) d.put("top_block", topBlock);
         if (topMob != null) d.put("top_mob", topMob);
 
-        List<String> done = new ArrayList<>();
+        List<Map<String, Object>> done = new ArrayList<>();
         for (AdvancementHolder a : server.getAdvancements().getAllAdvancements())
-            if (p.getAdvancements().getOrStartProgress(a).isDone() && !a.id().getPath().startsWith("recipes/")) done.add(a.id().toString());
+            if (p.getAdvancements().getOrStartProgress(a).isDone() && !a.id().getPath().startsWith("recipes/")) {
+                Map<String, Object> e = new LinkedHashMap<>();
+                e.put("id", a.id().toString());
+                e.put("name", a.id().getPath());
+                e.put("done", true);
+                done.add(e);
+            }
         d.put("advancements", done.size());
         d.put("advancement_list", done);
 

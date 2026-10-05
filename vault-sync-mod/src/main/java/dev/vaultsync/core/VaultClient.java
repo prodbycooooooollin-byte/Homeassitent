@@ -68,5 +68,5 @@ public final class VaultClient {
     private static String field(String b, String name, String v) {
         return "--" + b + "\r\nContent-Disposition: form-data; name=\"" + name + "\"\r\n\r\n" + v + "\r\n";
     }
-    private static String trim(String s) { return s.length() > 200 ? s.substring(0, 200) : s; }
+    private static String trim(String s) { return s.length() > 1500 ? s.substring(0, 1500) : s; }
 }
