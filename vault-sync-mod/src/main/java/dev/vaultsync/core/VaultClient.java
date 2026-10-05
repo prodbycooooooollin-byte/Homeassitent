@@ -26,7 +26,9 @@ public final class VaultClient {
 
     /** worldSync: POST {key, data} als JSON. 401 = falscher Schlüssel, 404 = auf der Seite gibt es noch keine Sicherung. */
     public void postStats(java.util.Map<String, Object> data) throws IOException, InterruptedException {
-        String json = Json.write(java.util.Map.of("key", cfg.apiKey, "data", data));
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("key", cfg.apiKey); body.put("data", data);
+        String json = Json.write(body);
         HttpRequest req = HttpRequest.newBuilder(URI.create(cfg.endpoint)).timeout(Duration.ofSeconds(30))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();
