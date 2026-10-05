@@ -34,9 +34,9 @@ public final class VaultSyncClient implements ClientModInitializer {
             if (session != null) { session.stop(); session = null; activeRoot = null; }
             if (root == null) return;
             String folder = root.getFileName().toString();
-            String worldId = config.worlds.get(folder);
-            if (worldId == null || config.apiKey.isEmpty()) { activeRoot = root; return; } // nicht eingetragen → nichts tun
             activeRoot = root;
+            if (!config.watched.contains(folder) && !config.worlds.containsKey(folder) || config.apiKey.isEmpty()) return; // nicht eingetragen → nichts tun
+            String worldId = config.worlds.getOrDefault(folder, folder);
             session = engine.start(root, worldId, new MinecraftHooks(server));
             LOG.info("Sicherung aktiv für Welt '{}' alle {} Min.", folder, config.intervalMinutes);
         });

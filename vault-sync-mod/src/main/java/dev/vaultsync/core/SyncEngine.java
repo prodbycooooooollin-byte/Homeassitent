@@ -11,6 +11,8 @@ public final class SyncEngine {
 
     /** Vom Spiel bereitgestellt: Welt konsistent auf Platte bringen und Schreibzugriffe kurz pausieren. */
     public interface Hooks {
+        /** Statistiken auf dem Server-Thread einsammeln (null = keine verfügbar). */
+        java.util.Map<String, Object> collectStats() throws Exception;
         void saveAndFreeze() throws Exception;
         void unfreeze();
     }
@@ -45,6 +47,7 @@ public final class SyncEngine {
         /** Beim Verlassen der Welt: Welt ist dann komplett gespeichert – letzter, konsistenter Stand. */
         public void stop() {
             task.cancel(false);
+            if (!cfg.zipBackup) return; // Statistiken brauchen den laufenden Server
             Thread t = new Thread(() -> cycle(root, id, null, false), "VaultSync-final"); // nicht-daemon: JVM wartet kurz
             t.start();
         }
@@ -56,6 +59,12 @@ public final class SyncEngine {
         boolean frozen = false;
         try {
             set(State.SAVING);
+            if (hooks != null) {
+                var stats = hooks.collectStats();
+                if (stats != null) { set(State.UPLOADING); client.postStats(stats); }
+            }
+            if (!cfg.zipBackup) { set(State.DONE); return; }
+            set(State.SAVING);
             if (hooks != null) { hooks.saveAndFreeze(); frozen = true; }
             String fp = WorldZipper.fingerprint(root);
             if (fp.equals(lastFingerprint)) { set(State.IDLE); return; }
@@ -66,7 +75,7 @@ public final class SyncEngine {
             client.upload(worldId, fp, tmp);
             lastFingerprint = fp;
             set(State.DONE);
-            log.accept("Welt gesichert (" + Files.size(tmp) / 1024 / 1024 + " MB)");
+            log.accept("Welt-ZIP hochgeladen (" + Files.size(tmp) / 1024 / 1024 + " MB)");
         } catch (Exception e) {
             lastError = String.valueOf(e.getMessage());
             set(State.ERROR);

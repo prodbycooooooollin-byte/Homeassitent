@@ -12,7 +12,8 @@ import java.time.Duration;
 import java.util.UUID;
 
 /**
- * Lädt ein Welt-Backup hoch. ANNAHME zum Protokoll (bitte mit der Seite abgleichen):
+ * {@link #postStats} entspricht der echten worldSync-Schnittstelle. {@link #upload} ist NUR eine Annahme für eine künftige
+ * Upload-Schnittstelle der Seite (existiert noch nicht) und ist standardmäßig abgeschaltet (zipBackup=false):
  *   POST {endpoint}, Header "Authorization: Bearer {apiKey}", multipart/form-data mit
  *   Feldern worldId, fingerprint, replacePrevious=true und Datei "file" (world.zip).
  * Die Seite ersetzt/löscht die alte Version selbst. Alles Protokollspezifische steht NUR in dieser Klasse.
@@ -22,6 +23,21 @@ public final class VaultClient {
     private final Config cfg;
 
     public VaultClient(Config cfg) { this.cfg = cfg; }
+
+    /** worldSync: POST {key, data} als JSON. 401 = falscher Schlüssel, 404 = auf der Seite gibt es noch keine Sicherung. */
+    public void postStats(java.util.Map<String, Object> data) throws IOException, InterruptedException {
+        String json = Json.write(java.util.Map.of("key", cfg.apiKey, "data", data));
+        HttpRequest req = HttpRequest.newBuilder(URI.create(cfg.endpoint)).timeout(Duration.ofSeconds(30))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();
+        HttpResponse<String> r = http.send(req, HttpResponse.BodyHandlers.ofString());
+        switch (r.statusCode()) {
+            case 200 -> { }
+            case 401 -> throw new IOException("Falscher Schlüssel (apiKey)");
+            case 404 -> throw new IOException("Auf der Seite gibt es noch keine Sicherung – erst eine anlegen");
+            default -> throw new IOException("Server antwortete " + r.statusCode() + ": " + trim(r.body()));
+        }
+    }
 
     public void upload(String worldId, String fingerprint, Path zip) throws IOException, InterruptedException {
         String b = "----vaultsync" + UUID.randomUUID();
