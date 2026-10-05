@@ -33,7 +33,7 @@ final class VaultHud implements HudElement {
         int cx = w - 12 - textW - 6 - 6;  // Mittelpunkt des Symbols (GUI-Einheiten)
         int cy = 14;
         int text = argb(alpha * 0.75f, 0xC8, 0xCC, 0xD2);
-        ctx.drawString(mc.font, label, w - 10 - textW, cy - 4, text, false);
+        ctx.text(mc.font, label, w - 10 - textW, cy - 4, text, false);
 
         var m = ctx.pose();
         m.pushMatrix();
