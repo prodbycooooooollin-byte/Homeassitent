@@ -34,7 +34,7 @@ final class StatsCollector {
         d.put("mc_version", SharedConstants.getCurrentVersion().name());
         d.put("game_mode", p.gameMode.getGameModeForPlayer().getName());
         d.put("difficulty", data.getDifficulty().name().toLowerCase(java.util.Locale.ROOT));
-        d.put("seed", overworld.getSeed());
+        d.put("seed", String.valueOf(overworld.getSeed()));
         d.put("dimension", p.level().dimension().identifier().toString());
         d.put("player_x", Math.round(p.getX() * 10) / 10.0);
         d.put("player_y", Math.round(p.getY() * 10) / 10.0);
