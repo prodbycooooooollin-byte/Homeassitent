@@ -1,0 +1,44 @@
+package dev.vaultsync.mc;
+
+import dev.vaultsync.core.Config;
+import dev.vaultsync.core.SyncEngine;
+import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.WorldSavePath;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.file.Path;
+
+public final class VaultSyncClient implements ClientModInitializer {
+    static final Logger LOG = LoggerFactory.getLogger("VaultSync");
+    private SyncEngine engine;
+    private SyncEngine.Session session;
+    private Path activeRoot;
+    private Config config;
+
+    @Override public void onInitializeClient() {
+        try {
+            config = Config.load(FabricLoader.getInstance().getConfigDir().resolve("vaultsync.properties"));
+        } catch (Exception e) { LOG.error("Konfiguration nicht lesbar", e); return; }
+        engine = new SyncEngine(config, LOG::info);
+        HudRenderCallback.EVENT.register(new VaultHud(engine));
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            MinecraftServer server = client.isIntegratedServerRunning() ? client.getServer() : null;
+            Path root = server == null || !server.isRunning() ? null
+                    : server.getSavePath(WorldSavePath.ROOT).toAbsolutePath().normalize();
+            if (root == null ? activeRoot == null : root.equals(activeRoot)) return;
+            if (session != null) { session.stop(); session = null; activeRoot = null; }
+            if (root == null) return;
+            String folder = root.getFileName().toString();
+            String worldId = config.worlds.get(folder);
+            if (worldId == null || config.apiKey.isEmpty()) { activeRoot = root; return; } // nicht eingetragen → nichts tun
+            activeRoot = root;
+            session = engine.start(root, worldId, new MinecraftHooks(server));
+            LOG.info("Sicherung aktiv für Welt '{}' alle {} Min.", folder, config.intervalMinutes);
+        });
+    }
+}
