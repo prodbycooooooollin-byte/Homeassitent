@@ -1,0 +1,23 @@
+name: Vault Sync Versionen suchen
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/vault-sync-discover.yml']
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "== Spiel 26.x =="; curl -s https://meta.fabricmc.net/v2/versions/game | python3 -c "import sys,json; print([v['version'] for v in json.load(sys.stdin) if v['version'].startswith('26')][:15])"
+          echo "== Loader =="; curl -s https://meta.fabricmc.net/v2/versions/loader | python3 -c "import sys,json; print([v['version'] for v in json.load(sys.stdin)][:5])"
+          echo "== Fabric API 26.x =="; curl -s https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/maven-metadata.xml | grep -o '<version>[^<]*26[^<]*</version>' | tail -8
+          echo "== Loom Plugins =="; curl -s https://maven.fabricmc.net/net/fabricmc/fabric-loom/maven-metadata.xml | grep -o '<version>[^<]*</version>' | tail -6
+          curl -s https://maven.fabricmc.net/net/fabricmc/fabric-loom/net.fabricmc.fabric-loom.gradle.plugin/maven-metadata.xml | grep -o '<version>[^<]*</version>' | tail -6
+          echo "== Java =="; curl -s "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json" | python3 -c "
+          import sys,json,urllib.request
+          m=json.load(sys.stdin)
+          v=[x for x in m['versions'] if x['id'].startswith('26.3')]
+          print(v[:3])
+          if v:
+              d=json.load(urllib.request.urlopen(v[0]['url'])); print(d.get('javaVersion'), d.get('type'))
+          "
