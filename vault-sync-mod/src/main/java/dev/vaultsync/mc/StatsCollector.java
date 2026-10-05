@@ -33,7 +33,7 @@ final class StatsCollector {
         d.put("world_name", data.getLevelName());
         d.put("mc_version", SharedConstants.getCurrentVersion().name());
         d.put("game_mode", p.gameMode.getGameModeForPlayer().getName());
-        d.put("difficulty", data.getDifficulty().getKey());
+        d.put("difficulty", data.getDifficulty().name().toLowerCase(java.util.Locale.ROOT));
         d.put("seed", overworld.getSeed());
         d.put("dimension", p.level().dimension().identifier().toString());
         d.put("player_x", Math.round(p.getX() * 10) / 10.0);
@@ -43,7 +43,7 @@ final class StatsCollector {
         d.put("health", p.getHealth());
         d.put("food_level", p.getFoodData().getFoodLevel());
         d.put("game_time_ticks", overworld.getGameTime());
-        d.put("day_time", overworld.getDayTime());
+        d.put("day_time", overworld.getGameTime() % 24000L);
         d.put("weather", overworld.isThundering() ? "thunder" : overworld.isRaining() ? "rain" : "clear");
         d.put("hardcore", data.isHardcore());
 

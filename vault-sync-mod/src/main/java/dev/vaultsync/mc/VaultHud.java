@@ -4,7 +4,7 @@ import dev.vaultsync.core.SyncEngine;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElement;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 /**
  * Minimalistischer Statusindikator oben rechts: dünner, rotierender Bogen mit auslaufendem Schweif,
@@ -15,9 +15,9 @@ final class VaultHud implements HudElement {
     private final SyncEngine engine;
     VaultHud(SyncEngine engine) { this.engine = engine; }
 
-    @Override public void render(GuiGraphics ctx, DeltaTracker tick) {
+    @Override public void extractRenderState(GuiGraphicsExtractor ctx, DeltaTracker tick) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.options.hideGui || mc.player == null) return;
+        if (mc.player == null) return; // bei F1 (GUI aus) werden HUD-Elemente ohnehin nicht gezeichnet
         SyncEngine.State s = engine.state();
         long age = engine.stateAgeMs();
         boolean busy = s == SyncEngine.State.SAVING || s == SyncEngine.State.UPLOADING;
@@ -45,7 +45,7 @@ final class VaultHud implements HudElement {
         m.popMatrix();
     }
 
-    private static void spinner(GuiGraphics c, float alpha, boolean upload) {
+    private static void spinner(GuiGraphicsExtractor c, float alpha, boolean upload) {
         double head = (System.nanoTime() / 1e9) * (upload ? 5.2 : 4.2);
         double r = 9; int n = 52; double sweep = Math.PI * 1.35;
         // schwacher Hintergrundring
@@ -61,22 +61,22 @@ final class VaultHud implements HudElement {
         }
     }
 
-    private static void dot(GuiGraphics c, double a, double r, int col) {
+    private static void dot(GuiGraphicsExtractor c, double a, double r, int col) {
         int x = (int) Math.round(Math.cos(a) * r), y = (int) Math.round(Math.sin(a) * r);
         c.fill(x, y, x + 1, y + 1, col);
     }
 
-    private static void check(GuiGraphics c, float alpha) {
+    private static void check(GuiGraphicsExtractor c, float alpha) {
         int col = argb(alpha, 0x5B, 0xD9, 0x8C);
         line(c, -5, 0, -2, 4, col); line(c, -2, 4, 6, -4, col);
     }
 
-    private static void cross(GuiGraphics c, float alpha) {
+    private static void cross(GuiGraphicsExtractor c, float alpha) {
         int col = argb(alpha, 0xF2, 0x6B, 0x6B);
         line(c, -4, -4, 4, 4, col); line(c, -4, 4, 4, -4, col);
     }
 
-    private static void line(GuiGraphics c, int x0, int y0, int x1, int y1, int col) {
+    private static void line(GuiGraphicsExtractor c, int x0, int y0, int x1, int y1, int col) {
         int n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
         for (int i = 0; i <= n; i++) {
             int x = x0 + (x1 - x0) * i / n, y = y0 + (y1 - y0) * i / n;
