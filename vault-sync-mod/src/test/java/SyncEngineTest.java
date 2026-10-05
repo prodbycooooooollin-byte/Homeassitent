@@ -38,6 +38,8 @@ class SyncEngineTest {
         s.stop(0);
     }
 
+    private static Map<String,Object> item() { var m = new LinkedHashMap<String,Object>(); m.put("id", "minecraft:dirt"); m.put("count", 2); return m; }
+
     @Test void statsAreSentAsKeyAndData() throws Exception {
         AtomicReference<String> got = new AtomicReference<>(); AtomicInteger code = new AtomicInteger(200);
         HttpServer s = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -47,7 +49,7 @@ class SyncEngineTest {
         SyncEngine e = new SyncEngine(c, m -> { });
         SyncEngine.Hooks h = new SyncEngine.Hooks() {
             public Map<String,Object> collectStats() { var m = new LinkedHashMap<String,Object>(); m.put("world_name", "A \"B\""); m.put("xp_level", 3);
-                m.put("health", 19.5); m.put("hardcore", false); m.put("inventory", List.of(Map.of("id", "minecraft:dirt", "count", 2))); return m; }
+                m.put("health", 19.5); m.put("hardcore", false); m.put("inventory", List.of(item())); return m; }
             public void saveAndFreeze() { fail("zipBackup ist aus"); } public void unfreeze() { } };
         e.cycle(Path.of("."), "w", h, true);
         assertEquals("{\"key\":\"geheim\",\"data\":{\"world_name\":\"A \\\"B\\\"\",\"xp_level\":3,\"health\":19.5,\"hardcore\":false,"
