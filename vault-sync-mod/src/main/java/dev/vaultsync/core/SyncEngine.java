@@ -27,23 +27,32 @@ public final class SyncEngine {
     private volatile long stateSince = System.nanoTime();
     private volatile String lastError = "";
     private volatile String lastFingerprint = "";
+    private volatile boolean paused;
+    private volatile long lastSuccessMs;
+    private volatile ScheduledFuture<?> scheduled;
 
     public SyncEngine(Config cfg, Consumer<String> log) { this.cfg = cfg; this.client = new VaultClient(cfg); this.log = log; }
 
     public State state() { return state; }
     public long stateAgeMs() { return (System.nanoTime() - stateSince) / 1_000_000; }
     public String lastError() { return lastError; }
+    public boolean paused() { return paused; }
+    public void setPaused(boolean p) { paused = p; }
+    /** Zeitpunkt des letzten erfolgreichen Durchlaufs (ms seit 1970) oder 0. */
+    public long lastSuccessMs() { return lastSuccessMs; }
     private void set(State s) { state = s; stateSince = System.nanoTime(); }
 
     public Session start(Path worldRoot, String worldId, Hooks hooks) {
-        ScheduledFuture<?> f = exec.scheduleWithFixedDelay(() -> cycle(worldRoot, worldId, hooks, true),
+        ScheduledFuture<?> f = exec.scheduleWithFixedDelay(() -> { if (!paused) cycle(worldRoot, worldId, hooks, true); },
                 cfg.intervalMinutes, cfg.intervalMinutes, TimeUnit.MINUTES);
-        return new Session(f, worldRoot, worldId);
+        return new Session(f, worldRoot, worldId, hooks);
     }
 
     public final class Session {
-        private final ScheduledFuture<?> task; private final Path root; private final String id;
-        Session(ScheduledFuture<?> t, Path r, String i) { task = t; root = r; id = i; }
+        private final ScheduledFuture<?> task; private final Path root; private final String id; private final Hooks hooks;
+        Session(ScheduledFuture<?> t, Path r, String i, Hooks h) { task = t; root = r; id = i; hooks = h; }
+        /** Sofort sichern (läuft im Hintergrund; das Ergebnis zeigt die Anzeige bzw. {@link #state()}). */
+        public void syncNow() { exec.execute(() -> cycle(root, id, hooks, true)); }
         /** Beim Verlassen der Welt: Welt ist dann komplett gespeichert – letzter, konsistenter Stand. */
         public void stop() {
             task.cancel(false);
@@ -63,7 +72,7 @@ public final class SyncEngine {
                 var stats = hooks.collectStats();
                 if (stats != null) { set(State.UPLOADING); client.postStats(stats); }
             }
-            if (!cfg.zipBackup) { set(State.DONE); return; }
+            if (!cfg.zipBackup) { lastSuccessMs = System.currentTimeMillis(); set(State.DONE); log.accept("Statistiken gesendet"); return; }
             set(State.SAVING);
             if (hooks != null) { hooks.saveAndFreeze(); frozen = true; }
             String fp = WorldZipper.fingerprint(root);
@@ -74,6 +83,7 @@ public final class SyncEngine {
             set(State.UPLOADING);
             client.upload(worldId, fp, tmp);
             lastFingerprint = fp;
+            lastSuccessMs = System.currentTimeMillis();
             set(State.DONE);
             log.accept("Welt-ZIP hochgeladen (" + Files.size(tmp) / 1024 / 1024 + " MB)");
         } catch (Exception e) {

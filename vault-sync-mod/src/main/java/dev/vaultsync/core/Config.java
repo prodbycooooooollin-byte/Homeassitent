@@ -18,6 +18,12 @@ public final class Config {
     public final java.util.Set<String> watched = new java.util.LinkedHashSet<>();
     public final Map<String, String> worlds = new LinkedHashMap<>();
 
+    /** Übernimmt Werte aus einer frisch geladenen Konfiguration (für /vault reload). */
+    public void copyFrom(Config o) {
+        endpoint = o.endpoint; apiKey = o.apiKey; intervalMinutes = o.intervalMinutes; zipBackup = o.zipBackup;
+        watched.clear(); watched.addAll(o.watched); worlds.clear(); worlds.putAll(o.worlds);
+    }
+
     public static Config load(Path file) throws IOException {
         if (!Files.exists(file)) {
             Files.createDirectories(file.getParent());

@@ -61,6 +61,25 @@ class SyncEngineTest {
         assertTrue(e.lastError().contains("Schlüssel")); s.stop(0);
     }
 
+    @Test void syncNowAndPause() throws Exception {
+        AtomicInteger posts = new AtomicInteger();
+        HttpServer s = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        s.createContext("/", ex -> { ex.getRequestBody().readAllBytes(); posts.incrementAndGet(); ex.sendResponseHeaders(200, -1); ex.close(); }); s.start();
+        Config c = new Config(); c.endpoint = "http://127.0.0.1:" + s.getAddress().getPort() + "/"; c.intervalMinutes = 60;
+        SyncEngine e = new SyncEngine(c, m -> { });
+        SyncEngine.Hooks h = new SyncEngine.Hooks() {
+            public Map<String,Object> collectStats() { return Map.of("xp_level", 1); }
+            public void saveAndFreeze() { } public void unfreeze() { } };
+        var session = e.start(Path.of("."), "w", h);
+        session.syncNow();
+        for (int i = 0; i < 50 && e.lastSuccessMs() == 0; i++) Thread.sleep(100);
+        assertEquals(1, posts.get()); assertTrue(e.lastSuccessMs() > 0);
+        e.setPaused(true); assertTrue(e.paused());
+        Config n = new Config(); n.apiKey = "neu"; n.intervalMinutes = 9; n.watched.add("X"); c.copyFrom(n);
+        assertEquals("neu", c.apiKey); assertEquals(9, c.intervalMinutes); assertTrue(c.watched.contains("X"));
+        s.stop(0);
+    }
+
     @Test void zipSkipsLockAndKeepsFolder() throws Exception {
         Path w = Files.createTempDirectory("saves").resolve("W"); Files.createDirectories(w);
         Files.writeString(w.resolve("level.dat"), "x"); Files.writeString(w.resolve("session.lock"), "l");
