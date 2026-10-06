@@ -14,7 +14,7 @@ public final class Config {
     public volatile int intervalMinutes = 5;
     /** ZIP-Backup der Weltdateien über worldUpload. */
     public volatile boolean zipBackup = false;
-    /** Adresse von worldUpload; leer = aus endpoint abgeleitet (worldSync → worldUpload). */
+    /** Adresse von worldUploadChunk; leer = aus endpoint abgeleitet (worldSync → worldUploadChunk). */
     public String uploadEndpoint = "";
     /** Wie oft die komplette Welt als ZIP hochgeladen wird (Statistiken gehen alle intervalMinutes). */
     public volatile int zipIntervalMinutes = 30;
@@ -62,7 +62,7 @@ public final class Config {
         c.uploadOnExit = Boolean.parseBoolean(p.getProperty("uploadOnExit", "true").trim());
         c.showIndicator = Boolean.parseBoolean(p.getProperty("showIndicator", "true").trim());
         c.uploadEndpoint = p.getProperty("uploadEndpoint", "").trim();
-        if (c.uploadEndpoint.isEmpty()) c.uploadEndpoint = c.endpoint.replaceAll("worldSync/?$", "worldUpload");
+        if (c.uploadEndpoint.isEmpty()) c.uploadEndpoint = c.endpoint.replaceAll("worldSync/?$", "worldUploadChunk");
         for (String w : p.getProperty("worlds", "").split(",")) if (!w.isBlank()) c.watched.add(w.trim());
         for (String k : p.stringPropertyNames())
             if (k.startsWith("world.") && !p.getProperty(k).isBlank()) c.worlds.put(k.substring(6), p.getProperty(k).trim());
@@ -80,7 +80,7 @@ public final class Config {
         sb.append("zipIntervalMinutes=").append(zipIntervalMinutes).append('\n');
         sb.append("uploadOnExit=").append(uploadOnExit).append('\n');
         sb.append("showIndicator=").append(showIndicator).append('\n');
-        if (!uploadEndpoint.equals(endpoint.replaceAll("worldSync/?$", "worldUpload"))) sb.append("uploadEndpoint=").append(uploadEndpoint).append('\n');
+        if (!uploadEndpoint.equals(endpoint.replaceAll("worldSync/?$", "worldUploadChunk"))) sb.append("uploadEndpoint=").append(uploadEndpoint).append('\n');
         worlds.forEach((k, v) -> sb.append("world.").append(k.replace(" ", "\\ ")).append('=').append(v).append('\n'));
         Files.writeString(file, sb.toString());
     }

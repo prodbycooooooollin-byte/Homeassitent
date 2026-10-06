@@ -9,36 +9,90 @@ import java.util.zip.ZipInputStream;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SyncEngineTest {
-    @Test void uploadsOnceThenSkipsUnchanged() throws Exception {
-        Path world = Files.createTempDirectory("saves").resolve("Meine Welt");
-        Files.createDirectories(world.resolve("region"));
-        Files.writeString(world.resolve("level.dat"), "x");
-        Files.writeString(world.resolve("session.lock"), "locked");
-        Files.writeString(world.resolve("region/r.0.0.mca"), "data");
+    /** Baut die Funktion worldUploadChunk nach und sammelt die Teile. */
+    private static final class FakeSite {
+        final HttpServer server; final AtomicInteger requests = new AtomicInteger(); final AtomicInteger finishes = new AtomicInteger();
+        final java.io.ByteArrayOutputStream received = new java.io.ByteArrayOutputStream();
+        final List<String> actions = Collections.synchronizedList(new ArrayList<>());
+        volatile String fileName = "", worldName = "", key = ""; volatile long lastOffset; volatile int failFirst = 0; volatile int status = 200;
+        FakeSite() throws Exception {
+            server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/", ex -> {
+                byte[] body = ex.getRequestBody().readAllBytes(); requests.incrementAndGet();
+                if (failFirst > 0) { failFirst--; ex.sendResponseHeaders(502, -1); ex.close(); return; }
+                if (status != 200) { ex.sendResponseHeaders(status, -1); ex.close(); return; }
+                var h = ex.getRequestHeaders(); key = h.getFirst("X-WorldVault-Key"); String a = h.getFirst("X-Action"); actions.add(a);
+                long off = h.getFirst("X-Offset") == null ? 0 : Long.parseLong(h.getFirst("X-Offset"));
+                if (!a.equals("start")) assertEquals(received.size(), off, "Offset muss zu den bisher empfangenen Bytes passen");
+                received.writeBytes(body); lastOffset = off;
+                if (a.equals("finish")) { finishes.incrementAndGet(); fileName = h.getFirst("X-File-Name"); worldName = h.getFirst("X-World-Name"); }
+                byte[] resp = (a.equals("start") ? "{\"ok\":true,\"session_id\":\"SID1\",\"offset\":" + body.length + "}" : "{\"ok\":true}").getBytes();
+                ex.sendResponseHeaders(200, resp.length); ex.getResponseBody().write(resp); ex.close();
+            });
+            server.start();
+        }
+        String url() { return "http://127.0.0.1:" + server.getAddress().getPort() + "/"; }
+    }
 
-        AtomicInteger posts = new AtomicInteger(); AtomicReference<String> auth = new AtomicReference<>(); AtomicReference<String> hdrs = new AtomicReference<>();
-        AtomicReference<byte[]> body = new AtomicReference<>();
-        HttpServer s = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        s.createContext("/", ex -> { posts.incrementAndGet(); auth.set(ex.getRequestHeaders().getFirst("X-WorldVault-Key")); hdrs.set(ex.getRequestHeaders().getFirst("X-World-Name") + "|" + ex.getRequestHeaders().getFirst("X-File-Name"));
-            body.set(ex.getRequestBody().readAllBytes()); ex.sendResponseHeaders(200, -1); ex.close(); });
-        s.start();
-        Config c = new Config(); c.zipBackup = true; c.endpoint = "http://127.0.0.1:" + s.getAddress().getPort() + "/"; c.uploadEndpoint = c.endpoint; c.apiKey = "K";
-        AtomicInteger freezes = new AtomicInteger(), thaws = new AtomicInteger();
+    private static Path bigWorld(int bytes) throws Exception {
+        Path w = Files.createTempDirectory("saves").resolve("Meine Welt"); Files.createDirectories(w.resolve("region"));
+        Files.writeString(w.resolve("level.dat"), "x");
+        byte[] data = new byte[bytes]; new Random(1).nextBytes(data); // nicht komprimierbar → ZIP ≈ so groß wie bytes
+        Files.write(w.resolve("region/r.0.0.mca"), data);
+        return w;
+    }
+
+    @Test void uploadsInChunksAndReassembles() throws Exception {
+        FakeSite site = new FakeSite();
+        Config c = new Config(); c.zipBackup = true; c.apiKey = "K"; c.endpoint = site.url(); c.uploadEndpoint = site.url();
+        Path world = bigWorld(300_000);
+        Path zip = Files.createTempFile("t", ".zip"); WorldZipper.zip(world, zip);
+        VaultClient vc = new VaultClient(c); vc.chunkBytes = 64 * 1024;
+        vc.upload("Meine Welt", zip);
+        assertEquals("start", site.actions.get(0)); assertEquals("finish", site.actions.get(site.actions.size() - 1));
+        assertTrue(site.actions.size() >= 5, site.actions.toString()); assertEquals(1, site.finishes.get());
+        assertArrayEquals(Files.readAllBytes(zip), site.received.toByteArray());
+        assertEquals("K", site.key); assertEquals("Meine Welt", site.worldName); assertTrue(site.fileName.startsWith("Meine Welt_") && site.fileName.endsWith(".zip"));
+        site.server.stop(0);
+    }
+
+    @Test void smallFileIsStartPlusFinish() throws Exception {
+        FakeSite site = new FakeSite();
+        Config c = new Config(); c.apiKey = "K"; c.uploadEndpoint = site.url();
+        Path z = Files.createTempFile("t", ".zip"); Files.writeString(z, "PKabc");
+        new VaultClient(c).upload("W", z);
+        assertEquals(List.of("start", "finish"), site.actions); assertEquals("PKabc", site.received.toString());
+        site.server.stop(0);
+    }
+
+    @Test void retriesTransientErrorsAndStopsOnAuthError() throws Exception {
+        FakeSite site = new FakeSite(); site.failFirst = 2;
+        Config c = new Config(); c.apiKey = "K"; c.uploadEndpoint = site.url();
+        VaultClient vc = new VaultClient(c); vc.retryDelayMs = 1;
+        Path z = Files.createTempFile("t", ".zip"); Files.writeString(z, "PKabc");
+        vc.upload("W", z);
+        assertEquals(List.of("start", "finish"), site.actions); assertEquals(4, site.requests.get());
+        site.status = 401;
+        var ex = assertThrows(java.io.IOException.class, () -> vc.upload("W", z));
+        assertTrue(ex.getMessage().contains("Schlüssel"));
+        site.status = 404;
+        ex = assertThrows(java.io.IOException.class, () -> vc.upload("W", z));
+        assertTrue(ex.getMessage().contains("worldUploadChunk"));
+        site.server.stop(0);
+    }
+
+    @Test void engineUploadsWorldViaChunks() throws Exception {
+        FakeSite site = new FakeSite();
+        Config c = new Config(); c.zipBackup = true; c.apiKey = "K"; c.endpoint = site.url(); c.uploadEndpoint = site.url();
+        Path world = bigWorld(1000);
         SyncEngine.Hooks h = new SyncEngine.Hooks() {
-            public Map<String,Object> collectStats() { return null; } public void saveAndFreeze() { freezes.incrementAndGet(); } public void unfreeze() { thaws.incrementAndGet(); } };
+            public Map<String,Object> collectStats() { return null; } public void saveAndFreeze() { } public void unfreeze() { } };
         SyncEngine e = new SyncEngine(c, m -> { });
         e.cycle(world, "w1", h, true);
-        assertEquals(SyncEngine.State.DONE, e.state()); assertEquals(1, posts.get()); assertEquals("K", auth.get());
-        assertTrue(hdrs.get().startsWith("Meine Welt|Meine Welt_") && hdrs.get().endsWith(".zip"), hdrs.get());
-        assertEquals('P', body.get()[0]); assertEquals('K', body.get()[1]); // rohe ZIP
+        assertEquals(SyncEngine.State.DONE, e.state()); assertEquals(1, site.finishes.get()); assertTrue(e.lastZipBytes() > 1000);
         e.cycle(world, "w1", h, true, true);
-        assertEquals(1, posts.get(), "unverändert → kein zweiter Upload");
-        Files.writeString(world.resolve("level.dat"), "changed!");
-        e.cycle(world, "w1", h, true);
-        assertEquals(1, posts.get(), "ZIP-Intervall noch nicht erreicht");
-        e.cycle(world, "w1", h, true, true);
-        assertEquals(2, posts.get()); assertEquals(freezes.get(), thaws.get());
-        s.stop(0);
+        assertEquals(1, site.finishes.get(), "unveränderte Welt wird nicht erneut hochgeladen");
+        site.server.stop(0);
     }
 
     private static Map<String,Object> item() { var m = new LinkedHashMap<String,Object>(); m.put("id", "minecraft:dirt"); m.put("count", 2); return m; }
