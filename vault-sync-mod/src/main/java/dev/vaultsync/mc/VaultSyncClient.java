@@ -41,7 +41,7 @@ public final class VaultSyncClient implements ClientModInitializer {
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
                 Identifier.fromNamespaceAndPath("vaultsync", "status"), new VaultHud(engine, config));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (openRequested) { openRequested = false; client.setScreen(new VaultScreen(engine, config, actions())); } // erst im nächsten Tick, sonst schließt der Chat es wieder
+            if (openRequested) { openRequested = false; client.setScreenAndShow(new VaultScreen(engine, config, actions())); } // erst im nächsten Tick, sonst schließt der Chat es wieder
             MinecraftServer server = client.getSingleplayerServer();
             Path root = server == null || !server.isRunning() ? null
                     : server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
