@@ -67,3 +67,12 @@ export function shoppingList(builds: Build[]): { name: string; count: number; fr
 
 export const progress = (items: ItemEntry[]) =>
   items.length ? items.filter((i) => i.done).length / items.length : 0;
+
+/** Ergänzt fehlende Items (vorhandene bleiben unverändert, damit abgehakte nicht überschrieben werden). */
+export function addMissing(items: ItemEntry[], add: { name: string; count: number }[]): ItemEntry[] {
+  const have = new Set(items.map((i) => i.name.toLowerCase()));
+  const extra = add
+    .filter((a) => !have.has(a.name.toLowerCase()))
+    .map((a) => ({ id: uid(), name: a.name, count: a.count, done: false }));
+  return extra.length ? [...items, ...extra] : items;
+}

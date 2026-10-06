@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { buildFarm } from '../lib/analyze';
-import { newBuild, type Store } from '../lib/store';
+import { useCallback, useEffect, useState } from 'react';
+import { parseItemList } from '../lib/analyze';
+import { addMissing, newBuild, type Store } from '../lib/store';
+import { fetchComments } from '../lib/youtube';
 import type { Build, Farm } from '../lib/types';
 import { Chest } from './Chest';
+import { SchematicPanel } from './SchematicPanel';
 import { DiffBadge, Stars, duration } from './Farms';
 
 interface Props {
@@ -14,7 +16,9 @@ interface Props {
 export function Detail({ farm, store, onClose }: Props) {
   const { state, update } = store;
   const build = state.builds.find((b) => b.farm.id === farm.id);
-  const [tab, setTab] = useState<'info' | 'list'>(build ? 'list' : 'info');
+  const [tab, setTab] = useState<'info' | 'list' | '3d'>(build ? 'list' : 'info');
+  const [comments, setComments] = useState<string[]>([]);
+  const [cstate, setCstate] = useState('');
   const fav = state.favorites.some((f) => f.id === farm.id);
 
   const start = () => {
@@ -25,10 +29,34 @@ export function Detail({ farm, store, onClose }: Props) {
     update((s) => ({ ...s, builds: s.builds.map((b) => (b.farm.id === farm.id ? { ...b, ...p } : b)) }));
   const toggleFav = () =>
     update((s) => ({ ...s, favorites: fav ? s.favorites.filter((f) => f.id !== farm.id) : [farm, ...s.favorites] }));
-  const importDesc = () => {
-    const parsed = buildFarm({ videoId: farm.videoId, title: farm.title, channel: farm.channel, thumbnail: farm.thumbnail, description: farm.description });
-    if (build) patchBuild({ items: [...build.items, ...parsed.items.filter((p) => !build.items.some((i) => i.name === p.name)).map((p) => ({ ...p, id: Math.random().toString(36).slice(2, 10), done: false }))] });
-  };
+  const addItems = useCallback(
+    (list: { name: string; count: number }[]) =>
+      update((st) => ({
+        ...st,
+        builds: st.builds.map((b) => (b.farm.id === farm.id ? { ...b, items: addMissing(b.items, list) } : b)),
+      })),
+    [farm.id, update],
+  );
+  const importDesc = () => addItems(parseItemList(farm.description));
+  const importComments = () => addItems(parseItemList(comments.join('\n')));
+
+  // Kommentare laden (Ersteller-Kommentare enthalten oft die Materialliste)
+  useEffect(() => {
+    if (!state.apiKey) return;
+    const ac = new AbortController();
+    setCstate('lädt');
+    fetchComments(farm.videoId, state.apiKey, farm.channelId, ac.signal)
+      .then((c) => { setComments(c); setCstate(''); })
+      .catch((e) => { if (e.name !== 'AbortError') setCstate('nicht verfügbar'); });
+    return () => ac.abort();
+  }, [farm.videoId, farm.channelId, state.apiKey]);
+
+  // Neues Projekt ohne Items → Liste automatisch aus Kommentaren füllen
+  const commentItems = parseItemList(comments.join('\n'));
+  useEffect(() => {
+    if (build && build.items.length === 0 && commentItems.length >= 3) addItems(commentItems);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comments, build?.id]);
 
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label={farm.title} onClick={onClose}>
@@ -61,6 +89,7 @@ export function Detail({ farm, store, onClose }: Props) {
           <button className={tab === 'list' ? 'on' : ''} onClick={() => (build ? setTab('list') : start())}>
             {build ? 'Materialien & Notizen' : '+ Bau starten'}
           </button>
+          <button className={tab === '3d' ? 'on' : ''} onClick={() => setTab('3d')}>🧱 3D-Modell</button>
         </div>
 
         {tab === 'info' && (
@@ -71,10 +100,24 @@ export function Detail({ farm, store, onClose }: Props) {
           </div>
         )}
 
+        {tab === '3d' && (
+          <SchematicPanel
+            title={farm.title}
+            text={`${farm.description}\n${comments.join('\n')}`}
+            autoApply={!!build && build.items.length === 0}
+            onMaterials={(m, auto) => { if (!build) start(); addItems(m); if (!auto) setTab('list'); }}
+          />
+        )}
+
         {tab === 'list' && build && (
           <>
             <Chest items={build.items} lang={state.lang} onChange={(items) => patchBuild({ items })} />
-            {farm.description && <button className="chip" onClick={importDesc}>Items aus Videobeschreibung erneut einlesen</button>}
+            <div className="chips">
+              {farm.description && <button className="chip" onClick={importDesc}>Items aus Beschreibung einlesen</button>}
+              {state.apiKey && <button className="chip" onClick={importComments} disabled={commentItems.length === 0}>
+                Items aus Kommentaren ({cstate || commentItems.length})
+              </button>}
+            </div>
             <label className="field">Koordinaten / Standort
               <input value={build.coords} onChange={(e) => patchBuild({ coords: e.target.value })} placeholder="x 120, y 64, z -300" />
             </label>

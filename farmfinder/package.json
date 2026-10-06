@@ -9,18 +9,60 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "catalog": "tsx scripts/build-catalog.ts",
+    "electron": "npm run build && electron .",
+    "dist:win": "npm run build && electron-builder --win --publish never"
   },
   "dependencies": {
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "tesseract.js": "^7.0.0",
+    "three": "^0.186.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.4",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "local.farmfinder",
+    "productName": "FarmFinder",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "artifactName": "FarmFinder-Setup-${version}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "portable": {
+      "artifactName": "FarmFinder-${version}-portable.${ext}"
+    }
+  },
+  "author": "prodbycooooooollin-byte",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prodbycooooooollin-byte/Homeassitent.git"
   }
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { parseItemList } from '../lib/analyze';
+import { ocrImage } from '../lib/ocr';
 import { ITEMS, displayName, findItem, itemColor, stackSize } from '../lib/items';
 import { formatBreakdown } from '../lib/stacks';
 import { uid } from '../lib/store';
@@ -18,6 +19,8 @@ export function Chest({ items, lang, onChange }: Props) {
   const [count, setCount] = useState(1);
   const [paste, setPaste] = useState('');
   const [showPaste, setShowPaste] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrErr, setOcrErr] = useState('');
 
   const rows = Math.max(3, Math.ceil(items.length / 9));
   const slots = Array.from({ length: rows * 9 }, (_, i) => items[i]);
@@ -33,6 +36,13 @@ export function Chest({ items, lang, onChange }: Props) {
     else onChange([...items, { id: uid(), name: canon, count: c, done: false }]);
     setName('');
     setCount(1);
+  };
+  const readImage = async (file?: Blob | null) => {
+    if (!file) return;
+    setShowPaste(true); setOcrBusy(true); setOcrErr('');
+    try { const text = (await ocrImage(file)).trim(); setPaste((p) => (p ? `${p}\n${text}` : text)); }
+    catch { setOcrErr('Texterkennung fehlgeschlagen (beim ersten Mal wird das Sprachpaket aus dem Internet geladen).'); }
+    finally { setOcrBusy(false); }
   };
   const importList = () => {
     const parsed = parseItemList(paste);
@@ -114,6 +124,9 @@ export function Chest({ items, lang, onChange }: Props) {
           <button key={i.en} className="chip" onClick={() => add(i.en, 1)}>+ {i[lang]}</button>
         ))}
         <button className="chip" onClick={() => setShowPaste((v) => !v)}>📋 Liste einfügen</button>
+        <label className="chip">🖼️ Screenshot einlesen
+          <input type="file" accept="image/*" hidden onChange={(e) => void readImage(e.target.files?.[0])} />
+        </label>
         {items.length > 0 && (
           <>
             <button className="chip" onClick={() => onChange(items.map((i) => ({ ...i, done: true })))}>Alle abhaken</button>
@@ -125,7 +138,11 @@ export function Chest({ items, lang, onChange }: Props) {
       {showPaste && (
         <div className="paste">
           <p className="muted">Materialliste aus Videobeschreibung oder angeheftetem Kommentar einfügen, z. B. „64x Hopper“ oder „Observer x 12“ – eine Zeile pro Item.</p>
-          <textarea rows={6} value={paste} onChange={(e) => setPaste(e.target.value)} />
+          <p className="muted small">Tipp: Screenshot der im Video eingeblendeten Materialliste mit Strg+V hier einfügen oder oben wählen – der erkannte Text erscheint unten und kann vor dem Import korrigiert werden.</p>
+          {ocrBusy && <p className="muted" role="status">Erkenne Text …</p>}
+          {ocrErr && <p role="alert">{ocrErr}</p>}
+          <textarea rows={6} value={paste} onChange={(e) => setPaste(e.target.value)}
+            onPaste={(e) => { const f = [...e.clipboardData.files].find((x) => x.type.startsWith('image/')); if (f) { e.preventDefault(); void readImage(f); } }} />
           <button className="primary" onClick={importList} disabled={!paste.trim()}>Importieren</button>
         </div>
       )}

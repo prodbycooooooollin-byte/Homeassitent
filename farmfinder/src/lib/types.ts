@@ -12,6 +12,7 @@ export interface Farm {
   videoId: string;
   title: string;
   channel: string;
+  channelId?: string;
   thumbnail: string;
   publishedAt?: string;
   views?: number;

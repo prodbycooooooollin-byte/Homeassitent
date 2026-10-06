@@ -93,6 +93,7 @@ export interface RawVideo {
   likes?: number;
   durationSec?: number;
   description: string;
+  channelId?: string;
 }
 
 export function buildFarm(v: RawVideo): Farm {

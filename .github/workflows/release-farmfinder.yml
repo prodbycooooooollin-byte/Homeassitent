@@ -1,0 +1,91 @@
+name: Release FarmFinder (Windows)
+
+# Baut die Windows-EXE (Installer + portable) und veröffentlicht sie als GitHub-Release.
+# Auslöser:
+#  - Tag "farm-v<version>" (z. B. farm-v0.2.0)
+#  - Push auf main oder einen claude/*-Branch mit Änderungen am Projekt
+#  - manuell über "Run workflow"
+
+on:
+  push:
+    tags:
+      - 'farm-v*'
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'farmfinder/**'
+      - '.github/workflows/release-farmfinder.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release-Tag (z. B. farm-v0.2.0)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: farmfinder
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Release-Tag bestimmen
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then TAG="${{ github.event.inputs.tag }}";
+          elif [ "${{ github.ref_type }}" = "tag" ]; then TAG="${{ github.ref_name }}";
+          else TAG="farm-v$(node -p "require('./package.json').version")"; fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "Release-Tag: $TAG"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: farmfinder/package-lock.json
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Typprüfung
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: EXE bauen (NSIS-Installer + portable)
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Artefakte hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: farmfinder-windows
+          path: |
+            farmfinder/release/*.exe
+            farmfinder/release/*.blockmap
+          if-no-files-found: error
+
+      - name: GitHub-Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: FarmFinder ${{ env.RELEASE_TAG }}
+          prerelease: true
+          body: |
+            Windows-Build von FarmFinder (Minecraft-Farm-Browser).
+
+            - `FarmFinder-Setup-*.exe`: Installer
+            - `FarmFinder-*-portable.exe`: ohne Installation lauffähig
+
+            Hinweise: Die EXE ist nicht signiert (Windows SmartScreen kann warnen).
+            Für die Live-Videosuche in den Einstellungen einen YouTube-API-Key eintragen.
+          files: farmfinder/release/*.exe
+          overwrite_files: true

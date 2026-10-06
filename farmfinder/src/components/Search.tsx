@@ -4,6 +4,7 @@ import { FARM_TYPES, resolveQuery } from '../lib/catalog';
 import type { Store } from '../lib/store';
 import type { Farm } from '../lib/types';
 import { VERSIONS, matchVersion } from '../lib/versions';
+import { farmsForType, loadCatalog, type CatalogFile } from '../lib/catalog-data';
 import { manualFarm, parseVideoId, searchFarms, youtubeSearchUrl } from '../lib/youtube';
 import { FarmCard } from './Farms';
 
@@ -44,7 +45,10 @@ export function Search({ store, onOpen, goSettings }: Props) {
   const [strict, setStrict] = useState(true);
   const [link, setLink] = useState('');
   const abort = useRef<AbortController>();
+  const [catalog, setCatalog] = useState<CatalogFile>({ generated: null, entries: {} });
+  useEffect(() => { void loadCatalog().then(setCatalog); }, []);
 
+  const catalogCount = new Set(Object.values(catalog.entries).flat().map((f) => f.id)).size;
   const resolved = submitted ? resolveQuery(submitted, state.version) : undefined;
 
   useEffect(() => {
@@ -52,7 +56,7 @@ export function Search({ store, onOpen, goSettings }: Props) {
     const q = resolved.ytQuery;
     const cached = cacheGet(q);
     if (cached) { setFarms(cached); setError(''); return; }
-    if (!state.apiKey) { setFarms([]); return; }
+    if (!state.apiKey) { setFarms(resolved.type ? farmsForType(catalog, resolved.type.id) : []); return; }
     abort.current?.abort();
     const ac = (abort.current = new AbortController());
     setLoading(true);
@@ -63,7 +67,7 @@ export function Search({ store, onOpen, goSettings }: Props) {
       .finally(() => setLoading(false));
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submitted, state.version, state.apiKey]);
+  }, [submitted, state.version, state.apiKey, catalog]);
 
   const shown = sortFarms(
     farms.filter((f) => {
@@ -103,8 +107,8 @@ export function Search({ store, onOpen, goSettings }: Props) {
 
       {!state.apiKey && (
         <div className="notice">
-          <strong>Für die automatische Videosuche brauchst du einen kostenlosen YouTube-API-Key.</strong>
-          <p>Ohne Key kannst du trotzdem Videos per Link hinzufügen und alles andere nutzen.</p>
+          <strong>{catalogCount > 0 ? 'Du siehst den mitgelieferten Video-Katalog.' : 'Für die automatische Videosuche brauchst du einen kostenlosen YouTube-API-Key.'}</strong>
+          <p>{catalogCount > 0 ? `Stand: ${catalog.generated?.slice(0, 10)} · ${catalogCount} Videos. Mit eigenem Key suchst du live nach beliebigen Begriffen.` : 'Ohne Key kannst du Videos per Link hinzufügen und alles andere nutzen.'}</p>
           <div className="row">
             <button className="primary" onClick={goSettings}>Key einrichten</button>
             {resolved && <a className="chip" href={youtubeSearchUrl(resolved.ytQuery)} target="_blank" rel="noreferrer">Auf YouTube suchen ↗</a>}
@@ -133,6 +137,26 @@ export function Search({ store, onOpen, goSettings }: Props) {
           </label>
           <label className="check"><input type="checkbox" checked={strict} onChange={(e) => setStrict(e.target.checked)} /> Nur Videos mit erkannter Version {state.version}</label>
           <span className="muted small">{shown.length} Treffer{hidden > 0 && ` · ${hidden} ausgeblendet (andere/unklare Version)`}</span>
+        </div>
+      )}
+
+      {!submitted && catalogCount > 0 && (
+        <div className="home">
+          {FARM_TYPES.map((t) => {
+            const top = sortFarms(farmsForType(catalog, t.id).filter((f) => matchVersion(f.versions, state.version) === 'yes'), 'balance').slice(0, 3);
+            return top.length ? (
+              <div key={t.id}>
+                <h3>{t.emoji} {t.de} <button className="ghost small" onClick={() => go(t.de)}>alle ansehen →</button></h3>
+                <div className="grid">
+                  {top.map((f) => (
+                    <FarmCard key={f.id} farm={f} version={state.version} fav={state.favorites.some((x) => x.id === f.id)}
+                      active={state.builds.some((b) => b.farm.id === f.id)} onOpen={() => onOpen(f)}
+                      onFav={() => update((s) => ({ ...s, favorites: s.favorites.some((x) => x.id === f.id) ? s.favorites.filter((x) => x.id !== f.id) : [f, ...s.favorites] }))} />
+                  ))}
+                </div>
+              </div>
+            ) : null;
+          })}
         </div>
       )}
 

@@ -36,6 +36,7 @@ interface VideoResource {
   snippet: {
     title: string;
     channelTitle: string;
+    channelId?: string;
     description: string;
     publishedAt: string;
     thumbnails?: Record<string, { url: string }>;
@@ -50,6 +51,7 @@ export function toRaw(v: VideoResource): RawVideo {
     videoId: v.id,
     title: decodeEntities(v.snippet.title),
     channel: decodeEntities(v.snippet.channelTitle),
+    channelId: v.snippet.channelId,
     description: v.snippet.description ?? '',
     publishedAt: v.snippet.publishedAt,
     thumbnail: (th.medium ?? th.high ?? th.default)?.url ?? `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`,
@@ -114,3 +116,20 @@ export async function manualFarm(input: string): Promise<Farm | undefined> {
 }
 
 export const youtubeSearchUrl = (q: string) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+
+interface CommentThread {
+  snippet: { topLevelComment: { snippet: { textDisplay: string; authorChannelId?: { value: string } } } };
+}
+
+/** Kommentare mit Materiallisten – Ersteller-Kommentare zuerst (angeheftete Kommentare stehen meist oben). */
+export async function fetchComments(videoId: string, key: string, channelId?: string, signal?: AbortSignal): Promise<string[]> {
+  const res = await call<{ items: CommentThread[] }>(
+    'commentThreads',
+    { part: 'snippet', videoId, order: 'relevance', maxResults: '20', textFormat: 'plainText' },
+    key,
+    signal,
+  );
+  const all = res.items.map((i) => i.snippet.topLevelComment.snippet);
+  const own = all.filter((c) => channelId && c.authorChannelId?.value === channelId);
+  return [...own, ...all.filter((c) => !own.includes(c))].map((c) => decodeEntities(c.textDisplay));
+}
