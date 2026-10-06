@@ -6,20 +6,36 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "dist": "electron-builder --publish never"
   },
   "build": {
     "appId": "de.aethermoor.game",
     "productName": "Aethermoor",
-    "files": ["electron/**", "index.html", "style.css", "js/**", "vendor/**", "fonts/**", "package.json"],
-    "win": { "target": "nsis" },
-    "mac": { "target": "dmg" },
-    "linux": { "target": "AppImage" }
+    "files": [
+      "electron/**",
+      "index.html",
+      "style.css",
+      "js/**",
+      "vendor/**",
+      "fonts/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "publish": null
   },
   "devDependencies": {
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
     "three": "0.149.0",
     "@fontsource/cinzel": "^5.0.0"
-  }
+  },
+  "author": "Aethermoor"
 }
