@@ -28,9 +28,10 @@ public final class VaultSyncClient implements ClientModInitializer {
             config = Config.load(FabricLoader.getInstance().getConfigDir().resolve("vaultsync.properties"));
         } catch (Exception e) { LOG.error("Konfiguration nicht lesbar", e); return; }
         engine = new SyncEngine(config, LOG::info);
-        engine.setChat(msg -> net.minecraft.client.Minecraft.getInstance().execute(() ->
-                net.minecraft.client.Minecraft.getInstance().gui.getChat().addMessage(
-                        net.minecraft.network.chat.Component.literal("[Vault] " + msg))));
+        engine.setChat(msg -> net.minecraft.client.Minecraft.getInstance().execute(() -> {
+            var player = net.minecraft.client.Minecraft.getInstance().player;
+            if (player != null) player.sendSystemMessage(net.minecraft.network.chat.Component.literal("[Vault] " + msg));
+        }));
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 VaultCommands.register(dispatcher, engine, config, () -> session, this::reloadConfig));
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
