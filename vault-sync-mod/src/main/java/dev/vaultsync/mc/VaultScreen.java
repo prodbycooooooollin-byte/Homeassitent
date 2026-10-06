@@ -10,9 +10,12 @@ import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
+import java.util.function.IntConsumer;
 
-/** Eigenes Dashboard (/vault): komplett selbst gezeichnet, ohne Minecraft-Widgets. */
+/**
+ * Kontrollzentrum (/vault): fährt oben rechts aus der Ecke, halbtransparente runde Kacheln im iOS-Stil.
+ * Komplett selbst gezeichnet, keine Minecraft-Widgets.
+ */
 final class VaultScreen extends Screen {
     interface Actions {
         SyncEngine.Session session();
@@ -21,9 +24,13 @@ final class VaultScreen extends Screen {
         void addCurrentWorld();
     }
 
-    private static final int W = 360, H = 262, PAD = 14;
-    private static final int BG = 0xF2101216, CARD = 0xFF171A20, LINE = 0xFF262A33, TEXT = 0xFFE8EAEE, MUTED = 0xFF8A919E,
-            OK = 0xFF5BD98C, ERR = 0xFFF26B6B, WARN = 0xFFE5B65C, ACCENT = 0xFF6AA8FF, ACCENT_DIM = 0xFF22324A;
+    // Maße in Panel-Einheiten
+    private static final int W = 232, MARGIN = 10, PAD = 10, GAP = 6;
+    // iOS-Farben (ARGB, ohne Animation)
+    private static final int PANEL = 0xD01C1C1E, PANEL_EDGE = 0x24FFFFFF, TILE = 0x1AFFFFFF, TILE_HOT = 0x2EFFFFFF, TRACK = 0x26FFFFFF;
+    private static final int LABEL = 0xFFFFFFFF, LABEL2 = 0x99EBEBF5, LABEL3 = 0x4DEBEBF5;
+    private static final int BLUE = 0xFF0A84FF, GREEN = 0xFF30D158, RED = 0xFFFF453A, ORANGE = 0xFFFF9F0A;
+    private static final long OPEN_MS = 320, CLOSE_MS = 200;
 
     private record Hit(int x, int y, int w, int h, Runnable action) { }
 
@@ -31,7 +38,10 @@ final class VaultScreen extends Screen {
     private final Config cfg;
     private final Actions act;
     private final List<Hit> hits = new ArrayList<>();
-    private float scale = 1f; private int ox, oy;
+    private final long openedAt = System.nanoTime();
+    private long closingAt = 0;
+    private float anim = 0f;                 // 0..1 Sichtbarkeit (Animation)
+    private float sc = 1f; private int px, py, panelH;
 
     VaultScreen(SyncEngine engine, Config cfg, Actions act) {
         super(Component.literal("Vault"));
@@ -40,151 +50,259 @@ final class VaultScreen extends Screen {
 
     @Override public boolean isPauseScreen() { return false; }
 
+    /** Schließen mit Animation. */
+    @Override public void onClose() { if (closingAt == 0) closingAt = System.nanoTime(); }
+
+    private static float easeOut(float t) { t = Math.max(0, Math.min(1, t)); return 1 - (float) Math.pow(1 - t, 3); }
+
+    // ---------------------------------------------------------------- Rendern
+
     @Override public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
+        long now = System.nanoTime();
+        if (closingAt != 0) {
+            anim = 1 - easeOut((now - closingAt) / 1e6f / CLOSE_MS);
+            if (anim <= 0.001f) { super.onClose(); return; }
+        } else anim = easeOut((now - openedAt) / 1e6f / OPEN_MS);
+
         hits.clear();
-        g.fill(0, 0, width, height, 0x99000000); // Abdunkelung
-        scale = Math.min(1f, Math.min((width - 16) / (float) W, (height - 16) / (float) H));
-        ox = Math.round((width - W * scale) / 2f); oy = Math.round((height - H * scale) / 2f);
-        int mx = Math.round((mouseX - ox) / scale), my = Math.round((mouseY - oy) / scale);
+        sc = Math.min(1f, Math.min((height - 2 * MARGIN) / (float) Math.max(panelH, 1), (width - 2 * MARGIN) / (float) W));
+        if (panelH == 0) sc = 1f;
+        px = Math.round(width - MARGIN - W * sc); py = MARGIN;
+        int mx = Math.round((mouseX - px) / sc), my = Math.round((mouseY - py) / sc);
+
+        g.fill(0, 0, width, height, a(0x59000000));   // leichte Abdunkelung der Welt
+
+        float pivotX = px + W * sc, pivotY = py;
+        float s = 0.86f + 0.14f * anim;
         var m = g.pose();
-        m.pushMatrix(); m.translate(ox, oy); m.scale(scale, scale);
-        draw(g, mx, my);
+        m.pushMatrix();
+        m.translate(pivotX, pivotY - (1 - anim) * 14);  // fährt von oben ein
+        m.scale(s, s);
+        m.translate(-pivotX, -pivotY);
+        m.translate(px, py);
+        m.scale(sc, sc);
+        panelH = draw(g, mx, my);
         m.popMatrix();
     }
 
     @Override public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        int mx = Math.round((float) (event.x() - ox) / scale), my = Math.round((float) (event.y() - oy) / scale);
+        if (closingAt != 0 || anim < 0.9f) return true;
+        int mx = Math.round((float) (event.x() - px) / sc), my = Math.round((float) (event.y() - py) / sc);
+        if (mx < 0 || my < 0 || mx >= W || my >= panelH) { onClose(); return true; } // Klick daneben schließt
         for (Hit h : hits) if (mx >= h.x && mx < h.x + h.w && my >= h.y && my < h.y + h.h) { h.action.run(); return true; }
-        return super.mouseClicked(event, doubleClick);
+        return true;
     }
 
-    // ---------------------------------------------------------------- Zeichnen
+    // ---------------------------------------------------------------- Inhalt
 
-    private void draw(GuiGraphicsExtractor g, int mx, int my) {
+    /** Zeichnet das Panel, gibt dessen Höhe zurück. */
+    private int draw(GuiGraphicsExtractor g, int mx, int my) {
         long now = System.currentTimeMillis();
         var session = act.session();
         boolean active = session != null;
-        rounded(g, 0, 0, W, H, 6, BG);
-        outline(g, 0, 0, W, H, 6, LINE);
+        boolean busy = engine.state() == SyncEngine.State.SAVING || engine.state() == SyncEngine.State.UPLOADING;
+        boolean error = engine.state() == SyncEngine.State.ERROR;
 
-        // Kopf
-        spaced(g, "VAULT", PAD, 14, TEXT, 1.4f);
-        text(g, active ? act.worldFolder() : "keine Welt aktiv", PAD, 30, MUTED, 1f);
-        String stateText; int stateCol;
-        if (!active) { stateText = "Nicht aktiv"; stateCol = MUTED; }
-        else if (engine.paused()) { stateText = "Pausiert"; stateCol = WARN; }
-        else switch (engine.state()) {
-            case SAVING -> { stateText = "Speichert …"; stateCol = ACCENT; }
-            case UPLOADING -> { stateText = "Sendet …"; stateCol = ACCENT; }
-            case ERROR -> { stateText = "Fehler"; stateCol = ERR; }
-            default -> { stateText = "Aktiv"; stateCol = OK; }
-        }
-        int pw = font.width(stateText) + 26;
-        rounded(g, W - PAD - pw, 14, pw, 18, 9, CARD);
-        rounded(g, W - PAD - pw + 9, 21, 5, 5, 2, stateCol);
-        text(g, stateText, W - PAD - pw + 19, 19, TEXT, 1f);
+        // Höhe vorab bestimmen (Hintergrund wird zuerst gezeichnet)
+        int hHeader = 30, hRow = 54, hSliders = 88, hToggles = 48, hHist = 18 + 3 * 13, hErr = error ? 30 : 0;
+        int total = PAD + hHeader + GAP + hRow + GAP + hRow + GAP + hSliders + GAP + hToggles + GAP + hHist + (error ? GAP + hErr : 0) + PAD;
 
-        // Karten
-        int gap = 6, cw = (W - 2 * PAD - 3 * gap) / 4, cy = 46, ch = 50;
-        card(g, PAD, cy, cw, ch, "LETZTE SYNC", Fmt.ago(engine.lastStatsMs(), now),
-                engine.lastStatsFields() > 0 ? engine.lastStatsFields() + " Werte · " + Fmt.size(engine.lastStatsBytes()) : "–");
-        card(g, PAD + (cw + gap), cy, cw, ch, "LETZTER UPLOAD", Fmt.ago(engine.lastZipMs(), now),
-                engine.lastZipBytes() > 0 ? Fmt.size(engine.lastZipBytes()) : "–");
-        card(g, PAD + 2 * (cw + gap), cy, cw, ch, "NÄCHSTE SYNC", active && !engine.paused() ? Fmt.until(engine.nextStatsMs(), now) : "–",
-                cfg.zipBackup && active ? "ZIP " + Fmt.until(engine.nextZipMs(), now) : "ZIP aus");
-        String err = engine.state() == SyncEngine.State.ERROR ? engine.lastError() : "";
-        card(g, PAD + 3 * (cw + gap), cy, cw, ch, "ZUSTAND", engine.state() == SyncEngine.State.ERROR ? "Fehler" : "In Ordnung",
-                err.isEmpty() ? "keine Fehler" : fit(err, cw - 12));
+        // Schatten + Panel
+        for (int i = 6; i >= 1; i--) rounded(g, -i, -i + 3, W + 2 * i, total + 2 * i, 18 + i, a(0x0E000000));
+        rounded(g, 0, 0, W, total, 18, a(PANEL));
+        outline(g, 0, 0, W, total, 18, a(PANEL_EDGE));
 
-        // Verlauf (links)
-        int ly = 106, lw = 168;
-        panel(g, PAD, ly, lw, 106, "VERLAUF");
-        var hist = engine.history();
-        if (hist.isEmpty()) text(g, "Noch keine Sicherung.", PAD + 10, ly + 30, MUTED, 1f);
-        for (int i = 0; i < Math.min(6, hist.size()); i++) {
-            var e = hist.get(i); int y = ly + 24 + i * 13;
-            rounded(g, PAD + 10, y + 2, 4, 4, 2, e.ok() ? OK : ERR);
-            text(g, Fmt.ago(e.timeMs(), now), PAD + 20, y, MUTED, 1f);
-            String what = e.kind().equals(SyncEngine.ZIP) ? "ZIP" : "Stats";
-            text(g, what, PAD + 74, y, TEXT, 1f);
-            text(g, e.ok() ? (e.bytes() > 0 ? Fmt.size(e.bytes()) : "") : fit(e.message(), 50), PAD + 104, y, e.ok() ? MUTED : ERR, 1f);
-        }
+        int y = PAD, x = PAD, iw = W - 2 * PAD;
 
-        // Einstellungen (rechts)
-        int rx = PAD + lw + 8, rw = W - PAD - rx;
-        panel(g, rx, ly, rw, 106, "EINSTELLUNGEN");
-        label(g, "Statistiken alle (Min.)", rx + 10, ly + 22);
-        int[] si = {1, 5, 10, 20, 30, 60};
-        segmented(g, rx + 10, ly + 33, rw - 20, mx, my, si.length, i -> String.valueOf(si[i]), i -> cfg.intervalMinutes == si[i],
-                i -> { cfg.intervalMinutes = si[i]; act.save(); });
-        label(g, "Welt hochladen alle (Min.)", rx + 10, ly + 52);
-        int[] zi = {0, 15, 30, 60, 120};
-        segmented(g, rx + 10, ly + 63, rw - 20, mx, my, zi.length, i -> zi[i] == 0 ? "Aus" : String.valueOf(zi[i]),
-                i -> zi[i] == 0 ? !cfg.zipBackup : cfg.zipBackup && cfg.zipIntervalMinutes == zi[i],
-                i -> { if (zi[i] == 0) cfg.zipBackup = false; else { cfg.zipBackup = true; cfg.zipIntervalMinutes = zi[i]; } act.save(); });
-        toggle(g, rx + 10, ly + 82, "Beim Verlassen hochladen", cfg.uploadOnExit, mx, my, () -> { cfg.uploadOnExit = !cfg.uploadOnExit; act.save(); });
-        toggle(g, rx + 10, ly + 94, "Anzeige oben rechts", cfg.showIndicator, mx, my, () -> { cfg.showIndicator = !cfg.showIndicator; act.save(); });
+        // Kopf: Titel + Weltname, rechts Status-Pille
+        bold(g, "Vault", x + 2, y + 2, a(LABEL), 1.3f);
+        text(g, fit(active ? act.worldFolder() : "keine Welt aktiv", 110), x + 2, y + 19, a(LABEL2), 0.9f);
+        String st; int stc;
+        if (!active) { st = "Aus"; stc = LABEL3; }
+        else if (engine.paused()) { st = "Pausiert"; stc = ORANGE; }
+        else if (error) { st = "Fehler"; stc = RED; }
+        else if (busy) { st = "Synchronisiert"; stc = BLUE; }
+        else { st = "Bereit"; stc = GREEN; }
+        int pw = Math.round(font.width(st) * 0.9f) + 24;
+        rounded(g, x + iw - pw, y + 3, pw, 18, 9, a(TILE));
+        rounded(g, x + iw - pw + 8, y + 10, 5, 5, 2, a(stc));
+        text(g, st, x + iw - pw + 17, y + 8, a(LABEL), 0.9f);
+        y += hHeader + GAP;
 
-        // Aktionen
-        int by = 222, bh = 24, bw = (W - 2 * PAD - 2 * gap) / 3;
+        // Reihe 1: Sichern / Pause
+        int tw = (iw - GAP) / 2;
         if (active) {
-            button(g, PAD, by, bw, bh, "Jetzt sichern", true, mx, my, session::syncNow);
-            button(g, PAD + bw + gap, by, bw, bh, "Nur Statistiken", false, mx, my, session::statsNow);
-            button(g, PAD + 2 * (bw + gap), by, bw, bh, engine.paused() ? "Fortsetzen" : "Pausieren", false, mx, my, () -> engine.setPaused(!engine.paused()));
+            tile(g, x, y, tw, hRow, mx, my, session::syncNow);
+            circle(g, x + 8 + 15, y + hRow / 2, 15, a(busy ? BLUE : 0x33FFFFFF));
+            if (busy) spinner(g, x + 8 + 15, y + hRow / 2, 8, a(LABEL)); else refreshIcon(g, x + 8 + 15, y + hRow / 2, a(LABEL));
+            text(g, "Jetzt", x + 46, y + 14, a(LABEL), 0.95f);
+            text(g, "sichern", x + 46, y + 26, a(LABEL2), 0.85f);
+
+            boolean p = engine.paused();
+            tile(g, x + tw + GAP, y, tw, hRow, mx, my, () -> engine.setPaused(!engine.paused()));
+            circle(g, x + tw + GAP + 8 + 15, y + hRow / 2, 15, a(p ? ORANGE : 0x33FFFFFF));
+            if (p) playIcon(g, x + tw + GAP + 8 + 15, y + hRow / 2, a(LABEL)); else pauseIcon(g, x + tw + GAP + 8 + 15, y + hRow / 2, a(LABEL));
+            text(g, p ? "Fortsetzen" : "Pausieren", x + tw + GAP + 46, y + 14, a(LABEL), 0.95f);
+            text(g, p ? "aus Pause" : "Automatik", x + tw + GAP + 46, y + 26, a(LABEL2), 0.85f);
         } else {
-            button(g, PAD, by, 2 * bw + gap, bh, "Diese Welt sichern", true, mx, my, act::addCurrentWorld);
-            text(g, cfg.apiKey.isEmpty() ? "Zugangscode fehlt in der Config" : "Welt nicht eingetragen", PAD + 2 * (bw + gap), by + 8, MUTED, 1f);
+            tile(g, x, y, iw, hRow, mx, my, act::addCurrentWorld);
+            circle(g, x + 8 + 15, y + hRow / 2, 15, a(BLUE));
+            plusIcon(g, x + 8 + 15, y + hRow / 2, a(LABEL));
+            text(g, "Diese Welt sichern", x + 46, y + 14, a(LABEL), 0.95f);
+            text(g, cfg.apiKey.isEmpty() ? "Zugangscode fehlt in der Config" : "Noch nicht eingetragen", x + 46, y + 26, a(cfg.apiKey.isEmpty() ? ORANGE : LABEL2), 0.85f);
         }
-        text(g, "ESC schließt", W - PAD - font.width("ESC schließt"), H - 12, MUTED, 1f);
+        y += hRow + GAP;
+
+        // Reihe 2: Letzte Sicherung / Nächste Sicherung (mit Ring)
+        tile(g, x, y, tw, hRow, mx, my, null);
+        text(g, "LETZTE SICHERUNG", x + 9, y + 8, a(LABEL2), 0.7f);
+        long lastAny = Math.max(engine.lastStatsMs(), engine.lastZipMs());
+        bold(g, fit(Fmt.ago(lastAny, now), 100), x + 9, y + 19, a(LABEL), 1.1f);
+        String sub = engine.lastZipBytes() > 0 ? "ZIP " + Fmt.size(engine.lastZipBytes()) : engine.lastStatsFields() > 0 ? engine.lastStatsFields() + " Werte" : "–";
+        text(g, fit(sub, 100), x + 9, y + 36, a(LABEL2), 0.85f);
+
+        int nx = x + tw + GAP;
+        tile(g, nx, y, tw, hRow, mx, my, null);
+        long next = engine.nextStatsMs();
+        float prog = next == 0 || !active || engine.paused() ? 0f : 1f - Math.max(0f, Math.min(1f, (next - now) / (float) (cfg.intervalMinutes * 60_000L)));
+        ring(g, nx + 9 + 14, y + hRow / 2, 12, 1f, a(TRACK));
+        if (prog > 0) ring(g, nx + 9 + 14, y + hRow / 2, 12, prog, a(BLUE));
+        text(g, "NÄCHSTE", nx + 46, y + 10, a(LABEL2), 0.7f);
+        bold(g, active && !engine.paused() ? Fmt.until(next, now) : "–", nx + 46, y + 20, a(LABEL), 1.05f);
+        text(g, cfg.zipBackup && active ? "ZIP " + Fmt.until(engine.nextZipMs(), now) : "ZIP aus", nx + 46, y + 36, a(LABEL2), 0.8f);
+        y += hRow + GAP;
+
+        // Regler: Statistiken / Welt hochladen
+        tile(g, x, y, iw, hSliders, mx, my, null);
+        int[] si = {1, 5, 10, 20, 30, 60};
+        int cur = indexOf(si, cfg.intervalMinutes);
+        text(g, "Statistiken", x + 10, y + 9, a(LABEL), 0.9f);
+        String v1 = "alle " + cfg.intervalMinutes + " Min.";
+        text(g, v1, x + iw - 10 - Math.round(font.width(v1) * 0.9f), y + 9, a(LABEL2), 0.9f);
+        slider(g, x + 10, y + 22, iw - 20, si.length, cur, i -> { cfg.intervalMinutes = si[i]; act.save(); });
+
+        int[] zi = {0, 15, 30, 60, 120};
+        int zcur = !cfg.zipBackup ? 0 : Math.max(1, indexOf(zi, cfg.zipIntervalMinutes));
+        text(g, "Welt hochladen", x + 10, y + 49, a(LABEL), 0.9f);
+        String v2 = !cfg.zipBackup ? "aus" : "alle " + zi[zcur] + " Min.";
+        text(g, v2, x + iw - 10 - Math.round(font.width(v2) * 0.9f), y + 49, a(LABEL2), 0.9f);
+        slider(g, x + 10, y + 62, iw - 20, zi.length, zcur, i -> { if (zi[i] == 0) cfg.zipBackup = false; else { cfg.zipBackup = true; cfg.zipIntervalMinutes = zi[i]; } act.save(); });
+        y += hSliders + GAP;
+
+        // Schalter
+        tile(g, x, y, iw, hToggles, mx, my, null);
+        toggle(g, x + 10, y + 8, iw - 20, "Beim Verlassen hochladen", cfg.uploadOnExit, () -> { cfg.uploadOnExit = !cfg.uploadOnExit; act.save(); });
+        toggle(g, x + 10, y + 27, iw - 20, "Anzeige oben rechts", cfg.showIndicator, () -> { cfg.showIndicator = !cfg.showIndicator; act.save(); });
+        y += hToggles + GAP;
+
+        // Verlauf
+        tile(g, x, y, iw, hHist, mx, my, null);
+        text(g, "VERLAUF", x + 10, y + 7, a(LABEL2), 0.7f);
+        var hist = engine.history();
+        if (hist.isEmpty()) text(g, "Noch nichts gesichert", x + 10, y + 22, a(LABEL3), 0.9f);
+        for (int i = 0; i < Math.min(3, hist.size()); i++) {
+            var e = hist.get(i); int ry = y + 19 + i * 13;
+            circle(g, x + 14, ry + 4, 3, a(e.ok() ? GREEN : RED));
+            text(g, e.kind().equals(SyncEngine.ZIP) ? "Welt" : "Stats", x + 24, ry, a(LABEL), 0.85f);
+            String d = e.ok() ? (e.bytes() > 0 ? Fmt.size(e.bytes()) : "") : fit(e.message(), 70);
+            text(g, d, x + 62, ry, a(e.ok() ? LABEL2 : RED), 0.85f);
+            String t = Fmt.ago(e.timeMs(), now);
+            text(g, t, x + iw - 10 - Math.round(font.width(t) * 0.85f), ry, a(LABEL3), 0.85f);
+        }
+        y += hHist;
+
+        if (error) {
+            y += GAP;
+            rounded(g, x, y, iw, hErr, 12, a(0x40FF453A));
+            text(g, "Fehler", x + 10, y + 6, a(RED), 0.8f);
+            text(g, fit(engine.lastError(), Math.round((iw - 20) / 0.85f)), x + 10, y + 17, a(LABEL), 0.85f);
+        }
+        return total;
     }
 
     // ---------------------------------------------------------------- Bausteine
 
-    private void card(GuiGraphicsExtractor g, int x, int y, int w, int h, String label, String value, String sub) {
-        rounded(g, x, y, w, h, 5, CARD);
-        text(g, label, x + 7, y + 7, MUTED, 0.8f);
-        text(g, fit(value, (int) ((w - 12) / 1.25f)), x + 7, y + 19, TEXT, 1.25f);
-        text(g, fit(sub, w - 12), x + 7, y + 36, MUTED, 1f);
+    private static int indexOf(int[] a, int v) { int best = 0; for (int i = 0; i < a.length; i++) if (Math.abs(a[i] - v) < Math.abs(a[best] - v)) best = i; return best; }
+
+    /** Kachel; mit Aktion reagiert sie auf Hover und Klick. */
+    private void tile(GuiGraphicsExtractor g, int x, int y, int w, int h, int mx, int my, Runnable action) {
+        boolean hov = action != null && mx >= x && mx < x + w && my >= y && my < y + h;
+        rounded(g, x, y, w, h, 12, a(hov ? TILE_HOT : TILE));
+        if (action != null) hits.add(new Hit(x, y, w, h, action));
     }
 
-    private void panel(GuiGraphicsExtractor g, int x, int y, int w, int h, String title) {
-        rounded(g, x, y, w, h, 5, CARD);
-        text(g, title, x + 10, y + 8, MUTED, 0.8f);
-    }
-
-    private void label(GuiGraphicsExtractor g, String s, int x, int y) { text(g, s, x, y, MUTED, 0.9f); }
-
-    private void segmented(GuiGraphicsExtractor g, int x, int y, int w, int mx, int my, int n,
-                           java.util.function.IntFunction<String> name, java.util.function.IntPredicate selected, java.util.function.IntConsumer pick) {
-        int h = 14, sw = w / n;
-        rounded(g, x, y, sw * n, h, 4, 0xFF0E1014);
+    /** Stufenregler im iOS-Stil: heller Verlauf bis zur gewählten Stufe, Stufen sind klickbar. */
+    private void slider(GuiGraphicsExtractor g, int x, int y, int w, int n, int cur, IntConsumer pick) {
+        int h = 16;
+        rounded(g, x, y, w, h, 8, a(TRACK));
+        int fillW = Math.max(h, Math.round((w) * (cur + 1) / (float) n));
+        rounded(g, x, y, fillW, h, 8, a(cur == 0 && n > 0 && false ? TRACK : 0xF2FFFFFF));
         for (int i = 0; i < n; i++) {
-            final int idx = i; int sx = x + i * sw;
-            boolean sel = selected.test(i), hov = mx >= sx && mx < sx + sw && my >= y && my < y + h;
-            if (sel) rounded(g, sx + 1, y + 1, sw - 2, h - 2, 3, ACCENT_DIM);
-            else if (hov) rounded(g, sx + 1, y + 1, sw - 2, h - 2, 3, 0xFF1C2028);
-            String t = name.apply(i);
-            text(g, t, sx + (sw - font.width(t)) / 2, y + 3, sel ? ACCENT : TEXT, 1f);
-            hits.add(new Hit(sx, y, sw, h, () -> pick.accept(idx)));
+            final int idx = i; int sx = x + Math.round(i * w / (float) n), ex = x + Math.round((i + 1) * w / (float) n);
+            if (i > 0 && i > cur) circle(g, sx + (ex - sx) / 2, y + h / 2, 1, a(LABEL3));
+            hits.add(new Hit(sx, y - 3, ex - sx, h + 6, () -> pick.accept(idx)));
         }
     }
 
-    private void toggle(GuiGraphicsExtractor g, int x, int y, String label, boolean on, int mx, int my, Runnable flip) {
-        boolean hov = mx >= x && mx < x + 130 && my >= y - 1 && my < y + 11;
-        rounded(g, x, y, 18, 9, 4, on ? ACCENT_DIM : 0xFF0E1014);
-        rounded(g, on ? x + 10 : x + 1, y + 1, 7, 7, 3, on ? ACCENT : MUTED);
-        text(g, label, x + 24, y + 1, hov ? TEXT : MUTED, 0.9f);
-        hits.add(new Hit(x, y - 1, 130, 12, flip));
+    private void toggle(GuiGraphicsExtractor g, int x, int y, int w, String label, boolean on, Runnable flip) {
+        text(g, label, x, y + 4, a(LABEL), 0.9f);
+        int sw = 26, sh = 15, sx = x + w - sw;
+        rounded(g, sx, y, sw, sh, 7, a(on ? GREEN : TRACK));
+        circle(g, on ? sx + sw - 7 - 1 : sx + 7 + 1, y + sh / 2, 6, a(0xFFFFFFFF));
+        hits.add(new Hit(x, y - 2, w, sh + 4, flip));
     }
 
-    private void button(GuiGraphicsExtractor g, int x, int y, int w, int h, String label, boolean primary, int mx, int my, Runnable run) {
-        boolean hov = mx >= x && mx < x + w && my >= y && my < y + h;
-        int bg = primary ? (hov ? 0xFF7FB6FF : ACCENT) : (hov ? 0xFF222731 : CARD);
-        rounded(g, x, y, w, h, 5, bg);
-        if (!primary) outline(g, x, y, w, h, 5, LINE);
-        text(g, label, x + (w - font.width(label)) / 2, y + (h - 8) / 2, primary ? 0xFF0B1220 : TEXT, 1f);
-        hits.add(new Hit(x, y, w, h, run));
+    // ---------------------------------------------------------------- Symbole
+
+    private void spinner(GuiGraphicsExtractor g, int cx, int cy, int r, int color) {
+        double head = (System.nanoTime() / 1e9) * 5.0;
+        arc(g, cx, cy, r, head - Math.PI * 1.3, Math.PI * 1.3, color, true);
     }
+
+    private void refreshIcon(GuiGraphicsExtractor g, int cx, int cy, int color) {
+        arc(g, cx, cy, 8, -Math.PI * 0.35, Math.PI * 1.55, color, false);
+        // Pfeilspitze am Ende des Bogens
+        double a = -Math.PI * 0.35;
+        int ax = cx + (int) Math.round(Math.cos(a) * 8), ay = cy + (int) Math.round(Math.sin(a) * 8);
+        g.fill(ax - 1, ay - 3, ax + 4, ay - 2, color); g.fill(ax, ay - 2, ax + 3, ay - 1, color); g.fill(ax + 1, ay - 1, ax + 2, ay, color);
+    }
+
+    private void pauseIcon(GuiGraphicsExtractor g, int cx, int cy, int color) {
+        rounded(g, cx - 5, cy - 6, 4, 12, 1, color); rounded(g, cx + 1, cy - 6, 4, 12, 1, color);
+    }
+
+    private void playIcon(GuiGraphicsExtractor g, int cx, int cy, int color) {
+        for (int i = 0; i < 12; i++) { int half = Math.min(i, 11 - i); g.fill(cx - 4 + i / 2, cy - 6 + i, cx - 4 + i / 2 + 8 - (i < 6 ? 6 - i : i - 5) , cy - 5 + i, color); }
+    }
+
+    private void plusIcon(GuiGraphicsExtractor g, int cx, int cy, int color) {
+        g.fill(cx - 6, cy - 1, cx + 6, cy + 1, color); g.fill(cx - 1, cy - 6, cx + 1, cy + 6, color);
+    }
+
+    /** Ring (volle Linie, Anteil 0..1 ab 12 Uhr). */
+    private void ring(GuiGraphicsExtractor g, int cx, int cy, int r, float frac, int color) {
+        arc(g, cx, cy, r, -Math.PI / 2, Math.PI * 2 * frac, color, false);
+    }
+
+    /** Bogen aus 1×1-Punkten in halber Pixelgröße (feinere Linie). fade = Schweif nach hinten ausblenden. */
+    private void arc(GuiGraphicsExtractor g, int cx, int cy, int r, double start, double sweep, int color, boolean fade) {
+        var m = g.pose(); m.pushMatrix(); m.translate(cx, cy); m.scale(0.5f, 0.5f);
+        int n = Math.max(8, (int) (Math.abs(sweep) * r * 2.2));
+        for (int i = 0; i <= n; i++) {
+            double t = i / (double) n, ang = start + sweep * t;
+            int col = fade ? withAlpha(color, (float) (t * t)) : color;
+            int x = (int) Math.round(Math.cos(ang) * r * 2), y = (int) Math.round(Math.sin(ang) * r * 2);
+            g.fill(x, y, x + 2, y + 2, col);   // 2×2 halbe Pixel = 1 GUI-Einheit Strichstärke
+        }
+        m.popMatrix();
+    }
+
+    private static int withAlpha(int argb, float f) { int al = Math.round(((argb >>> 24) & 0xFF) * f); return (al << 24) | (argb & 0xFFFFFF); }
+
+    // ---------------------------------------------------------------- Zeichen-Helfer
+
+    /** Alpha mit der Einblend-Animation verrechnen. */
+    private int a(int argb) { return withAlpha(argb, anim); }
 
     private String fit(String s, int maxW) {
         if (font.width(s) <= maxW) return s;
@@ -192,17 +310,21 @@ final class VaultScreen extends Screen {
         return s + "…";
     }
 
-    private void text(GuiGraphicsExtractor g, String s, int x, int y, int color, float sc) {
-        if (sc == 1f) { g.text(font, s, x, y, color, false); return; }
-        var m = g.pose(); m.pushMatrix(); m.translate(x, y); m.scale(sc, sc);
+    private void text(GuiGraphicsExtractor g, String s, int x, int y, int color, float scale) {
+        if (scale == 1f) { g.text(font, s, x, y, color, false); return; }
+        var m = g.pose(); m.pushMatrix(); m.translate(x, y); m.scale(scale, scale);
         g.text(font, s, 0, 0, color, false);
         m.popMatrix();
     }
 
-    private void spaced(GuiGraphicsExtractor g, String s, int x, int y, int color, float sc) {
-        int cx = x;
-        for (char c : s.toCharArray()) { text(g, String.valueOf(c), cx, y, color, sc); cx += Math.round((font.width(String.valueOf(c)) + 2) * sc); }
+    /** Halbfett: der Text wird um einen halben Pixel versetzt doppelt gezeichnet. */
+    private void bold(GuiGraphicsExtractor g, String s, int x, int y, int color, float scale) {
+        var m = g.pose(); m.pushMatrix(); m.translate(x, y); m.scale(scale, scale);
+        g.text(font, s, 0, 0, color, false); g.text(font, s, 1, 0, color, false);
+        m.popMatrix();
     }
+
+    private static void circle(GuiGraphicsExtractor g, int cx, int cy, int r, int color) { rounded(g, cx - r, cy - r, 2 * r, 2 * r, r, color); }
 
     /** Rechteck mit abgerundeten Ecken (Radius r) aus Zeilen-Füllungen. */
     private static void rounded(GuiGraphicsExtractor g, int x, int y, int w, int h, int r, int color) {
@@ -215,7 +337,12 @@ final class VaultScreen extends Screen {
     }
 
     private static void outline(GuiGraphicsExtractor g, int x, int y, int w, int h, int r, int color) {
-        g.fill(x + r, y, x + w - r, y + 1, color); g.fill(x + r, y + h - 1, x + w - r, y + h, color);
-        g.fill(x, y + r, x + 1, y + h - r, color); g.fill(x + w - 1, y + r, x + w, y + h - r, color);
+        r = Math.min(r, Math.min(w, h) / 2);
+        for (int i = 0; i < h; i++) {
+            int d = i < r ? r - i : i >= h - r ? i - (h - r - 1) : 0;
+            int inset = d == 0 ? 0 : r - (int) Math.round(Math.sqrt(Math.max(0, r * r - (d - 0.5) * (d - 0.5))));
+            if (i == 0 || i == h - 1) g.fill(x + inset, y + i, x + w - inset, y + i + 1, color);
+            else { g.fill(x + inset, y + i, x + inset + 1, y + i + 1, color); g.fill(x + w - inset - 1, y + i, x + w - inset, y + i + 1, color); }
+        }
     }
 }
