@@ -58,9 +58,9 @@ class SyncEngineTest {
         assertEquals("{\"key\":\"geheim\",\"data\":{\"world_name\":\"A \\\"B\\\"\",\"xp_level\":3,\"health\":19.5,\"hardcore\":false,"
                 + "\"inventory\":[{\"id\":\"minecraft:dirt\",\"count\":2}]}}|application/json", got.get());
         assertEquals(SyncEngine.State.DONE, e.state());
-        code.set(404); e.cycle(Path.of("."), "w", h, true);
+        code.set(404); e.cycle(Path.of("."), "w", h, true, true);
         assertEquals(SyncEngine.State.ERROR, e.state()); assertTrue(e.lastError().contains("noch keine Sicherung"));
-        code.set(401); e.cycle(Path.of("."), "w", h, true);
+        code.set(401); e.cycle(Path.of("."), "w", h, true, true);
         assertTrue(e.lastError().contains("Schlüssel")); s.stop(0);
     }
 
@@ -80,6 +80,30 @@ class SyncEngineTest {
         e.setPaused(true); assertTrue(e.paused());
         Config n = new Config(); n.apiKey = "neu"; n.intervalMinutes = 9; n.watched.add("X"); c.copyFrom(n);
         assertEquals("neu", c.apiKey); assertEquals(9, c.intervalMinutes); assertTrue(c.watched.contains("X"));
+        s.stop(0);
+    }
+
+    @Test void historyAndConfigSave() throws Exception {
+        HttpServer s = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        s.createContext("/", ex -> { ex.getRequestBody().readAllBytes(); ex.sendResponseHeaders(200, -1); ex.close(); }); s.start();
+        Config c = new Config(); c.endpoint = "http://127.0.0.1:" + s.getAddress().getPort() + "/";
+        SyncEngine e = new SyncEngine(c, m -> { });
+        SyncEngine.Hooks h = new SyncEngine.Hooks() {
+            public Map<String,Object> collectStats() { return Map.of("a", 1, "b", 2); }
+            public void saveAndFreeze() { } public void unfreeze() { } };
+        e.cycle(Path.of("."), "w", h, true, true);
+        var ev = e.history().get(0);
+        assertEquals(SyncEngine.STATS, ev.kind()); assertTrue(ev.ok()); assertEquals(2, e.lastStatsFields()); assertTrue(e.lastStatsBytes() > 10);
+        assertTrue(e.nextStatsMs() == 0 || e.nextStatsMs() > System.currentTimeMillis());
+
+        Path f = Files.createTempFile("cfg", ".properties");
+        c.apiKey = "k"; c.intervalMinutes = 20; c.zipIntervalMinutes = 60; c.zipBackup = true; c.uploadOnExit = false; c.showIndicator = false;
+        c.watched.add("Meine Welt"); c.uploadEndpoint = "http://x/up";
+        c.save(f);
+        Config r = Config.load(f);
+        assertEquals(20, r.intervalMinutes); assertEquals(60, r.zipIntervalMinutes); assertTrue(r.zipBackup);
+        assertFalse(r.uploadOnExit); assertFalse(r.showIndicator); assertEquals("k", r.apiKey);
+        assertTrue(r.watched.contains("Meine Welt")); assertEquals("http://x/up", r.uploadEndpoint);
         s.stop(0);
     }
 

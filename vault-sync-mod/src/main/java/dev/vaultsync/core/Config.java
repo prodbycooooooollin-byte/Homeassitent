@@ -11,13 +11,17 @@ import java.util.Properties;
 public final class Config {
     public String endpoint = "https://vault-my-world.base44.app/functions/worldSync";
     public String apiKey = "";
-    public int intervalMinutes = 5;
+    public volatile int intervalMinutes = 5;
     /** ZIP-Backup der Weltdateien über worldUpload. */
-    public boolean zipBackup = false;
+    public volatile boolean zipBackup = false;
     /** Adresse von worldUpload; leer = aus endpoint abgeleitet (worldSync → worldUpload). */
     public String uploadEndpoint = "";
     /** Wie oft die komplette Welt als ZIP hochgeladen wird (Statistiken gehen alle intervalMinutes). */
-    public int zipIntervalMinutes = 30;
+    public volatile int zipIntervalMinutes = 30;
+    /** Beim Verlassen der Welt noch einmal komplett hochladen. */
+    public volatile boolean uploadOnExit = true;
+    /** Statusanzeige oben rechts im Spiel. */
+    public volatile boolean showIndicator = true;
     /** Ordnernamen der Welten (aus .minecraft/saves), für die gesichert wird. */
     public final java.util.Set<String> watched = new java.util.LinkedHashSet<>();
     public final Map<String, String> worlds = new LinkedHashMap<>();
@@ -25,6 +29,7 @@ public final class Config {
     /** Übernimmt Werte aus einer frisch geladenen Konfiguration (für /vault reload). */
     public void copyFrom(Config o) {
         endpoint = o.endpoint; apiKey = o.apiKey; intervalMinutes = o.intervalMinutes; zipBackup = o.zipBackup; uploadEndpoint = o.uploadEndpoint; zipIntervalMinutes = o.zipIntervalMinutes;
+        uploadOnExit = o.uploadOnExit; showIndicator = o.showIndicator;
         watched.clear(); watched.addAll(o.watched); worlds.clear(); worlds.putAll(o.worlds);
     }
 
@@ -54,11 +59,29 @@ public final class Config {
         c.zipBackup = Boolean.parseBoolean(p.getProperty("zipBackup", "false").trim());
         try { c.zipIntervalMinutes = Math.max(1, Integer.parseInt(p.getProperty("zipIntervalMinutes", "30").trim())); }
         catch (NumberFormatException ignored) { }
+        c.uploadOnExit = Boolean.parseBoolean(p.getProperty("uploadOnExit", "true").trim());
+        c.showIndicator = Boolean.parseBoolean(p.getProperty("showIndicator", "true").trim());
         c.uploadEndpoint = p.getProperty("uploadEndpoint", "").trim();
         if (c.uploadEndpoint.isEmpty()) c.uploadEndpoint = c.endpoint.replaceAll("worldSync/?$", "worldUpload");
         for (String w : p.getProperty("worlds", "").split(",")) if (!w.isBlank()) c.watched.add(w.trim());
         for (String k : p.stringPropertyNames())
             if (k.startsWith("world.") && !p.getProperty(k).isBlank()) c.worlds.put(k.substring(6), p.getProperty(k).trim());
         return c;
+    }
+
+    /** Schreibt alle Einstellungen zurück (für das Dashboard). */
+    public synchronized void save(Path file) throws IOException {
+        StringBuilder sb = new StringBuilder("# Vault Sync (wird vom Dashboard /vault geschrieben)\n");
+        sb.append("endpoint=").append(endpoint).append('\n');
+        sb.append("apiKey=").append(apiKey).append('\n');
+        sb.append("intervalMinutes=").append(intervalMinutes).append('\n');
+        sb.append("worlds=").append(String.join(", ", watched)).append('\n');
+        sb.append("zipBackup=").append(zipBackup).append('\n');
+        sb.append("zipIntervalMinutes=").append(zipIntervalMinutes).append('\n');
+        sb.append("uploadOnExit=").append(uploadOnExit).append('\n');
+        sb.append("showIndicator=").append(showIndicator).append('\n');
+        if (!uploadEndpoint.equals(endpoint.replaceAll("worldSync/?$", "worldUpload"))) sb.append("uploadEndpoint=").append(uploadEndpoint).append('\n');
+        worlds.forEach((k, v) -> sb.append("world.").append(k.replace(" ", "\\ ")).append('=').append(v).append('\n'));
+        Files.writeString(file, sb.toString());
     }
 }

@@ -13,11 +13,12 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 final class VaultHud implements HudElement {
     private static final int FADE_MS = 400, HOLD_MS = 2200;
     private final SyncEngine engine;
-    VaultHud(SyncEngine engine) { this.engine = engine; }
+    private final dev.vaultsync.core.Config cfg;
+    VaultHud(SyncEngine engine, dev.vaultsync.core.Config cfg) { this.engine = engine; this.cfg = cfg; }
 
     @Override public void extractRenderState(GuiGraphicsExtractor ctx, DeltaTracker tick) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) return; // bei F1 (GUI aus) werden HUD-Elemente ohnehin nicht gezeichnet
+        if (mc.player == null || !cfg.showIndicator) return; // bei F1 (GUI aus) werden HUD-Elemente ohnehin nicht gezeichnet
         SyncEngine.State s = engine.state();
         long age = engine.stateAgeMs();
         boolean busy = s == SyncEngine.State.SAVING || s == SyncEngine.State.UPLOADING;

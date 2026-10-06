@@ -18,7 +18,7 @@ public final class VaultClient {
     public VaultClient(Config cfg) { this.cfg = cfg; }
 
     /** worldSync: POST {key, data} als JSON. 401 = falscher Schlüssel, 404 = auf der Seite gibt es noch keine Sicherung. */
-    public void postStats(java.util.Map<String, Object> data) throws IOException, InterruptedException {
+    public long postStats(java.util.Map<String, Object> data) throws IOException, InterruptedException {
         var body = new java.util.LinkedHashMap<String, Object>();
         body.put("key", cfg.apiKey); body.put("data", data);
         String json = Json.write(body);
@@ -32,6 +32,7 @@ public final class VaultClient {
             case 404 -> throw new IOException("Auf der Seite gibt es noch keine Sicherung – erst eine anlegen");
             default -> throw new IOException("Server antwortete " + r.statusCode() + ": " + trim(r.body()));
         }
+        return json.getBytes(StandardCharsets.UTF_8).length;
     }
 
     /**

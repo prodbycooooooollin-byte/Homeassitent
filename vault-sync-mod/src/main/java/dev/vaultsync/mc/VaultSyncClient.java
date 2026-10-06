@@ -22,10 +22,14 @@ public final class VaultSyncClient implements ClientModInitializer {
     private SyncEngine.Session session;
     private Path activeRoot;
     private Config config;
+    private volatile boolean openRequested;
+    private Path configFile;
+    private String folder = "";
 
     @Override public void onInitializeClient() {
         try {
-            config = Config.load(FabricLoader.getInstance().getConfigDir().resolve("vaultsync.properties"));
+            configFile = FabricLoader.getInstance().getConfigDir().resolve("vaultsync.properties");
+            config = Config.load(configFile);
         } catch (Exception e) { LOG.error("Konfiguration nicht lesbar", e); return; }
         engine = new SyncEngine(config, LOG::info);
         engine.setChat(msg -> net.minecraft.client.Minecraft.getInstance().execute(() -> {
@@ -33,17 +37,18 @@ public final class VaultSyncClient implements ClientModInitializer {
             if (player != null) player.sendSystemMessage(net.minecraft.network.chat.Component.literal("[Vault] " + msg));
         }));
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-                VaultCommands.register(dispatcher, engine, config, () -> session, this::reloadConfig));
+                VaultCommands.register(dispatcher, () -> openRequested = true));
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
-                Identifier.fromNamespaceAndPath("vaultsync", "status"), new VaultHud(engine));
+                Identifier.fromNamespaceAndPath("vaultsync", "status"), new VaultHud(engine, config));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (openRequested) { openRequested = false; client.setScreen(new VaultScreen(engine, config, actions())); } // erst im nächsten Tick, sonst schließt der Chat es wieder
             MinecraftServer server = client.getSingleplayerServer();
             Path root = server == null || !server.isRunning() ? null
                     : server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
             if (root == null ? activeRoot == null : root.equals(activeRoot)) return;
             if (session != null) { session.stop(); session = null; activeRoot = null; }
             if (root == null) return;
-            String folder = root.getFileName().toString();
+            folder = root.getFileName().toString();
             activeRoot = root;
             if (!config.watched.contains(folder) && !config.worlds.containsKey(folder) || config.apiKey.isEmpty()) return; // nicht eingetragen → nichts tun
             String worldId = config.worlds.getOrDefault(folder, folder);
@@ -52,11 +57,15 @@ public final class VaultSyncClient implements ClientModInitializer {
         });
     }
 
-    /** /vault reload: Config neu lesen und die aktuelle Welt neu bewerten. */
-    private String reloadConfig() throws Exception {
-        config.copyFrom(Config.load(FabricLoader.getInstance().getConfigDir().resolve("vaultsync.properties")));
-        if (session != null) { session.stop(); session = null; }
-        activeRoot = null; // Tick-Handler entscheidet neu
-        return "Config neu geladen (" + config.watched.size() + " Welt(en) eingetragen).";
+    private VaultScreen.Actions actions() {
+        return new VaultScreen.Actions() {
+            public SyncEngine.Session session() { return session; }
+            public String worldFolder() { return folder; }
+            public void save() { try { config.save(configFile); } catch (Exception e) { LOG.error("Config nicht speicherbar", e); } }
+            public void addCurrentWorld() {
+                if (folder.isEmpty() || config.apiKey.isEmpty()) return;
+                config.watched.add(folder); save(); activeRoot = null; // Tick-Handler startet die Sicherung
+            }
+        };
     }
 }
