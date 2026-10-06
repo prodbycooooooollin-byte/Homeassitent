@@ -35,7 +35,7 @@ final class StatsCollector {
         d.put("game_mode", p.gameMode.getGameModeForPlayer().getName());
         d.put("difficulty", data.getDifficulty().name().toLowerCase(java.util.Locale.ROOT));
         d.put("seed", String.valueOf(overworld.getSeed()));
-        d.put("dimension", p.level().dimension().identifier().toString());
+        d.put("dimension", strip(p.level().dimension().identifier()));
         d.put("player_x", Math.round(p.getX() * 10) / 10.0);
         d.put("player_y", Math.round(p.getY() * 10) / 10.0);
         d.put("player_z", Math.round(p.getZ() * 10) / 10.0);
@@ -62,14 +62,14 @@ final class StatsCollector {
         for (Block b : BuiltInRegistries.BLOCK) {
             int v = st.getValue(Stats.BLOCK_MINED.get(b));
             mined += v;
-            if (v > bestMined) { bestMined = v; topBlock = BuiltInRegistries.BLOCK.getKey(b).toString(); }
+            if (v > bestMined) { bestMined = v; topBlock = pretty(strip(BuiltInRegistries.BLOCK.getKey(b))); }
         }
         long crafted = 0;
         for (Item i : BuiltInRegistries.ITEM) crafted += st.getValue(Stats.ITEM_CRAFTED.get(i));
         int bestKill = 0; String topMob = null;
         for (EntityType<?> t : BuiltInRegistries.ENTITY_TYPE) {
             int v = st.getValue(Stats.ENTITY_KILLED.get(t));
-            if (v > bestKill) { bestKill = v; topMob = BuiltInRegistries.ENTITY_TYPE.getKey(t).toString(); }
+            if (v > bestKill) { bestKill = v; topMob = pretty(strip(BuiltInRegistries.ENTITY_TYPE.getKey(t))); }
         }
         long cm = 0;
         for (Identifier id : List.of(Stats.WALK_ONE_CM, Stats.SPRINT_ONE_CM, Stats.CROUCH_ONE_CM, Stats.SWIM_ONE_CM,
@@ -83,20 +83,86 @@ final class StatsCollector {
         if (topMob != null) d.put("top_mob", topMob);
 
         List<Map<String, Object>> done = new ArrayList<>();
-        for (AdvancementHolder a : server.getAdvancements().getAllAdvancements())
-            if (p.getAdvancements().getOrStartProgress(a).isDone() && !a.id().getPath().startsWith("recipes/")) {
-                Map<String, Object> e = new LinkedHashMap<>();
-                e.put("id", a.id().toString());
-                e.put("name", a.id().getPath());
-                e.put("done", true);
-                done.add(e);
+        List<Map<String, Object>> biomes = new ArrayList<>();
+        for (AdvancementHolder a : server.getAdvancements().getAllAdvancements()) {
+            var progress = p.getAdvancements().getOrStartProgress(a);
+            String path = a.id().getPath();
+            if (path.equals("adventure/adventuring_time")) {
+                for (String crit : progress.getCompletedCriteria()) {
+                    Map<String, Object> e = new LinkedHashMap<>();
+                    e.put("id", strip(Identifier.parse(crit)));
+                    var when = progress.getCriterion(crit).getObtained();
+                    if (when != null) e.put("date", when.toString());
+                    biomes.add(e);
+                }
             }
+            if (!progress.isDone() || path.startsWith("recipes/") || path.endsWith("/root")) continue;
+            Map<String, Object> e = new LinkedHashMap<>();
+            e.put("id", strip(a.id()));
+            java.time.Instant latest = null;
+            for (String crit : progress.getCompletedCriteria()) {
+                var when = progress.getCriterion(crit).getObtained();
+                if (when != null && (latest == null || when.isAfter(latest))) latest = when;
+            }
+            if (latest != null) e.put("date", latest.toString());
+            done.add(e);
+        }
+        done.sort((x, y) -> String.valueOf(y.get("date")).compareTo(String.valueOf(x.get("date"))));
+        biomes.sort((x, y) -> String.valueOf(x.get("date")).compareTo(String.valueOf(y.get("date"))));
         d.put("advancements", done.size());
         d.put("advancement_list", done);
+        d.put("biomes", biomes);
+
+        d.put("stats_detail", detail(st));
 
         d.put("inventory", items(p.getInventory()));
         d.put("ender_items", items(p.getEnderChestInventory()));
         return d;
+    }
+
+    /** Detail-Statistiken im gleichen Format wie die Auslese im Browser (je Kategorie die 80 höchsten Werte). */
+    private static Map<String, Object> detail(ServerStatsCounter st) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, Integer> custom = new HashMap<>();
+        for (Identifier id : BuiltInRegistries.CUSTOM_STAT) custom.put(strip(id), st.getValue(Stats.CUSTOM.get(id)));
+        out.put("custom", topN(custom, 200));
+        Map<String, Integer> m = new HashMap<>();
+        for (Block b : BuiltInRegistries.BLOCK) m.put(strip(BuiltInRegistries.BLOCK.getKey(b)), st.getValue(Stats.BLOCK_MINED.get(b)));
+        out.put("mined", topN(m, 80));
+        String[] names = {"crafted", "used", "broken", "picked_up", "dropped"};
+        for (String name : names) {
+            m = new HashMap<>();
+            for (Item i : BuiltInRegistries.ITEM) {
+                var type = switch (name) { case "crafted" -> Stats.ITEM_CRAFTED; case "used" -> Stats.ITEM_USED; case "broken" -> Stats.ITEM_BROKEN;
+                    case "picked_up" -> Stats.ITEM_PICKED_UP; default -> Stats.ITEM_DROPPED; };
+                m.put(strip(BuiltInRegistries.ITEM.getKey(i)), st.getValue(type.get(i)));
+            }
+            out.put(name, topN(m, 80));
+        }
+        Map<String, Integer> killed = new HashMap<>(), killedBy = new HashMap<>();
+        for (EntityType<?> t : BuiltInRegistries.ENTITY_TYPE) {
+            String key = strip(BuiltInRegistries.ENTITY_TYPE.getKey(t));
+            killed.put(key, st.getValue(Stats.ENTITY_KILLED.get(t))); killedBy.put(key, st.getValue(Stats.ENTITY_KILLED_BY.get(t)));
+        }
+        out.put("killed", topN(killed, 80));
+        out.put("killed_by", topN(killedBy, 80));
+        return out;
+    }
+
+    /** Die Seite erwartet Namen ohne "minecraft:". */
+    static String strip(Identifier id) { return id.getNamespace().equals("minecraft") ? id.getPath() : id.toString(); }
+
+    private static String pretty(String id) {
+        String n = id.replace('_', ' ');
+        return n.isEmpty() ? n : Character.toUpperCase(n.charAt(0)) + n.substring(1);
+    }
+
+    /** Die höchsten n Einträge, absteigend (wie die Auslese im Browser). */
+    private static Map<String, Object> topN(Map<String, Integer> m, int n) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        m.entrySet().stream().filter(e -> e.getValue() > 0).sorted((a, b) -> b.getValue() - a.getValue()).limit(n)
+                .forEach(e -> out.put(e.getKey(), e.getValue()));
+        return out;
     }
 
     private static int custom(ServerStatsCounter st, Identifier id) { return st.getValue(Stats.CUSTOM.get(id)); }
@@ -107,7 +173,7 @@ final class StatsCollector {
             ItemStack s = inv.getItem(i);
             if (s.isEmpty()) continue;
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("slot", i); m.put("id", BuiltInRegistries.ITEM.getKey(s.getItem()).toString()); m.put("count", s.getCount());
+            m.put("slot", i); m.put("id", strip(BuiltInRegistries.ITEM.getKey(s.getItem()))); m.put("count", s.getCount());
             out.add(m);
         }
         return out;
