@@ -29,6 +29,9 @@ public final class SyncEngine {
     private volatile String lastFingerprint = "";
     private volatile boolean paused;
     private volatile long lastZipMs;
+    private volatile Consumer<String> chat = m -> { };
+    /** Rückmeldungen für manuelle Sicherungen (/vault sync) – z. B. als Chatnachricht. */
+    public void setChat(Consumer<String> c) { chat = c; }
     private volatile long lastSuccessMs;
     private volatile ScheduledFuture<?> scheduled;
 
@@ -78,11 +81,17 @@ public final class SyncEngine {
             }
             boolean zipDue = cfg.zipBackup && (forceZip || lastZipMs == 0
                     || System.currentTimeMillis() - lastZipMs >= cfg.zipIntervalMinutes * 60_000L);
-            if (!zipDue) { lastSuccessMs = System.currentTimeMillis(); set(State.DONE); log.accept("Statistiken gesendet"); return; }
+            if (!zipDue) { lastSuccessMs = System.currentTimeMillis(); set(State.DONE); log.accept("Statistiken gesendet");
+                if (forceZip && live) chat.accept(cfg.zipBackup ? "Statistiken gesendet." : "Statistiken gesendet. Welt-ZIP ist aus (zipBackup=false in der Config).");
+                return; }
             set(State.SAVING);
             if (hooks != null) { hooks.saveAndFreeze(); frozen = true; }
             String fp = WorldZipper.fingerprint(root);
-            if (fp.equals(lastFingerprint)) { lastZipMs = System.currentTimeMillis(); lastSuccessMs = lastZipMs; set(State.DONE); return; }
+            if (fp.equals(lastFingerprint)) {
+                lastZipMs = System.currentTimeMillis(); lastSuccessMs = lastZipMs; set(State.DONE);
+                if (forceZip && live) chat.accept("Fertig – die Welt hat sich seit der letzten Sicherung nicht geändert, es ist nichts Neues hochzuladen.");
+                return;
+            }
             tmp = Files.createTempFile("vaultsync-", ".zip");
             WorldZipper.zip(root, tmp);
             if (frozen) { hooks.unfreeze(); frozen = false; }
@@ -93,10 +102,12 @@ public final class SyncEngine {
             lastSuccessMs = System.currentTimeMillis();
             set(State.DONE);
             log.accept("Welt-ZIP hochgeladen (" + Files.size(tmp) / 1024 / 1024 + " MB)");
+            if (forceZip && live) chat.accept("Welt hochgeladen (" + Math.max(1, Files.size(tmp) / 1024 / 1024) + " MB). Sie steht jetzt in der Versionsliste auf der Seite.");
         } catch (Exception e) {
             lastError = String.valueOf(e.getMessage());
             set(State.ERROR);
             log.accept("Sicherung fehlgeschlagen: " + e);
+            if (forceZip && live) chat.accept("Fehlgeschlagen: " + lastError);
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
         } finally {
             if (frozen) hooks.unfreeze();
