@@ -6,8 +6,8 @@ startet also von selbst mit Minecraft und wird nur aktiv, wenn du eine **eingetr
 * Alle `intervalMinutes` (Standard 5) sendet er die Statistiken der Welt an `worldSync` (`{key, data}`): Position, XP, Leben,
   Hunger, Spielzeit, Tode, Kills, abgebaute Blöcke, Distanz, Fortschritte, Inventar, Endertruhe, Spielregeln usw.
 * Anzeige oben rechts: feiner rotierender Bogen („Sichere Welt" / „Synchronisiere"), danach Häkchen bzw. rotes Kreuz.
-* **Weltdateien (ZIP) werden noch nicht hochgeladen** – `worldSync` nimmt keine Dateien an. Der ZIP-Code ist fertig, aber
-  mit `zipBackup=false` abgeschaltet, bis die Seite eine Upload-Schnittstelle hat (siehe unten).
+* Zusätzlich lädt er alle `zipIntervalMinutes` (Standard 30) die **komplette Welt als ZIP** per `worldUpload` hoch
+  (roher ZIP-Body, Header `X-WorldVault-Key`). Die Seite behält die neuesten 3 Sicherungen. Ein letzter Upload erfolgt beim Verlassen der Welt.
 
 ## Einrichten
 1. Fabric Loader + Fabric API für 1.21.4 installieren, `vault-sync-1.0.0.jar` in `mods/` legen.
@@ -24,7 +24,9 @@ Hinweis: `worldSync` hat keine Welt-Zuordnung, alles geht in die neueste Sicheru
 `gradle build` (Loom braucht Zugriff auf maven.fabricmc.net) → `build/libs/vault-sync-1.0.0.jar`.
 Kern-Tests: `gradle test` (läuft ohne Minecraft-Logik).
 
-## Für spätere ZIP-Backups
-Die Seite braucht dafür eine neue Funktion (Datei-Upload, ein Eintrag pro Welt, alte Version ersetzen). Der Mod ist auf diese
-**angenommene** Form vorbereitet (`core/VaultClient.upload`): `POST`, `Authorization: Bearer <key>`, multipart mit `worldId`,
-`fingerprint`, `replacePrevious=true` und Datei `file`. Sobald sie existiert: `zipBackup=true` und ggf. `VaultClient` anpassen.
+## Befehle
+`/vault sync` (sofort Statistiken + ZIP), `/vault status`, `/vault pause`, `/vault resume`, `/vault reload`.
+
+## Einstellungen
+`apiKey`, `worlds`, `intervalMinutes`, `zipBackup` (true/false), `zipIntervalMinutes`, `endpoint`, optional `uploadEndpoint`
+(Standard: `endpoint` mit `worldUpload` statt `worldSync`).

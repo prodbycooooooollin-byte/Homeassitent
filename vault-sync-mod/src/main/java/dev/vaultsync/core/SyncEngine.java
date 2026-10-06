@@ -28,6 +28,7 @@ public final class SyncEngine {
     private volatile String lastError = "";
     private volatile String lastFingerprint = "";
     private volatile boolean paused;
+    private volatile long lastZipMs;
     private volatile long lastSuccessMs;
     private volatile ScheduledFuture<?> scheduled;
 
@@ -52,18 +53,21 @@ public final class SyncEngine {
         private final ScheduledFuture<?> task; private final Path root; private final String id; private final Hooks hooks;
         Session(ScheduledFuture<?> t, Path r, String i, Hooks h) { task = t; root = r; id = i; hooks = h; }
         /** Sofort sichern (läuft im Hintergrund; das Ergebnis zeigt die Anzeige bzw. {@link #state()}). */
-        public void syncNow() { exec.execute(() -> cycle(root, id, hooks, true)); }
+        public void syncNow() { exec.execute(() -> cycle(root, id, hooks, true, true)); }
         /** Beim Verlassen der Welt: Welt ist dann komplett gespeichert – letzter, konsistenter Stand. */
         public void stop() {
             task.cancel(false);
             if (!cfg.zipBackup) return; // Statistiken brauchen den laufenden Server
-            Thread t = new Thread(() -> cycle(root, id, null, false), "VaultSync-final"); // nicht-daemon: JVM wartet kurz
+            Thread t = new Thread(() -> cycle(root, id, null, false, true), "VaultSync-final"); // nicht-daemon: JVM wartet kurz
             t.start();
         }
     }
 
     /** Ein Durchlauf; synchron, damit Tests ihn direkt aufrufen können. */
-    public synchronized void cycle(Path root, String worldId, Hooks hooks, boolean live) {
+    public void cycle(Path root, String worldId, Hooks hooks, boolean live) { cycle(root, worldId, hooks, live, false); }
+
+    /** @param forceZip ZIP auch dann hochladen, wenn der letzte Upload noch keine zipIntervalMinutes her ist (manuell / beim Verlassen). */
+    public synchronized void cycle(Path root, String worldId, Hooks hooks, boolean live, boolean forceZip) {
         Path tmp = null;
         boolean frozen = false;
         try {
@@ -72,17 +76,20 @@ public final class SyncEngine {
                 var stats = hooks.collectStats();
                 if (stats != null) { set(State.UPLOADING); client.postStats(stats); }
             }
-            if (!cfg.zipBackup) { lastSuccessMs = System.currentTimeMillis(); set(State.DONE); log.accept("Statistiken gesendet"); return; }
+            boolean zipDue = cfg.zipBackup && (forceZip || lastZipMs == 0
+                    || System.currentTimeMillis() - lastZipMs >= cfg.zipIntervalMinutes * 60_000L);
+            if (!zipDue) { lastSuccessMs = System.currentTimeMillis(); set(State.DONE); log.accept("Statistiken gesendet"); return; }
             set(State.SAVING);
             if (hooks != null) { hooks.saveAndFreeze(); frozen = true; }
             String fp = WorldZipper.fingerprint(root);
-            if (fp.equals(lastFingerprint)) { set(State.IDLE); return; }
+            if (fp.equals(lastFingerprint)) { lastZipMs = System.currentTimeMillis(); lastSuccessMs = lastZipMs; set(State.DONE); return; }
             tmp = Files.createTempFile("vaultsync-", ".zip");
             WorldZipper.zip(root, tmp);
             if (frozen) { hooks.unfreeze(); frozen = false; }
             set(State.UPLOADING);
-            client.upload(worldId, fp, tmp);
+            client.upload(root.getFileName().toString(), tmp);
             lastFingerprint = fp;
+            lastZipMs = System.currentTimeMillis();
             lastSuccessMs = System.currentTimeMillis();
             set(State.DONE);
             log.accept("Welt-ZIP hochgeladen (" + Files.size(tmp) / 1024 / 1024 + " MB)");

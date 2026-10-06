@@ -16,24 +16,27 @@ class SyncEngineTest {
         Files.writeString(world.resolve("session.lock"), "locked");
         Files.writeString(world.resolve("region/r.0.0.mca"), "data");
 
-        AtomicInteger posts = new AtomicInteger(); AtomicReference<String> auth = new AtomicReference<>();
+        AtomicInteger posts = new AtomicInteger(); AtomicReference<String> auth = new AtomicReference<>(); AtomicReference<String> hdrs = new AtomicReference<>();
         AtomicReference<byte[]> body = new AtomicReference<>();
         HttpServer s = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        s.createContext("/", ex -> { posts.incrementAndGet(); auth.set(ex.getRequestHeaders().getFirst("Authorization"));
+        s.createContext("/", ex -> { posts.incrementAndGet(); auth.set(ex.getRequestHeaders().getFirst("X-WorldVault-Key")); hdrs.set(ex.getRequestHeaders().getFirst("X-World-Name") + "|" + ex.getRequestHeaders().getFirst("X-File-Name"));
             body.set(ex.getRequestBody().readAllBytes()); ex.sendResponseHeaders(200, -1); ex.close(); });
         s.start();
-        Config c = new Config(); c.zipBackup = true; c.endpoint = "http://127.0.0.1:" + s.getAddress().getPort() + "/"; c.apiKey = "K";
+        Config c = new Config(); c.zipBackup = true; c.endpoint = "http://127.0.0.1:" + s.getAddress().getPort() + "/"; c.uploadEndpoint = c.endpoint; c.apiKey = "K";
         AtomicInteger freezes = new AtomicInteger(), thaws = new AtomicInteger();
         SyncEngine.Hooks h = new SyncEngine.Hooks() {
             public Map<String,Object> collectStats() { return null; } public void saveAndFreeze() { freezes.incrementAndGet(); } public void unfreeze() { thaws.incrementAndGet(); } };
         SyncEngine e = new SyncEngine(c, m -> { });
         e.cycle(world, "w1", h, true);
-        assertEquals(SyncEngine.State.DONE, e.state()); assertEquals(1, posts.get()); assertEquals("Bearer K", auth.get());
-        assertTrue(new String(body.get(), "ISO-8859-1").contains("name=\"worldId\"\r\n\r\nw1"));
-        e.cycle(world, "w1", h, true);
+        assertEquals(SyncEngine.State.DONE, e.state()); assertEquals(1, posts.get()); assertEquals("K", auth.get());
+        assertTrue(hdrs.get().startsWith("Meine Welt|Meine Welt_") && hdrs.get().endsWith(".zip"), hdrs.get());
+        assertEquals('P', body.get()[0]); assertEquals('K', body.get()[1]); // rohe ZIP
+        e.cycle(world, "w1", h, true, true);
         assertEquals(1, posts.get(), "unverändert → kein zweiter Upload");
         Files.writeString(world.resolve("level.dat"), "changed!");
         e.cycle(world, "w1", h, true);
+        assertEquals(1, posts.get(), "ZIP-Intervall noch nicht erreicht");
+        e.cycle(world, "w1", h, true, true);
         assertEquals(2, posts.get()); assertEquals(freezes.get(), thaws.get());
         s.stop(0);
     }
@@ -93,7 +96,7 @@ class SyncEngineTest {
         Path w = Files.createTempDirectory("saves").resolve("W"); Files.createDirectories(w); Files.writeString(w.resolve("a"), "1");
         HttpServer s = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         s.createContext("/", ex -> { ex.getRequestBody().readAllBytes(); ex.sendResponseHeaders(500, -1); ex.close(); }); s.start();
-        Config c = new Config(); c.zipBackup = true; c.endpoint = "http://127.0.0.1:" + s.getAddress().getPort() + "/";
+        Config c = new Config(); c.zipBackup = true; c.endpoint = "http://127.0.0.1:" + s.getAddress().getPort() + "/"; c.uploadEndpoint = c.endpoint;
         AtomicInteger th = new AtomicInteger();
         SyncEngine e = new SyncEngine(c, m -> { });
         e.cycle(w, "x", new SyncEngine.Hooks() { public Map<String,Object> collectStats() { return null; } public void saveAndFreeze() { } public void unfreeze() { th.incrementAndGet(); } }, true);

@@ -11,13 +11,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.UUID;
 
-/**
- * {@link #postStats} entspricht der echten worldSync-Schnittstelle. {@link #upload} ist NUR eine Annahme für eine künftige
- * Upload-Schnittstelle der Seite (existiert noch nicht) und ist standardmäßig abgeschaltet (zipBackup=false):
- *   POST {endpoint}, Header "Authorization: Bearer {apiKey}", multipart/form-data mit
- *   Feldern worldId, fingerprint, replacePrevious=true und Datei "file" (world.zip).
- * Die Seite ersetzt/löscht die alte Version selbst. Alles Protokollspezifische steht NUR in dieser Klasse.
- */
 public final class VaultClient {
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
     private final Config cfg;
@@ -41,32 +34,34 @@ public final class VaultClient {
         }
     }
 
-    public void upload(String worldId, String fingerprint, Path zip) throws IOException, InterruptedException {
-        String b = "----vaultsync" + UUID.randomUUID();
-        byte[] head = (field(b, "worldId", worldId) + field(b, "fingerprint", fingerprint) + field(b, "replacePrevious", "true")
-                + "--" + b + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"world.zip\"\r\n"
-                + "Content-Type: application/zip\r\n\r\n").getBytes(StandardCharsets.UTF_8);
-        byte[] tail = ("\r\n--" + b + "--\r\n").getBytes(StandardCharsets.UTF_8);
-        long len = head.length + Files.size(zip) + tail.length;
-
-        HttpRequest.BodyPublisher body = HttpRequest.BodyPublishers.fromPublisher(HttpRequest.BodyPublishers.ofInputStream(() -> {
-            try {
-                return new SequenceInputStream(new SequenceInputStream(new ByteArrayInputStream(head), Files.newInputStream(zip)),
-                        new ByteArrayInputStream(tail));
-            } catch (IOException e) { throw new UncheckedIOException(e); }
-        }), len);
-
-        HttpRequest req = HttpRequest.newBuilder(URI.create(cfg.endpoint))
-                .timeout(Duration.ofMinutes(15))
-                .header("Authorization", "Bearer " + cfg.apiKey)
-                .header("Content-Type", "multipart/form-data; boundary=" + b)
-                .POST(body).build();
+    /**
+     * worldUpload der Seite: POST, Body = rohe ZIP, Header X-WorldVault-Key (gleicher Schlüssel wie worldSync),
+     * X-File-Name, X-World-Name, X-Label. Die Seite behält die neuesten 3 Sicherungen und löscht ältere selbst.
+     */
+    public void upload(String worldName, Path zip) throws IOException, InterruptedException {
+        String stamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm"));
+        String safe = ascii(worldName);
+        HttpRequest req = HttpRequest.newBuilder(URI.create(cfg.uploadEndpoint))
+                .timeout(Duration.ofMinutes(30))
+                .header("X-WorldVault-Key", cfg.apiKey)
+                .header("X-File-Name", safe + "_" + stamp + ".zip")
+                .header("X-World-Name", safe)
+                .header("Content-Type", "application/zip")
+                .POST(HttpRequest.BodyPublishers.ofFile(zip)).build();
         HttpResponse<String> r = http.send(req, HttpResponse.BodyHandlers.ofString());
-        if (r.statusCode() / 100 != 2) throw new IOException("Server antwortete " + r.statusCode() + ": " + trim(r.body()));
+        switch (r.statusCode()) {
+            case 200 -> { }
+            case 401 -> throw new IOException("Falscher Schlüssel (apiKey)");
+            case 413 -> throw new IOException("Welt zu groß für die Seite (max. 4 GB)");
+            default -> throw new IOException("Upload: Server antwortete " + r.statusCode() + ": " + trim(r.body()));
+        }
     }
 
-    private static String field(String b, String name, String v) {
-        return "--" + b + "\r\nContent-Disposition: form-data; name=\"" + name + "\"\r\n\r\n" + v + "\r\n";
+    /** HTTP-Header vertragen nur einfaches ASCII. */
+    static String ascii(String s) {
+        String t = s.replaceAll("[^\\x20-\\x7E]", "_").replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        return t.isEmpty() ? "welt" : t;
     }
+
     private static String trim(String s) { return s.length() > 1500 ? s.substring(0, 1500) : s; }
 }
