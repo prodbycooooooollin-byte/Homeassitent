@@ -1,22 +1,42 @@
 # Aethermoor – Die Schattenkrone
 
-Ein Mittelalter-/Fantasy-MMORPG im Browser (HTML5 Canvas, reines JavaScript, kein Build-Schritt).
-Öffne `index.html` in einem modernen Browser – fertig.
+3D-Fantasy-MMORPG als **Desktop-App** (Electron + Three.js). Mittelalter-/Fantasy-Welt mit Tag-und-Nacht-Wechsel,
+Schatten, Wetter, vielen Bossen, Quests, Skillbäumen und einem kantigen "Obsidian & Gold"-Interface.
+
+## Starten (PC)
+Voraussetzung: [Node.js](https://nodejs.org) 18+.
+
+```bash
+cd mmorpg
+npm install      # lädt Electron (einmalig)
+npm start        # startet das Spiel als Desktop-Fenster
+```
+
+Installierbare Version bauen (Installer für das jeweilige Betriebssystem, auf diesem System ausführen):
+
+```bash
+npm run dist     # Windows: .exe-Installer · macOS: .dmg · Linux: AppImage  (Ergebnis in mmorpg/dist)
+```
+
+Vollbild: **F11**. Grafikqualität (Hoch/Mittel/Niedrig) im Menü (Esc).
 
 ## Hinweis zum "MMO"
 Die Welt ist ein **Einzelspieler-Spiel mit simulierten Mitspielern** (wandernde Abenteurer, Weltchat).
-Echter Mehrspieler bräuchte einen Server (z. B. Node + WebSocket); die Spiellogik ist dafür bewusst getrennt.
+Echter Mehrspieler bräuchte einen Server (z. B. Node + WebSocket).
 
 ## Inhalt
-- 4 Klassen (Krieger, Magier, Waldläufer, Priester), je 3 Fertigkeitenbäume mit 15 Fertigkeiten (Ränge, Passive, Ultimates)
-- Große Welt mit 7 Zonen, 7 Siedlungen (sichere Zonen), Straßen, Tag/Nacht, Minimap & Weltkarte
-- ~45 Monstertypen, Elite-Gegner, **13 Bosse** mit Mechaniken (Boden-Telegraphen, Nova, Beschwörungen, Flüche, Raserei)
-- 51 Quests mit Questketten, Tracker, NPC-Markierungen (! und ?)
-- Loot in 5 Seltenheitsstufen, Boss-Unikate, Ausrüstung, Händler, Sammelberufe, Alchemie & Schmiedekunst, Reittier
-- Klassische MMORPG-Oberfläche: Spieler-/Zielfenster, Aktionsleiste (Drag & Drop), Chat, Inventar, Charakter, Questlog
-- Automatisches Speichern (localStorage)
+- 3D-Welt: 7 Zonen mit Höhenprofil, Wasser, Lava, Wäldern, Siedlungen mit Fachwerkhäusern, Straßen, Wetter (Schnee, Asche, Glühwürmchen …)
+- 4 Klassen (Krieger, Magier, Waldläufer, Priester), je 3 Fertigkeitenbäume mit 15 Fertigkeiten
+- ~45 Monstertypen, Elite-Gegner, **13 Bosse** mit Mechaniken (Boden-Warnkreise, Nova, Beschwörungen, Flüche, Raserei)
+- 51 Quests, Loot in 5 Seltenheitsstufen, Boss-Unikate, Händler, Sammelberufe, Alchemie, Schmiedekunst, Reittier
+- Kantiges UI: Kristall-Anzeigen für Leben/Ressource, Facetten-Fenster, Drag & Drop Aktionsleiste, rotierende Minimap
+- Automatisches Speichern (im Profil der App)
 
 ## Steuerung
-WASD / Linksklick = Bewegen · Linksklick auf Gegner = Anvisieren · Rechtsklick = Angreifen · 1–0 Fertigkeiten ·
-Tab = Ziel · Leertaste = Auto-Angriff · R = Reittier · Q/E = Heil-/Manatrank · F = Interagieren ·
-C/B/K/L/M = Fenster · Enter = Chat (`/hilfe`)
+WASD = Bewegen (relativ zur Kamera) · **Rechte Maustaste halten & ziehen = Kamera** · Mausrad = Zoom ·
+Linksklick = Bewegen/Anvisieren · Rechtsklick auf Gegner = Angreifen · 1–0 Fertigkeiten · Tab = Ziel · Leertaste = Auto-Angriff ·
+R = Reittier · Q/E = Heil-/Manatrank · F = Interagieren · C/B/K/L/M = Fenster · Enter = Chat (`/hilfe`) · F11 = Vollbild
+
+## Technik
+`js/data.js` Spieldaten · `js/world.js` Weltgenerierung · `js/game.js` Spiellogik · `js/models.js` 3D-Figuren ·
+`js/render.js` 3D-Engine · `js/ui.js` Oberfläche · `electron/main.js` Desktop-Fenster

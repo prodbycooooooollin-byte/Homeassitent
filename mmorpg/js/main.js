@@ -4,9 +4,10 @@
 // =====================================================================
 (function () {
   const cv = $('cv');
-  Render.init(cv);
+  Render.init(cv, $('ov'));
   Audio2.init();
   World.build();
+  Render.buildWorld();
   UI.init();
 
   // ---------- Startbildschirm ----------
@@ -15,7 +16,7 @@
   $('nameIn').value = NAMES[Math.floor(Math.random() * NAMES.length)];
   const pick = $('classPick');
   for (const k in CLASSES) {
-    const C = CLASSES[k], el = h('div', 'cc' + (k === selCls ? ' sel' : ''), `<span class="ci">${C.ic}</span>${C.name}`);
+    const C = CLASSES[k], el = h('div', 'cc' + (k === selCls ? ' sel' : ''), `<span class="ci">${C.ic}</span><span class="cn">${C.name}</span>`);
     el.onclick = () => { selCls = k; pick.querySelectorAll('.cc').forEach(x => x.classList.remove('sel')); el.classList.add('sel'); showDesc(); };
     pick.appendChild(el);
   }
@@ -36,7 +37,7 @@
   function begin(P, fresh) {
     Audio2.resume();
     G.P = P; initWorldEntities(); UI.resetState();
-    G.now = 0; G.clock = 100; G.target = null; G.chat = []; G.texts = []; G.parts = []; G.lastSave = 0; G.running = true;
+    G.now = 0; G.clock = 0; G.target = null; G.chat = []; G.texts = []; G.parts = []; G.lastSave = 0; G.running = true;
     P.cd = {}; P.fx = []; P.dead = false;
     if (fresh) {
       const first = TREES[P.cls][0][0]; P.skills[first.id] = 1; P.hotbar[0] = { t: 'skill', id: first.id };
@@ -87,47 +88,53 @@
   window.addEventListener('blur', () => { UI.keys = {}; });
   window.addEventListener('beforeunload', () => { if (G.running) saveGame(); });
 
-  function pickEntity(wx, wy) {
-    let best = null, bd = 1e9;
-    for (const m of G.mobs) {
-      if (m.dead) continue;
-      const lift = m.def.kind === 'flyer' ? 30 : m.def.kind === 'ghost' ? 22 : 16;
-      const d = Math.hypot(wx - m.x, wy - (m.y - lift * m.sc)), r = 22 * m.sc + 4;
-      if (d < r && d < bd) { bd = d; best = m; }
-    }
-    for (const n of G.npcs) { const d = Math.hypot(wx - n.x, wy - (n.y - 20)); if (d < 26 && d < bd) { bd = d; best = n; } }
-    for (const n of G.nodes) { if (!n.avail) continue; const d = Math.hypot(wx - n.x, wy - (n.y - 4)); if (d < 24 && d < bd) { bd = d; best = n; } }
-    return best;
-  }
+  // ---------- Maus: Linksklick/Rechtsklick, Kamera mit rechter Maustaste, Zoom ----------
+  let rdrag = null;
   cv.addEventListener('mousemove', e => {
     UI.mouse.x = e.clientX; UI.mouse.y = e.clientY;
-    const w = Render.screenToWorld(e.clientX, e.clientY); UI.mouseWorld = w;
-    const ent = G.running ? pickEntity(w.x, w.y) : null;
+    if (rdrag) {
+      const dx = e.clientX - rdrag.x, dy = e.clientY - rdrag.y;
+      if (!rdrag.moved && Math.hypot(e.clientX - rdrag.sx, e.clientY - rdrag.sy) > 5) rdrag.moved = true;
+      if (rdrag.moved) Render.rotateCam(dx, dy);
+      rdrag.x = e.clientX; rdrag.y = e.clientY; return;
+    }
+    if (!G.running) return;
+    const ent = Render.pick(e.clientX, e.clientY);
     UI.hover = ent && ent.def ? ent : null;
     cv.style.cursor = ent ? (ent.def ? 'crosshair' : 'pointer') : '';
+    const g = Render.groundPoint(e.clientX, e.clientY); if (g) UI.mouseWorld = g;
   });
+  cv.addEventListener('wheel', e => { e.preventDefault(); Render.zoom(e.deltaY); }, { passive: false });
   cv.addEventListener('contextmenu', e => e.preventDefault());
   cv.addEventListener('mousedown', e => {
     if (!G.running) return;
     Audio2.resume(); if (typing()) document.activeElement.blur();
-    const P = G.P; if (P.dead) return;
-    const w = Render.screenToWorld(e.clientX, e.clientY), ent = pickEntity(w.x, w.y);
-    if (e.button === 0) {
-      if (ent && ent.def) {
-        if (G.target === ent) { P.autoAtk = true; P.chase = true; P.interact = null; } else setTarget(ent);
-      } else if (ent && ent.npc) { setTarget(ent); P.interact = ent; P.path = null; P.approach = null; P.chase = false; }
+    if (e.button === 2) { rdrag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false }; return; }
+    const P = G.P; if (P.dead || e.button !== 0) return;
+    rightOrLeft(e, 0);
+  });
+  window.addEventListener('mouseup', e => {
+    if (e.button !== 2 || !rdrag) return;
+    const d = rdrag; rdrag = null;
+    if (!d.moved && G.running && !G.P.dead && e.target === cv) rightOrLeft(e, 2);
+  });
+  function rightOrLeft(e, button) {
+    const P = G.P, ent = Render.pick(e.clientX, e.clientY);
+    if (button === 0) {
+      if (ent && ent.def) { if (G.target === ent) { P.autoAtk = true; P.chase = true; P.interact = null; } else setTarget(ent); }
+      else if (ent && ent.npc) { setTarget(ent); P.interact = ent; P.path = null; P.approach = null; P.chase = false; }
       else if (ent) { P.interact = ent; P.path = null; P.approach = null; P.chase = false; }
-      else { moveTo(w.x, w.y); }
-    } else if (e.button === 2) {
+      else { const g = Render.groundPoint(e.clientX, e.clientY); if (g) moveTo(g.x, g.y); }
+    } else {
       if (ent && ent.def) { setTarget(ent); P.autoAtk = true; P.chase = true; P.interact = null; P.path = null; }
       else if (ent) { P.interact = ent; P.path = null; P.chase = false; }
-      else moveTo(w.x, w.y);
+      else { const g = Render.groundPoint(e.clientX, e.clientY); if (g) moveTo(g.x, g.y); }
     }
-  });
+  }
   function moveTo(x, y) {
     const P = G.P; P.chase = false; P.approach = null; P.interact = null; if (P.gather) cancelGather();
     const path = World.findPath(P.x, P.y, x, y);
-    if (path) { P.path = path; G.clickMark = { x, y, t: 0 }; burst(x, y, '#ffe9a0', 4, 40, 0.3); }
+    if (path) { P.path = path; G.clickMark = { x, y, t: 0 }; }
   }
 
   // ---------- Schleife ----------
@@ -135,8 +142,8 @@
   function frame(now) {
     requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    if (!G.running) return;
-    updateGame(dt); Render.draw(); UI.update(dt);
+    if (!G.running) { Render.drawMenu(dt); return; }
+    updateGame(dt); Render.draw(dt); UI.update(dt);
   }
   requestAnimationFrame(frame);
 })();

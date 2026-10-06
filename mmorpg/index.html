@@ -3,26 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'">
 <title>Aethermoor – Die Schattenkrone</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <canvas id="cv"></canvas>
+<canvas id="ov"></canvas>
 
 <div id="ui" class="hidden">
   <div id="frames">
-    <div id="pf" class="frame">
-      <div class="portrait" id="pfIcon"></div>
+    <div id="pf" class="frame pnl">
+      <div class="hexf"><span id="pfIcon"></span></div>
       <div class="fbody">
         <div class="fname"><span id="pfName"></span><span class="lvl" id="pfLvl"></span></div>
         <div class="bar hp"><i id="pfHp"></i><span id="pfHpT"></span></div>
         <div class="bar res" id="pfResBar"><i id="pfRes"></i><span id="pfResT"></span></div>
       </div>
     </div>
-    <div id="tf" class="frame hidden">
-      <div class="portrait" id="tfIcon"></div>
+    <div id="tf" class="frame pnl hidden">
+      <div class="hexf"><span id="tfIcon"></span></div>
       <div class="fbody">
         <div class="fname"><span id="tfName"></span><span class="lvl" id="tfLvl"></span></div>
         <div class="bar hp" id="tfHpBar"><i id="tfHp"></i><span id="tfHpT"></span></div>
@@ -32,14 +32,14 @@
     <div id="buffs"></div>
   </div>
 
-  <div id="mini">
+  <div id="mini" class="pnl">
     <div id="zoneLabel"></div>
-    <canvas id="mm" width="170" height="170"></canvas>
+    <canvas id="mm" width="176" height="176"></canvas>
     <div id="coord"></div>
   </div>
-  <div id="tracker"></div>
+  <div id="tracker" class="pnl"></div>
 
-  <div id="chatBox">
+  <div id="chatBox" class="pnl">
     <div id="chatTabs">
       <button data-ch="all" class="on">Alle</button><button data-ch="chat">Chat</button><button data-ch="combat">Kampf</button><button data-ch="quest">Quests</button>
     </div>
@@ -49,8 +49,14 @@
 
   <div id="bottom">
     <div id="castbar" class="hidden"><i></i><span></span></div>
-    <div id="hotbar"></div>
-    <div id="xp"><i></i><span></span></div>
+    <div id="barRow">
+      <div class="crystal hpc" id="hpCrystal"><div class="cin"><div class="cfill"></div><div class="cshine"></div><span class="ctext" id="hpCT"></span></div></div>
+      <div id="barMid">
+        <div id="hotbar"></div>
+        <div id="xp"><i></i><span></span></div>
+      </div>
+      <div class="crystal resc" id="resCrystal"><div class="cin"><div class="cfill"></div><div class="cshine"></div><span class="ctext" id="resCT"></span></div></div>
+    </div>
   </div>
 
   <div id="menubar">
@@ -65,11 +71,11 @@
   <div id="windows"></div>
   <div id="zoneBanner"></div>
   <div id="toast"></div>
-  <div id="tip"></div>
+  <div id="tip" class="pnl"></div>
 
   <div id="death" class="hidden">
-    <div class="deathbox">
-      <h1>Du bist gestorben</h1>
+    <div class="deathbox pnl">
+      <h1>Du bist gefallen</h1>
       <p>Deine Seele wird zur nächsten Siedlung getragen.</p>
       <button id="reviveBtn" class="btn big">Wiederbeleben</button>
     </div>
@@ -78,32 +84,35 @@
 
 <div id="start">
   <div class="startbox">
+    <div class="crest">◆ ━━━ ◆ ━━━ ◆</div>
     <h1>AETHERMOOR</h1>
     <h2>Die Schattenkrone</h2>
     <p class="lore">Ein uraltes Böses erwacht im Norden. Die Schattenkrone sammelt ihre Heerscharen – und nur wenige Helden wagen sich noch ins Licht. Erschaffe deinen Abenteurer und stelle dich der Dunkelheit.</p>
     <div id="saveInfo" class="hidden">
       <div id="saveText"></div>
       <button id="continueBtn" class="btn big">Abenteuer fortsetzen</button>
-      <div class="or">– oder neu beginnen –</div>
+      <div class="or">◆ oder ein neues Schicksal beginnen ◆</div>
     </div>
-    <label class="lbl">Name deines Helden</label>
+    <label class="lbl">Name des Helden</label>
     <input id="nameIn" maxlength="14" placeholder="Name" autocomplete="off">
-    <label class="lbl">Wähle deine Klasse</label>
+    <label class="lbl">Wähle deine Berufung</label>
     <div id="classPick"></div>
     <div id="classDesc"></div>
     <button id="startBtn" class="btn big">Abenteuer beginnen</button>
     <div class="help">
-      <b>Steuerung:</b> WASD oder Linksklick = Bewegen · Linksklick auf Gegner = Anvisieren · Rechtsklick auf Gegner = Angreifen ·
-      1–0 = Fertigkeiten · Tab = Nächstes Ziel · Rechtsklick auf NPC = Ansprechen · R = Reittier · Q/E = Heil-/Manatrank ·
-      C/B/K/L/M = Fenster · Enter = Chat
+      <b>Steuerung:</b> WASD = Bewegen (kameraabhängig) · Rechte Maustaste halten &amp; ziehen = Kamera drehen · Mausrad = Zoom · Linksklick = Bewegen/Anvisieren ·
+      Rechtsklick auf Gegner = Angreifen · 1–0 = Fertigkeiten · Tab = Nächstes Ziel · R = Reittier · Q/E = Heil-/Manatrank · F = Interagieren ·
+      C/B/K/L/M = Fenster · Enter = Chat · F11 = Vollbild
     </div>
   </div>
 </div>
 
+<script src="vendor/three.min.js"></script>
 <script src="js/util.js"></script>
 <script src="js/data.js"></script>
 <script src="js/world.js"></script>
 <script src="js/game.js"></script>
+<script src="js/models.js"></script>
 <script src="js/render.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/ui.js"></script>

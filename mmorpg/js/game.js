@@ -19,10 +19,10 @@ function log(text, ch = 'system', color) {
   G.dirty.chat = true;
 }
 function ftext(x, y, txt, color = '#fff', size = 15, life = 1.1) {
-  G.texts.push({ x: x + rnd(-8, 8), y, txt, color, size, t: 0, life, vy: -46 });
+  G.texts.push({ x: x + rnd(-8, 8), y, y0: y, txt, color, size, t: 0, life, vy: -46 });
 }
 function burst(x, y, color, n = 8, sp = 90, life = 0.5) {
-  for (let i = 0; i < n; i++) { const a = rnd(0, TAU), s = rnd(sp * 0.3, sp); G.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 20, color, t: 0, life: rnd(life * 0.6, life), size: rnd(2, 4) }); }
+  for (let i = 0; i < n; i++) { const a = rnd(0, TAU), s = rnd(sp * 0.3, sp); G.parts.push({ x, y, y0: y, vz: rnd(-60, 60), vx: Math.cos(a) * s, vy: Math.sin(a) * s - 20, color, t: 0, life: rnd(life * 0.6, life), size: rnd(2, 4) }); }
 }
 function ring(x, y, r, color, life = 0.45) { G.rings.push({ x, y, r, color, t: 0, life }); }
 function later(sec, fn) { G.timers.push({ at: G.now + sec, fn }); }
@@ -376,7 +376,7 @@ function aggro(m) {
 }
 function killMob(m) {
   const P = G.P;
-  m.dead = true; m.state = 'dead'; m.fx.length = 0;
+  m.dead = true; m.state = 'dead'; m.fx.length = 0; m.diedAt = G.now;
   m.respawnAt = G.now + (m.boss ? 240 : m.elite ? 100 : 30);
   const diff = m.lvl - P.level;
   let f = diff >= 0 ? 1 + Math.min(diff, 4) * 0.05 : diff < -6 ? 0.1 : clamp(1 + diff * 0.12, 0.15, 1);
@@ -931,10 +931,8 @@ function updatePlayer(dt) {
   const stunned = hasFx(P, 'stun');
   const slow = hasFx(P, 'slow');
   let spd = P.st.speed * (slow ? 1 - slow.pct / 100 : 1);
-  let mx = 0, my = 0;
-  const K = UI.keys;
-  if (K['KeyW'] || K['ArrowUp']) my -= 1; if (K['KeyS'] || K['ArrowDown']) my += 1;
-  if (K['KeyA'] || K['ArrowLeft']) mx -= 1; if (K['KeyD'] || K['ArrowRight']) mx += 1;
+  const mv0 = Render.moveVec(UI.keys);
+  const mx = mv0.x, my = mv0.y;
   P.moving = false;
   if (!stunned) {
     if (mx || my) {

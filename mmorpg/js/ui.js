@@ -113,8 +113,7 @@ const UI = {
     const s = h('div', 'slot');
     if (it) {
       const i = itemInfo(it); s.textContent = i.ic;
-      s.style.borderColor = it.type === 'gear' ? RARITY[it.rar].c : '#4a3718';
-      if (it.type === 'gear') s.style.boxShadow = it.rar >= 3 ? `inset 0 0 8px ${RARITY[it.rar].c}` : 'none';
+      s.style.setProperty('--bc', it.type === 'gear' ? RARITY[it.rar].c : '#5a4720');
       if (it.qty > 1) s.appendChild(h('span', 'cnt', it.qty));
       if (it.type === 'gear' && G.P.level < it.req) s.style.filter = 'brightness(.6) sepia(.6) hue-rotate(-30deg)';
     }
@@ -145,7 +144,7 @@ const UI = {
     for (const sl of layout) {
       if (!sl) { paper.appendChild(h('div')); continue; }
       const it = P.eq[sl], s = this.slotEl(it), wrapS = h('div');
-      if (!it) { s.style.opacity = .5; s.textContent = { weapon: '⚔️', head: '🪖', chest: '🦺', legs: '👖', feet: '🥾', ring: '💍', ring2: '💍', neck: '📿' }[sl]; s.style.filter = 'grayscale(1)'; }
+      if (!it) { s.style.opacity = .5; s.style.filter = 'grayscale(1)'; s.textContent = { weapon: '⚔️', head: '🪖', chest: '🦺', legs: '👖', feet: '🥾', ring: '💍', ring2: '💍', neck: '📿' }[sl]; s.style.filter = 'grayscale(1)'; }
       else { s.onclick = () => { this.hideTip(); unequip(sl); }; this.attachTip(s, () => this.itemTip(it)); }
       wrapS.appendChild(s); wrapS.appendChild(h('div', 'lbl2', SLOTS[sl.replace('2', '')])); paper.appendChild(wrapS);
     }
@@ -290,8 +289,8 @@ const UI = {
     const grid = h('div', 'grid stock');
     for (const it of this.stockCache[npc.id]) {
       const info = itemInfo(it), price = it.type === 'gear' ? (it.price * 1.6) | 0 : BASEITEMS[it.id].price;
-      const el = h('div', 'si', `<div class="ic">${info.ic}</div><div class="pr" style="color:${P.gold >= price ? '#f0d27a' : '#ff6a6a'}">${price} 💰</div>`);
-      if (it.type === 'gear') el.style.borderColor = RARITY[it.rar].c;
+      const el = h('div', 'si', `<div><div class="ic">${info.ic}</div><div class="pr" style="color:${P.gold >= price ? '#f0d27a' : '#ff6a6a'}">${price} 💰</div></div>`);
+      if (it.type === 'gear') el.style.setProperty('--bc', RARITY[it.rar].c);
       el.onclick = () => { buyItem(it); this.refresh('vendor'); }; this.attachTip(el, () => this.itemTip(it));
       grid.appendChild(el);
     }
@@ -319,10 +318,11 @@ const UI = {
     mk('Weiterspielen', () => this.close('menu'));
     mk('Spiel speichern', () => { saveGame(); this.toast('Gespeichert'); });
     mk(Audio2.on ? '🔊 Ton: an' : '🔇 Ton: aus', () => { Audio2.toggle(); this.renderMenu(); });
+    mk('Grafik: ' + ({ low: 'Niedrig', medium: 'Mittel', high: 'Hoch' }[Render.quality] || 'Hoch'), () => { Render.setQuality({ high: 'medium', medium: 'low', low: 'high' }[Render.quality] || 'high'); this.renderMenu(); });
     mk('Zum nächsten Ort teleportieren (/stuck)', () => { clientCommand('/stuck'); this.close('menu'); });
     mk('Neuer Charakter (löscht Speicherstand)', () => { if (confirm('Wirklich neu beginnen? Dein Fortschritt geht verloren.')) { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* */ } window.onbeforeunload = null; location.reload(); } }, 'red');
     body.appendChild(m);
-    body.appendChild(h('div', 'hint', 'Steuerung: WASD / Klick = Bewegen · Rechtsklick Gegner = Angriff · 1–0 Fertigkeiten · Tab Ziel · R Reittier · Q/E Tränke · Enter Chat · Leertaste Auto-Angriff'));
+    body.appendChild(h('div', 'hint', 'Steuerung: WASD / Klick = Bewegen · Rechte Maustaste ziehen = Kamera · Mausrad = Zoom · Rechtsklick Gegner = Angriff · 1–0 Fertigkeiten · Tab Ziel · R Reittier · Q/E Tränke · Enter Chat · Leertaste Auto-Angriff'));
   },
 
   // ---------- Aktionsleiste ----------
@@ -394,6 +394,10 @@ const UI = {
   updateFrames() {
     const P = G.P, C = CLASSES[P.cls], st = P.st;
     $('pfIcon').textContent = C.ic; $('pfName').textContent = P.name; $('pfLvl').textContent = P.level;
+    const hk = clamp(P.hp / st.maxHp, 0, 1), rk = clamp(P.res / st.maxRes, 0, 1);
+    $('hpCrystal').querySelector('.cfill').style.height = hk * 100 + '%'; $('hpCT').textContent = Math.ceil(P.hp);
+    const rc = $('resCrystal'); rc.querySelector('.cfill').style.height = rk * 100 + '%'; $('resCT').textContent = Math.floor(P.res);
+    rc.querySelector('.cfill').style.filter = C.res === 'Ausdauer' ? 'hue-rotate(150deg) saturate(1.4)' : C.res === 'Energie' ? 'hue-rotate(175deg) saturate(1.6) brightness(1.2)' : 'none';
     $('pfHp').style.width = clamp(P.hp / st.maxHp * 100, 0, 100) + '%'; $('pfHpT').textContent = `${Math.ceil(P.hp)} / ${st.maxHp}`;
     $('pfRes').style.width = clamp(P.res / st.maxRes * 100, 0, 100) + '%'; $('pfRes').style.background = `linear-gradient(${C.resCol}, ${C.resCol}99)`; $('pfResT').textContent = `${Math.floor(P.res)} / ${st.maxRes}`;
     const xpk = P.level >= MAX_LEVEL ? 1 : P.xp / xpNeed(P.level);
@@ -431,19 +435,23 @@ const UI = {
     $('coord').textContent = `${Math.round(P.x / TILE)}, ${Math.round(P.y / TILE)}`;
   },
   drawMinimap() {
-    const cv = $('mm'), c = cv.getContext('2d'), P = G.P, V = 52, S = cv.width / V;
-    c.save(); c.clearRect(0, 0, cv.width, cv.height);
-    c.beginPath(); c.arc(cv.width / 2, cv.height / 2, cv.width / 2, 0, TAU); c.clip();
-    c.fillStyle = '#000'; c.fillRect(0, 0, cv.width, cv.height);
-    c.imageSmoothingEnabled = false;
+    const cv = $('mm'), c = cv.getContext('2d'), P = G.P, V = 56, S = cv.width / V, w = cv.width, hgt = cv.height;
+    const th = -Math.PI / 2 - Math.atan2(-Math.cos(Render.yaw), -Math.sin(Render.yaw)), ct = Math.cos(th), st2 = Math.sin(th);
+    c.save(); c.clearRect(0, 0, w, hgt); c.fillStyle = '#000'; c.fillRect(0, 0, w, hgt); c.imageSmoothingEnabled = false;
     const px = P.x / TILE, py = P.y / TILE;
-    c.drawImage(World.mm, px - V / 2, py - V / 2, V, V, 0, 0, cv.width, cv.height);
-    const mx = x => (x / TILE - px + V / 2) * S, my = y => (y / TILE - py + V / 2) * S;
-    for (const n of G.npcs) { const mk = npcMarker(n); c.fillStyle = mk === 'avail' || mk === 'ready' ? '#ffd23f' : '#7aff7a'; c.beginPath(); c.arc(mx(n.x), my(n.y), mk === 'avail' || mk === 'ready' ? 4 : 2.5, 0, TAU); c.fill(); if (mk === 'avail' || mk === 'ready') { c.fillStyle = '#000'; c.font = 'bold 8px Georgia'; c.textAlign = 'center'; c.fillText(mk === 'avail' ? '!' : '?', mx(n.x), my(n.y) + 3); } }
-    for (const m of G.mobs) if (!m.dead && (m.boss || m.state === 'chase')) { const x = mx(m.x), y = my(m.y); if (x < 0 || y < 0 || x > cv.width || y > cv.height) continue; c.fillStyle = m.boss ? '#ff2a2a' : '#e03030'; c.beginPath(); c.arc(x, y, m.boss ? 4 : 2.5, 0, TAU); c.fill(); }
-    for (const b of G.bots) { c.fillStyle = '#6fb0ff'; c.fillRect(mx(b.x) - 1.5, my(b.y) - 1.5, 3, 3); }
-    for (const nd of G.nodes) if (nd.avail) { const x = mx(nd.x), y = my(nd.y); if (x > 0 && y > 0 && x < cv.width && y < cv.height) { c.fillStyle = NODE_TYPES[nd.type].col; c.fillRect(x - 1.5, y - 1.5, 3, 3); } }
-    c.translate(cv.width / 2, cv.height / 2); c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 1.5; c.beginPath(); c.arc(0, 0, 4, 0, TAU); c.fill(); c.stroke();
+    c.translate(w / 2, hgt / 2); c.rotate(th);
+    const R = V * 0.78;
+    c.drawImage(World.mm, px - R / 2, py - R / 2, R, R, -R * S / 2, -R * S / 2, R * S, R * S);
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    const pt = (x, y) => { const dx = (x / TILE - px) * S, dy = (y / TILE - py) * S; return [w / 2 + dx * ct - dy * st2, hgt / 2 + dx * st2 + dy * ct]; };
+    for (const n of G.npcs) { const mk = npcMarker(n), [x, y] = pt(n.x, n.y); if (x < -6 || y < -6 || x > w + 6 || y > hgt + 6) continue; c.fillStyle = mk === 'avail' || mk === 'ready' ? '#ffd23f' : '#7aff7a'; c.beginPath(); c.moveTo(x, y - 5); c.lineTo(x + 4, y); c.lineTo(x, y + 5); c.lineTo(x - 4, y); c.fill(); if (mk === 'avail' || mk === 'ready') { c.fillStyle = '#000'; c.font = 'bold 8px Georgia'; c.textAlign = 'center'; c.fillText(mk === 'avail' ? '!' : '?', x, y + 3); } }
+    for (const m of G.mobs) if (!m.dead && (m.boss || m.state === 'chase')) { const [x, y] = pt(m.x, m.y); if (x < 0 || y < 0 || x > w || y > hgt) continue; c.fillStyle = '#ff3a2a'; c.fillRect(x - (m.boss ? 4 : 2.5), y - (m.boss ? 4 : 2.5), m.boss ? 8 : 5, m.boss ? 8 : 5); }
+    for (const b of G.bots) { const [x, y] = pt(b.x, b.y); c.fillStyle = '#6fb0ff'; c.fillRect(x - 1.5, y - 1.5, 3, 3); }
+    for (const nd of G.nodes) if (nd.avail) { const [x, y] = pt(nd.x, nd.y); if (x > 0 && y > 0 && x < w && y < hgt) { c.fillStyle = NODE_TYPES[nd.type].col; c.fillRect(x - 1.5, y - 1.5, 3, 3); } }
+    c.translate(w / 2, hgt / 2); c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(0, -7); c.lineTo(5, 5); c.lineTo(0, 2); c.lineTo(-5, 5); c.closePath(); c.fill(); c.stroke();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    const nx = w / 2 + (0 * ct - -1 * st2) * 80, ny = hgt / 2 + (0 * st2 + -1 * ct) * 80;
+    c.fillStyle = '#f8e08e'; c.font = 'bold 13px Cinzel, Georgia'; c.textAlign = 'center'; c.strokeStyle = '#000'; c.lineWidth = 3; c.strokeText('N', nx, ny + 4); c.fillText('N', nx, ny + 4);
     c.restore();
   },
   renderTracker() {

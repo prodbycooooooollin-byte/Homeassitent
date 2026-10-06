@@ -1,0 +1,25 @@
+{
+  "name": "aethermoor",
+  "productName": "Aethermoor",
+  "version": "2.0.0",
+  "description": "Aethermoor – Die Schattenkrone: 3D-Fantasy-MMORPG (Desktop-App)",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "de.aethermoor.game",
+    "productName": "Aethermoor",
+    "files": ["electron/**", "index.html", "style.css", "js/**", "vendor/**", "fonts/**", "package.json"],
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg" },
+    "linux": { "target": "AppImage" }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "three": "0.149.0",
+    "@fontsource/cinzel": "^5.0.0"
+  }
+}
