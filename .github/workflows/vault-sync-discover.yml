@@ -21,6 +21,8 @@ jobs:
             if unzip -l "$j" 2>/dev/null | grep -q "net/minecraft/client/Minecraft.class"; then JAR="$j"; break; fi
           done
           echo "JAR=$JAR"
-          echo "== Minecraft: Toast"; javap -cp "$JAR" net.minecraft.client.Minecraft | grep -i toast
-          echo "== SystemToast"; javap -cp "$JAR" 'net.minecraft.client.gui.components.toasts.SystemToast' | head -30
-          echo "== SystemToastId"; javap -cp "$JAR" 'net.minecraft.client.gui.components.toasts.SystemToast$SystemToastId' | head
+          echo "== Toast-Klassen"; unzip -l "$JAR" | grep -i toast | awk '{print $4}' | head -30 || true
+          echo "== Minecraft (-p): Toast"; javap -p -cp "$JAR" net.minecraft.client.Minecraft | grep -i toast || true
+          echo "== Gui (-p): Toast"; javap -p -cp "$JAR" net.minecraft.client.gui.Gui | grep -i toast || true
+          echo "== SystemToast"; javap -p -cp "$JAR" 'net.minecraft.client.gui.components.toasts.SystemToast' | head -40 || true
+          echo "== SystemToastId"; javap -p -cp "$JAR" 'net.minecraft.client.gui.components.toasts.SystemToast$SystemToastId' | head || true
