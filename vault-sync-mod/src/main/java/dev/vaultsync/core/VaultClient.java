@@ -45,8 +45,13 @@ public final class VaultClient {
      * zusammensetzt. Header: X-WorldVault-Key (gleicher Schlüssel wie worldSync), X-Action, X-Session-Id, X-Offset, und bei finish
      * X-File-Name / X-World-Name. Die Seite behält die neuesten 3 Sicherungen und löscht ältere selbst.
      */
-    public void upload(String worldName, Path zip) throws IOException, InterruptedException {
+    public void upload(String worldName, Path zip) throws IOException, InterruptedException { upload(worldName, zip, null, null); }
+
+    /** @param label Titel der Version auf der Seite (mit lokaler Uhrzeit des PCs); null = die Seite vergibt einen. @param progress 0..1 nach jedem Teil. */
+    public void upload(String worldName, Path zip, String label, java.util.function.DoubleConsumer progress) throws IOException, InterruptedException {
         String stamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm"));
+        long total = Math.max(1, Files.size(zip)), sent = 0;
+        this.label = label == null ? null : label.replaceAll("[^\\x20-\\x7E]", "-").trim(); // Header: nur einfaches ASCII, Doppelpunkt der Uhrzeit bleibt
         String safe = ascii(worldName);
         String sessionId = null; long offset = 0;
         try (InputStream in = new BufferedInputStream(Files.newInputStream(zip), 1 << 16)) {
@@ -56,17 +61,20 @@ public final class VaultClient {
                 if (sessionId == null) {
                     sessionId = chunk("start", null, 0, cur, safe, stamp).sessionId;
                     offset = cur.length;
-                    if (next.length == 0) { chunk("finish", sessionId, offset, new byte[0], safe, stamp); return; }
+                    if (next.length == 0) { chunk("finish", sessionId, offset, new byte[0], safe, stamp); if (progress != null) progress.accept(1); return; }
                 } else if (next.length == 0) {
-                    chunk("finish", sessionId, offset, cur, safe, stamp); return;
+                    chunk("finish", sessionId, offset, cur, safe, stamp); if (progress != null) progress.accept(1); return;
                 } else {
                     chunk("append", sessionId, offset, cur, safe, stamp);
                     offset += cur.length;
                 }
+                if (progress != null) progress.accept(Math.min(0.99, (double) (offset) / total));
                 cur = next;
             }
         }
     }
+
+    private volatile String label;
 
     private record Reply(String sessionId) { }
 
@@ -80,7 +88,10 @@ public final class VaultClient {
                         .header("Content-Type", "application/octet-stream")
                         .POST(HttpRequest.BodyPublishers.ofByteArray(data));
                 if (sessionId != null) b.header("X-Session-Id", sessionId).header("X-Offset", Long.toString(offset));
-                if (action.equals("finish")) b.header("X-File-Name", worldName + "_" + stamp + ".zip").header("X-World-Name", worldName);
+                if (action.equals("finish")) {
+                    b.header("X-File-Name", worldName + "_" + stamp + ".zip").header("X-World-Name", worldName);
+                    if (label != null) b.header("X-Label", label); // sonst stempelt die Seite die Zeit selbst (dort ggf. andere Zeitzone)
+                }
                 HttpResponse<String> r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
                 int code = r.statusCode();
                 if (code == 200) return new Reply(action.equals("start") ? jsonString(r.body(), "session_id") : sessionId);

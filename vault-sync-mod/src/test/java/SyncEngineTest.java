@@ -14,7 +14,7 @@ class SyncEngineTest {
         final HttpServer server; final AtomicInteger requests = new AtomicInteger(); final AtomicInteger finishes = new AtomicInteger();
         final java.io.ByteArrayOutputStream received = new java.io.ByteArrayOutputStream();
         final List<String> actions = Collections.synchronizedList(new ArrayList<>());
-        volatile String fileName = "", worldName = "", key = ""; volatile long lastOffset; volatile int failFirst = 0; volatile int status = 200;
+        volatile String fileName = "", worldName = "", key = "", label = ""; volatile long lastOffset; volatile int failFirst = 0; volatile int status = 200;
         FakeSite() throws Exception {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/", ex -> {
@@ -25,7 +25,7 @@ class SyncEngineTest {
                 long off = h.getFirst("X-Offset") == null ? 0 : Long.parseLong(h.getFirst("X-Offset"));
                 if (!a.equals("start")) assertEquals(received.size(), off, "Offset muss zu den bisher empfangenen Bytes passen");
                 received.writeBytes(body); lastOffset = off;
-                if (a.equals("finish")) { finishes.incrementAndGet(); fileName = h.getFirst("X-File-Name"); worldName = h.getFirst("X-World-Name"); }
+                if (a.equals("finish")) { finishes.incrementAndGet(); fileName = h.getFirst("X-File-Name"); worldName = h.getFirst("X-World-Name"); label = String.valueOf(h.getFirst("X-Label")); }
                 byte[] resp = (a.equals("start") ? "{\"ok\":true,\"session_id\":\"SID1\",\"offset\":" + body.length + "}" : "{\"ok\":true}").getBytes();
                 ex.sendResponseHeaders(200, resp.length); ex.getResponseBody().write(resp); ex.close();
             });
@@ -159,6 +159,55 @@ class SyncEngineTest {
         assertFalse(r.uploadOnExit); assertFalse(r.showIndicator); assertEquals("k", r.apiKey);
         assertTrue(r.watched.contains("Meine Welt")); assertEquals("http://x/up", r.uploadEndpoint);
         s.stop(0);
+    }
+
+    @Test void localBackupsKeepNewestAndWorkWithoutSite() throws Exception {
+        Path world = bigWorld(2000); Path dir = Files.createTempDirectory("lb");
+        Config c = new Config(); c.zipBackup = false; c.localBackupDir = dir.toString(); c.localKeep = 2;
+        SyncEngine e = new SyncEngine(c, m -> { });
+        SyncEngine.Hooks h = new SyncEngine.Hooks() { public Map<String,Object> collectStats() { return null; } public void saveAndFreeze() { } public void unfreeze() { } };
+        for (int i = 0; i < 4; i++) { Files.writeString(world.resolve("level.dat"), "v" + i); Thread.sleep(1100); e.cycle(world, "w", h, true, true); }
+        try (var s = Files.list(dir)) { var names = s.map(p -> p.getFileName().toString()).sorted().toList(); assertEquals(2, names.size(), names.toString()); assertTrue(names.get(0).startsWith("Meine Welt_")); }
+        assertEquals(SyncEngine.LOCAL, e.history().stream().filter(x -> x.kind().equals(SyncEngine.LOCAL)).findFirst().get().kind());
+        assertTrue(c.zipEnabled());
+    }
+
+    @Test void historySurvivesRestartAndExitWaitsForServerStop() throws Exception {
+        FakeSite site = new FakeSite();
+        Config c = new Config(); c.zipBackup = true; c.apiKey = "K"; c.endpoint = site.url(); c.uploadEndpoint = site.url();
+        Path world = bigWorld(5000); Path state = Files.createTempDirectory("st").resolve("w.state");
+        SyncEngine.Hooks h = new SyncEngine.Hooks() { public Map<String,Object> collectStats() { return null; } public void saveAndFreeze() { } public void unfreeze() { } };
+        SyncEngine e = new SyncEngine(c, m -> { });
+        var session = e.start(world, "w", h, state);
+        AtomicBoolean stopped = new AtomicBoolean(false);
+        long t0 = System.currentTimeMillis();
+        Thread t = session.stop(stopped::get);
+        Thread.sleep(700);
+        assertEquals(0, site.requests.get(), "vor dem Serverstopp wird nichts hochgeladen");
+        stopped.set(true); t.join(15000);
+        assertEquals(1, site.finishes.get()); assertTrue(System.currentTimeMillis() - t0 >= 700);
+        assertTrue(site.label.startsWith("Beim Verlassen - "), site.label);
+        assertTrue(e.history().get(0).message().startsWith(SyncEngine.EXIT_PREFIX));
+
+        // "Neustart": neue Engine liest Verlauf und Fingerabdruck wieder ein
+        SyncEngine e2 = new SyncEngine(c, m -> { });
+        e2.start(world, "w", h, state);
+        assertEquals(1, e2.history().size()); assertTrue(e2.lastZipMs() > 0);
+        e2.cycle(world, "w", h, true, true);
+        assertEquals(1, site.finishes.get(), "gleicher Stand → kein erneuter Upload");
+        site.server.stop(0);
+    }
+
+    @Test void uploadReportsProgress() throws Exception {
+        FakeSite site = new FakeSite();
+        Config c = new Config(); c.apiKey = "K"; c.uploadEndpoint = site.url();
+        Path zip = Files.createTempFile("t", ".zip"); Files.write(zip, new byte[300_000]);
+        VaultClient vc = new VaultClient(c); vc.chunkBytes = 100_000;
+        List<Double> seen = Collections.synchronizedList(new ArrayList<>());
+        vc.upload("W", zip, "Test - 07.10.2026 20:05", seen::add);
+        assertTrue(seen.size() >= 2 && seen.get(seen.size() - 1) == 1.0 && seen.get(0) < 1.0, seen.toString());
+        assertEquals("Test - 07.10.2026 20:05", site.label);
+        site.server.stop(0);
     }
 
     @Test void zipSkipsLockAndKeepsFolder() throws Exception {

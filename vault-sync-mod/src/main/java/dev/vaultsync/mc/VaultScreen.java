@@ -136,7 +136,7 @@ final class VaultScreen extends Screen {
             circle(g, x + 8 + 15, y + hRow / 2, 15, a(busy ? BLUE : 0x33FFFFFF));
             if (busy) spinner(g, x + 8 + 15, y + hRow / 2, 8, a(LABEL)); else refreshIcon(g, x + 8 + 15, y + hRow / 2, a(LABEL));
             text(g, "Jetzt", x + 46, y + 14, a(LABEL), 0.95f);
-            text(g, "sichern", x + 46, y + 26, a(LABEL2), 0.85f);
+            text(g, busy && engine.progress() > 0.005 ? (int) (engine.progress() * 100) + " %" : "sichern", x + 46, y + 26, a(busy ? BLUE : LABEL2), 0.85f);
 
             boolean p = engine.paused();
             tile(g, x + tw + GAP, y, tw, hRow, mx, my, () -> engine.setPaused(!engine.paused()));
@@ -203,7 +203,7 @@ final class VaultScreen extends Screen {
         for (int i = 0; i < Math.min(3, hist.size()); i++) {
             var e = hist.get(i); int ry = y + 19 + i * 13;
             circle(g, x + 14, ry + 4, 3, a(e.ok() ? GREEN : RED));
-            text(g, e.kind().equals(SyncEngine.ZIP) ? "Welt" : "Stats", x + 24, ry, a(LABEL), 0.85f);
+            text(g, e.kind().equals(SyncEngine.ZIP) ? "Welt" : e.kind().equals(SyncEngine.LOCAL) ? "Lokal" : "Stats", x + 24, ry, a(LABEL), 0.85f);
             String d = e.ok() ? (e.bytes() > 0 ? Fmt.size(e.bytes()) : "") : fit(e.message(), 70);
             text(g, d, x + 62, ry, a(e.ok() ? LABEL2 : RED), 0.85f);
             String t = Fmt.ago(e.timeMs(), now);

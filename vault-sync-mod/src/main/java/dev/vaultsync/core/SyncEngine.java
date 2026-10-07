@@ -1,10 +1,16 @@
 package dev.vaultsync.core;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /** Sichert eine geöffnete Welt periodisch. Kennt kein Minecraft – das Spiel hängt über {@link Hooks} dran. */
@@ -22,8 +28,9 @@ public final class SyncEngine {
         void unfreeze();
     }
 
-    public static final String STATS = "Statistiken", ZIP = "Welt-ZIP";
-    private static final int MAX_HISTORY = 30;
+    public static final String STATS = "Statistiken", ZIP = "Welt-ZIP", LOCAL = "Lokale Kopie";
+    public static final String EXIT_PREFIX = "Beim Verlassen: ";
+    private static final int MAX_HISTORY = 40;
 
     private final Config cfg;
     private final VaultClient client;
@@ -41,6 +48,9 @@ public final class SyncEngine {
     private volatile long lastSuccessMs, lastStatsMs, lastZipMs, lastStatsAttempt, lastZipAttempt;
     private volatile long lastStatsBytes, lastZipBytes;
     private volatile int lastStatsFields;
+    private volatile double progress;
+    private volatile Path stateFile;
+    private volatile long announcedExitMs;
 
     public SyncEngine(Config cfg, Consumer<String> log) { this.cfg = cfg; this.client = new VaultClient(cfg); this.log = log; }
 
@@ -51,6 +61,8 @@ public final class SyncEngine {
     public String lastError() { return lastError; }
     public boolean paused() { return paused; }
     public void setPaused(boolean p) { paused = p; }
+    /** Fortschritt des laufenden Uploads, 0..1. */
+    public double progress() { return progress; }
     /** Zeitpunkte (ms seit 1970) bzw. 0, wenn es das noch nie gab. */
     public long lastSuccessMs() { return lastSuccessMs; }
     public long lastStatsMs() { return lastStatsMs; }
@@ -60,22 +72,83 @@ public final class SyncEngine {
     public long lastZipBytes() { return lastZipBytes; }
     /** Wann die nächste automatische Statistik- bzw. ZIP-Sicherung fällig ist (0 = nie / aus). */
     public long nextStatsMs() { return lastStatsAttempt == 0 ? 0 : lastStatsAttempt + cfg.intervalMinutes * 60_000L; }
-    public long nextZipMs() { return !cfg.zipBackup || lastZipAttempt == 0 ? 0 : lastZipAttempt + cfg.zipIntervalMinutes * 60_000L; }
+    public long nextZipMs() { return !cfg.zipEnabled() || lastZipAttempt == 0 ? 0 : lastZipAttempt + cfg.zipIntervalMinutes * 60_000L; }
     /** Neueste zuerst. */
-    public List<Event> history() { var l = new java.util.ArrayList<>(history); java.util.Collections.reverse(l); return l; }
+    public List<Event> history() { var l = new ArrayList<>(history); Collections.reverse(l); return l; }
 
     private void set(State s) { state = s; stateSince = System.nanoTime(); }
     private void record(String kind, boolean ok, long bytes, String msg) {
         history.add(new Event(System.currentTimeMillis(), kind, ok, bytes, msg));
         while (history.size() > MAX_HISTORY) history.remove(0);
+        saveState();
     }
 
-    public Session start(Path worldRoot, String worldId, Hooks hooks) {
+    // ---------------------------------------------------------------- Zustand auf der Platte (überlebt Neustarts)
+
+    private synchronized void loadState(Path file) {
+        stateFile = file;
+        history.clear();
+        lastFingerprint = ""; announcedExitMs = 0;
+        if (file == null || !Files.exists(file)) return;
+        try {
+            for (String line : Files.readAllLines(file)) {
+                int i = line.indexOf('=');
+                if (i < 0) continue;
+                String k = line.substring(0, i), v = line.substring(i + 1);
+                try {
+                    switch (k) {
+                        case "fp" -> lastFingerprint = v;
+                        case "zipMs" -> lastZipMs = Long.parseLong(v);
+                        case "statsMs" -> lastStatsMs = Long.parseLong(v);
+                        case "zipBytes" -> lastZipBytes = Long.parseLong(v);
+                        case "statsBytes" -> lastStatsBytes = Long.parseLong(v);
+                        case "statsFields" -> lastStatsFields = Integer.parseInt(v);
+                        case "announced" -> announcedExitMs = Long.parseLong(v);
+                        case "ev" -> {
+                            String[] p = v.split("\t", 5);
+                            if (p.length == 5) history.add(new Event(Long.parseLong(p[0]), p[1], p[2].equals("1"), Long.parseLong(p[3]), p[4]));
+                        }
+                        default -> { }
+                    }
+                } catch (NumberFormatException ignored) { }
+            }
+        } catch (IOException e) { log.accept("Verlauf nicht lesbar: " + e); }
+    }
+
+    private synchronized void saveState() {
+        Path f = stateFile;
+        if (f == null) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("fp=").append(lastFingerprint).append('\n').append("zipMs=").append(lastZipMs).append('\n').append("statsMs=").append(lastStatsMs).append('\n')
+          .append("zipBytes=").append(lastZipBytes).append('\n').append("statsBytes=").append(lastStatsBytes).append('\n')
+          .append("statsFields=").append(lastStatsFields).append('\n').append("announced=").append(announcedExitMs).append('\n');
+        for (Event e : history)
+            sb.append("ev=").append(e.timeMs()).append('\t').append(e.kind()).append('\t').append(e.ok() ? 1 : 0).append('\t').append(e.bytes()).append('\t')
+              .append(e.message().replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')).append('\n');
+        try { Files.createDirectories(f.getParent()); Files.writeString(f, sb.toString()); } catch (IOException e) { log.accept("Verlauf nicht speicherbar: " + e); }
+    }
+
+    // ---------------------------------------------------------------- Ablauf
+
+    public Session start(Path worldRoot, String worldId, Hooks hooks) { return start(worldRoot, worldId, hooks, null); }
+
+    /** @param state Datei für Verlauf und letzten Stand dieser Welt (null = nicht speichern). */
+    public Session start(Path worldRoot, String worldId, Hooks hooks, Path state) {
+        loadState(state);
         long now = System.currentTimeMillis();
         lastStatsAttempt = now; lastZipAttempt = now;
         // Jede Sekunde prüfen, was fällig ist – so wirken geänderte Intervalle sofort.
         ScheduledFuture<?> f = exec.scheduleWithFixedDelay(() -> { if (!paused) cycle(worldRoot, worldId, hooks, true, false); },
                 1, 1, TimeUnit.SECONDS);
+        // Ergebnis der letzten Sicherung beim Verlassen kurz nach dem Betreten melden
+        Event lastExit = history().stream().filter(e -> e.message().startsWith(EXIT_PREFIX)).findFirst().orElse(null);
+        if (lastExit != null && lastExit.timeMs() > announcedExitMs) {
+            exec.schedule(() -> {
+                chat.accept((lastExit.ok() ? "Letztes Verlassen der Welt: " : "Letztes Verlassen der Welt – Sicherung fehlgeschlagen: ")
+                        + lastExit.message().substring(EXIT_PREFIX.length()) + " (" + Fmt.ago(lastExit.timeMs(), System.currentTimeMillis()) + ")");
+                announcedExitMs = lastExit.timeMs(); saveState();
+            }, 6, TimeUnit.SECONDS);
+        }
         return new Session(f, worldRoot, worldId, hooks);
     }
 
@@ -86,12 +159,33 @@ public final class SyncEngine {
         public void syncNow() { exec.execute(() -> cycle(root, id, hooks, true, true)); }
         /** Nur Statistiken, sofort. */
         public void statsNow() { exec.execute(() -> cycle(root, id, hooks, true, true, false)); }
-        /** Beim Verlassen der Welt: Welt ist dann komplett gespeichert – letzter, konsistenter Stand. */
-        public void stop() {
+
+        /**
+         * Welt wird verlassen: erst warten, bis der Server wirklich fertig gespeichert und beendet hat, dann den letzten, konsistenten
+         * Stand hochladen. Läuft in einem eigenen (nicht-daemon) Thread, damit ein Wechsel ins Hauptmenü nichts blockiert.
+         * @return der Thread (null, wenn nichts zu tun ist)
+         */
+        public Thread stop(BooleanSupplier serverStopped) {
             task.cancel(false);
-            if (!cfg.zipBackup || !cfg.uploadOnExit) return; // Statistiken brauchen den laufenden Server
-            Thread t = new Thread(() -> cycle(root, id, null, false, true), "VaultSync-final"); // nicht-daemon: JVM wartet kurz
+            if (!cfg.zipEnabled() || !cfg.uploadOnExit) return null;
+            Thread t = new Thread(() -> {
+                long until = System.currentTimeMillis() + 120_000;
+                try {
+                    while (serverStopped != null && !serverStopped.getAsBoolean() && System.currentTimeMillis() < until) Thread.sleep(200);
+                    Thread.sleep(500); // Dateien sind geschlossen
+                } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
+                cycle(root, id, null, false, true);
+            }, "VaultSync-final");
             t.start();
+            return t;
+        }
+
+        /** Spiel wird geschlossen, die Welt läuft noch: jetzt synchron sichern (maximal timeoutMs warten). */
+        public void finalSyncBlocking(long timeoutMs) {
+            task.cancel(false);
+            if (!cfg.zipEnabled() || !cfg.uploadOnExit) return;
+            try { exec.submit(() -> cycle(root, id, hooks, false, true, true)).get(timeoutMs, TimeUnit.MILLISECONDS); }
+            catch (Exception e) { log.accept("Sicherung beim Beenden nicht abgeschlossen: " + e); }
         }
     }
 
@@ -104,8 +198,10 @@ public final class SyncEngine {
     public synchronized void cycle(Path root, String worldId, Hooks hooks, boolean live, boolean force, boolean withZip) {
         long now = System.currentTimeMillis();
         boolean doStats = hooks != null && (force || now - lastStatsAttempt >= cfg.intervalMinutes * 60_000L);
-        boolean doZip = withZip && cfg.zipBackup && (force || now - lastZipAttempt >= cfg.zipIntervalMinutes * 60_000L);
+        boolean doZip = withZip && cfg.zipEnabled() && (force || now - lastZipAttempt >= cfg.zipIntervalMinutes * 60_000L);
         if (!doStats && !doZip) return;
+        boolean exit = force && !live; // Verlassen der Welt bzw. Spiel beenden
+        String pre = exit ? EXIT_PREFIX : "";
         boolean notify = force && live, failed = false, any = false;
         if (doStats) {
             lastStatsAttempt = now;
@@ -113,26 +209,26 @@ public final class SyncEngine {
                 set(State.SAVING);
                 var stats = hooks.collectStats();
                 if (stats != null) {
-                    set(State.UPLOADING);
+                    set(State.UPLOADING); progress = 0;
                     long bytes = client.postStats(stats);
                     lastStatsMs = lastSuccessMs = System.currentTimeMillis(); lastStatsBytes = bytes; lastStatsFields = stats.size();
-                    record(STATS, true, bytes, stats.size() + " Werte");
+                    record(STATS, true, bytes, pre + stats.size() + " Werte");
                     log.accept("Statistiken gesendet");
                     if (notify) chat.accept("Statistiken gesendet (" + stats.size() + " Werte).");
                     any = true;
                 }
-            } catch (Exception e) { failed = true; fail(STATS, e, notify); }
+            } catch (Exception e) { failed = true; fail(STATS, pre, e, notify); }
         }
         if (doZip) {
             lastZipAttempt = now;
             Path tmp = null; boolean frozen = false;
             try {
-                set(State.SAVING);
+                set(State.SAVING); progress = 0;
                 if (hooks != null) { hooks.saveAndFreeze(); frozen = true; }
                 String fp = WorldZipper.fingerprint(root);
                 if (fp.equals(lastFingerprint)) {
                     lastZipMs = lastSuccessMs = System.currentTimeMillis();
-                    record(ZIP, true, 0, "unverändert, nichts hochgeladen");
+                    record(ZIP, true, 0, pre + "unverändert, nichts hochgeladen");
                     if (notify) chat.accept("Welt unverändert seit der letzten Sicherung – nichts Neues hochzuladen.");
                     any = true;
                 } else {
@@ -140,27 +236,42 @@ public final class SyncEngine {
                     WorldZipper.zip(root, tmp);
                     long size = Files.size(tmp);
                     if (frozen) { hooks.unfreeze(); frozen = false; }
-                    set(State.UPLOADING);
-                    client.upload(root.getFileName().toString(), tmp);
-                    lastFingerprint = fp;
+                    String world = root.getFileName().toString();
+                    boolean okAll = true;
+                    if (!cfg.localBackupDir.isBlank()) {
+                        try {
+                            Path saved = LocalBackups.store(Path.of(cfg.localBackupDir), world, tmp, cfg.localKeep);
+                            record(LOCAL, true, size, pre + saved.getFileName());
+                            if (notify) chat.accept("Lokale Kopie gespeichert: " + saved.getFileName());
+                        } catch (Exception e) { okAll = false; failed = true; fail(LOCAL, pre, e, notify); }
+                    }
+                    if (cfg.zipBackup) {
+                        set(State.UPLOADING); progress = 0;
+                        // Die Uhrzeit im Titel kommt vom PC (nicht vom Server der Seite), damit sie zur echten Sicherungszeit passt.
+                        String label = (exit ? "Beim Verlassen" : "Auto-Sicherung") + " - " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                        client.upload(world, tmp, label, p -> progress = p);
+                        record(ZIP, true, size, pre + "hochgeladen");
+                        log.accept("Welt-ZIP hochgeladen (" + size / 1024 / 1024 + " MB)");
+                        if (notify) chat.accept("Welt hochgeladen (" + Math.max(1, size / 1024 / 1024) + " MB).");
+                    }
+                    if (okAll) { lastFingerprint = fp; }
                     lastZipMs = lastSuccessMs = System.currentTimeMillis(); lastZipBytes = size;
-                    record(ZIP, true, size, "hochgeladen");
-                    log.accept("Welt-ZIP hochgeladen (" + size / 1024 / 1024 + " MB)");
-                    if (notify) chat.accept("Welt hochgeladen (" + Math.max(1, size / 1024 / 1024) + " MB).");
                     any = true;
+                    saveState();
                 }
-            } catch (Exception e) { failed = true; fail(ZIP, e, notify); }
+            } catch (Exception e) { failed = true; fail(ZIP, pre, e, notify); }
             finally {
                 if (frozen) hooks.unfreeze();
                 if (tmp != null) try { Files.deleteIfExists(tmp); } catch (Exception ignored) { }
             }
         }
+        progress = 0;
         set(failed ? State.ERROR : any ? State.DONE : State.IDLE);
     }
 
-    private void fail(String kind, Exception e, boolean notify) {
+    private void fail(String kind, String pre, Exception e, boolean notify) {
         lastError = String.valueOf(e.getMessage());
-        record(kind, false, 0, lastError);
+        record(kind, false, 0, pre + lastError);
         log.accept(kind + " fehlgeschlagen: " + e);
         if (notify) chat.accept(kind + " fehlgeschlagen: " + lastError);
         if (e instanceof InterruptedException) Thread.currentThread().interrupt();

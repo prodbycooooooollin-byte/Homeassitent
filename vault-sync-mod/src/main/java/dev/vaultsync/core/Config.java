@@ -20,6 +20,9 @@ public final class Config {
     public volatile int zipIntervalMinutes = 30;
     /** Beim Verlassen der Welt noch einmal komplett hochladen. */
     public volatile boolean uploadOnExit = true;
+    /** Ordner für lokale Kopien der Welt-ZIP (leer = aus) und wie viele Kopien bleiben. */
+    public volatile String localBackupDir = "";
+    public volatile int localKeep = 3;
     /** Statusanzeige oben rechts im Spiel. */
     public volatile boolean showIndicator = true;
     /** Ordnernamen der Welten (aus .minecraft/saves), für die gesichert wird. */
@@ -29,7 +32,7 @@ public final class Config {
     /** Übernimmt Werte aus einer frisch geladenen Konfiguration (für /vault reload). */
     public void copyFrom(Config o) {
         endpoint = o.endpoint; apiKey = o.apiKey; intervalMinutes = o.intervalMinutes; zipBackup = o.zipBackup; uploadEndpoint = o.uploadEndpoint; zipIntervalMinutes = o.zipIntervalMinutes;
-        uploadOnExit = o.uploadOnExit; showIndicator = o.showIndicator;
+        uploadOnExit = o.uploadOnExit; localBackupDir = o.localBackupDir; localKeep = o.localKeep; showIndicator = o.showIndicator;
         watched.clear(); watched.addAll(o.watched); worlds.clear(); worlds.putAll(o.worlds);
     }
 
@@ -47,6 +50,9 @@ public final class Config {
                     # Komplette Welt als ZIP auf die Seite hochladen (worldUpload), alle zipIntervalMinutes
                     zipBackup=true
                     zipIntervalMinutes=30
+                    # Optional: zusätzlich lokale Kopien der Welt, z. B. localBackupDir=D:/Backups/Minecraft (Windows: Schrägstriche / benutzen)
+                    localBackupDir=
+                    localKeep=3
                     """);
         }
         Properties p = new Properties();
@@ -59,6 +65,8 @@ public final class Config {
         c.zipBackup = Boolean.parseBoolean(p.getProperty("zipBackup", "false").trim());
         try { c.zipIntervalMinutes = Math.max(1, Integer.parseInt(p.getProperty("zipIntervalMinutes", "30").trim())); }
         catch (NumberFormatException ignored) { }
+        c.localBackupDir = p.getProperty("localBackupDir", "").trim();
+        try { c.localKeep = Math.max(1, Integer.parseInt(p.getProperty("localKeep", "3").trim())); } catch (NumberFormatException ignored) { }
         c.uploadOnExit = Boolean.parseBoolean(p.getProperty("uploadOnExit", "true").trim());
         c.showIndicator = Boolean.parseBoolean(p.getProperty("showIndicator", "true").trim());
         c.uploadEndpoint = p.getProperty("uploadEndpoint", "").trim();
@@ -78,10 +86,15 @@ public final class Config {
         sb.append("worlds=").append(String.join(", ", watched)).append('\n');
         sb.append("zipBackup=").append(zipBackup).append('\n');
         sb.append("zipIntervalMinutes=").append(zipIntervalMinutes).append('\n');
+        sb.append("localBackupDir=").append(localBackupDir.replace("\\", "\\\\")).append('\n');
+        sb.append("localKeep=").append(localKeep).append('\n');
         sb.append("uploadOnExit=").append(uploadOnExit).append('\n');
         sb.append("showIndicator=").append(showIndicator).append('\n');
         if (!uploadEndpoint.equals(endpoint.replaceAll("worldSync/?$", "worldUploadChunk"))) sb.append("uploadEndpoint=").append(uploadEndpoint).append('\n');
         worlds.forEach((k, v) -> sb.append("world.").append(k.replace(" ", "\\ ")).append('=').append(v).append('\n'));
         Files.writeString(file, sb.toString());
     }
+
+    /** Soll die Welt gezippt werden (Upload und/oder lokale Kopie)? */
+    public boolean zipEnabled() { return zipBackup || !localBackupDir.isBlank(); }
 }

@@ -4,7 +4,11 @@ import dev.vaultsync.core.Config;
 import dev.vaultsync.core.SyncEngine;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.minecraft.client.KeyMapping;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.loader.api.FabricLoader;
@@ -25,6 +29,7 @@ public final class VaultSyncClient implements ClientModInitializer {
     private volatile boolean openRequested;
     private Path configFile;
     private String folder = "";
+    private MinecraftServer activeServer;
 
     @Override public void onInitializeClient() {
         try {
@@ -40,19 +45,31 @@ public final class VaultSyncClient implements ClientModInitializer {
                 VaultCommands.register(dispatcher, () -> openRequested = true));
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
                 Identifier.fromNamespaceAndPath("vaultsync", "status"), new VaultHud(engine, config));
+        // Taste V öffnet das Kontrollzentrum (in den Steuerungs-Einstellungen änderbar)
+        KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("vaultsync", "main"));
+        KeyMapping openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.vaultsync.open", InputConstants.KEY_V, category));
+        // Spiel wird mit laufender Welt geschlossen: noch synchron sichern, solange der Server läuft
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> { if (session != null) session.finalSyncBlocking(180_000); });
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            while (openKey.consumeClick()) openRequested = true;
             if (openRequested) { openRequested = false; client.setScreenAndShow(new VaultScreen(engine, config, actions())); } // erst im nächsten Tick, sonst schließt der Chat es wieder
             MinecraftServer server = client.getSingleplayerServer();
             Path root = server == null || !server.isRunning() ? null
                     : server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
             if (root == null ? activeRoot == null : root.equals(activeRoot)) return;
-            if (session != null) { session.stop(); session = null; activeRoot = null; }
+            if (session != null) {
+                MinecraftServer old = activeServer;
+                session.stop(old == null ? null : old::isStopped); // wartet im Hintergrund, bis der Server fertig gespeichert hat
+                session = null; activeRoot = null; activeServer = null;
+            }
             if (root == null) return;
             folder = root.getFileName().toString();
             activeRoot = root;
             if (!config.watched.contains(folder) && !config.worlds.containsKey(folder) || config.apiKey.isEmpty()) return; // nicht eingetragen → nichts tun
             String worldId = config.worlds.getOrDefault(folder, folder);
-            session = engine.start(root, worldId, new MinecraftHooks(server));
+            activeServer = server;
+            session = engine.start(root, worldId, new MinecraftHooks(server),
+                    FabricLoader.getInstance().getConfigDir().resolve("vaultsync").resolve(folder.replaceAll("[\\\\/:*?\"<>|]", "_") + ".state"));
             LOG.info("Sicherung aktiv für Welt '{}' alle {} Min.", folder, config.intervalMinutes);
         });
     }

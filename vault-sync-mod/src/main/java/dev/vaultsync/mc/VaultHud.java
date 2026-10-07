@@ -27,7 +27,7 @@ final class VaultHud implements HudElement {
         float alpha = busy ? 1f : age < HOLD_MS ? 1f : 1f - (age - HOLD_MS) / (float) FADE_MS;
         if (busy && age < 150) alpha = age / 150f;
 
-        String label = switch (s) { case SAVING -> "Sichere Welt"; case UPLOADING -> "Synchronisiere";
+        String label = switch (s) { case SAVING -> "Sichere Welt"; case UPLOADING -> engine.progress() > 0.005 ? "Synchronisiere " + (int) (engine.progress() * 100) + " %" : "Synchronisiere";
             case DONE -> "Gesichert"; default -> "Sicherung fehlgeschlagen"; };
         int w = ctx.guiWidth();
         int textW = mc.font.width(label);

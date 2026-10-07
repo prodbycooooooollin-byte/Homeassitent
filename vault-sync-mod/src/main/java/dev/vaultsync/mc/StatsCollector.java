@@ -30,6 +30,7 @@ final class StatsCollector {
         var data = server.getWorldData();
 
         Map<String, Object> d = new LinkedHashMap<>();
+        d.put("analysis_version", 3); // die Seite liest die Welt dann nicht selbst im Browser neu aus
         d.put("world_name", data.getLevelName());
         d.put("mc_version", SharedConstants.getCurrentVersion().name());
         d.put("game_mode", p.gameMode.getGameModeForPlayer().getName());
@@ -51,8 +52,8 @@ final class StatsCollector {
         d.put("deaths", custom(st, Stats.DEATHS));
         d.put("mob_kills", custom(st, Stats.MOB_KILLS));
         d.put("jumps", custom(st, Stats.JUMP));
-        d.put("damage_dealt", custom(st, Stats.DAMAGE_DEALT));
-        d.put("damage_taken", custom(st, Stats.DAMAGE_TAKEN));
+        d.put("damage_dealt", Math.round(custom(st, Stats.DAMAGE_DEALT) / 20.0)); // wie die Auslese im Browser: Herzen
+        d.put("damage_taken", Math.round(custom(st, Stats.DAMAGE_TAKEN) / 20.0));
         d.put("animals_bred", custom(st, Stats.ANIMALS_BRED));
         d.put("fish_caught", custom(st, Stats.FISH_CAUGHT));
         d.put("villager_trades", custom(st, Stats.TRADED_WITH_VILLAGER));
