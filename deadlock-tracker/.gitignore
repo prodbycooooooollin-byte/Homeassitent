@@ -5,3 +5,5 @@ data/*.tmp
 .env.local
 next-env.d.ts
 *.tsbuildinfo
+release
+.next

@@ -15,6 +15,14 @@ npm run build && npm start     # http://localhost:3100  (oder: npm run dev)
 Account-ID eingeben (Steam32, Steam64 oder `steamcommunity.com/profiles/…`-Link). Vanity-URLs werden nicht aufgelöst.
 Ohne Netzwerk: `DEADLOCK_DEMO=1` startet mit generierten Demo-Daten.
 
+## Windows-EXE
+
+Der Workflow `.github/workflows/release-deadlock-tracker.yml` baut auf `windows-latest` einen Installer und eine
+portable EXE (Electron + eingebetteter Next-Server inkl. Poller) und legt sie als Pre-Release `dt-v<version>` ab.
+Start: Tag `dt-v*` pushen, Push auf `main`/`claude/**` (Änderungen in `deadlock-tracker/`) oder manuell über
+*Actions → Run workflow*. Lokal unter Windows: `npm run dist:win` (Ausgabe in `release/`), zum Ausprobieren `npm run desktop`.
+Daten liegen im Benutzerprofil (`%APPDATA%/Deadlock Tracker/store.json`). Die EXE ist nicht signiert.
+
 ## Wie Matches zuverlässig & schnell erkannt werden
 
 1. **Server-Poller** (`instrumentation.ts`, Standard alle 20 s, `POLL_INTERVAL_S`) fragt die Match-Historie aller
