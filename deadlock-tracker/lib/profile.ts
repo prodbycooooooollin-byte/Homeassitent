@@ -14,6 +14,7 @@ export function currentSession(items: MatchListItem[], nowS = Date.now() / 1000,
     const prevStart = sess[sess.length - 1].startTime;
     const thisEnd = items[i].startTime + items[i].durationS;
     if (prevStart - thisEnd > gapMin * 60) break;
+    if (items[0].startTime - items[i].startTime > 12 * 3600) break; // eine Session dauert nicht länger als 12 h
     sess.push(items[i]);
   }
   const last = sess[0];

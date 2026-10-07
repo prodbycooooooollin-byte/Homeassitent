@@ -19,18 +19,20 @@ Ohne Netzwerk: `DEADLOCK_DEMO=1` startet mit generierten Demo-Daten.
 
 | Seite | Inhalt |
 | --- | --- |
-| Übersicht | Player Card (Steam-Profil, Main-Held, Rang, Winrate), **Live-Match-Banner**, Kennzahlen, letzte Matches, Rang, Leistungsverlauf, Form, Top-Helden |
-| Matches | Alle Matches mit Filtern (Ergebnis, Modus, Held), Sortierung, Tagesgruppen |
-| Match | Vollständige Summary beider Teams, Note, Ø Lobby-Rang, Teamvergleich, Rating-Aufschlüsselung |
-| Helden | Eigene Helden-Statistik als Karten, Detailseite je Held |
-| Rang | Aktueller Rang, Peak, Rangverlauf-Diagramm |
-| Mitspieler | Stammspieler mit Winrate (aus allen Matches mit Details) |
-| Meta | Globale Helden-Tierliste (Winrate/Pickrate, Ranked, 14 Tage) |
-| Bestenliste | Leaderboard je Region |
-| Suche (Top-Bar) | Spielersuche per Name (Steam-Profile) oder ID, direkt tracken |
+| Übersicht | Player Card, **Live-Match-Banner**, Kennzahlen inkl. Ø Lobby-Rang, Session-Bilanz mit Tilt-Warnung, Erkenntnisse, Rekorde, letzte Matches, Rang, Performance-Radar, Aktivitäts-Heatmap |
+| Matches | Alle Matches, Filter (Ergebnis/Modus/Held), Sortierung, Tagesgruppen |
+| Match | Tabs: **Übersicht** (Auszeichnungen, Teamvergleich, Lobby-Ränge), **Lane** (Souls/Kämpfe je Lane bis Minute X), **Verlauf** (Souls-Vorsprung, Spielerkurven), **Items** (Kaufreihenfolge), **Ereignisse** (Kill-Feed, Objectives, Mid-Boss, Todeszeiten) |
+| Helden | Eigene Helden-Karten, Detailseite je Held |
+| Rang | Verlauf mit Ø Lobby-Rang, „Top X %“, Rang-Punkte pro Match, Rangänderungen, Winrate nach Lobby-Stärke |
+| Analyse | Winrate nach Tageszeit/Wochentag/Dauer/Lobby-Stärke, Radar, Rekorde, Erkenntnisse |
+| Erfolge | 12 freischaltbare Meilensteine |
+| Mitspieler · Vergleich | Stammspieler mit Winrate · zwei getrackte Accounts gegenüberstellen |
+| Meta · Bestenliste | Globale Helden-Tierliste · Leaderboard je Region |
+| Diagnose | Testet alle API-Endpunkte von deinem Rechner aus, zeigt Status/Rate-Limits/Fehler und die Update-Version |
 
 **Live-Erkennung:** `/v1/matches/active` zeigt laufende Matches. Endet eines, pollt der Server die Historie
-einige Minuten im 5-s-Takt (sonst 20 s) – das neue Match erscheint so meist Sekunden nach dem Eintrag in der API.
+einige Minuten im 5-s-Takt (sonst 20 s). Details (beide Teams, Ränge, Zeitreihen) werden ohne Steam-Fallback
+geladen (Limit 3/h pro IP); frische Matches nutzen nach 3 Fehlversuchen höchstens 2 Steam-Abrufe pro Stunde.
 
 ## Design & Assets
 
@@ -39,6 +41,14 @@ Fortschrittsbalken, gestaffelter Aufbau), neigbare Heldenkarten, animierte Zahle
 Rang-Badges kommen von `api.deadlock-api.com/v1/assets/{heroes,ranks}` bzw. `/v1/assets/ranks/{tier}/{sub}/image`,
 laufen über `/api/img` (Host-Allowlist, Platten-Cache, überstehen Offline-Phasen) und fallen bei Fehlern auf
 eigene Grafiken zurück (Farbkachel mit Initialen, gezeichnetes Rang-Emblem).
+
+## Auto-Update (Desktop)
+
+Die installierte App (NSIS-Installer) prüft beim Start und alle 30 Minuten auf Updates (electron-updater, Quelle:
+Release `dt-latest`), lädt sie im Hintergrund und zeigt „Neu starten & installieren“; ohne Klick wird beim Beenden
+installiert. Der Workflow zählt die Version pro Build hoch (`0.1.<Run-Nummer>`) und aktualisiert `dt-latest`.
+Die **portable EXE** kann sich nicht selbst aktualisieren. Voraussetzung: Das Repository bzw. die Releases müssen
+öffentlich erreichbar sein.
 
 ## Windows-EXE
 

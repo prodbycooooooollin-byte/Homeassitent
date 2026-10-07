@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Aurora />
           <RouteProgress />
           <TopBar />
-          <main className="mx-auto max-w-[1280px] px-5 pb-16 pt-6">{children}</main>
+          <main className="mx-auto max-w-[1560px] px-5 pb-16 pt-6">{children}</main>
           <UpdateBanner />
         </Providers>
       </body>

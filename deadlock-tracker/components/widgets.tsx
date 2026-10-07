@@ -52,7 +52,7 @@ export function RadarCard({ items }: { items: MatchListItem[] }) {
 }
 
 export function ActivityHeatmap({ items }: { items: MatchListItem[] }) {
-  const days = useMemo(() => activity(items, 20), [items]);
+  const days = useMemo(() => activity(items, 34), [items]);
   const max = Math.max(1, ...days.map((d) => d.n));
   const weeks: typeof days[] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
@@ -60,14 +60,14 @@ export function ActivityHeatmap({ items }: { items: MatchListItem[] }) {
   return (
     <section className="surface p-5">
       <h3 className="label mb-3">Aktivität <span className="normal-case tracking-normal">· Matches pro Tag, Farbe = Winrate</span></h3>
-      <div className="flex gap-1 overflow-x-auto pb-1">
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))` }}>
         {weeks.map((w, i) => (
           <div key={i} className="flex flex-col gap-1">
             <span className="h-3 text-[9px] text-muted">{months[i]}</span>
             {w.map((d, j) => {
               const wr = d.n ? d.wins / d.n : 0;
               const base = d.n ? (wr >= 0.5 ? "62,207,142" : "240,97,109") : "255,255,255";
-              return <span key={j} title={`${d.date.toLocaleDateString("de-DE")}: ${d.n} Matches${d.n ? `, ${d.wins} Siege` : ""}`} className="h-4 w-4 rounded-[4px] transition hover:scale-125"
+              return <span key={j} title={`${d.date.toLocaleDateString("de-DE")}: ${d.n} Matches${d.n ? `, ${d.wins} Siege` : ""}`} className="h-4 w-full rounded-[4px] transition hover:scale-110"
                 style={{ background: `rgba(${base},${d.n ? 0.25 + (d.n / max) * 0.7 : 0.05})` }} />;
             })}
           </div>

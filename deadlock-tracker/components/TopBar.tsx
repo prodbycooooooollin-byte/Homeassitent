@@ -13,10 +13,12 @@ const NAV = [
   { href: "/matches", label: "Matches" },
   { href: "/heroes", label: "Helden" },
   { href: "/rank", label: "Rang" },
+  { href: "/insights", label: "Analyse" },
+  { href: "/achievements", label: "Erfolge" },
   { href: "/mates", label: "Mitspieler" },
+  { href: "/compare", label: "Vergleich" },
   { href: "/meta", label: "Meta" },
   { href: "/leaderboard", label: "Bestenliste" },
-  { href: "/status", label: "Diagnose" },
 ];
 
 export function TopBar() {
@@ -38,16 +40,16 @@ export function TopBar() {
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[#080a10]/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-[1280px] items-center gap-4 px-5">
+        <div className="mx-auto flex h-16 max-w-[1560px] items-center gap-4 px-5">
           <NavLink href="/" aria-label="Deadlock Tracker" className="transition hover:scale-[1.03]"><Logo /></NavLink>
-          <nav ref={navRef} className="relative hidden h-full items-center gap-0.5 lg:flex">
+          <nav ref={navRef} className="relative hidden h-full items-center gap-0 xl:flex">
             {NAV.map((n) => (
               <NavLink key={n.href} href={n.href} data-href={n.href}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition ${activeHref === n.href ? "text-white" : "text-muted hover:text-white"}`}>
+                className={`whitespace-nowrap rounded-lg px-2.5 py-2 text-sm font-medium transition ${activeHref === n.href ? "text-white" : "text-muted hover:text-white"}`}>
                 {n.label}
               </NavLink>
             ))}
-            <span className="nav-ind" style={{ left: ind.left + 8, width: Math.max(0, ind.width - 16) }} />
+            <span className="nav-ind" style={{ left: ind.left + 6, width: Math.max(0, ind.width - 12) }} />
           </nav>
           <div className="ml-auto flex items-center gap-3">
             <SearchBox />
@@ -76,7 +78,8 @@ export function TopBar() {
                         <span className="truncate text-sm">{p.name}</span>
                       </button>
                     ))}
-                    <NavLink href="/?add=1" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-lg border-t border-white/[0.06] px-2 py-2 text-sm text-amber hover:bg-white/[0.06]">＋ Account hinzufügen</NavLink>
+                    <NavLink href="/status" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-lg border-t border-white/[0.06] px-2 py-2 text-sm text-muted hover:bg-white/[0.06] hover:text-white">⚙ Diagnose & Updates</NavLink>
+                    <NavLink href="/?add=1" onClick={() => setOpen(false)} className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-amber hover:bg-white/[0.06]">＋ Account hinzufügen</NavLink>
                   </div>
                 )}
               </div>
@@ -84,7 +87,7 @@ export function TopBar() {
           </div>
         </div>
         {/* Mobile Navigation */}
-        <nav className="flex gap-1 overflow-x-auto border-t border-white/[0.04] px-3 py-1.5 lg:hidden">
+        <nav className="flex gap-1 overflow-x-auto border-t border-white/[0.04] px-3 py-1.5 xl:hidden">
           {NAV.map((n) => (
             <NavLink key={n.href} href={n.href} className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm ${activeHref === n.href ? "bg-white/[0.08] text-white" : "text-muted"}`}>{n.label}</NavLink>
           ))}
