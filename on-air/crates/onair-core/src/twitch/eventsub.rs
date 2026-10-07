@@ -23,6 +23,17 @@ pub struct ChatEvent {
     pub badges: Vec<String>,
     /// Kanalpunkte-Einlösung mit Nachricht (für eine spätere Ausbaustufe).
     pub reward_id: Option<String>,
+    /// Shared Chat („Gemeinsam streamen“): Kanal, in dem die Nachricht geschrieben wurde.
+    /// `None` außerhalb von Shared Chat.
+    pub source_broadcaster_id: Option<String>,
+}
+
+impl ChatEvent {
+    /// Nachricht stammt aus dem Chat eines anderen Kanals (Shared Chat). Solche Nachrichten
+    /// dürfen in diesem Kanal nichts auslösen – kein Wunsch, kein Skip, keine Antwort.
+    pub fn is_from_other_channel(&self) -> bool {
+        self.source_broadcaster_id.as_deref().is_some_and(|s| !s.is_empty() && s != self.broadcaster_id)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,6 +165,7 @@ impl EventSubProtocol {
                         .map(|a| a.iter().filter_map(|b| b["set_id"].as_str().map(str::to_string)).collect())
                         .unwrap_or_default(),
                     reward_id: e["channel_points_custom_reward_id"].as_str().map(str::to_string),
+                    source_broadcaster_id: e["source_broadcaster_user_id"].as_str().map(str::to_string),
                 })
             }
             _ => WsAction::Ignored,
@@ -179,6 +191,24 @@ pub mod fixtures {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_chat_source_is_parsed() {
+        let mut p = EventSubProtocol::new();
+        p.handle(&fixtures::welcome("s1"));
+        let own = fixtures::chat("d1", "!sr a");
+        let WsAction::Chat(ev) = p.handle(&own) else { panic!() };
+        assert!(!ev.is_from_other_channel(), "ohne Shared Chat: eigener Kanal");
+        let same = fixtures::chat("d2", "!sr b").replace(r#""chatter_user_id""#, r#""source_broadcaster_user_id":"100","chatter_user_id""#);
+        let WsAction::Chat(ev) = p.handle(&same) else { panic!() };
+        assert!(!ev.is_from_other_channel(), "Shared Chat, Nachricht aus eigenem Kanal");
+        let foreign = fixtures::chat("d3", "!skip").replace(r#""chatter_user_id""#, r#""source_broadcaster_user_id":"999","chatter_user_id""#);
+        let WsAction::Chat(ev) = p.handle(&foreign) else { panic!() };
+        assert!(ev.is_from_other_channel(), "Shared Chat, Nachricht aus fremdem Kanal");
+        let null = fixtures::chat("d4", "!sr c").replace(r#""chatter_user_id""#, r#""source_broadcaster_user_id":null,"chatter_user_id""#);
+        let WsAction::Chat(ev) = p.handle(&null) else { panic!() };
+        assert!(!ev.is_from_other_channel());
+    }
 
     #[test]
     fn welcome_then_duplicate_notification() {

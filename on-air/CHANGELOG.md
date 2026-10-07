@@ -2,6 +2,7 @@
 
 ## 0.2.0
 
+- Behoben: Beim gemeinsamen Streamen (Twitch Shared Chat / „Stream Together“) konnten Zuschauer und Streamer der anderen Kanäle Songs wünschen, skippen oder Befehle auslösen. Jetzt reagiert ON AIR nur auf Nachrichten aus dem eigenen Chat.
 - Universal Request: Wünsche als Spotify-, YouTube-/YouTube-Music-, Apple-Music- und SoundCloud-Link oder „Künstler – Titel“; Kurzlinks, regionale Links und Tracking-Parameter werden erkannt; Zuordnung zur passenden Spotify-Version mit Versionserkennung (Remix, Live, Acoustic, sped up …); bei Mehrdeutigkeit kleine Auswahl im Chat (`!auswahl N`, `!abbrechen`) bzw. in der App. Einrichtung optionaler Zugangsdaten unter *Einstellungen → Musikquellen* (siehe `docs/QUELLEN.md`).
 - Playlist- und Albumlinks: Auswahl eines einzelnen Titels (`!weiter`, `!zurueck`), in der App mit Nachladen und Filter; Playlists werden nie komplett übernommen.
 - `!ersetzen` / `!replace` und „Song ändern“: eigenen noch nicht übergebenen Wunsch austauschen – Platz, Einlösung und Eingangszeit bleiben, der alte Song bleibt bei jedem Fehler erhalten.

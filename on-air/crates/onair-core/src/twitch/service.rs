@@ -467,6 +467,13 @@ impl Shared {
         if self.sent_ids.lock().unwrap().contains(&ev.message_id) {
             return;
         }
+        // Gemeinsam streamen (Shared Chat): Twitch liefert auch Nachrichten aus den Chats der
+        // anderen Kanäle. Befehle gelten nur im eigenen Chat – sonst würden Zuschauer eines
+        // anderen Streams hier Songs wünschen oder skippen.
+        if ev.is_from_other_channel() {
+            tracing::debug!(target: "twitch", "Nachricht aus anderem Kanal (Shared Chat) ignoriert");
+            return;
+        }
         // Chatnachrichten zu Kanalpunkte-Einlösungen werden ausschließlich über die
         // Einlösung verarbeitet (sonst doppelter Wunsch).
         if ev.reward_id.is_some() {

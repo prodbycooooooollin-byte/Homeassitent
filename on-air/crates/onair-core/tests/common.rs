@@ -78,6 +78,8 @@ pub struct FakeSpotify {
     pub readable_playlists: HashMap<String, Vec<Value>>,
     /// Gezählte Suchanfragen.
     pub searches: Vec<String>,
+    /// Anzahl „Nächster Titel“-Aufrufe (Skip).
+    pub skips: u32,
 }
 
 impl Default for FakeSpotify {
@@ -107,6 +109,7 @@ impl Default for FakeSpotify {
             catalog: vec![],
             readable_playlists: HashMap::new(),
             searches: vec![],
+            skips: 0,
         }
     }
 }
@@ -267,6 +270,7 @@ impl FakeSpotify {
                 }
             }
             (Method::Post, "/me/player/next") => {
+                self.skips += 1;
                 self.advance();
                 Ok(HttpResponse::new(200))
             }

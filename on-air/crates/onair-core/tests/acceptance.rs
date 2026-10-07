@@ -330,6 +330,7 @@ async fn duplicate_twitch_event_creates_one_request_and_one_reply() {
         text: "!sr some song".into(),
         badges: vec![],
         reward_id: None,
+        source_broadcaster_id: None,
     };
     handle_chat_for_test(&svc, ev.clone()).await;
     handle_chat_for_test(&svc, ev).await; // doppelte Zustellung
@@ -337,6 +338,81 @@ async fn duplicate_twitch_event_creates_one_request_and_one_reply() {
     let from_viewer = rt.queue.store.pending().into_iter().filter(|r| r.requester.id == "twitch:200").count();
     assert_eq!(from_viewer, 1, "genau ein Request");
     assert_eq!(helix_sends.load(std::sync::atomic::Ordering::SeqCst), 1, "genau eine Chatantwort");
+}
+
+// Gemeinsam streamen (Twitch Shared Chat): Nachrichten aus dem Chat eines anderen Kanals
+// dürfen hier weder Wünsche anlegen noch skippen noch Antworten auslösen.
+#[tokio::test(start_paused = true)]
+async fn shared_chat_messages_from_other_channels_are_ignored() {
+    use onair_core::twitch::eventsub::ChatEvent;
+    use onair_core::twitch::service::{handle_chat_for_test, TwitchDeps, TwitchService};
+    let h = Harness::new();
+    let rt = start_runtime(&h, Db::in_memory().unwrap(), open_settings()).await;
+    wait_for("online", || rt.spotify_state.borrow().is_online(), Duration::from_secs(10)).await;
+    let helix_sends = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let hs = helix_sends.clone();
+    let twitch_http = onair_core::http::FakeTransport::new(move |r| {
+        if r.url.ends_with("/chat/messages") {
+            hs.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            return Ok(onair_core::http::HttpResponse::json(200, serde_json::json!({"data": [{"message_id": "sent", "is_sent": true}]})));
+        }
+        Ok(onair_core::http::HttpResponse::new(404))
+    });
+    let tw_tokens = onair_core::auth::TokenManager::load(
+        "tw",
+        Arc::new(onair_core::twitch::auth::TwitchTokenEndpoint { http: twitch_http.clone(), client_id: Arc::new(|| "c".into()), id_base: "http://x".into() }),
+        Arc::new(onair_core::secrets::MemorySecretStore::default()),
+        h.clock.clone(),
+    );
+    tw_tokens
+        .install(onair_core::auth::TokenSet { access_token: "tw".into(), refresh_token: Some("r".into()), expires_at_ms: h.clock.now_ms() + 3_600_000, scope: "user:read:chat user:write:chat".into(), authorized_at_ms: 0 })
+        .unwrap();
+    let (mut svc, _handle) = TwitchService::new(TwitchDeps {
+        http: twitch_http.clone(),
+        tokens: tw_tokens,
+        client_id: Arc::new(|| "c".into()),
+        id_base: "http://x".into(),
+        helix_base: "http://helix".into(),
+        ws_url: "ws://127.0.0.1:9".into(),
+        queue: rt.queue.clone(),
+        spotify: rt.spotify.clone(),
+        spotify_state: rt.spotify_state.clone(),
+        spotify_cmd: rt.spotify_cmd.clone(),
+        settings: rt.settings.clone(),
+        activity: rt.activity.clone(),
+        bus: rt.bus.clone(),
+        clock: h.clock.clone(),
+        cp_reward: tokio::sync::watch::channel(None).1,
+        redemptions_tx: tokio::sync::mpsc::unbounded_channel().0,
+    });
+    svc.set_identity_for_test(onair_core::twitch::auth::Identity { user_id: "100".into(), login: "streamer".into(), scopes: vec![] });
+    svc.spawn_chat_sender_for_test();
+    let msg = |id: &str, user: &str, badges: &[&str], text: &str, source: Option<&str>| ChatEvent {
+        message_id: id.into(),
+        broadcaster_id: "100".into(),
+        user_id: user.into(),
+        user_login: format!("u{user}"),
+        user_name: format!("U{user}"),
+        text: text.into(),
+        badges: badges.iter().map(|b| b.to_string()).collect(),
+        reward_id: None,
+        source_broadcaster_id: source.map(str::to_string),
+    };
+    let skips = |h: &Harness| h.fake.lock().unwrap().skips;
+    let skips_before = skips(&h);
+
+    // Zuschauer und Streamer des anderen Kanals: Wunsch und Skip.
+    handle_chat_for_test(&svc, msg("f1", "300", &[], "!sr some song", Some("999"))).await;
+    handle_chat_for_test(&svc, msg("f2", "999", &["broadcaster"], "!skip", Some("999"))).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert!(rt.queue.store.pending().iter().all(|r| r.requester.id != "twitch:300"), "kein Wunsch aus fremdem Chat");
+    assert_eq!(skips(&h), skips_before, "kein Skip aus fremdem Chat");
+    assert_eq!(helix_sends.load(std::sync::atomic::Ordering::SeqCst), 0, "keine Antwort auf fremde Nachrichten");
+
+    // Eigener Chat während Shared Chat (Quelle = eigener Kanal) funktioniert weiter.
+    handle_chat_for_test(&svc, msg("o1", "200", &[], "!sr some song", Some("100"))).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert_eq!(rt.queue.store.pending().iter().filter(|r| r.requester.id == "twitch:200").count(), 1, "eigener Wunsch angenommen");
 }
 
 // 10) Absturz nach Queue-Übergabe, aber vor Bestätigung: keine blinde doppelte Übergabe.
@@ -651,7 +727,7 @@ async fn playlist_command_shares_current_playlist() {
     let mut n = 0;
     let mut ask = |text: &str| {
         n += 1;
-        ChatEvent { message_id: format!("m{n}"), broadcaster_id: "100".into(), user_id: "300".into(), user_login: "fan".into(), user_name: "Fan".into(), text: text.into(), badges: vec![], reward_id: None }
+        ChatEvent { message_id: format!("m{n}"), broadcaster_id: "100".into(), user_id: "300".into(), user_login: "fan".into(), user_name: "Fan".into(), text: text.into(), badges: vec![], reward_id: None, source_broadcaster_id: None }
     };
     let last = |sent: &Arc<std::sync::Mutex<Vec<String>>>| sent.lock().unwrap().last().cloned().unwrap_or_default();
 
