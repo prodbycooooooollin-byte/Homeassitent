@@ -5,6 +5,9 @@ import dev.vaultsync.core.SyncEngine;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import com.mojang.blaze3d.platform.InputConstants;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -59,6 +62,17 @@ public final class VaultSyncClient implements ClientModInitializer {
                         net.minecraft.network.chat.Component.literal(msg));
             });
         });
+        // Wird die Welt wieder geöffnet, während die Sicherung beim Verlassen noch läuft: abbrechen, damit sich beides nicht in die Quere kommt
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> engine.cancelRunning("Welt wird wieder geöffnet"));
+        // Klick auf die Fortschritts-Meldung oben rechts bricht die Sicherung ab (auf jedem Bildschirm, auch im Hauptmenü)
+        ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> ScreenMouseEvents.allowMouseClick(screen).register((scr, click) -> {
+            ProgressToast t = progressToast;
+            if (t != null && t.isRunning() && click.button() == 0 && click.x() >= scr.width - 210 && click.y() <= 56) {
+                engine.cancelRunning("vom Spieler abgebrochen");
+                return false;   // Klick verbraucht
+            }
+            return true;
+        }));
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 VaultCommands.register(dispatcher, () -> openRequested = true));
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,

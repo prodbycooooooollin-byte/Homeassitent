@@ -133,10 +133,10 @@ final class VaultScreen extends Screen {
         // Reihe 1: Sichern / Pause
         int tw = (iw - GAP) / 2;
         if (active) {
-            tile(g, x, y, tw, hRow, mx, my, session::syncNow);
+            tile(g, x, y, tw, hRow, mx, my, busy ? () -> engine.cancelRunning("vom Spieler abgebrochen") : session::syncNow);
             circle(g, x + 8 + 15, y + hRow / 2, 15, a(busy ? BLUE : 0x33FFFFFF));
             if (busy) spinner(g, x + 8 + 15, y + hRow / 2, 8, a(LABEL)); else refreshIcon(g, x + 8 + 15, y + hRow / 2, a(LABEL));
-            text(g, "Jetzt", x + 46, y + 14, a(LABEL), 0.95f);
+            text(g, busy ? "Abbrechen" : "Jetzt", x + 46, y + 14, a(LABEL), 0.95f);
             text(g, busy && engine.progress() > 0.005 ? (int) (engine.progress() * 100) + " %" : "sichern", x + 46, y + 26, a(busy ? BLUE : LABEL2), 0.85f);
 
             boolean p = engine.paused();

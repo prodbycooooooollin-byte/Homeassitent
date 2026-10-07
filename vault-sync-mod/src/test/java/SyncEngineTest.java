@@ -14,11 +14,11 @@ class SyncEngineTest {
         final HttpServer server; final AtomicInteger requests = new AtomicInteger(); final AtomicInteger finishes = new AtomicInteger();
         final java.io.ByteArrayOutputStream received = new java.io.ByteArrayOutputStream();
         final List<String> actions = Collections.synchronizedList(new ArrayList<>());
-        volatile String fileName = "", worldName = "", key = "", label = ""; volatile long lastOffset; volatile int failFirst = 0; volatile int status = 200; volatile String failBody = null;
+        volatile String fileName = "", worldName = "", key = "", label = ""; volatile long lastOffset; volatile int failFirst = 0; volatile int status = 200; volatile String failBody = null; volatile int delayMs = 0;
         FakeSite() throws Exception {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/", ex -> {
-                byte[] body = ex.getRequestBody().readAllBytes(); requests.incrementAndGet();
+                byte[] body = ex.getRequestBody().readAllBytes(); requests.incrementAndGet(); if (delayMs > 0) try { Thread.sleep(delayMs); } catch (InterruptedException ignored) { }
                 if (failFirst > 0) { failFirst--; ex.sendResponseHeaders(502, -1); ex.close(); return; }
                 if (status != 200) {
                     if (failBody != null) { byte[] fb = failBody.getBytes(); ex.sendResponseHeaders(status, fb.length); ex.getResponseBody().write(fb); } else ex.sendResponseHeaders(status, -1);
@@ -310,6 +310,46 @@ class SyncEngineTest {
         broken.set(false); e2.cycle(world, "w", h, true, true);
         assertEquals(2, posts.get());
         s.stop(0);
+    }
+
+    @Test void cancelStopsRunningUploadAndCleansUp() throws Exception {
+        FakeSite site = new FakeSite(); site.delayMs = 400;
+        Config c = new Config(); c.zipBackup = true; c.apiKey = "K"; c.endpoint = site.url(); c.uploadEndpoint = site.url();
+        Path world = bigWorld(9_500_000);   // mehrere 4-MB-Teile
+        SyncEngine.Hooks h = new SyncEngine.Hooks() { public Map<String,Object> collectStats() { return null; } public void saveAndFreeze() { } public void unfreeze() { } };
+        SyncEngine e = new SyncEngine(c, m -> { });
+        Thread t = new Thread(() -> e.cycle(world, "w", h, true, true)); t.start();
+        for (int i = 0; i < 100 && site.requests.get() == 0; i++) Thread.sleep(50);
+        assertTrue(e.busy());
+        e.cancelRunning("Test");
+        t.join(20000);
+        assertEquals(0, site.finishes.get(), "abgebrochen → nie fertig hochgeladen");
+        assertTrue(e.history().get(0).message().startsWith("Abgebrochen"), e.history().get(0).message());
+        assertEquals(SyncEngine.State.IDLE, e.state()); assertFalse(e.busy()); assertEquals("", e.phase());
+        site.delayMs = 0; site.received.reset();
+        e.cycle(world, "w", h, true, true);   // der nächste Durchlauf ist nicht mehr abgebrochen
+        assertEquals(1, site.finishes.get());
+        site.server.stop(0);
+    }
+
+    @Test void cancelWhileWaitingForServerAbortsExitUpload() throws Exception {
+        FakeSite site = new FakeSite();
+        Config c = new Config(); c.zipBackup = true; c.apiKey = "K"; c.endpoint = site.url(); c.uploadEndpoint = site.url();
+        Path world = bigWorld(3000); Path state = Files.createTempDirectory("st").resolve("w.state");
+        SyncEngine.Hooks h = new SyncEngine.Hooks() { public Map<String,Object> collectStats() { return null; } public void saveAndFreeze() { } public void unfreeze() { } };
+        SyncEngine e = new SyncEngine(c, m -> { });
+        AtomicReference<String> res = new AtomicReference<>();
+        e.setExitListener((ok, m) -> res.set(ok + "|" + m));
+        var session = e.start(world, "w", h, state);
+        Thread t = session.stop(() -> false);   // Server "stoppt" nie
+        Thread.sleep(400);
+        assertTrue(e.busy());
+        e.cancelRunning("Welt wird wieder geöffnet");
+        t.join(5000);
+        assertEquals(0, site.requests.get());
+        assertTrue(res.get().startsWith("false|Abgebrochen"), res.get());
+        assertFalse(e.busy());
+        site.server.stop(0);
     }
 
     @Test void zipSkipsLockAndKeepsFolder() throws Exception {

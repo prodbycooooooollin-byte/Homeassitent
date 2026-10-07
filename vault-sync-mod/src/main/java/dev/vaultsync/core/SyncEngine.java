@@ -53,6 +53,9 @@ public final class SyncEngine {
     private volatile Runnable exitStartListener = () -> { };
     private volatile Path stateFile;
     private final StatsGuard guard = new StatsGuard();
+    private volatile boolean cancel;            // Abbruch angefordert
+    private volatile boolean running;           // läuft gerade ein Durchlauf
+    private volatile int exitWaiting;           // Verlassen-Thread wartet noch auf den Server
     private volatile long announcedExitMs;
     private volatile String warning = "";
     private volatile java.util.function.BiConsumer<Boolean, String> exitListener = (ok, m) -> { };
@@ -67,6 +70,23 @@ public final class SyncEngine {
     public void setExitStartListener(Runnable r) { exitStartListener = r; }
     /** Was gerade passiert, z. B. "Welt wird gepackt"; leer = nichts. */
     public String phase() { return phase; }
+    /** Läuft gerade etwas, das man abbrechen kann? */
+    public boolean busy() { return running || exitWaiting > 0; }
+
+    /**
+     * Bricht eine laufende Sicherung ab (zwischen den Schritten, spätestens nach dem aktuellen Upload-Teil) – z. B. weil die Welt
+     * wieder geöffnet wird, während die Sicherung beim Verlassen noch läuft, oder weil der Spieler es will. Ohne laufende Sicherung passiert nichts.
+     */
+    public void cancelRunning(String reason) {
+        if (!busy()) return;
+        cancelReason = reason == null || reason.isBlank() ? "Abgebrochen" : "Abgebrochen: " + reason;
+        cancel = true;
+        log.accept("Sicherung wird abgebrochen (" + reason + ")");
+    }
+    private volatile String cancelReason = "Abgebrochen";
+
+    private void checkCancel() { if (cancel) throw new CancellationException(cancelReason); }
+
     /** Hinweis, der kein Fehler ist (z. B. Welt wird groß); leer = keiner. */
     public String warning() { return warning; }
     public State state() { return state; }
@@ -150,6 +170,7 @@ public final class SyncEngine {
     /** @param state Datei für Verlauf und letzten Stand dieser Welt (null = nicht speichern). */
     public Session start(Path worldRoot, String worldId, Hooks hooks, Path state) {
         loadState(state);
+        if (!running) cancel = false;   // frische Welt-Sitzung: alter Abbruch gilt nicht mehr
         long now = System.currentTimeMillis();
         lastStatsAttempt = now; lastZipAttempt = now;
         // Jede Sekunde prüfen, was fällig ist – so wirken geänderte Intervalle sofort.
@@ -183,14 +204,16 @@ public final class SyncEngine {
         public Thread stop(BooleanSupplier serverStopped) {
             task.cancel(false);
             if (!cfg.zipEnabled() || !cfg.uploadOnExit) return null;
-            phase = "Warte auf Minecraft"; progress = 0;
+            phase = "Warte auf Minecraft"; progress = 0; cancel = false; exitWaiting++;
             try { exitStartListener.run(); } catch (RuntimeException e) { log.accept("Fortschrittsanzeige fehlgeschlagen: " + e); }
             Thread t = new Thread(() -> {
                 long until = System.currentTimeMillis() + 120_000;
                 try {
-                    while (serverStopped != null && !serverStopped.getAsBoolean() && System.currentTimeMillis() < until) Thread.sleep(200);
-                    Thread.sleep(500); // Dateien sind geschlossen
-                } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
+                    while (serverStopped != null && !serverStopped.getAsBoolean() && System.currentTimeMillis() < until && !cancel) Thread.sleep(200);
+                    if (!cancel) Thread.sleep(500); // Dateien sind geschlossen
+                } catch (InterruptedException e) { Thread.currentThread().interrupt(); exitWaiting--; return; }
+                exitWaiting--;
+                if (cancel) { aborted(true); return; }
                 cycle(root, id, null, false, true);
             }, "VaultSync-final");
             t.start();
@@ -207,6 +230,14 @@ public final class SyncEngine {
         }
     }
 
+    /** Der Abbruch wurde angenommen, bevor etwas begonnen hat. */
+    private void aborted(boolean exit) {
+        String msg = cancelReason;
+        record(ZIP, false, 0, (exit ? EXIT_PREFIX : "") + msg);
+        cancel = false; phase = ""; progress = 0; set(State.IDLE);
+        if (exit) try { exitListener.accept(false, msg); } catch (RuntimeException e) { log.accept("Meldung beim Verlassen fehlgeschlagen: " + e); }
+    }
+
     /** Ein Durchlauf; synchron, damit Tests ihn direkt aufrufen können. */
     public void cycle(Path root, String worldId, Hooks hooks, boolean live) { cycle(root, worldId, hooks, live, false); }
 
@@ -218,10 +249,17 @@ public final class SyncEngine {
         boolean doStats = hooks != null && (force || now - lastStatsAttempt >= cfg.intervalMinutes * 60_000L);
         boolean doZip = withZip && cfg.zipEnabled() && (force || now - lastZipAttempt >= cfg.zipIntervalMinutes * 60_000L);
         if (!doStats && !doZip) return;
+        running = true;
+        try { runCycle(root, hooks, live, force, doStats, doZip, now); }
+        finally { running = false; cancel = false; }
+    }
+
+    private void runCycle(Path root, Hooks hooks, boolean live, boolean force, boolean doStats, boolean doZip, long now) {
         boolean exit = force && !live; // Verlassen der Welt bzw. Spiel beenden
         String pre = exit ? EXIT_PREFIX : "";
         boolean notify = force && live, failed = false, any = false;
         String summary = "";
+        cancelledNow = false;
         if (doStats) {
             lastStatsAttempt = now;
             try {
@@ -245,9 +283,9 @@ public final class SyncEngine {
                     if (notify) chat.accept("Statistiken gesendet (" + stats.size() + " Werte).");
                     any = true;
                 }
-            } catch (Exception e) { failed = true; fail(STATS, pre, e, notify); }
+            } catch (CancellationException e) { cancelled(pre, notify, e); } catch (Exception e) { failed = true; fail(STATS, pre, e, notify); }
         }
-        if (doZip) {
+        if (doZip && !cancelledNow) {
             lastZipAttempt = now;
             Path tmp = null; boolean frozen = false;
             try {
@@ -262,12 +300,14 @@ public final class SyncEngine {
                     any = true;
                 } else {
                     // Platz prüfen, bevor wir gigabyteweise schreiben
+                    checkCancel();
                     long worldBytes = WorldZipper.size(root);
                     DiskCheck.requireOn(Path.of(System.getProperty("java.io.tmpdir")), worldBytes);
                     if (!cfg.localBackupDir.isBlank()) DiskCheck.requireOn(Path.of(cfg.localBackupDir), worldBytes);
                     tmp = Files.createTempFile("vaultsync-", ".zip");
                     phase = "Welt wird gepackt"; progress = 0;
-                    WorldZipper.zip(root, tmp, p -> progress = p * 0.25);   // Packen = erste 25 %, Upload = der Rest
+                    WorldZipper.zip(root, tmp, p -> { progress = p * 0.25; checkCancel(); });   // Packen = erste 25 %, Upload = der Rest
+                    checkCancel();
                     long size = Files.size(tmp);
                     warning = cfg.warnZipMb > 0 && size > cfg.warnZipMb * 1024L * 1024L
                             ? "Die Welt ist " + Fmt.size(size) + " groß. Prüfe, ob dein Dropbox genug Platz hat." : "";
@@ -286,7 +326,7 @@ public final class SyncEngine {
                         set(State.UPLOADING); phase = "Welt wird hochgeladen"; progress = 0.25;
                         // Die Uhrzeit im Titel kommt vom PC (nicht vom Server der Seite), damit sie zur echten Sicherungszeit passt.
                         String label = (exit ? "Beim Verlassen" : "Auto-Sicherung") + " - " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
-                        client.upload(world, tmp, label, p -> progress = 0.25 + 0.75 * p);
+                        client.upload(world, tmp, label, p -> { progress = 0.25 + 0.75 * p; checkCancel(); });
                         record(ZIP, true, size, pre + "hochgeladen");
                         summary = "Welt hochgeladen (" + Fmt.size(size) + ").";
                         log.accept("Welt-ZIP hochgeladen (" + size / 1024 / 1024 + " MB)");
@@ -298,17 +338,28 @@ public final class SyncEngine {
                     any = true;
                     saveState();
                 }
-            } catch (Exception e) { failed = true; fail(ZIP, pre, e, notify); }
+            } catch (CancellationException e) { cancelled(pre, notify, e); } catch (Exception e) { failed = true; fail(ZIP, pre, e, notify); }
             finally {
                 if (frozen) hooks.unfreeze();
                 if (tmp != null) try { Files.deleteIfExists(tmp); } catch (Exception ignored) { }
             }
         }
         progress = 0; phase = "";
-        set(failed ? State.ERROR : any ? State.DONE : State.IDLE);
-        if (exit && (failed || any)) {
+        set(failed ? State.ERROR : any && !cancelledNow ? State.DONE : State.IDLE);
+        if (exit && cancelledNow) {
+            try { exitListener.accept(false, cancelReason); } catch (RuntimeException e) { log.accept("Meldung beim Verlassen fehlgeschlagen: " + e); }
+        } else if (exit && (failed || any)) {
             try { exitListener.accept(!failed, failed ? lastError : summary); } catch (RuntimeException e) { log.accept("Meldung beim Verlassen fehlgeschlagen: " + e); }
         }
+    }
+
+    private boolean cancelledNow;
+
+    private void cancelled(String pre, boolean notify, CancellationException e) {
+        cancelledNow = true;
+        record(ZIP, false, 0, pre + e.getMessage());
+        log.accept("Sicherung abgebrochen: " + e.getMessage());
+        if (notify) chat.accept(e.getMessage());
     }
 
     private void fail(String kind, String pre, Exception e, boolean notify) {
