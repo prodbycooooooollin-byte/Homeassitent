@@ -76,5 +76,6 @@ jeweiligen Haushalts gemappt werden (Kommentare markieren die Stellen).
 ## Weitere Projekte in diesem Repository
 
 - [`lumahome/`](lumahome/README.md) – LumaHome: eigenständiger 3D-Hausplaner mit Home-Assistant-Steuerung und Energieansicht (lokale Anwendung, eigenständiges npm-Projekt).
+- [`deadlock-tracker/`](deadlock-tracker/README.md) – Deadlock-Match-Tracker mit Match Summary, S–F-Rating und Lobby-Rang (Next.js, eigenständiges npm-Projekt).
 - [`lol-build-assistant/`](lol-build-assistant/README.md) – Windows-Desktop-App mit Ingame-Overlay für dynamische, erklärbare Item-Empfehlungen in League of Legends (Electron + TypeScript, eigenständiges npm-Projekt).
 
