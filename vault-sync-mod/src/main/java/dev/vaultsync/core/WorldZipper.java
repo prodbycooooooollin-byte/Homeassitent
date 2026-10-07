@@ -45,7 +45,12 @@ public final class WorldZipper {
         return sum[0];
     }
 
-    public static void zip(Path root, Path target) throws IOException {
+    public static void zip(Path root, Path target) throws IOException { zip(root, target, null); }
+
+    /** @param progress bekommt nach jeder Datei den Anteil 0..1 der gepackten Bytes */
+    public static void zip(Path root, Path target, java.util.function.DoubleConsumer progress) throws IOException {
+        final long total = progress == null ? 1 : Math.max(1, size(root));
+        final long[] done = {0};
         try (OutputStream os = Files.newOutputStream(target); ZipOutputStream zos = new ZipOutputStream(os)) {
             zos.setLevel(Deflater.BEST_SPEED); // Regionsdateien sind schon komprimiert
             String top = root.getFileName().toString();
@@ -57,6 +62,7 @@ public final class WorldZipper {
                         zos.putNextEntry(new ZipEntry(top + "/" + rel.toString().replace('\\', '/')));
                         Files.copy(f, zos);
                         zos.closeEntry();
+                        if (progress != null) { done[0] += a.size(); progress.accept(Math.min(1.0, (double) done[0] / total)); }
                     } catch (NoSuchFileException e) { /* während des Zippens verschwunden */ }
                     return FileVisitResult.CONTINUE;
                 }

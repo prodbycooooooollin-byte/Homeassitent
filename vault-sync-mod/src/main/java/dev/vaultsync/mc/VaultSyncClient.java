@@ -31,6 +31,7 @@ public final class VaultSyncClient implements ClientModInitializer {
     private Path configFile;
     private String folder = "";
     private MinecraftServer activeServer;
+    private ProgressToast progressToast;
 
     @Override public void onInitializeClient() {
         try {
@@ -42,13 +43,21 @@ public final class VaultSyncClient implements ClientModInitializer {
             var player = net.minecraft.client.Minecraft.getInstance().player;
             if (player != null) player.sendSystemMessage(net.minecraft.network.chat.Component.literal("[Vault] " + msg));
         }));
-        // Ergebnis der Sicherung beim Verlassen als Meldung oben rechts – auch auf dem Titelbildschirm sichtbar
+        // Beim Verlassen der Welt: Toast mit Fortschrittsbalken, am Ende mit dem Ergebnis – auch auf dem Titelbildschirm sichtbar
+        engine.setExitStartListener(() -> {
+            if (!config.exitToast) return;
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            mc.execute(() -> { progressToast = new ProgressToast(engine); mc.gui.toastManager().addToast(progressToast); });
+        });
         engine.setExitListener((ok, msg) -> {
             if (!config.exitToast) return;
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-            mc.execute(() -> SystemToast.addOrUpdate(mc.gui.toastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
-                    net.minecraft.network.chat.Component.literal(ok ? "Vault: Welt gesichert" : "Vault: Sicherung fehlgeschlagen"),
-                    net.minecraft.network.chat.Component.literal(msg)));
+            mc.execute(() -> {
+                if (progressToast != null) { progressToast.finish(ok, msg); progressToast = null; }
+                else SystemToast.addOrUpdate(mc.gui.toastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
+                        net.minecraft.network.chat.Component.literal(ok ? "Vault: Welt gesichert" : "Vault: Sicherung fehlgeschlagen"),
+                        net.minecraft.network.chat.Component.literal(msg));
+            });
         });
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 VaultCommands.register(dispatcher, () -> openRequested = true));
@@ -58,7 +67,11 @@ public final class VaultSyncClient implements ClientModInitializer {
         KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("vaultsync", "main"));
         KeyMapping openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.vaultsync.open", InputConstants.KEY_V, category));
         // Spiel wird mit laufender Welt geschlossen: noch synchron sichern, solange der Server läuft
-        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> { if (session != null) session.finalSyncBlocking(180_000); });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            if (session == null || !config.zipEnabled() || !config.uploadOnExit) return;
+            Runnable close = QuitProgressWindow.show(engine); // eigenes Fenster mit Fortschritt, weil Minecraft beim Schließen nicht mehr zeichnet
+            try { session.finalSyncBlocking(180_000); } finally { close.run(); }
+        });
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openKey.consumeClick()) openRequested = true;
             if (openRequested) { openRequested = false; client.setScreenAndShow(new VaultScreen(engine, config, actions())); } // erst im nächsten Tick, sonst schließt der Chat es wieder

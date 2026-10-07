@@ -184,11 +184,14 @@ class SyncEngineTest {
         var session = e.start(world, "w", h, state);
         AtomicBoolean stopped = new AtomicBoolean(false);
         long t0 = System.currentTimeMillis();
+        AtomicInteger started = new AtomicInteger(); e.setExitStartListener(started::incrementAndGet);
         Thread t = session.stop(stopped::get);
         Thread.sleep(700);
+        assertEquals("Warte auf Minecraft", e.phase()); assertEquals(1, started.get());
         assertEquals(0, site.requests.get(), "vor dem Serverstopp wird nichts hochgeladen");
         stopped.set(true); t.join(15000);
         assertEquals(1, site.finishes.get()); assertTrue(System.currentTimeMillis() - t0 >= 700);
+        assertEquals("", e.phase()); assertEquals(0.0, e.progress());
         assertTrue(site.label.startsWith("Beim Verlassen - "), site.label);
         assertTrue(e.history().get(0).message().startsWith(SyncEngine.EXIT_PREFIX));
 
@@ -199,6 +202,14 @@ class SyncEngineTest {
         e2.cycle(world, "w", h, true, true);
         assertEquals(1, site.finishes.get(), "gleicher Stand → kein erneuter Upload");
         site.server.stop(0);
+    }
+
+    @Test void zipReportsProgressUpToOne() throws Exception {
+        Path world = bigWorld(400_000); Path zip = Files.createTempFile("p", ".zip");
+        List<Double> seen = new ArrayList<>();
+        WorldZipper.zip(world, zip, seen::add);
+        assertTrue(seen.size() >= 2); assertEquals(1.0, seen.get(seen.size() - 1), 0.0001);
+        for (int i = 1; i < seen.size(); i++) assertTrue(seen.get(i) >= seen.get(i - 1));
     }
 
     @Test void uploadReportsProgress() throws Exception {

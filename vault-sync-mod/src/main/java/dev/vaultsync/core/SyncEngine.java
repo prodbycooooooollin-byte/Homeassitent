@@ -49,6 +49,8 @@ public final class SyncEngine {
     private volatile long lastStatsBytes, lastZipBytes;
     private volatile int lastStatsFields;
     private volatile double progress;
+    private volatile String phase = "";
+    private volatile Runnable exitStartListener = () -> { };
     private volatile Path stateFile;
     private volatile long announcedExitMs;
     private volatile String warning = "";
@@ -60,6 +62,10 @@ public final class SyncEngine {
     public void setChat(Consumer<String> c) { chat = c; }
     /** Wird aufgerufen, wenn die Sicherung beim Verlassen der Welt fertig ist (ok, Text) – z. B. für eine Meldung auf dem Titelbildschirm. */
     public void setExitListener(java.util.function.BiConsumer<Boolean, String> l) { exitListener = l; }
+    /** Wird aufgerufen, sobald beim Verlassen der Welt eine Sicherung beginnt (z. B. um einen Fortschritts-Toast zu zeigen). */
+    public void setExitStartListener(Runnable r) { exitStartListener = r; }
+    /** Was gerade passiert, z. B. "Welt wird gepackt"; leer = nichts. */
+    public String phase() { return phase; }
     /** Hinweis, der kein Fehler ist (z. B. Welt wird groß); leer = keiner. */
     public String warning() { return warning; }
     public State state() { return state; }
@@ -174,6 +180,8 @@ public final class SyncEngine {
         public Thread stop(BooleanSupplier serverStopped) {
             task.cancel(false);
             if (!cfg.zipEnabled() || !cfg.uploadOnExit) return null;
+            phase = "Warte auf Minecraft"; progress = 0;
+            try { exitStartListener.run(); } catch (RuntimeException e) { log.accept("Fortschrittsanzeige fehlgeschlagen: " + e); }
             Thread t = new Thread(() -> {
                 long until = System.currentTimeMillis() + 120_000;
                 try {
@@ -190,6 +198,7 @@ public final class SyncEngine {
         public void finalSyncBlocking(long timeoutMs) {
             task.cancel(false);
             if (!cfg.zipEnabled() || !cfg.uploadOnExit) return;
+            phase = "Warte auf Minecraft"; progress = 0;
             try { exec.submit(() -> cycle(root, id, hooks, false, true, true)).get(timeoutMs, TimeUnit.MILLISECONDS); }
             catch (Exception e) { log.accept("Sicherung beim Beenden nicht abgeschlossen: " + e); }
         }
@@ -230,7 +239,7 @@ public final class SyncEngine {
             lastZipAttempt = now;
             Path tmp = null; boolean frozen = false;
             try {
-                set(State.SAVING); progress = 0;
+                set(State.SAVING); progress = 0; phase = "Welt wird gespeichert";
                 if (hooks != null) { hooks.saveAndFreeze(); frozen = true; }
                 String fp = WorldZipper.fingerprint(root);
                 if (fp.equals(lastFingerprint)) {
@@ -245,7 +254,8 @@ public final class SyncEngine {
                     DiskCheck.requireOn(Path.of(System.getProperty("java.io.tmpdir")), worldBytes);
                     if (!cfg.localBackupDir.isBlank()) DiskCheck.requireOn(Path.of(cfg.localBackupDir), worldBytes);
                     tmp = Files.createTempFile("vaultsync-", ".zip");
-                    WorldZipper.zip(root, tmp);
+                    phase = "Welt wird gepackt"; progress = 0;
+                    WorldZipper.zip(root, tmp, p -> progress = p * 0.25);   // Packen = erste 25 %, Upload = der Rest
                     long size = Files.size(tmp);
                     warning = cfg.warnZipMb > 0 && size > cfg.warnZipMb * 1024L * 1024L
                             ? "Die Welt ist " + Fmt.size(size) + " groß. Prüfe, ob dein Dropbox genug Platz hat." : "";
@@ -261,10 +271,10 @@ public final class SyncEngine {
                         } catch (Exception e) { okAll = false; failed = true; fail(LOCAL, pre, e, notify); }
                     }
                     if (cfg.zipBackup) {
-                        set(State.UPLOADING); progress = 0;
+                        set(State.UPLOADING); phase = "Welt wird hochgeladen"; progress = 0.25;
                         // Die Uhrzeit im Titel kommt vom PC (nicht vom Server der Seite), damit sie zur echten Sicherungszeit passt.
                         String label = (exit ? "Beim Verlassen" : "Auto-Sicherung") + " - " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
-                        client.upload(world, tmp, label, p -> progress = p);
+                        client.upload(world, tmp, label, p -> progress = 0.25 + 0.75 * p);
                         record(ZIP, true, size, pre + "hochgeladen");
                         summary = "Welt hochgeladen (" + Fmt.size(size) + ").";
                         log.accept("Welt-ZIP hochgeladen (" + size / 1024 / 1024 + " MB)");
@@ -282,7 +292,7 @@ public final class SyncEngine {
                 if (tmp != null) try { Files.deleteIfExists(tmp); } catch (Exception ignored) { }
             }
         }
-        progress = 0;
+        progress = 0; phase = "";
         set(failed ? State.ERROR : any ? State.DONE : State.IDLE);
         if (exit && (failed || any)) {
             try { exitListener.accept(!failed, failed ? lastError : summary); } catch (RuntimeException e) { log.accept("Meldung beim Verlassen fehlgeschlagen: " + e); }
