@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "vaultsync",
+  "version": "${version}",
+  "name": "Vault Sync",
+  "description": "Sichert deine Singleplayer-Welt automatisch auf deiner Vault-Seite.",
+  "environment": "client",
+  "entrypoints": { "client": ["dev.vaultsync.mc.VaultSyncClient"] },
+  "depends": { "fabricloader": ">=0.16.0", "minecraft": "~26.3", "java": ">=25", "fabric-api": "*" }
+}
