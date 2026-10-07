@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.loader.api.FabricLoader;
@@ -22,6 +23,7 @@ import java.nio.file.Path;
 
 public final class VaultSyncClient implements ClientModInitializer {
     static final Logger LOG = LoggerFactory.getLogger("VaultSync");
+    private static final SystemToast.SystemToastId EXIT_TOAST = new SystemToast.SystemToastId(9000L);
     private SyncEngine engine;
     private SyncEngine.Session session;
     private Path activeRoot;
@@ -41,6 +43,14 @@ public final class VaultSyncClient implements ClientModInitializer {
             var player = net.minecraft.client.Minecraft.getInstance().player;
             if (player != null) player.sendSystemMessage(net.minecraft.network.chat.Component.literal("[Vault] " + msg));
         }));
+        // Ergebnis der Sicherung beim Verlassen als Meldung oben rechts – auch auf dem Titelbildschirm sichtbar
+        engine.setExitListener((ok, msg) -> {
+            if (!config.exitToast) return;
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            mc.execute(() -> SystemToast.addOrUpdate(mc.getToastManager(), EXIT_TOAST,
+                    net.minecraft.network.chat.Component.literal(ok ? "Vault: Welt gesichert" : "Vault: Sicherung fehlgeschlagen"),
+                    net.minecraft.network.chat.Component.literal(msg)));
+        });
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 VaultCommands.register(dispatcher, () -> openRequested = true));
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,

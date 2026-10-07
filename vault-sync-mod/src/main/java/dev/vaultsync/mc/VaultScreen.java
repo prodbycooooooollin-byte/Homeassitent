@@ -102,10 +102,11 @@ final class VaultScreen extends Screen {
         boolean active = session != null;
         boolean busy = engine.state() == SyncEngine.State.SAVING || engine.state() == SyncEngine.State.UPLOADING;
         boolean error = engine.state() == SyncEngine.State.ERROR;
+        boolean warn = !error && !engine.warning().isEmpty();   // Hinweis (z. B. Welt wird groß), kein Fehler
 
         // Höhe vorab bestimmen (Hintergrund wird zuerst gezeichnet)
-        int hHeader = 30, hRow = 54, hSliders = 88, hToggles = 48, hHist = 18 + 3 * 13, hErr = error ? 30 : 0;
-        int total = PAD + hHeader + GAP + hRow + GAP + hRow + GAP + hSliders + GAP + hToggles + GAP + hHist + (error ? GAP + hErr : 0) + PAD;
+        int hHeader = 30, hRow = 54, hSliders = 88, hToggles = 48, hHist = 18 + 3 * 13, hErr = error || warn ? 30 : 0;
+        int total = PAD + hHeader + GAP + hRow + GAP + hRow + GAP + hSliders + GAP + hToggles + GAP + hHist + (error || warn ? GAP + hErr : 0) + PAD;
 
         // Schatten + Panel
         for (int i = 6; i >= 1; i--) rounded(g, -i, -i + 3, W + 2 * i, total + 2 * i, 18 + i, a(0x0E000000));
@@ -211,11 +212,11 @@ final class VaultScreen extends Screen {
         }
         y += hHist;
 
-        if (error) {
+        if (error || warn) {
             y += GAP;
-            rounded(g, x, y, iw, hErr, 12, a(0x40FF453A));
-            text(g, "Fehler", x + 10, y + 6, a(RED), 0.8f);
-            text(g, fit(engine.lastError(), Math.round((iw - 20) / 0.85f)), x + 10, y + 17, a(LABEL), 0.85f);
+            rounded(g, x, y, iw, hErr, 12, a(error ? 0x40FF453A : 0x40FF9F0A));
+            text(g, error ? "Fehler" : "Hinweis", x + 10, y + 6, a(error ? RED : ORANGE), 0.8f);
+            text(g, fit(error ? engine.lastError() : engine.warning(), Math.round((iw - 20) / 0.85f)), x + 10, y + 17, a(LABEL), 0.85f);
         }
         return total;
     }

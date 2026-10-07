@@ -32,6 +32,19 @@ public final class WorldZipper {
         } catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
 
+    /** Gesamtgröße der Weltdateien (ohne session.lock) in Bytes. */
+    public static long size(Path root) throws IOException {
+        long[] sum = {0};
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override public FileVisitResult visitFile(Path f, BasicFileAttributes a) {
+                if (!skip(root.relativize(f))) sum[0] += a.size();
+                return FileVisitResult.CONTINUE;
+            }
+            @Override public FileVisitResult visitFileFailed(Path f, IOException e) { return FileVisitResult.CONTINUE; }
+        });
+        return sum[0];
+    }
+
     public static void zip(Path root, Path target) throws IOException {
         try (OutputStream os = Files.newOutputStream(target); ZipOutputStream zos = new ZipOutputStream(os)) {
             zos.setLevel(Deflater.BEST_SPEED); // Regionsdateien sind schon komprimiert

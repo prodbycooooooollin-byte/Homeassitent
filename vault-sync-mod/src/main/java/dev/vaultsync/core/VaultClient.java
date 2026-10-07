@@ -97,7 +97,10 @@ public final class VaultClient {
                 if (code == 200) return new Reply(action.equals("start") ? jsonString(r.body(), "session_id") : sessionId);
                 if (code == 401) throw new IOException("Falscher Schlüssel (apiKey)");
                 if (code == 404) throw new IOException("Die Funktion worldUploadChunk gibt es auf der Seite noch nicht (404)");
-                last = new IOException("Upload (" + action + "): Server antwortete " + code + ": " + trim(r.body()));
+                String body = r.body() == null ? "" : r.body();
+                if (body.contains("insufficient_space") || body.contains("over_quota"))
+                    throw new IOException("Dropbox ist voll – nicht genug Speicherplatz für diese Welt. Platz schaffen oder ein größeres Dropbox nutzen.");
+                last = new IOException("Upload (" + action + "): Server antwortete " + code + ": " + trim(body));
                 if (code < 500) throw last;
             } catch (java.net.http.HttpTimeoutException | java.net.ConnectException e) {
                 last = new IOException("Upload (" + action + "): " + e);

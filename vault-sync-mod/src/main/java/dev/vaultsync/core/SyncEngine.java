@@ -51,11 +51,17 @@ public final class SyncEngine {
     private volatile double progress;
     private volatile Path stateFile;
     private volatile long announcedExitMs;
+    private volatile String warning = "";
+    private volatile java.util.function.BiConsumer<Boolean, String> exitListener = (ok, m) -> { };
 
     public SyncEngine(Config cfg, Consumer<String> log) { this.cfg = cfg; this.client = new VaultClient(cfg); this.log = log; }
 
     /** Rückmeldungen für manuelle Sicherungen – z. B. als Chatnachricht. */
     public void setChat(Consumer<String> c) { chat = c; }
+    /** Wird aufgerufen, wenn die Sicherung beim Verlassen der Welt fertig ist (ok, Text) – z. B. für eine Meldung auf dem Titelbildschirm. */
+    public void setExitListener(java.util.function.BiConsumer<Boolean, String> l) { exitListener = l; }
+    /** Hinweis, der kein Fehler ist (z. B. Welt wird groß); leer = keiner. */
+    public String warning() { return warning; }
     public State state() { return state; }
     public long stateAgeMs() { return (System.nanoTime() - stateSince) / 1_000_000; }
     public String lastError() { return lastError; }
@@ -203,6 +209,7 @@ public final class SyncEngine {
         boolean exit = force && !live; // Verlassen der Welt bzw. Spiel beenden
         String pre = exit ? EXIT_PREFIX : "";
         boolean notify = force && live, failed = false, any = false;
+        String summary = "";
         if (doStats) {
             lastStatsAttempt = now;
             try {
@@ -229,12 +236,20 @@ public final class SyncEngine {
                 if (fp.equals(lastFingerprint)) {
                     lastZipMs = lastSuccessMs = System.currentTimeMillis();
                     record(ZIP, true, 0, pre + "unverändert, nichts hochgeladen");
+                    summary = "Welt unverändert, nichts Neues hochzuladen.";
                     if (notify) chat.accept("Welt unverändert seit der letzten Sicherung – nichts Neues hochzuladen.");
                     any = true;
                 } else {
+                    // Platz prüfen, bevor wir gigabyteweise schreiben
+                    long worldBytes = WorldZipper.size(root);
+                    DiskCheck.requireOn(Path.of(System.getProperty("java.io.tmpdir")), worldBytes);
+                    if (!cfg.localBackupDir.isBlank()) DiskCheck.requireOn(Path.of(cfg.localBackupDir), worldBytes);
                     tmp = Files.createTempFile("vaultsync-", ".zip");
                     WorldZipper.zip(root, tmp);
                     long size = Files.size(tmp);
+                    warning = cfg.warnZipMb > 0 && size > cfg.warnZipMb * 1024L * 1024L
+                            ? "Die Welt ist " + Fmt.size(size) + " groß. Prüfe, ob dein Dropbox genug Platz hat." : "";
+                    if (!warning.isEmpty() && (force ? live : true)) chat.accept("Achtung: " + warning);
                     if (frozen) { hooks.unfreeze(); frozen = false; }
                     String world = root.getFileName().toString();
                     boolean okAll = true;
@@ -251,9 +266,11 @@ public final class SyncEngine {
                         String label = (exit ? "Beim Verlassen" : "Auto-Sicherung") + " - " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
                         client.upload(world, tmp, label, p -> progress = p);
                         record(ZIP, true, size, pre + "hochgeladen");
+                        summary = "Welt hochgeladen (" + Fmt.size(size) + ").";
                         log.accept("Welt-ZIP hochgeladen (" + size / 1024 / 1024 + " MB)");
                         if (notify) chat.accept("Welt hochgeladen (" + Math.max(1, size / 1024 / 1024) + " MB).");
                     }
+                    if (summary.isEmpty()) summary = "Lokale Kopie gespeichert (" + Fmt.size(size) + ").";
                     if (okAll) { lastFingerprint = fp; }
                     lastZipMs = lastSuccessMs = System.currentTimeMillis(); lastZipBytes = size;
                     any = true;
@@ -267,6 +284,9 @@ public final class SyncEngine {
         }
         progress = 0;
         set(failed ? State.ERROR : any ? State.DONE : State.IDLE);
+        if (exit && (failed || any)) {
+            try { exitListener.accept(!failed, failed ? lastError : summary); } catch (RuntimeException e) { log.accept("Meldung beim Verlassen fehlgeschlagen: " + e); }
+        }
     }
 
     private void fail(String kind, String pre, Exception e, boolean notify) {

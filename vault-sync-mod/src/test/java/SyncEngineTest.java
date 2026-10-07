@@ -14,13 +14,16 @@ class SyncEngineTest {
         final HttpServer server; final AtomicInteger requests = new AtomicInteger(); final AtomicInteger finishes = new AtomicInteger();
         final java.io.ByteArrayOutputStream received = new java.io.ByteArrayOutputStream();
         final List<String> actions = Collections.synchronizedList(new ArrayList<>());
-        volatile String fileName = "", worldName = "", key = "", label = ""; volatile long lastOffset; volatile int failFirst = 0; volatile int status = 200;
+        volatile String fileName = "", worldName = "", key = "", label = ""; volatile long lastOffset; volatile int failFirst = 0; volatile int status = 200; volatile String failBody = null;
         FakeSite() throws Exception {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/", ex -> {
                 byte[] body = ex.getRequestBody().readAllBytes(); requests.incrementAndGet();
                 if (failFirst > 0) { failFirst--; ex.sendResponseHeaders(502, -1); ex.close(); return; }
-                if (status != 200) { ex.sendResponseHeaders(status, -1); ex.close(); return; }
+                if (status != 200) {
+                    if (failBody != null) { byte[] fb = failBody.getBytes(); ex.sendResponseHeaders(status, fb.length); ex.getResponseBody().write(fb); } else ex.sendResponseHeaders(status, -1);
+                    ex.close(); return;
+                }
                 var h = ex.getRequestHeaders(); key = h.getFirst("X-WorldVault-Key"); String a = h.getFirst("X-Action"); actions.add(a);
                 long off = h.getFirst("X-Offset") == null ? 0 : Long.parseLong(h.getFirst("X-Offset"));
                 if (!a.equals("start")) assertEquals(received.size(), off, "Offset muss zu den bisher empfangenen Bytes passen");
@@ -207,6 +210,45 @@ class SyncEngineTest {
         vc.upload("W", zip, "Test - 07.10.2026 20:05", seen::add);
         assertTrue(seen.size() >= 2 && seen.get(seen.size() - 1) == 1.0 && seen.get(0) < 1.0, seen.toString());
         assertEquals("Test - 07.10.2026 20:05", site.label);
+        site.server.stop(0);
+    }
+
+    @Test void diskCheckExplainsLackOfSpace() throws Exception {
+        DiskCheck.require(100L << 20, 10L << 30, "Test");  // genug Platz: keine Ausnahme
+        var ex = assertThrows(java.io.IOException.class, () -> DiskCheck.require(5L << 30, 1L << 30, "Laufwerk D:"));
+        assertTrue(ex.getMessage().contains("Zu wenig Speicherplatz") && ex.getMessage().contains("Laufwerk D:"), ex.getMessage());
+        assertTrue(DiskCheck.needed(1000) > 1000);
+        Path w = bigWorld(4000); assertTrue(WorldZipper.size(w) >= 4000);
+    }
+
+    @Test void fullDropboxGivesClearMessageWithoutRetries() throws Exception {
+        FakeSite site = new FakeSite(); site.status = 500; site.failBody = "{\"error\":\"Dropbox: path/insufficient_space/\"}";
+        Config c = new Config(); c.apiKey = "K"; c.uploadEndpoint = site.url();
+        VaultClient vc = new VaultClient(c); vc.retryDelayMs = 1;
+        Path z = Files.createTempFile("t", ".zip"); Files.writeString(z, "PKabc");
+        var ex = assertThrows(java.io.IOException.class, () -> vc.upload("W", z));
+        assertTrue(ex.getMessage().contains("Dropbox ist voll"), ex.getMessage());
+        assertEquals(1, site.requests.get(), "kein Wiederholen bei vollem Speicher");
+        site.server.stop(0);
+    }
+
+    @Test void exitListenerGetsResultAndBigWorldWarns() throws Exception {
+        FakeSite site = new FakeSite();
+        Config c = new Config(); c.zipBackup = true; c.apiKey = "K"; c.endpoint = site.url(); c.uploadEndpoint = site.url(); c.warnZipMb = 1; // 1 MB-Schwelle
+        Path world = bigWorld(1_500_000);
+        SyncEngine.Hooks h = new SyncEngine.Hooks() { public Map<String,Object> collectStats() { return null; } public void saveAndFreeze() { } public void unfreeze() { } };
+        SyncEngine e = new SyncEngine(c, m -> { });
+        List<String> chats = Collections.synchronizedList(new ArrayList<>());
+        e.setChat(chats::add);
+        AtomicReference<String> res = new AtomicReference<>();
+        e.setExitListener((ok, m) -> res.set(ok + "|" + m));
+        e.cycle(world, "w", null, false, true);   // wie beim Verlassen
+        assertTrue(res.get().startsWith("true|Welt hochgeladen"), res.get());
+        assertTrue(e.warning().contains("groß"), e.warning());
+        Files.writeString(world.resolve("level.dat"), "neu!");
+        site.status = 401;
+        e.cycle(world, "w", null, false, true);
+        assertTrue(res.get().startsWith("false|") && res.get().contains("Schlüssel"), res.get());
         site.server.stop(0);
     }
 

@@ -23,6 +23,10 @@ public final class Config {
     /** Ordner für lokale Kopien der Welt-ZIP (leer = aus) und wie viele Kopien bleiben. */
     public volatile String localBackupDir = "";
     public volatile int localKeep = 3;
+    /** Meldung (Toast) beim Verlassen der Welt über das Ergebnis der Sicherung. */
+    public volatile boolean exitToast = true;
+    /** Warnung, wenn die ZIP größer als so viele MB wird (0 = aus). */
+    public volatile int warnZipMb = 1024;
     /** Statusanzeige oben rechts im Spiel. */
     public volatile boolean showIndicator = true;
     /** Ordnernamen der Welten (aus .minecraft/saves), für die gesichert wird. */
@@ -32,7 +36,7 @@ public final class Config {
     /** Übernimmt Werte aus einer frisch geladenen Konfiguration (für /vault reload). */
     public void copyFrom(Config o) {
         endpoint = o.endpoint; apiKey = o.apiKey; intervalMinutes = o.intervalMinutes; zipBackup = o.zipBackup; uploadEndpoint = o.uploadEndpoint; zipIntervalMinutes = o.zipIntervalMinutes;
-        uploadOnExit = o.uploadOnExit; localBackupDir = o.localBackupDir; localKeep = o.localKeep; showIndicator = o.showIndicator;
+        uploadOnExit = o.uploadOnExit; exitToast = o.exitToast; warnZipMb = o.warnZipMb; localBackupDir = o.localBackupDir; localKeep = o.localKeep; showIndicator = o.showIndicator;
         watched.clear(); watched.addAll(o.watched); worlds.clear(); worlds.putAll(o.worlds);
     }
 
@@ -67,6 +71,8 @@ public final class Config {
         catch (NumberFormatException ignored) { }
         c.localBackupDir = p.getProperty("localBackupDir", "").trim();
         try { c.localKeep = Math.max(1, Integer.parseInt(p.getProperty("localKeep", "3").trim())); } catch (NumberFormatException ignored) { }
+        c.exitToast = Boolean.parseBoolean(p.getProperty("exitToast", "true").trim());
+        try { c.warnZipMb = Math.max(0, Integer.parseInt(p.getProperty("warnZipMb", "1024").trim())); } catch (NumberFormatException ignored) { }
         c.uploadOnExit = Boolean.parseBoolean(p.getProperty("uploadOnExit", "true").trim());
         c.showIndicator = Boolean.parseBoolean(p.getProperty("showIndicator", "true").trim());
         c.uploadEndpoint = p.getProperty("uploadEndpoint", "").trim();
@@ -88,6 +94,8 @@ public final class Config {
         sb.append("zipIntervalMinutes=").append(zipIntervalMinutes).append('\n');
         sb.append("localBackupDir=").append(localBackupDir.replace("\\", "\\\\")).append('\n');
         sb.append("localKeep=").append(localKeep).append('\n');
+        sb.append("exitToast=").append(exitToast).append('\n');
+        sb.append("warnZipMb=").append(warnZipMb).append('\n');
         sb.append("uploadOnExit=").append(uploadOnExit).append('\n');
         sb.append("showIndicator=").append(showIndicator).append('\n');
         if (!uploadEndpoint.equals(endpoint.replaceAll("worldSync/?$", "worldUploadChunk"))) sb.append("uploadEndpoint=").append(uploadEndpoint).append('\n');
