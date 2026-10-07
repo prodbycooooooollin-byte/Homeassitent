@@ -1,5 +1,6 @@
 import { normalizeHistory, normalizeMetadata } from "./normalize";
 import { modeLabel } from "../modes";
+import { logCall } from "../diag";
 import type { HistoryEntry, MatchDetails } from "../types";
 
 const BASE = () => (process.env.DEADLOCK_API_URL || "https://api.deadlock-api.com").replace(/\/$/, "");
@@ -10,43 +11,53 @@ export class ApiError extends Error {
   }
 }
 
-async function getJson(url: string, opts: { timeoutMs?: number; retries?: number } = {}): Promise<unknown> {
-  const { timeoutMs = 12000, retries = 2 } = opts;
+async function getJson(url: string, opts: { timeoutMs?: number; retries?: number; accept429?: boolean } = {}): Promise<unknown> {
+  const { timeoutMs = 12000, retries = 2, accept429 = false } = opts;
+  const path = url.replace(BASE(), "").replace(/\?.*$/, "");
   let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
+    const t0 = Date.now();
     try {
       const headers: Record<string, string> = { accept: "application/json" };
       if (process.env.DEADLOCK_API_KEY) headers["x-api-key"] = process.env.DEADLOCK_API_KEY;
       const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs), cache: "no-store" });
+      logCall({ at: t0, path, status: res.status, ms: Date.now() - t0 });
       if (res.status === 404) throw new ApiError("Nicht gefunden", 404);
       if (res.status === 429) {
         const ra = Number(res.headers.get("retry-after")) || 5;
+        // Laut Spec liefert die Historie bei 429 trotzdem die gecachten Einträge.
+        if (accept429) {
+          const body = await res.json().catch(() => null);
+          if (Array.isArray(body)) return body;
+        }
         throw new ApiError("Rate-Limit", 429, ra);
       }
       if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
       return await res.json();
     } catch (e) {
       lastErr = e;
-      // 404 und 4xx (außer 429) sind endgültig – nicht wiederholen
-      if (e instanceof ApiError && e.status && e.status < 500 && e.status !== 429) throw e;
-      if (attempt < retries) {
-        const wait = e instanceof ApiError && e.retryAfterS ? e.retryAfterS * 1000 : 500 * 2 ** attempt;
-        await new Promise((r) => setTimeout(r, Math.min(wait, 10000)));
-      }
+      if (!(e instanceof ApiError)) logCall({ at: t0, path, status: "ERR", ms: Date.now() - t0, note: e instanceof Error ? e.message : String(e) });
+      // 404 und 4xx (außer 429) sind endgültig – nicht wiederholen; 429 meldet der Aufrufer (Backoff dort)
+      if (e instanceof ApiError && e.status && e.status < 500) throw e;
+      if (attempt < retries) await new Promise((r) => setTimeout(r, Math.min(500 * 2 ** attempt, 4000)));
     }
   }
   throw lastErr instanceof Error ? lastErr : new ApiError(String(lastErr));
 }
 
 export async function fetchHistory(accountId: number): Promise<HistoryEntry[]> {
-  const raw = await getJson(`${BASE()}/v1/players/${accountId}/match-history`);
+  const raw = await getJson(`${BASE()}/v1/players/${accountId}/match-history`, { accept429: true });
   return normalizeHistory(raw, accountId);
 }
 
-/** Liefert null solange Valve die Metadaten noch nicht bereitgestellt hat (404). */
-export async function fetchMatchDetails(matchId: number): Promise<MatchDetails | null> {
+/**
+ * Match-Details (beide Teams, Ränge, Zeitreihen). Liefert null, solange sie noch nicht bereitstehen (404).
+ * Standardmäßig ohne Steam-Fallback (`disable_steam`), da der nur 3×/h pro IP erlaubt ist – der Aufrufer
+ * entscheidet über das Budget (lib/diag.ts).
+ */
+export async function fetchMatchDetails(matchId: number, allowSteam = false): Promise<MatchDetails | null> {
   try {
-    const raw = await getJson(`${BASE()}/v1/matches/${matchId}/metadata`, { retries: 1 });
+    const raw = await getJson(`${BASE()}/v1/matches/${matchId}/metadata${allowSteam ? "" : "?disable_steam=true"}`, { retries: 1, timeoutMs: allowSteam ? 25000 : 12000 });
     return normalizeMetadata(raw);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return null;

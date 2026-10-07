@@ -16,6 +16,7 @@ const NAV = [
   { href: "/mates", label: "Mitspieler" },
   { href: "/meta", label: "Meta" },
   { href: "/leaderboard", label: "Bestenliste" },
+  { href: "/status", label: "Diagnose" },
 ];
 
 export function TopBar() {

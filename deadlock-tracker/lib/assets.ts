@@ -36,6 +36,7 @@ const TTL = 12 * 3600 * 1000;
 const g = globalThis as unknown as { __dlAssets?: AssetBundle };
 
 import { imgUrl } from "./img";
+import { logCall } from "./diag";
 
 type Obj = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
@@ -114,9 +115,17 @@ export function normalizeRanks(raw: unknown): Record<number, RankAsset> {
 const cacheFile = () => path.join(dataDir(), "assets-cache.json");
 
 async function getJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(10000), cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const t0 = Date.now();
+  const path = url.replace(/^https?:\/\/[^/]+/, "");
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000), cache: "no-store" });
+    logCall({ at: t0, path, status: res.status, ms: Date.now() - t0 });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    if (!(e instanceof Error && e.message.startsWith("HTTP"))) logCall({ at: t0, path, status: "ERR", ms: Date.now() - t0, note: e instanceof Error ? e.message : String(e) });
+    throw e;
+  }
 }
 
 export async function getAssets(): Promise<AssetBundle> {

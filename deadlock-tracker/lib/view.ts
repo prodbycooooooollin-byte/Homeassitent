@@ -112,7 +112,7 @@ export function overview(items: MatchListItem[], accountId?: number): Overview {
       .map(([heroId, h]) => ({ heroId, matches: h.m, wins: h.w, kda: (h.k + h.a) / Math.max(1, h.d) }))
       .sort((x, y) => y.matches - x.matches)
       .slice(0, 8),
-    currentBadge: (accountId ? getStore().players[String(accountId)]?.rank?.badge : undefined) ?? items.find((i) => i.myBadge)?.myBadge ?? null,
+    currentBadge: items.find((i) => i.myBadge)?.myBadge ?? (accountId ? getStore().players[String(accountId)]?.rank?.badge : undefined) ?? null,
     rankHistory: items.filter((i) => i.myBadge).slice(0, 80).map((i) => ({ t: i.startTime, badge: i.myBadge as number, matchId: i.matchId })).reverse(),
     form: items.slice(0, 20).map((i) => i.won),
     trend: items.filter((i) => i.score !== null).slice(0, 30).map((i) => i.score as number).reverse(),

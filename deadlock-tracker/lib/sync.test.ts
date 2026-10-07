@@ -2,12 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const hist = vi.hoisted(() => ({ entries: [] as any[], details: null as any, fail: false }));
 vi.mock("./api", () => ({
+  ApiError: class ApiError extends Error { constructor(m: string, public status?: number, public retryAfterS?: number) { super(m); } },
   fetchHistory: async () => {
     if (hist.fail) throw new Error("API down");
     return hist.entries;
   },
   fetchMatchDetails: async () => hist.details,
   fetchProfiles: async () => [],
+  fetchRank: async () => null,
+  fetchActive: async () => [],
 }));
 vi.mock("./store", async () => {
   const store = { version: 1, players: {}, matches: {} } as any;

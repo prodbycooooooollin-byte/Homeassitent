@@ -1,5 +1,6 @@
-import { fetchActive, fetchHistory, fetchMatchDetails, fetchProfiles, fetchRank, type ActiveMatchDto } from "./api";
+import { ApiError, fetchActive, fetchHistory, fetchMatchDetails, fetchProfiles, fetchRank, type ActiveMatchDto } from "./api";
 import { getStore, saveStore } from "./store";
+import { steamBudgetLeft, useSteamBudget } from "./diag";
 import type { MatchRecord, TrackedPlayer } from "./types";
 
 /**
@@ -29,7 +30,6 @@ export async function addPlayer(accountId: number): Promise<TrackedPlayer> {
       name: profile?.name ?? `Spieler ${accountId}`,
       avatar: profile?.avatar,
       addedAt: Date.now(),
-      rank: profile?.lastTeamAvgBadge ? { badge: profile.lastTeamAvgBadge, at: 0 } : undefined,
     };
     saveStore();
   }
@@ -83,6 +83,7 @@ export async function syncPlayer(accountId: number, now = Date.now()): Promise<S
     player.lastSyncAt = now;
     player.lastSyncOk = true;
     player.lastError = undefined;
+    player.historyBackoffUntil = undefined;
     if (result.newMatches.length) player.lastNewMatchAt = now;
     // Rang: nach neuen Matches und sonst alle 10 Min aktualisieren; Rang-Fehler dürfen den Sync nie scheitern lassen.
     if (result.newMatches.length || firstImport || !player.rank || now - player.rank.at > 10 * 60_000) {
@@ -100,6 +101,10 @@ export async function syncPlayer(accountId: number, now = Date.now()): Promise<S
     player.lastSyncOk = false;
     player.lastError = e instanceof Error ? e.message : String(e);
     result.error = player.lastError;
+    if (e instanceof ApiError && e.status === 429) {
+      // Rate-Limit: Daten bleiben erhalten, wir pausieren das Polling dieses Accounts
+      player.historyBackoffUntil = now + Math.max(60, e.retryAfterS ?? 60) * 1000;
+    }
   }
   saveStore();
   return result;
@@ -112,12 +117,17 @@ export async function enrichMatch(matchId: number, now = Date.now()): Promise<bo
   if (!rec) return false;
   if (rec.details) return true;
   const focus = Number(Object.keys(rec.history)[0]) || 1;
+  const ageMs = now - rec.startTime * 1000;
+  // Steam-Fallback nur für frische Matches, erst nach ein paar vergeblichen Versuchen und nur im Budget (3/h pro IP).
+  const allowSteam = rec.detailsAttempts >= 3 && ageMs < 6 * 3600_000 && steamBudgetLeft(now) > 0;
   try {
-    const details = await fetchMatchDetails(matchId, focus);
+    if (allowSteam) useSteamBudget(now);
+    const details = await fetchMatchDetails(matchId, focus, allowSteam);
     rec.detailsAttempts += 1;
     if (details) {
       rec.details = details;
       rec.detailsAt = now;
+      rec.lastError = undefined;
       const profiles = await fetchProfiles(
         details.players.filter((p) => !p.name).map((p) => p.accountId).filter(Boolean),
       );
@@ -133,11 +143,17 @@ export async function enrichMatch(matchId: number, now = Date.now()): Promise<bo
       saveStore();
       return true;
     }
-  } catch {
+    rec.lastError = allowSteam ? "Noch nicht bei Valve verfügbar" : "Noch nicht im Archiv – wird erneut versucht";
+  } catch (e) {
     rec.detailsAttempts += 1;
+    rec.lastError = e instanceof Error ? e.message : String(e);
+    if (e instanceof ApiError && e.status === 429) {
+      rec.nextDetailsAttemptAt = now + Math.max(30, e.retryAfterS ?? 30) * 1000;
+      saveStore();
+      return false;
+    }
   }
-  const age = now - rec.startTime * 1000;
-  rec.nextDetailsAttemptAt = age > GIVE_UP_AFTER_MS ? Number.MAX_SAFE_INTEGER : now + nextAttemptDelayMs(rec.detailsAttempts);
+  rec.nextDetailsAttemptAt = ageMs > GIVE_UP_AFTER_MS ? Number.MAX_SAFE_INTEGER : now + nextAttemptDelayMs(rec.detailsAttempts);
   saveStore();
   return false;
 }
@@ -196,6 +212,7 @@ export function runCycle(force = false): Promise<SyncResult[]> {
     const everyMs = now < live().fastUntil ? 5000 : baseMs;
     for (const p of Object.values(getStore().players)) {
       if (!force && p.lastSyncAt && now - p.lastSyncAt < everyMs - 500) continue;
+      if (!force && p.historyBackoffUntil && now < p.historyBackoffUntil) continue;
       results.push(await syncPlayer(p.accountId));
     }
     await enrichPending();

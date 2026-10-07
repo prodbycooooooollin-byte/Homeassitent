@@ -1,6 +1,7 @@
 // Electron-Hülle: startet den eingebetteten Next.js-Standalone-Server (inkl. Hintergrund-Poller)
 // und zeigt die Oberfläche in einem Fenster. Daten liegen im Benutzerprofil (userData).
 const { app, BrowserWindow, shell, dialog } = require("electron");
+const updater = require("./updater");
 const path = require("path");
 const net = require("net");
 const http = require("http");
@@ -64,7 +65,7 @@ async function createWindow() {
     show: false,
     title: "Deadlock Tracker",
     autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, sandbox: true },
+    webPreferences: { contextIsolation: true, sandbox: true, preload: path.join(__dirname, "preload.js") },
   });
   // Externe Links im Standardbrowser öffnen
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -72,6 +73,7 @@ async function createWindow() {
     return { action: "deny" };
   });
   win.once("ready-to-show", () => win.show());
+  updater.setup(win);
   await win.loadURL(`http://127.0.0.1:${port}/`);
 }
 

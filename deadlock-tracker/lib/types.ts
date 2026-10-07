@@ -82,6 +82,8 @@ export interface MatchRecord {
   /** true, wenn das Match im laufenden Betrieb erkannt wurde (nicht beim Erst-Import). */
   detectedLive?: boolean;
   detailsAt?: number; // ms
+  /** Letzter Fehler beim Laden der Details (für die Diagnose) */
+  lastError?: string;
 }
 
 export interface TrackedPlayer {
@@ -95,6 +97,8 @@ export interface TrackedPlayer {
   lastNewMatchAt?: number;
   /** Aktueller Rang laut /v1/players/{id}/rank */
   rank?: { badge: number; at: number };
+  /** Backoff bei Rate-Limit der Historie (ms-Zeitstempel) */
+  historyBackoffUntil?: number;
 }
 
 export interface StoreShape {

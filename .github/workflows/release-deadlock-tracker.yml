@@ -1,7 +1,10 @@
 name: Release Deadlock Tracker (Windows)
 
 # Baut die Windows-EXE (NSIS-Installer + portable) auf echtem Windows und veröffentlicht sie
-# als GitHub-Pre-Release "dt-v<version aus package.json>".
+# als GitHub-Pre-Release "dt-v<version>" und aktualisiert zusätzlich das rollende Release "dt-latest",
+# aus dem sich installierte Apps automatisch aktualisieren (electron-updater, generic-Provider).
+# Die Version wird pro Build hochgezählt: <Basisversion aus package.json, Minor>.<Run-Nummer>, damit jeder Build
+# als Update erkannt wird. Die Version in package.json bleibt unverändert.
 # Die EXE bettet den Next.js-Server samt Hintergrund-Poller ein (Electron); Daten liegen im Benutzerprofil.
 
 on:
@@ -32,14 +35,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Release-Tag bestimmen
+      - name: Version und Release-Tag bestimmen
         shell: bash
         run: |
+          BASE=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          VERSION="$BASE.${{ github.run_number }}"
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
           if [ -n "${{ github.event.inputs.tag }}" ]; then TAG="${{ github.event.inputs.tag }}";
-          elif [ "${{ github.ref_type }}" = "tag" ]; then TAG="${{ github.ref_name }}";
-          else TAG="dt-v$(node -p "require('./package.json').version")"; fi
+          else TAG="dt-v$VERSION"; fi
           echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
-          echo "Release-Tag: $TAG"
+          echo "Version: $VERSION · Release-Tag: $TAG"
 
       - uses: actions/setup-node@v4
         with:
@@ -57,7 +62,7 @@ jobs:
         run: npm test
 
       - name: EXE bauen (NSIS-Installer + portable)
-        run: npm run dist:win
+        run: npm run dist:win -- -c.extraMetadata.version=${{ env.APP_VERSION }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
@@ -67,7 +72,9 @@ jobs:
           test -f release/win-unpacked/resources/standalone/server.js
           test -d release/win-unpacked/resources/standalone/node_modules/next
           test -d release/win-unpacked/resources/standalone/.next/static
-          ls release/*.exe
+          test -f release/latest.yml
+          grep -q "version: ${APP_VERSION}" release/latest.yml
+          ls release/*.exe release/latest.yml
 
       - name: Artefakte hochladen
         uses: actions/upload-artifact@v4
@@ -76,6 +83,7 @@ jobs:
           path: |
             deadlock-tracker/release/*.exe
             deadlock-tracker/release/*.blockmap
+            deadlock-tracker/release/latest.yml
           if-no-files-found: error
 
       - name: GitHub-Release erstellen
@@ -88,11 +96,29 @@ jobs:
           body: |
             Windows-Build des Deadlock Trackers.
 
-            - `Deadlock-Tracker-Setup-*.exe`: Installer
+            - `Deadlock-Tracker-Setup.exe`: Installer (aktualisiert sich danach automatisch)
             - `Deadlock-Tracker-*-portable.exe`: ohne Installation lauffähig
 
             Hinweise: Die EXE ist nicht signiert (Windows SmartScreen kann warnen).
             Matches werden nur erkannt, solange die App läuft. Die Deadlock-API-Anbindung
             ist noch nicht gegen die Live-API verifiziert (siehe deadlock-tracker/README.md).
           files: deadlock-tracker/release/*.exe
+          overwrite_files: true
+
+      # Rollendes Release: feste URL für den Auto-Updater (latest.yml + aktueller Installer)
+      - name: Rollendes Update-Release "dt-latest" aktualisieren
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dt-latest
+          target_commitish: ${{ github.sha }}
+          name: Deadlock Tracker – aktuelle Version (Auto-Update-Quelle)
+          prerelease: true
+          body: |
+            Wird bei jedem Build überschrieben. Diese Dateien nutzt die installierte App für Auto-Updates –
+            zum manuellen Installieren bitte das versionierte Release `dt-v*` verwenden.
+            Aktuell: ${{ env.APP_VERSION }}
+          files: |
+            deadlock-tracker/release/Deadlock-Tracker-Setup.exe
+            deadlock-tracker/release/Deadlock-Tracker-Setup.exe.blockmap
+            deadlock-tracker/release/latest.yml
           overwrite_files: true
