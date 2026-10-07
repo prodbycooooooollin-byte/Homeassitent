@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe29a"/><stop offset=".5" stop-color="#f0b44c"/><stop offset="1" stop-color="#b8741a"/></linearGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2030"/><stop offset="1" stop-color="#0a0c12"/></linearGradient>
+    <radialGradient id="s" cx=".5" cy=".3" r=".8"><stop offset="0" stop-color="#f0b44c" stop-opacity=".35"/><stop offset="1" stop-color="#f0b44c" stop-opacity="0"/></radialGradient>
+  </defs>
+  <path d="M32 3 55 16.5v31L32 61 9 47.5v-31Z" fill="url(#b)" stroke="url(#g)" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M32 3 55 16.5v31L32 61 9 47.5v-31Z" fill="url(#s)"/>
+  <path d="M32 9 49 19v26L32 55 15 45V19Z" fill="none" stroke="#f0b44c" stroke-opacity=".28" stroke-width="1.2"/>
+  <path d="M22 18h11c9 0 14 5.5 14 14s-5 14-14 14H22Z" fill="url(#g)"/>
+  <circle cx="35" cy="29.5" r="4.2" fill="#0a0c12"/>
+  <path d="M33 31h4l1.6 9h-7.2Z" fill="#0a0c12"/>
+</svg>

@@ -4,6 +4,9 @@ import type { StoreShape } from "./types";
 
 const FILE = process.env.TRACKER_DATA_FILE || path.join(process.cwd(), "data", "store.json");
 
+/** Verzeichnis für Store und Asset-Cache (im Desktop-Build das Benutzerprofil). */
+export const dataDir = () => path.dirname(FILE);
+
 const g = globalThis as unknown as { __dlStore?: StoreShape };
 
 function load(): StoreShape {

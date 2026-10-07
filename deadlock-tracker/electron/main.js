@@ -59,7 +59,9 @@ async function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 860,
-    backgroundColor: "#0b0d12",
+    backgroundColor: "#07080c",
+    icon: path.join(__dirname, "..", "build", "icon.png"),
+    show: false,
     title: "Deadlock Tracker",
     autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, sandbox: true },
@@ -69,6 +71,7 @@ async function createWindow() {
     shell.openExternal(url);
     return { action: "deny" };
   });
+  win.once("ready-to-show", () => win.show());
   await win.loadURL(`http://127.0.0.1:${port}/`);
 }
 

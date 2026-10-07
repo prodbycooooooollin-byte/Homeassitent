@@ -15,6 +15,15 @@ npm run build && npm start     # http://localhost:3100  (oder: npm run dev)
 Account-ID eingeben (Steam32, Steam64 oder `steamcommunity.com/profiles/…`-Link). Vanity-URLs werden nicht aufgelöst.
 Ohne Netzwerk: `DEADLOCK_DEMO=1` startet mit generierten Demo-Daten.
 
+## Design & Assets
+
+Eigenes Logo (`app/icon.svg`, `components/Logo.tsx`), Player Card mit Steam-Avatar und meistgespieltem Helden,
+Rang-Embleme, S–F-Noten mit Glow, Teamvergleich. Helden-Bilder/-Namen und Rang-Bilder werden zur Laufzeit von
+`assets.deadlock-api.com` (`/v2/heroes`, `/v2/ranks`) geladen, über `/api/img` lokal zwischengespeichert
+(Allowlist, Platten-Cache) und überstehen so Offline-Phasen. Fehlen Bilder, greifen eigene Fallbacks
+(Farbkachel mit Initialen, gezeichnetes Rang-Emblem). Die Bild-Feldnamen der Assets-API (`lib/assets.ts`) sind
+aus der Kenntnis der API gewählt und noch nicht live geprüft.
+
 ## Windows-EXE
 
 Der Workflow `.github/workflows/release-deadlock-tracker.yml` baut auf `windows-latest` einen Installer und eine

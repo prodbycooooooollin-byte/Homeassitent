@@ -1,5 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Providers } from "@/components/Providers";
+import { TopBar } from "@/components/TopBar";
 
 export const metadata: Metadata = {
   title: "Deadlock Tracker",
@@ -9,15 +11,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de">
-      <body className="min-h-screen">
-        <header className="border-b border-line bg-panel/80 backdrop-blur sticky top-0 z-10">
-          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-            <a href="/" className="text-lg font-bold tracking-tight">
-              <span className="text-amber">Deadlock</span> Tracker
-            </a>
-          </div>
-        </header>
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <body>
+        <Providers>
+          <TopBar />
+          <main className="mx-auto max-w-[1280px] px-5 pb-16 pt-6">{children}</main>
+        </Providers>
       </body>
     </html>
   );

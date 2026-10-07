@@ -1,5 +1,5 @@
 import * as real from "./deadlock-api";
-import { DEMO_HEROES, demoHistory, demoMatch, demoProfiles } from "../fixtures";
+import { demoHistory, demoMatch, demoProfiles } from "../fixtures";
 import type { HistoryEntry, MatchDetails } from "../types";
 
 export { ApiError } from "./deadlock-api";
@@ -14,4 +14,3 @@ export const fetchMatchDetails = (matchId: number, focus = 1): Promise<MatchDeta
   demo() ? Promise.resolve(demoMatch(matchId, focus)) : real.fetchMatchDetails(matchId);
 export const fetchProfiles = (ids: number[]) =>
   demo() ? Promise.resolve(demoProfiles(ids)) : real.fetchProfiles(ids);
-export const fetchHeroes = () => (demo() ? Promise.resolve(DEMO_HEROES) : real.fetchHeroes());

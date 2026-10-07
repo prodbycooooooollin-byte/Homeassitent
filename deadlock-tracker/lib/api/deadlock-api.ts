@@ -2,7 +2,6 @@ import { normalizeHistory, normalizeMetadata } from "./normalize";
 import type { HistoryEntry, MatchDetails } from "../types";
 
 const BASE = () => (process.env.DEADLOCK_API_URL || "https://api.deadlock-api.com").replace(/\/$/, "");
-const ASSETS = () => (process.env.DEADLOCK_ASSETS_URL || "https://assets.deadlock-api.com").replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(message: string, public status?: number, public retryAfterS?: number) {
@@ -69,7 +68,7 @@ export async function fetchProfiles(accountIds: number[]): Promise<SteamProfile[
       const id = Number(r.account_id);
       const name = String(r.personaname ?? r.name ?? "");
       if (!id || !name) return [];
-      return [{ accountId: id, name, avatar: typeof r.avatar === "string" ? r.avatar : undefined }];
+      return [{ accountId: id, name, avatar: typeof (r.avatarfull ?? r.avatar) === "string" ? String(r.avatarfull ?? r.avatar) : undefined }];
     });
   } catch {
     return [];
@@ -80,22 +79,4 @@ export interface HeroInfo {
   id: number;
   name: string;
   icon?: string;
-}
-
-export async function fetchHeroes(): Promise<HeroInfo[]> {
-  try {
-    const raw = await getJson(`${ASSETS()}/v2/heroes`, { retries: 1 });
-    if (!Array.isArray(raw)) return [];
-    return raw.flatMap((h: Record<string, unknown>) => {
-      const id = Number(h.id);
-      if (!id) return [];
-      const images = (h.images ?? {}) as Record<string, unknown>;
-      const icon = [images.icon_hero_card, images.minimap_image, images.icon_image_small].find(
-        (x) => typeof x === "string",
-      ) as string | undefined;
-      return [{ id, name: String(h.name ?? `Hero ${id}`), icon }];
-    });
-  } catch {
-    return [];
-  }
 }

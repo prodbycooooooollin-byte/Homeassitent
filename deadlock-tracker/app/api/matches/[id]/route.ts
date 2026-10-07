@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { enrichMatch } from "@/lib/sync";
 import { getStore } from "@/lib/store";
-import { getHeroes } from "@/lib/heroes";
 import { lobbyBadge } from "@/lib/view";
 import { ratePlayer } from "@/lib/rating";
 
@@ -25,6 +24,5 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     attempts: rec.detailsAttempts,
     nextAttemptAt: rec.nextDetailsAttemptAt < Number.MAX_SAFE_INTEGER ? rec.nextDetailsAttemptAt : null,
     account,
-    heroes: await getHeroes(),
   });
 }
