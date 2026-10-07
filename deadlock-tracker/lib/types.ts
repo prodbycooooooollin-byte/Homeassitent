@@ -25,8 +25,32 @@ export interface HistoryEntry {
   rankedDelta?: number | null;
 }
 
+/** Zeitreihe eines Spielers (auf ≤ 40 Punkte reduziert); alle Arrays gleich lang. */
+export interface PlayerTimeline {
+  t: number[]; // Sekunden
+  nw: number[]; // Souls (Net Worth)
+  k: number[];
+  d: number[];
+  a: number[];
+  dmg: number[]; // Heldenschaden (kumuliert)
+  heal: number[]; // Heilung (kumuliert)
+  taken: number[]; // erlittener Schaden (kumuliert)
+}
+export interface PlayerDeath { t: number; killerSlot?: number; durS?: number }
+export interface PlayerItem { id: number; t: number; sold?: number }
+
 /** Ein Spieler in der vollständigen Match-Summary. */
 export interface MatchPlayer {
+  /** Lobby-Slot (für Zuordnung von Killern) */
+  slot?: number;
+  /** Zugewiesene Lane (Farbcode laut Valve: 1 Gelb, 3 Grün, 4 Blau, 6 Lila) */
+  lane?: number;
+  mvpRank?: number;
+  /** Summe der Todeszeiten in Sekunden */
+  deadTimeS?: number;
+  timeline?: PlayerTimeline;
+  deathLog?: PlayerDeath[];
+  items?: PlayerItem[];
   accountId: number;
   name?: string;
   avatar?: string;
@@ -48,8 +72,14 @@ export interface MatchPlayer {
   abandoned: boolean;
 }
 
+export interface MatchObjective { id: number; /** Team, dem das Gebäude gehörte */ team: TeamId; t: number }
+
 export interface MatchDetails {
+  /** Schema-Version der Details (2 = mit Zeitreihen, Items, Lanes, Objectives) */
+  v?: number;
   matchId: number;
+  objectives?: MatchObjective[];
+  midBoss?: { team: TeamId; t: number }[];
   startTime: number;
   durationS: number;
   winningTeam: TeamId | null;
@@ -84,6 +114,8 @@ export interface MatchRecord {
   detailsAt?: number; // ms
   /** Letzter Fehler beim Laden der Details (für die Diagnose) */
   lastError?: string;
+  /** Versuche, ältere Details auf das aktuelle Schema zu heben */
+  upgradeTries?: number;
 }
 
 export interface TrackedPlayer {

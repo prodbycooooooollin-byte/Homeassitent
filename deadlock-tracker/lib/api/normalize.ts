@@ -1,6 +1,6 @@
 import { averageBadge } from "../ranks";
 import { modeLabel } from "../modes";
-import type { HistoryEntry, MatchDetails, MatchPlayer, TeamId } from "../types";
+import type { HistoryEntry, MatchDetails, MatchPlayer, PlayerDeath, PlayerItem, PlayerTimeline, TeamId } from "../types";
 
 /* Alle Parser sind absichtlich tolerant: fehlende/umbenannte Felder führen zu 0/null statt zu Abstürzen. */
 
@@ -66,6 +66,22 @@ function finalStats(p: Obj): Obj {
   return {};
 }
 
+/** Zeitreihe aus `stats` (kumulierte Werte je Zeitstempel), gleichmäßig auf ≤ max Punkte reduziert. */
+export function normalizeTimeline(stats: unknown, max = 40): PlayerTimeline | undefined {
+  if (!Array.isArray(stats) || stats.length < 2) return undefined;
+  const rows = stats.filter(isObj).sort((a, b) => num(a.time_stamp_s) - num(b.time_stamp_s));
+  const idx: number[] = [];
+  const step = Math.max(1, Math.ceil(rows.length / max));
+  for (let i = 0; i < rows.length; i += step) idx.push(i);
+  if (idx[idx.length - 1] !== rows.length - 1) idx.push(rows.length - 1);
+  const col = (...keys: string[]) => idx.map((i) => keys.reduce((a, k) => a + num(rows[i][k]), 0));
+  return {
+    t: idx.map((i) => num(rows[i].time_stamp_s)),
+    nw: col("net_worth"), k: col("kills"), d: col("deaths"), a: col("assists"),
+    dmg: col("player_damage"), heal: col("player_healing", "self_healing"), taken: col("player_damage_taken"),
+  };
+}
+
 export function normalizeMetadata(raw: unknown): MatchDetails | null {
   if (!isObj(raw)) return null;
   const info = (isObj(raw.match_info) ? raw.match_info : raw) as Obj;
@@ -103,6 +119,17 @@ export function normalizeMetadata(raw: unknown): MatchDetails | null {
       damageTaken: pick("damage_taken", "player_damage_taken"),
       badge: badgeRaw > 0 ? badgeRaw : null,
       abandoned: num(p.abandon_match_time_s) > 0,
+      slot: typeof p.player_slot === "number" ? p.player_slot : undefined,
+      lane: num(p.assigned_lane) || undefined,
+      mvpRank: num(p.mvp_rank) || undefined,
+      timeline: normalizeTimeline(p.stats),
+      deathLog: Array.isArray(p.death_details)
+        ? (p.death_details as unknown[]).filter(isObj).map((x): PlayerDeath => ({ t: num(x.game_time_s), killerSlot: typeof x.killer_player_slot === "number" ? x.killer_player_slot : undefined, durS: num(x.death_duration_s) || undefined }))
+        : undefined,
+      deadTimeS: Array.isArray(p.death_details) ? (p.death_details as unknown[]).filter(isObj).reduce((a, x) => a + num(x.death_duration_s), 0) : undefined,
+      items: Array.isArray(p.items)
+        ? (p.items as unknown[]).filter(isObj).filter((x) => num(x.item_id) > 0).map((x): PlayerItem => ({ id: num(x.item_id), t: num(x.game_time_s), sold: num(x.sold_time_s) || undefined }))
+        : undefined,
     });
   }
 
@@ -117,6 +144,7 @@ export function normalizeMetadata(raw: unknown): MatchDetails | null {
   };
 
   return {
+    v: 2,
     matchId,
     startTime: num(info.start_time),
     durationS: num(info.duration_s),
@@ -125,5 +153,12 @@ export function normalizeMetadata(raw: unknown): MatchDetails | null {
     gameMode: typeof info.game_mode === "number" ? String(info.game_mode) : undefined,
     avgBadge: [teamBadge(0, "average_badge_team0"), teamBadge(1, "average_badge_team1")],
     players,
+    objectives: Array.isArray(info.objectives)
+      ? (info.objectives as unknown[]).filter(isObj).filter((o) => num(o.destroyed_time_s) > 0)
+          .map((o) => ({ id: num(o.team_objective_id), team: teamFromRaw(o.team), t: num(o.destroyed_time_s) }))
+      : undefined,
+    midBoss: Array.isArray(info.mid_boss)
+      ? (info.mid_boss as unknown[]).filter(isObj).map((m) => ({ team: teamFromRaw(m.team_claimed ?? m.team_killed), t: num(m.destroyed_time_s) }))
+      : undefined,
   };
 }

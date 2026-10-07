@@ -21,6 +21,9 @@ export interface MatchListItem {
   detectedAfterS: number | null;
   matchMode?: string;
   myBadge: number | null;
+  /** Rating-Teilwerte (KDA, Kill-Beteiligung, Souls/Min, Schaden/Heilung, Objective) */
+  parts: number[] | null;
+  rankedDelta: number | null;
   team: 0 | 1;
   level: number;
 }
@@ -63,6 +66,8 @@ export function listMatches(accountId: number): MatchListItem[] {
       team: me?.team ?? h.team,
       level: me?.level ?? h.heroLevel,
       myBadge: h.badge ?? me?.badge ?? null,
+      parts: rating ? rating.parts.map((x) => Math.round(x.value * 100) / 100) : null,
+      rankedDelta: h.rankedDelta ?? null,
     });
   }
   return items.sort((a, b) => b.startTime - a.startTime);
@@ -79,7 +84,7 @@ export interface Overview {
   /** Letzte bekannte Rang-Badge des Spielers */
   currentBadge: number | null;
   /** Rang-Verlauf (älteste zuerst) */
-  rankHistory: { t: number; badge: number; matchId: number }[];
+  rankHistory: { t: number; badge: number; matchId: number; lobby: number | null; delta: number | null; won: boolean }[];
   /** Letzte 20 Ergebnisse, neueste zuerst */
   form: boolean[];
   /** Rating-Scores der letzten 30 bewerteten Matches, älteste zuerst */
@@ -113,7 +118,7 @@ export function overview(items: MatchListItem[], accountId?: number): Overview {
       .sort((x, y) => y.matches - x.matches)
       .slice(0, 8),
     currentBadge: items.find((i) => i.myBadge)?.myBadge ?? (accountId ? getStore().players[String(accountId)]?.rank?.badge : undefined) ?? null,
-    rankHistory: items.filter((i) => i.myBadge).slice(0, 80).map((i) => ({ t: i.startTime, badge: i.myBadge as number, matchId: i.matchId })).reverse(),
+    rankHistory: items.filter((i) => i.myBadge).slice(0, 120).map((i) => ({ t: i.startTime, badge: i.myBadge as number, matchId: i.matchId, lobby: i.lobbyBadge, delta: i.rankedDelta, won: i.won })).reverse(),
     form: items.slice(0, 20).map((i) => i.won),
     trend: items.filter((i) => i.score !== null).slice(0, 30).map((i) => i.score as number).reverse(),
   };

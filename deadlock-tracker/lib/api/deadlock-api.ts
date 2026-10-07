@@ -168,3 +168,13 @@ export async function fetchLeaderboard(region: string): Promise<LeaderboardRow[]
     badge: typeof e.badge_level === "number" ? e.badge_level : undefined,
   }));
 }
+
+export interface BadgeBucket { badge: number; players: number }
+
+/** Verteilung der Ranked-Spieler über alle Badges (für „Top X %“). */
+export async function fetchBadgeDistribution(): Promise<BadgeBucket[]> {
+  const since = Math.floor(Date.now() / 1000) - 30 * 86400;
+  const raw = await getJson(`${BASE()}/v1/analytics/badge-distribution?match_mode=ranked&min_unix_timestamp=${since}`, { retries: 1, timeoutMs: 20000 });
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((r: Record<string, unknown>) => (Number(r.badge_level) > 0 ? [{ badge: Number(r.badge_level), players: Number(r.unique_players) || Number(r.total_matches) || 0 }] : []));
+}

@@ -30,7 +30,7 @@ function HeroesView({ heroes }: { heroes: HeroAgg[] }) {
           </div>
         } />
       {heroes.length === 0 ? <Empty title="Noch keine Helden" text="Sobald Matches erkannt wurden, siehst du hier deine Helden-Statistiken." /> : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {sorted.map((h, i) => <HeroCard key={h.heroId} h={h} i={i} />)}
         </div>
       )}
@@ -47,8 +47,8 @@ function HeroCard({ h, i }: { h: HeroAgg; i: number }) {
     <NavLink href={`/heroes/${h.heroId}`} className="block fade-up" style={{ animationDelay: `${Math.min(i, 12) * 45}ms` }}>
       <div {...tilt} className="tilt surface group relative overflow-hidden" style={{ boxShadow: `0 0 0 1px ${color}33, 0 24px 50px -30px ${color}` }}>
         <span className="shine z-10" />
-        <div className="relative h-56 overflow-hidden">
-          <div className="absolute inset-0 transition-transform duration-500 group-hover:scale-110"><HeroPortrait id={h.heroId} size={400} h={224} className="!h-full !w-full !rounded-none" /></div>
+        <div className="relative aspect-[4/5] overflow-hidden">
+          <div className="absolute inset-0 transition-transform duration-500 group-hover:scale-105"><HeroPortrait id={h.heroId} fill ratio={0.8} className="!rounded-none" /></div>
           <div className="absolute inset-0 bg-gradient-to-t from-[#0f121a] via-[#0f121a]/20 to-transparent" />
           <div className="absolute right-3 top-3"><GradeBadge grade={h.avgScore === null ? null : gradeFor(h.avgScore)} size="sm" title="Ø Note" /></div>
           <div className="absolute bottom-3 left-4 right-4">

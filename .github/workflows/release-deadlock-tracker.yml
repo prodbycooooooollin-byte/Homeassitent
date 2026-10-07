@@ -61,8 +61,14 @@ jobs:
       - name: Tests
         run: npm test
 
+      # Version nur im CI-Checkout setzen (kein Commit). Über package.json statt CLI-Argument,
+      # weil npm unter Windows "-c.extraMetadata..." falsch zerlegt.
+      - name: App-Version setzen
+        shell: bash
+        run: npm pkg set version=${{ env.APP_VERSION }}
+
       - name: EXE bauen (NSIS-Installer + portable)
-        run: npm run dist:win -- -c.extraMetadata.version=${{ env.APP_VERSION }}
+        run: npm run dist:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 

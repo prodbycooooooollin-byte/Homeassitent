@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { dataDir } from "./store";
-import { DEMO_HEROES } from "./fixtures";
+import { DEMO_HEROES, DEMO_ITEMS } from "./fixtures";
 import { isDemo } from "./api";
 
 /** Normalisierte Asset-Daten (Helden + Ränge) für den Client. Bild-URLs laufen über /api/img (Cache + Allowlist). */
@@ -158,6 +158,45 @@ export async function getAssets(): Promise<AssetBundle> {
       return (g.__dlAssets = { ...cached, fetchedAt: Date.now(), source: "cache" });
     } catch {
       return (g.__dlAssets = { heroes: {}, ranks: {}, fetchedAt: Date.now(), source: "none" });
+    }
+  }
+}
+
+/* ---- Items (nur kaufbare Upgrades; große Antwort, daher getrennt und lange zwischengespeichert) ---- */
+export interface ItemAsset { id: number; name: string; image?: string; tier: number; slot: string; cost?: number }
+const gi = globalThis as unknown as { __dlItems?: { at: number; map: Record<number, ItemAsset> } };
+const itemsFile = () => path.join(dataDir(), "items-cache.json");
+
+export async function getItems(): Promise<Record<number, ItemAsset>> {
+  if (isDemo()) {
+    const map: Record<number, ItemAsset> = {};
+    DEMO_ITEMS.forEach((name, i) => { map[1000 + i] = { id: 1000 + i, name, tier: 1 + (i % 4), slot: ["weapon", "vitality", "spirit"][i % 3] }; });
+    return map;
+  }
+  if (gi.__dlItems && Date.now() - gi.__dlItems.at < 24 * 3600_000) return gi.__dlItems.map;
+  try {
+    const raw = await getJson(`${API()}/v1/assets/items`);
+    const map: Record<number, ItemAsset> = {};
+    for (const it of Array.isArray(raw) ? (raw as Obj[]) : []) {
+      const id = Number(it.id);
+      if (!id || it.type !== "upgrade" || !str(it.name)) continue;
+      map[id] = {
+        id, name: String(it.name), tier: Number(it.item_tier) || 1, slot: str(it.item_slot_type) ?? "weapon",
+        cost: typeof it.cost === "number" ? it.cost : undefined,
+        image: imgUrl(firstStr(it, ["shop_image_small", "image", "shop_image"])),
+      };
+    }
+    if (!Object.keys(map).length) throw new Error("keine Items");
+    gi.__dlItems = { at: Date.now(), map };
+    try { fs.mkdirSync(dataDir(), { recursive: true }); fs.writeFileSync(itemsFile(), JSON.stringify(map)); } catch {}
+    return map;
+  } catch {
+    try {
+      const map = JSON.parse(fs.readFileSync(itemsFile(), "utf8")) as Record<number, ItemAsset>;
+      gi.__dlItems = { at: Date.now() - 23 * 3600_000, map }; // bald erneut versuchen
+      return map;
+    } catch {
+      return {};
     }
   }
 }

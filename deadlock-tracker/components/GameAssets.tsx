@@ -64,27 +64,44 @@ export function useTilt(max = 7) {
 const initials = (n: string) => n.replace(/[^\p{L}\p{N} ]/gu, "").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 
 /** Helden-Bild: echtes Asset, sonst eigenes Farb-Fallback (nie „Held #1"). */
-export function HeroPortrait({ id, size = 44, h, variant = "portrait", className = "", ring }: {
-  id: number; size?: number; h?: number; variant?: "portrait" | "small" | "art"; className?: string; ring?: string;
+export function HeroPortrait({ id, size = 44, h, fill, ratio, variant = "portrait", className = "", ring }: {
+  id: number; size?: number; h?: number; /** füllt den Elterncontainer (Seitenverhältnis über `ratio` = Breite/Höhe) */ fill?: boolean; ratio?: number;
+  variant?: "portrait" | "small" | "art"; className?: string; ring?: string;
 }) {
   const { hero, name, color } = useHero(id);
   const raw = hero ? (variant === "art" ? hero.art : variant === "small" ? hero.small ?? hero.portrait : hero.portrait ?? hero.small) : undefined;
   const img = useImg(raw);
+  const [nat, setNat] = useState<number | null>(null); // natürliches Seitenverhältnis des geladenen Bildes
+  const boxRatio = fill ? ratio ?? 0.75 : size / (h ?? size);
+  // Große Boxen: weicht das Bildformat deutlich ab, wird es vollständig gezeigt (contain) statt angeschnitten.
+  const big = fill || size >= 90;
+  const mismatch = big && nat !== null && Math.abs(Math.log(nat / boxRatio)) > 0.14;
+  const dims = fill ? { width: "100%", height: "100%" } : { width: size, height: h ?? size };
   return (
     <div
       className={`relative shrink-0 overflow-hidden rounded-xl ${className}`}
-      style={{ width: size, height: h ?? size, boxShadow: ring ? `0 0 0 2px ${ring}, 0 6px 18px -6px ${ring}` : "0 0 0 1px rgba(255,255,255,.08)" }}
+      style={{ ...dims, boxShadow: ring ? `0 0 0 2px ${ring}, 0 6px 18px -6px ${ring}` : "0 0 0 1px rgba(255,255,255,.08)" }}
       title={name}
     >
       <div className="absolute inset-0" style={{ background: `linear-gradient(145deg, ${color}cc, ${color}33 60%, #0a0c12)` }} />
       {!img.src && (
-        <span className="display absolute inset-0 flex items-center justify-center font-extrabold text-white/80" style={{ fontSize: size * 0.38 }}>
+        <span className="display absolute inset-0 flex items-center justify-center font-extrabold text-white/80" style={{ fontSize: (fill ? 96 : size) * 0.38 }}>
           {initials(name)}
         </span>
       )}
       {img.src && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={img.src} onError={img.onError} alt={name} loading="lazy" className="absolute inset-0 h-full w-full object-cover object-top" />
+        <>
+          {mismatch && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={img.src} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-125 object-cover opacity-60 blur-xl" />
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={img.src} onError={img.onError} alt={name} loading="lazy"
+            onLoad={(e) => setNat(e.currentTarget.naturalWidth / Math.max(1, e.currentTarget.naturalHeight))}
+            className={`absolute inset-0 h-full w-full ${mismatch ? "object-contain" : big ? "object-cover object-top" : "object-cover object-[50%_20%]"}`}
+          />
+        </>
       )}
     </div>
   );

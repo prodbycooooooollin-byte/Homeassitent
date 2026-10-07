@@ -115,7 +115,8 @@ export async function enrichMatch(matchId: number, now = Date.now()): Promise<bo
   const store = getStore();
   const rec = store.matches[matchId];
   if (!rec) return false;
-  if (rec.details) return true;
+  const upgrading = !!rec.details && rec.details.v !== 2;
+  if (rec.details && !upgrading) return true;
   const focus = Number(Object.keys(rec.history)[0]) || 1;
   const ageMs = now - rec.startTime * 1000;
   // Steam-Fallback nur für frische Matches, erst nach ein paar vergeblichen Versuchen und nur im Budget (3/h pro IP).
@@ -125,6 +126,7 @@ export async function enrichMatch(matchId: number, now = Date.now()): Promise<bo
     const details = await fetchMatchDetails(matchId, focus, allowSteam);
     rec.detailsAttempts += 1;
     if (details) {
+      if (upgrading) rec.upgradeTries = 0;
       rec.details = details;
       rec.detailsAt = now;
       rec.lastError = undefined;
@@ -144,6 +146,7 @@ export async function enrichMatch(matchId: number, now = Date.now()): Promise<bo
       return true;
     }
     rec.lastError = allowSteam ? "Noch nicht bei Valve verfügbar" : "Noch nicht im Archiv – wird erneut versucht";
+    if (upgrading) rec.upgradeTries = (rec.upgradeTries ?? 0) + 1;
   } catch (e) {
     rec.detailsAttempts += 1;
     rec.lastError = e instanceof Error ? e.message : String(e);
@@ -153,6 +156,12 @@ export async function enrichMatch(matchId: number, now = Date.now()): Promise<bo
       return false;
     }
   }
+  if (upgrading) {
+    // Alte Details bleiben erhalten; nach 3 vergeblichen Versuchen nicht weiter belästigen
+    rec.nextDetailsAttemptAt = (rec.upgradeTries ?? 0) >= 3 ? Number.MAX_SAFE_INTEGER : now + 10 * 60_000;
+    saveStore();
+    return true;
+  }
   rec.nextDetailsAttemptAt = ageMs > GIVE_UP_AFTER_MS ? Number.MAX_SAFE_INTEGER : now + nextAttemptDelayMs(rec.detailsAttempts);
   saveStore();
   return false;
@@ -160,8 +169,12 @@ export async function enrichMatch(matchId: number, now = Date.now()): Promise<bo
 
 export async function enrichPending(now = Date.now()): Promise<number> {
   const store = getStore();
+  // Ältere Details (ohne Zeitreihen etc.) werden für die neuesten Matches einmalig aufgewertet.
+  for (const m of Object.values(store.matches).sort((a, b) => b.startTime - a.startTime).slice(0, 30)) {
+    if (m.details && m.details.v !== 2 && m.nextDetailsAttemptAt === Number.MAX_SAFE_INTEGER && (m.upgradeTries ?? 0) < 3) m.nextDetailsAttemptAt = now;
+  }
   const due = Object.values(store.matches)
-    .filter((m) => !m.details && m.nextDetailsAttemptAt <= now)
+    .filter((m) => (!m.details || m.details.v !== 2) && m.nextDetailsAttemptAt <= now)
     .sort((a, b) => b.startTime - a.startTime)
     .slice(0, ENRICH_PER_CYCLE);
   let ok = 0;

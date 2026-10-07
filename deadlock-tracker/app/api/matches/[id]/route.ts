@@ -22,6 +22,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     lobbyBadge: lobbyBadge(d),
     pending: !d,
     attempts: rec.detailsAttempts,
+    lastError: rec.lastError ?? null,
     nextAttemptAt: rec.nextDetailsAttemptAt < Number.MAX_SAFE_INTEGER ? rec.nextDetailsAttemptAt : null,
     account,
   });
