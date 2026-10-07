@@ -17,7 +17,9 @@ jobs:
         with: { gradle-version: "9.7.0" }
       - run: gradle compileJava --no-daemon || true
       - run: |
-          JAR=$(find ~/.gradle -name "minecraft*.jar" -path "*loom*" ! -name "*sources*" | xargs ls -S | head -1)
+          for j in $(find ~/.gradle . -name "*.jar" 2>/dev/null); do
+            if unzip -l "$j" 2>/dev/null | grep -q "net/minecraft/client/Minecraft.class"; then JAR="$j"; break; fi
+          done
           echo "JAR=$JAR"
           echo "== Minecraft: Toast"; javap -cp "$JAR" net.minecraft.client.Minecraft | grep -i toast
           echo "== SystemToast"; javap -cp "$JAR" 'net.minecraft.client.gui.components.toasts.SystemToast' | head -30
