@@ -406,7 +406,7 @@ export const en: Record<DictKey, string> = {
   "onb.s2": "Connect Twitch (optional)",
   "onb.s2_text": "For song requests from chat. You can also do this later.",
   "onb.s2_g1": "Open the <b>Twitch Developer Console</b> → <b>Register Your Application</b>.",
-  "onb.s2_g2": "OAuth redirect URL: <b>http://localhost</b> (not used by the device code flow, but required).",
+  "onb.s2_g2": "OAuth redirect URL: <b>https://localhost</b> (required, must start with https:// – not used by the device code flow).",
   "onb.s2_g3": "Category “Chat Bot” or “Other”, client type <b>Public</b>.",
   "onb.s2_g4": "Copy the client ID and paste it below.",
   "onb.s2_done": "Twitch is connected.",

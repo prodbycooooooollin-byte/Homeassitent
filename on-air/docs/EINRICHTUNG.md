@@ -29,7 +29,7 @@ rechtzeitig und fordert dann gezielt zur Neuanmeldung auf; Queue und Einstellung
 ## 2. Twitch-App anlegen (optional, für Chatrequests)
 
 1. https://dev.twitch.tv/console/apps/create öffnen.
-2. Name frei, **OAuth Redirect URL**: `http://localhost` (Pflichtfeld, vom Geräte-Code-Ablauf nicht genutzt).
+2. Name frei, **OAuth Redirect URL**: `https://localhost` (Pflichtfeld; Twitch akzeptiert nur Adressen mit `https://`. Der Geräte-Code-Ablauf nutzt sie nicht.)
 3. Kategorie „Chat Bot“ (oder „Other“), **Client-Typ: Öffentlich / Public**.
 4. **Client ID** in ON AIR einfügen und **Twitch verbinden** klicken.
 5. Im Browser öffnet sich `twitch.tv/activate` – den in ON AIR angezeigten Code eingeben

@@ -404,7 +404,7 @@ export const de = {
   "onb.s2": "Twitch verbinden (optional)",
   "onb.s2_text": "Für Songrequests aus dem Chat. Du kannst das auch später erledigen.",
   "onb.s2_g1": "Öffne die <b>Twitch Developer Console</b> → <b>Register Your Application</b>.",
-  "onb.s2_g2": "OAuth Redirect URL: <b>http://localhost</b> (wird für den Geräte-Code-Ablauf nicht genutzt, ist aber Pflichtfeld).",
+  "onb.s2_g2": "OAuth Redirect URL: <b>https://localhost</b> (Pflichtfeld, muss mit https:// beginnen – wird für den Geräte-Code-Ablauf nicht genutzt).",
   "onb.s2_g3": "Kategorie „Chat Bot“ oder „Other“, Client-Typ <b>Öffentlich (Public)</b>.",
   "onb.s2_g4": "Client ID kopieren und unten einfügen.",
   "onb.s2_done": "Twitch ist verbunden.",
