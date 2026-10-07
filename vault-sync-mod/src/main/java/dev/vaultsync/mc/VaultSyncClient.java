@@ -23,7 +23,6 @@ import java.nio.file.Path;
 
 public final class VaultSyncClient implements ClientModInitializer {
     static final Logger LOG = LoggerFactory.getLogger("VaultSync");
-    private static final SystemToast.SystemToastId EXIT_TOAST = new SystemToast.SystemToastId(9000L);
     private SyncEngine engine;
     private SyncEngine.Session session;
     private Path activeRoot;
@@ -47,7 +46,7 @@ public final class VaultSyncClient implements ClientModInitializer {
         engine.setExitListener((ok, msg) -> {
             if (!config.exitToast) return;
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-            mc.execute(() -> SystemToast.addOrUpdate(mc.getToastManager(), EXIT_TOAST,
+            mc.execute(() -> SystemToast.addOrUpdate(mc.gui.toastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
                     net.minecraft.network.chat.Component.literal(ok ? "Vault: Welt gesichert" : "Vault: Sicherung fehlgeschlagen"),
                     net.minecraft.network.chat.Component.literal(msg)));
         });
