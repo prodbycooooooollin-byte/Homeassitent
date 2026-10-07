@@ -52,6 +52,7 @@ public final class SyncEngine {
     private volatile String phase = "";
     private volatile Runnable exitStartListener = () -> { };
     private volatile Path stateFile;
+    private final StatsGuard guard = new StatsGuard();
     private volatile long announcedExitMs;
     private volatile String warning = "";
     private volatile java.util.function.BiConsumer<Boolean, String> exitListener = (ok, m) -> { };
@@ -100,7 +101,7 @@ public final class SyncEngine {
     private synchronized void loadState(Path file) {
         stateFile = file;
         history.clear();
-        lastFingerprint = ""; announcedExitMs = 0;
+        lastFingerprint = ""; announcedExitMs = 0; guard.clear();
         if (file == null || !Files.exists(file)) return;
         try {
             for (String line : Files.readAllLines(file)) {
@@ -116,6 +117,7 @@ public final class SyncEngine {
                         case "statsBytes" -> lastStatsBytes = Long.parseLong(v);
                         case "statsFields" -> lastStatsFields = Integer.parseInt(v);
                         case "announced" -> announcedExitMs = Long.parseLong(v);
+                        case "g" -> { int j = v.indexOf(':'); if (j > 0) guard.remember(v.substring(0, j), Double.parseDouble(v.substring(j + 1))); }
                         case "ev" -> {
                             String[] p = v.split("\t", 5);
                             if (p.length == 5) history.add(new Event(Long.parseLong(p[0]), p[1], p[2].equals("1"), Long.parseLong(p[3]), p[4]));
@@ -134,6 +136,7 @@ public final class SyncEngine {
         sb.append("fp=").append(lastFingerprint).append('\n').append("zipMs=").append(lastZipMs).append('\n').append("statsMs=").append(lastStatsMs).append('\n')
           .append("zipBytes=").append(lastZipBytes).append('\n').append("statsBytes=").append(lastStatsBytes).append('\n')
           .append("statsFields=").append(lastStatsFields).append('\n').append("announced=").append(announcedExitMs).append('\n');
+        guard.snapshot().forEach((k, v) -> sb.append("g=").append(k).append(':').append(v).append('\n'));
         for (Event e : history)
             sb.append("ev=").append(e.timeMs()).append('\t').append(e.kind()).append('\t').append(e.ok() ? 1 : 0).append('\t').append(e.bytes()).append('\t')
               .append(e.message().replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')).append('\n');
@@ -224,6 +227,15 @@ public final class SyncEngine {
             try {
                 set(State.SAVING);
                 var stats = hooks.collectStats();
+                if (stats != null) {
+                    List<String> notes = new ArrayList<>();
+                    stats = guard.sanitize(stats, notes);
+                    notes.forEach(n -> log.accept("Statistik-Schutz: " + n));
+                    if (stats == null) {
+                        record(STATS, false, 0, pre + "Übersprungen: " + notes.get(0));
+                        if (notify) chat.accept("Statistiken nicht gesendet: " + notes.get(0) + " (vermutlich noch nicht geladen).");
+                    }
+                }
                 if (stats != null) {
                     set(State.UPLOADING); progress = 0;
                     long bytes = client.postStats(stats);

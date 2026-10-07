@@ -263,6 +263,55 @@ class SyncEngineTest {
         site.server.stop(0);
     }
 
+    @Test void statsGuardKeepsCountersFromFallingToZero() {
+        StatsGuard g = new StatsGuard(); List<String> notes = new ArrayList<>();
+        Map<String,Object> a = new LinkedHashMap<>(); a.put("play_time_ticks", 72000L); a.put("deaths", 8); a.put("mob_kills", 120); a.put("blocks_mined", 5000); a.put("xp_level", 12);
+        assertNotNull(g.sanitize(a, notes));
+        // alles auf 0 → unbrauchbar
+        Map<String,Object> zeros = new LinkedHashMap<>(); zeros.put("play_time_ticks", 0); zeros.put("deaths", 0); zeros.put("mob_kills", 0); zeros.put("blocks_mined", 0); zeros.put("xp_level", 0);
+        assertNull(g.sanitize(zeros, notes)); assertFalse(notes.isEmpty());
+        // nur ein Zähler fällt auf 0 → alter Wert bleibt, Rest wird übernommen
+        Map<String,Object> one = new LinkedHashMap<>(a); one.put("deaths", 0); one.put("blocks_mined", 5100);
+        var fixed = g.sanitize(one, notes);
+        assertEquals(8L, ((Number) fixed.get("deaths")).longValue()); assertEquals(5100, ((Number) fixed.get("blocks_mined")).intValue());
+        // echter Zuwachs und niedrigere, aber echte Werte (Sicherung zurückgespielt) bleiben erlaubt
+        Map<String,Object> up = new LinkedHashMap<>(a); up.put("deaths", 9);
+        assertEquals(9, ((Number) g.sanitize(up, notes).get("deaths")).intValue());
+        Map<String,Object> restored = new LinkedHashMap<>(); restored.put("play_time_ticks", 1000); restored.put("deaths", 2); restored.put("blocks_mined", 50);
+        assertEquals(2, ((Number) g.sanitize(restored, notes).get("deaths")).intValue());
+        // Neue Welt: ohne Vorwissen ist 0 normal
+        assertNotNull(new StatsGuard().sanitize(zeros, new ArrayList<>()));
+    }
+
+    @Test void engineSkipsBrokenStatsAndRemembersAcrossRestart() throws Exception {
+        AtomicInteger posts = new AtomicInteger(); AtomicReference<String> lastBody = new AtomicReference<>();
+        HttpServer s = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        s.createContext("/", ex -> { lastBody.set(new String(ex.getRequestBody().readAllBytes())); posts.incrementAndGet(); ex.sendResponseHeaders(200, -1); ex.close(); }); s.start();
+        Config c = new Config(); c.endpoint = "http://127.0.0.1:" + s.getAddress().getPort() + "/";
+        AtomicBoolean broken = new AtomicBoolean(false);
+        SyncEngine.Hooks h = new SyncEngine.Hooks() {
+            public Map<String,Object> collectStats() { var m = new LinkedHashMap<String,Object>(); int v = broken.get() ? 0 : 8;
+                m.put("play_time_ticks", broken.get() ? 0 : 72000); m.put("deaths", v); m.put("mob_kills", v * 10); m.put("blocks_mined", v * 100); return m; }
+            public void saveAndFreeze() { } public void unfreeze() { } };
+        Path state = Files.createTempDirectory("st").resolve("w.state"); Path world = bigWorld(100);
+        SyncEngine e = new SyncEngine(c, m -> { });
+        e.start(world, "w", h, state);
+        e.cycle(world, "w", h, true, true);
+        assertEquals(1, posts.get());
+        broken.set(true);
+        e.cycle(world, "w", h, true, true);
+        assertEquals(1, posts.get(), "kaputte Messung wird nicht gesendet");
+        assertFalse(e.history().get(0).ok());
+        // Neustart: Schutz kennt den letzten guten Stand aus der Datei
+        SyncEngine e2 = new SyncEngine(c, m -> { });
+        e2.start(world, "w", h, state);
+        e2.cycle(world, "w", h, true, true);
+        assertEquals(1, posts.get(), "auch nach Neustart nicht gesendet");
+        broken.set(false); e2.cycle(world, "w", h, true, true);
+        assertEquals(2, posts.get());
+        s.stop(0);
+    }
+
     @Test void zipSkipsLockAndKeepsFolder() throws Exception {
         Path w = Files.createTempDirectory("saves").resolve("W"); Files.createDirectories(w);
         Files.writeString(w.resolve("level.dat"), "x"); Files.writeString(w.resolve("session.lock"), "l");
