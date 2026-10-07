@@ -17,8 +17,12 @@ export interface HistoryEntry {
   denies: number;
   heroLevel: number;
   abandoned: boolean;
+  /** Lesbarer Modus, z. B. "Ranked" oder "Street Brawl". */
   matchMode?: string;
   gameMode?: string;
+  /** Rang-Badge des Spielers nach dem Match (tier*10+subrank), falls bekannt. */
+  badge?: number | null;
+  rankedDelta?: number | null;
 }
 
 /** Ein Spieler in der vollständigen Match-Summary. */
@@ -89,6 +93,8 @@ export interface TrackedPlayer {
   lastSyncOk?: boolean;
   lastError?: string;
   lastNewMatchAt?: number;
+  /** Aktueller Rang laut /v1/players/{id}/rank */
+  rank?: { badge: number; at: number };
 }
 
 export interface StoreShape {

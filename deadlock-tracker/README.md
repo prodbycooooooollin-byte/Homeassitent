@@ -15,14 +15,30 @@ npm run build && npm start     # http://localhost:3100  (oder: npm run dev)
 Account-ID eingeben (Steam32, Steam64 oder `steamcommunity.com/profiles/…`-Link). Vanity-URLs werden nicht aufgelöst.
 Ohne Netzwerk: `DEADLOCK_DEMO=1` startet mit generierten Demo-Daten.
 
+## Seiten & Funktionen
+
+| Seite | Inhalt |
+| --- | --- |
+| Übersicht | Player Card (Steam-Profil, Main-Held, Rang, Winrate), **Live-Match-Banner**, Kennzahlen, letzte Matches, Rang, Leistungsverlauf, Form, Top-Helden |
+| Matches | Alle Matches mit Filtern (Ergebnis, Modus, Held), Sortierung, Tagesgruppen |
+| Match | Vollständige Summary beider Teams, Note, Ø Lobby-Rang, Teamvergleich, Rating-Aufschlüsselung |
+| Helden | Eigene Helden-Statistik als Karten, Detailseite je Held |
+| Rang | Aktueller Rang, Peak, Rangverlauf-Diagramm |
+| Mitspieler | Stammspieler mit Winrate (aus allen Matches mit Details) |
+| Meta | Globale Helden-Tierliste (Winrate/Pickrate, Ranked, 14 Tage) |
+| Bestenliste | Leaderboard je Region |
+| Suche (Top-Bar) | Spielersuche per Name (Steam-Profile) oder ID, direkt tracken |
+
+**Live-Erkennung:** `/v1/matches/active` zeigt laufende Matches. Endet eines, pollt der Server die Historie
+einige Minuten im 5-s-Takt (sonst 20 s) – das neue Match erscheint so meist Sekunden nach dem Eintrag in der API.
+
 ## Design & Assets
 
-Eigenes Logo (`app/icon.svg`, `components/Logo.tsx`), Player Card mit Steam-Avatar und meistgespieltem Helden,
-Rang-Embleme, S–F-Noten mit Glow, Teamvergleich. Helden-Bilder/-Namen und Rang-Bilder werden zur Laufzeit von
-`assets.deadlock-api.com` (`/v2/heroes`, `/v2/ranks`) geladen, über `/api/img` lokal zwischengespeichert
-(Allowlist, Platten-Cache) und überstehen so Offline-Phasen. Fehlen Bilder, greifen eigene Fallbacks
-(Farbkachel mit Initialen, gezeichnetes Rang-Emblem). Die Bild-Feldnamen der Assets-API (`lib/assets.ts`) sind
-aus der Kenntnis der API gewählt und noch nicht live geprüft.
+Eigenes Logo (`app/icon.svg`), Aurora-Hintergrund in der Farbe des Main-Helden, Seitenübergänge (Aus-/Einblenden,
+Fortschrittsbalken, gestaffelter Aufbau), neigbare Heldenkarten, animierte Zahlen. Heldenbilder/-namen und
+Rang-Badges kommen von `api.deadlock-api.com/v1/assets/{heroes,ranks}` bzw. `/v1/assets/ranks/{tier}/{sub}/image`,
+laufen über `/api/img` (Host-Allowlist, Platten-Cache, überstehen Offline-Phasen) und fallen bei Fehlern auf
+eigene Grafiken zurück (Farbkachel mit Initialen, gezeichnetes Rang-Emblem).
 
 ## Windows-EXE
 
@@ -58,11 +74,12 @@ Das ist eine eigene Heuristik (`lib/rating.ts`), nicht der statlocker-Algorithmu
 
 ## Datenquelle & Stand der Verifikation
 
-Daten kommen von der Community-API [deadlock-api.com](https://deadlock-api.com)
-(`/v1/players/{id}/match-history`, `/v1/matches/{id}/metadata`, `/v1/players/steam`, Assets für Heldennamen).
-**Achtung:** In der Entwicklungsumgebung war diese Domain gesperrt – Endpunkte und Feldnamen sind aus der
-Kenntnis der API implementiert und **noch nicht gegen die Live-API getestet**. Die Parser
-(`lib/api/normalize.ts`) sind tolerant; falls Felder abweichen, ist nur diese Datei anzupassen.
+Quelle: Community-API [deadlock-api.com](https://deadlock-api.com). Die Parser sind gegen die **OpenAPI-Spec**
+(`deadlock-api/openapi-clients`) und die **Valve-Protobufs** (`SteamDatabase/Protobufs`) geprüft und in
+`lib/api/normalize.test.ts` mit spezifikationsgetreuen Beispieldaten abgesichert (u. a. `player_match_outcome`,
+`ranked_display_badge`, `player_rank_data.initial_display_rank`, `match_mode`/`game_mode` als Zahlen).
+**Nicht getestet** ist der echte HTTP-Verkehr: die Entwicklungsumgebung konnte `api.deadlock-api.com` nicht erreichen.
+Die globalen Seiten (Meta, Bestenliste) zeigen bei API-Fehlern eine Fehlermeldung statt abzustürzen.
 
 ## Tests
 

@@ -2,6 +2,7 @@
 import { useCallback, useState } from "react";
 import { GradeBadge, GRADE_STYLE } from "./GradeBadge";
 import { HeroBackdrop, HeroPortrait, RankEmblem, useHero, useHeroName } from "./GameAssets";
+import { NavLink } from "./NavLink";
 import { useInterval } from "./useTracker";
 import { fmtDuration, fmtK } from "@/lib/format";
 import { formatBadge } from "@/lib/ranks";
@@ -38,7 +39,7 @@ export function MatchView({ matchId, account }: { matchId: number; account: numb
   }, [matchId, account]);
   useInterval(() => { if (!res || res.pending) load(); }, 8000);
 
-  const back = <a href="/" className="btn btn-ghost !px-3 !py-1.5 text-xs">← Übersicht</a>;
+  const back = <NavLink href="/matches" className="btn btn-ghost !w-fit !px-3 !py-1.5 text-xs">← Alle Matches</NavLink>;
   if (err) return <div className="space-y-4">{back}<div className="surface p-6 text-loss">{err}</div></div>;
   if (!res) return <div className="space-y-4">{back}<div className="skeleton h-56" /><div className="skeleton h-80" /></div>;
   if (!res.details) return <Pending res={res} account={account} back={back} />;
@@ -50,7 +51,7 @@ function Pending({ res, account, back }: { res: Res; account: number; back: Reac
   const heroName = useHeroName();
   const { color } = useHero(mine?.heroId);
   return (
-    <div className="space-y-4 fade-up">
+    <>
       {back}
       <section className="surface relative overflow-hidden p-8" style={{ boxShadow: `0 0 0 1px ${color}33` }}>
         <HeroBackdrop id={mine?.heroId} />
@@ -67,7 +68,7 @@ function Pending({ res, account, back }: { res: Res; account: number; back: Reac
         </div>
       </section>
       <div className="skeleton h-72" />
-    </div>
+    </>
   );
 }
 
@@ -81,10 +82,10 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
   const maxDmg = Math.max(1, ...d.players.map((p) => p.heroDamage));
 
   return (
-    <div className="space-y-5">
+    <>
       {back}
 
-      <section className="surface fade-up relative overflow-hidden" style={{ boxShadow: `0 0 0 1px ${resultColor}33, 0 30px 60px -30px ${resultColor}44` }}>
+      <section className="surface relative overflow-hidden" style={{ boxShadow: `0 0 0 1px ${resultColor}33, 0 30px 60px -30px ${resultColor}44` }}>
         <HeroBackdrop id={me?.heroId} />
         <div className="relative grid items-center gap-6 p-6 md:grid-cols-[auto_1fr_auto] md:p-8">
           <div className="flex items-center gap-5">
@@ -124,7 +125,7 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
       </section>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
-        <section className="surface fade-up p-5">
+        <section className="surface p-5">
           <h2 className="label mb-4">Teamvergleich</h2>
           <div className="space-y-3.5">
             <Versus label="Kills" a={sum(d, 0, (p) => p.kills)} b={sum(d, 1, (p) => p.kills)} />
@@ -134,7 +135,7 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
           </div>
         </section>
         {rating && (
-          <section className="surface fade-up p-5">
+          <section className="surface p-5">
             <h2 className="label mb-4">Deine Performance <span className="normal-case tracking-normal">· 1.00 = Lobby-Schnitt</span></h2>
             <div className="space-y-3">
               {rating.parts.map((p) => (
@@ -154,7 +155,7 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
       {([0, 1] as TeamId[]).map((t) => (
         <TeamTable key={t} team={t} d={d} account={account} ratings={res.ratings} maxDmg={maxDmg} />
       ))}
-    </div>
+    </>
   );
 }
 
@@ -184,7 +185,7 @@ function TeamTable({ team, d, account, ratings, maxDmg }: { team: TeamId; d: Mat
   const won = d.winningTeam === team;
   const T = TEAMS[team];
   return (
-    <section className="surface fade-up overflow-hidden" style={{ boxShadow: won ? `0 0 0 1px ${T.color}44, 0 24px 50px -30px ${T.color}66` : undefined }}>
+    <section className="surface overflow-hidden" style={{ boxShadow: won ? `0 0 0 1px ${T.color}44, 0 24px 50px -30px ${T.color}66` : undefined }}>
       <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-3" style={{ background: `linear-gradient(90deg, ${T.color}22, transparent 60%)` }}>
         <span className="h-6 w-1 rounded-full" style={{ background: T.color, boxShadow: `0 0 12px ${T.color}` }} />
         <h2 className="display text-lg font-bold" style={{ color: T.color }}>{T.name}</h2>

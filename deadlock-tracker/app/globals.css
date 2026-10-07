@@ -84,3 +84,38 @@ body::before {
 .grade-s { animation: grade-glow 2.4s ease-in-out infinite; }
 .toast-in { animation: slide-in .35s cubic-bezier(.2,.7,.2,1) both; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- Immersion: Aurora, Seitenübergänge, Tilt ---------- */
+:root { --hero: #f0b44c; }
+.aurora { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
+.aurora i { position: absolute; border-radius: 9999px; filter: blur(110px); opacity: .34; transition: background-color 1.2s ease; will-change: transform; }
+.aurora i:nth-child(1) { width: 620px; height: 620px; left: -160px; top: -200px; background: var(--hero); animation: drift-a 22s ease-in-out infinite; }
+.aurora i:nth-child(2) { width: 520px; height: 520px; right: -140px; top: 5%; background: #4aa3ff; opacity: .22; animation: drift-b 28s ease-in-out infinite; }
+.aurora i:nth-child(3) { width: 560px; height: 560px; left: 35%; bottom: -320px; background: var(--hero); opacity: .16; animation: drift-b 34s ease-in-out infinite reverse; }
+@keyframes drift-a { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(120px,80px) scale(1.15); } }
+@keyframes drift-b { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-110px,60px) scale(1.1); } }
+
+main { transition: opacity .16s ease, transform .16s ease, filter .16s ease; }
+html.leaving main { opacity: 0; transform: translateY(-10px) scale(.995); filter: blur(5px); }
+.page-enter { animation: page-in .6s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(18px) scale(.992); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+.stagger > * { animation: fade-up .65s cubic-bezier(.2,.7,.2,1) both; }
+.stagger > *:nth-child(1) { animation-delay: .04s; } .stagger > *:nth-child(2) { animation-delay: .12s; }
+.stagger > *:nth-child(3) { animation-delay: .20s; } .stagger > *:nth-child(4) { animation-delay: .28s; }
+.stagger > *:nth-child(5) { animation-delay: .36s; } .stagger > *:nth-child(6) { animation-delay: .44s; }
+.stagger > *:nth-child(n+7) { animation-delay: .52s; }
+
+.route-bar { position: fixed; left: 0; top: 0; height: 2px; z-index: 60; background: linear-gradient(90deg, #f0b44c, #fff1c9, #4aa3ff); box-shadow: 0 0 12px #f0b44c; transition: width .4s ease, opacity .3s ease .15s; pointer-events: none; }
+
+.tilt { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateZ(0); transition: transform .18s ease-out, box-shadow .25s, border-color .25s; transform-style: preserve-3d; }
+.tilt .shine { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: 0; transition: opacity .25s; background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,.14), transparent 45%); }
+.tilt:hover .shine { opacity: 1; }
+.float { animation: bob 6s ease-in-out infinite; }
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.sheen { position: relative; overflow: hidden; }
+.sheen::after { content: ""; position: absolute; inset: -20%; background: linear-gradient(110deg, transparent 40%, rgba(255,255,255,.28) 50%, transparent 60%); transform: translateX(-120%); animation: sheen 5s ease-in-out infinite; }
+@keyframes sheen { 0%, 60% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+.live-bar { background: linear-gradient(90deg, rgba(240,97,109,.18), rgba(240,97,109,.04)); border-color: rgba(240,97,109,.45); }
+.live-pulse { width: 10px; height: 10px; border-radius: 9999px; background: #f0616d; box-shadow: 0 0 0 0 rgba(240,97,109,.6); animation: live-ring 1.4s infinite; }
+@keyframes live-ring { to { box-shadow: 0 0 0 12px rgba(240,97,109,0); } }
+.nav-ind { position: absolute; bottom: -1px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, #f0b44c, #fff1c9); box-shadow: 0 0 10px #f0b44c; transition: left .35s cubic-bezier(.2,.8,.2,1), width .35s cubic-bezier(.2,.8,.2,1); }

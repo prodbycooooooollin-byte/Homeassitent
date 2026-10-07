@@ -21,6 +21,8 @@ export interface MatchListItem {
   detectedAfterS: number | null;
   matchMode?: string;
   myBadge: number | null;
+  team: 0 | 1;
+  level: number;
 }
 
 export function lobbyBadge(d: MatchDetails | undefined): number | null {
@@ -57,8 +59,10 @@ export function listMatches(accountId: number): MatchListItem[] {
       lobbyBadge: lobbyBadge(d),
       detailsReady: !!d,
       detectedAfterS: rec.detectedLive && rec.firstSeenAt > endMs ? Math.round((rec.firstSeenAt - endMs) / 1000) : null,
-      matchMode: h.matchMode,
-      myBadge: me?.badge ?? null,
+      matchMode: d?.matchMode ?? h.matchMode,
+      team: me?.team ?? h.team,
+      level: me?.level ?? h.heroLevel,
+      myBadge: h.badge ?? me?.badge ?? null,
     });
   }
   return items.sort((a, b) => b.startTime - a.startTime);
@@ -74,13 +78,15 @@ export interface Overview {
   heroes: { heroId: number; matches: number; wins: number; kda: number }[];
   /** Letzte bekannte Rang-Badge des Spielers */
   currentBadge: number | null;
+  /** Rang-Verlauf (älteste zuerst) */
+  rankHistory: { t: number; badge: number; matchId: number }[];
   /** Letzte 20 Ergebnisse, neueste zuerst */
   form: boolean[];
   /** Rating-Scores der letzten 30 bewerteten Matches, älteste zuerst */
   trend: number[];
 }
 
-export function overview(items: MatchListItem[]): Overview {
+export function overview(items: MatchListItem[], accountId?: number): Overview {
   const gradeCounts: Record<Grade, number> = { S: 0, A: 0, B: 0, C: 0, D: 0, F: 0 };
   const hero = new Map<number, { m: number; w: number; k: number; d: number; a: number }>();
   let k = 0, d = 0, a = 0, wins = 0;
@@ -106,8 +112,65 @@ export function overview(items: MatchListItem[]): Overview {
       .map(([heroId, h]) => ({ heroId, matches: h.m, wins: h.w, kda: (h.k + h.a) / Math.max(1, h.d) }))
       .sort((x, y) => y.matches - x.matches)
       .slice(0, 8),
-    currentBadge: items.find((i) => i.myBadge)?.myBadge ?? null,
+    currentBadge: (accountId ? getStore().players[String(accountId)]?.rank?.badge : undefined) ?? items.find((i) => i.myBadge)?.myBadge ?? null,
+    rankHistory: items.filter((i) => i.myBadge).slice(0, 80).map((i) => ({ t: i.startTime, badge: i.myBadge as number, matchId: i.matchId })).reverse(),
     form: items.slice(0, 20).map((i) => i.won),
     trend: items.filter((i) => i.score !== null).slice(0, 30).map((i) => i.score as number).reverse(),
   };
+}
+
+export interface HeroAgg {
+  heroId: number;
+  matches: number;
+  wins: number;
+  kda: number;
+  avgScore: number | null;
+  soulsPerMin: number;
+  bestGrade: Grade | null;
+  lastPlayed: number;
+}
+
+const GRADE_ORDER: Grade[] = ["S", "A", "B", "C", "D", "F"];
+
+export function heroAggregates(items: MatchListItem[]): HeroAgg[] {
+  const m = new Map<number, { n: number; w: number; k: number; d: number; a: number; scores: number[]; souls: number; mins: number; best: number; last: number }>();
+  for (const it of items) {
+    const h = m.get(it.heroId) ?? { n: 0, w: 0, k: 0, d: 0, a: 0, scores: [], souls: 0, mins: 0, best: 99, last: 0 };
+    h.n++; h.k += it.kills; h.d += it.deaths; h.a += it.assists;
+    if (it.won) h.w++;
+    if (it.score !== null) h.scores.push(it.score);
+    h.souls += it.netWorth; h.mins += it.durationS / 60;
+    if (it.grade) h.best = Math.min(h.best, GRADE_ORDER.indexOf(it.grade));
+    h.last = Math.max(h.last, it.startTime);
+    m.set(it.heroId, h);
+  }
+  return [...m.entries()].map(([heroId, h]) => ({
+    heroId, matches: h.n, wins: h.w, kda: (h.k + h.a) / Math.max(1, h.d),
+    avgScore: h.scores.length ? h.scores.reduce((x, y) => x + y, 0) / h.scores.length : null,
+    soulsPerMin: h.mins ? h.souls / h.mins : 0,
+    bestGrade: h.best < 99 ? GRADE_ORDER[h.best] : null,
+    lastPlayed: h.last,
+  })).sort((a, b) => b.matches - a.matches || b.lastPlayed - a.lastPlayed);
+}
+
+export interface MateAgg { accountId: number; name?: string; avatar?: string; games: number; wins: number; heroIds: number[] }
+
+/** Mitspieler (gleiches Team) über alle Matches mit vollständigen Details. */
+export function mates(accountId: number, minGames = 2): MateAgg[] {
+  const agg = new Map<number, MateAgg>();
+  for (const rec of Object.values(getStore().matches)) {
+    const d = rec.details;
+    const me = d?.players.find((p) => p.accountId === accountId);
+    if (!d || !me) continue;
+    const won = d.winningTeam === me.team;
+    for (const p of d.players) {
+      if (p.accountId === accountId || p.team !== me.team || !p.accountId) continue;
+      const a = agg.get(p.accountId) ?? { accountId: p.accountId, name: p.name, avatar: p.avatar, games: 0, wins: 0, heroIds: [] };
+      a.games++; if (won) a.wins++;
+      a.name = p.name ?? a.name; a.avatar = p.avatar ?? a.avatar;
+      if (!a.heroIds.includes(p.heroId)) a.heroIds.push(p.heroId);
+      agg.set(p.accountId, a);
+    }
+  }
+  return [...agg.values()].filter((a) => a.games >= minGames).sort((a, b) => b.games - a.games).slice(0, 40);
 }

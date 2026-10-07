@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Providers } from "@/components/Providers";
 import { TopBar } from "@/components/TopBar";
+import { Aurora, RouteProgress } from "@/components/RouteEffects";
 
 export const metadata: Metadata = {
   title: "Deadlock Tracker",
@@ -13,6 +14,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="de">
       <body>
         <Providers>
+          <Aurora />
+          <RouteProgress />
           <TopBar />
           <main className="mx-auto max-w-[1280px] px-5 pb-16 pt-6">{children}</main>
         </Providers>

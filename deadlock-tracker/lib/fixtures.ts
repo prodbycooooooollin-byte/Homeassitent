@@ -1,5 +1,8 @@
+import { linearToBadge } from "./ranks";
 import type { HistoryEntry, MatchDetails, MatchPlayer, TeamId } from "./types";
-import type { HeroInfo, SteamProfile } from "./api/deadlock-api";
+import type { ActiveMatchDto, HeroMeta, LeaderboardRow, SteamProfile } from "./api/deadlock-api";
+
+export interface HeroInfo { id: number; name: string }
 
 /** Deterministische Demo-Daten (DEADLOCK_DEMO=1), damit die App ohne Netzwerk bedienbar ist. */
 
@@ -20,7 +23,33 @@ export const DEMO_HEROES: HeroInfo[] = [
 const NAMES = ["Nova", "Kestrel", "Vex", "Orion", "Lumen", "Rook", "Sable", "Tundra", "Ember", "Quill", "Zephyr", "Moth"];
 
 export function demoProfiles(ids: number[]): SteamProfile[] {
-  return ids.map((accountId) => ({ accountId, name: `Spieler ${accountId % 10000}` }));
+  return ids.map((accountId) => ({ accountId, name: `Spieler ${accountId % 10000}`, lastTeamAvgBadge: 63 }));
+}
+
+export function demoSearch(q: string): SteamProfile[] {
+  return NAMES.filter((n) => n.toLowerCase().includes(q.toLowerCase())).map((n, i) => ({ accountId: 500000 + i, name: n, matches30d: 40 + i * 7, lastTeamAvgBadge: 50 + i }));
+}
+
+export const demoRank = 75;
+
+export function demoActive(accountId: number, now = Date.now()): ActiveMatchDto | null {
+  // Alle 20 Minuten läuft für 6 Minuten ein Demo-Match (zeigt die Live-Anzeige).
+  const phase = Math.floor(now / 60000) % 20;
+  if (phase >= 6) return null;
+  const r = rng(Math.floor(now / 1200000));
+  return {
+    matchId: 79999999, startTime: Math.floor(now / 1000) - (phase * 60 + 840), durationS: phase * 60 + 840, mode: "Ranked",
+    players: Array.from({ length: 12 }, (_, i) => ({ accountId: i === 0 ? accountId : 0, heroId: 1 + Math.floor(r() * DEMO_HEROES.length), team: (i < 6 ? 0 : 1) as 0 | 1 })),
+  };
+}
+
+export function demoHeroMeta(): HeroMeta[] {
+  return DEMO_HEROES.map((h) => { const r = rng(h.id * 31); const matches = Math.round(2000 + r() * 18000); return { heroId: h.id, matches, wins: Math.round(matches * (0.44 + r() * 0.12)) }; });
+}
+
+export function demoLeaderboard(): LeaderboardRow[] {
+  const r = rng(7);
+  return Array.from({ length: 100 }, (_, i) => ({ rank: i + 1, name: `${NAMES[i % NAMES.length]}${(i * 37) % 99}`, badge: 110 + (i < 10 ? 6 : i < 40 ? 5 : 4) - 4 + 0, heroIds: [1 + Math.floor(r() * 20), 1 + Math.floor(r() * 20), 1 + Math.floor(r() * 20)] }));
 }
 
 const DEMO_COUNT = 30;
@@ -36,7 +65,7 @@ export function demoHistory(accountId: number, now = Date.now()): HistoryEntry[]
       matchId: d.matchId, accountId, heroId: me.heroId, startTime: d.startTime, durationS: d.durationS,
       won: d.winningTeam === me.team, team: me.team, kills: me.kills, deaths: me.deaths, assists: me.assists,
       netWorth: me.netWorth, lastHits: me.lastHits, denies: me.denies, heroLevel: me.level, abandoned: false,
-      matchMode: "Ranked", gameMode: "Normal",
+      matchMode: "Ranked", gameMode: "1", badge: linearToBadge(6 * 6 + 2 + Math.floor((DEMO_COUNT - i) / 4)),
     });
   }
   return out;

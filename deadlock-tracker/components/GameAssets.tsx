@@ -1,8 +1,8 @@
 "use client";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AssetBundle, HeroAsset } from "@/lib/assets";
 import { formatBadge, tierOf } from "@/lib/ranks";
-import { imgUrl } from "@/lib/img";
+import { imgUrl, rankImageUrl } from "@/lib/img";
 
 const EMPTY: AssetBundle = { heroes: {}, ranks: {}, fetchedAt: 0, source: "none" };
 const Ctx = createContext<{ bundle: AssetBundle; loaded: boolean }>({ bundle: EMPTY, loaded: false });
@@ -37,17 +37,35 @@ export function useHero(id: number | undefined) {
   return { hero: h, name: h?.name ?? (loaded ? "Unbekannter Held" : "…"), color: h?.color ?? "#5b6478" };
 }
 
+/** URLs, die nicht ladbar waren – nicht bei jedem Render erneut anfragen. */
+const BAD = new Set<string>();
 function useImg(src?: string) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
-  return { src: failed ? undefined : src, onError: () => setFailed(true) };
+  const [, force] = useState(0);
+  return { src: src && !BAD.has(src) ? src : undefined, onError: () => { if (src) { BAD.add(src); force((n) => n + 1); } } };
+}
+
+/** 3D-Neigung + Glanzpunkt, folgt dem Mauszeiger. */
+export function useTilt(max = 7) {
+  const ref = useRef<HTMLDivElement>(null);
+  return {
+    ref,
+    onMouseMove: (e: React.MouseEvent) => {
+      const el = ref.current; if (!el) return;
+      const r = el.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+      el.style.setProperty("--ry", `${(x - 0.5) * 2 * max}deg`);
+      el.style.setProperty("--rx", `${-(y - 0.5) * 2 * max}deg`);
+      el.style.setProperty("--mx", `${x * 100}%`); el.style.setProperty("--my", `${y * 100}%`);
+    },
+    onMouseLeave: () => { const el = ref.current; if (el) { el.style.setProperty("--rx", "0deg"); el.style.setProperty("--ry", "0deg"); } },
+  };
 }
 
 const initials = (n: string) => n.replace(/[^\p{L}\p{N} ]/gu, "").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 
 /** Helden-Bild: echtes Asset, sonst eigenes Farb-Fallback (nie „Held #1"). */
-export function HeroPortrait({ id, size = 44, variant = "portrait", className = "", ring }: {
-  id: number; size?: number; variant?: "portrait" | "small" | "art"; className?: string; ring?: string;
+export function HeroPortrait({ id, size = 44, h, variant = "portrait", className = "", ring }: {
+  id: number; size?: number; h?: number; variant?: "portrait" | "small" | "art"; className?: string; ring?: string;
 }) {
   const { hero, name, color } = useHero(id);
   const raw = hero ? (variant === "art" ? hero.art : variant === "small" ? hero.small ?? hero.portrait : hero.portrait ?? hero.small) : undefined;
@@ -55,7 +73,7 @@ export function HeroPortrait({ id, size = 44, variant = "portrait", className = 
   return (
     <div
       className={`relative shrink-0 overflow-hidden rounded-xl ${className}`}
-      style={{ width: size, height: size, boxShadow: ring ? `0 0 0 2px ${ring}, 0 6px 18px -6px ${ring}` : "0 0 0 1px rgba(255,255,255,.08)" }}
+      style={{ width: size, height: h ?? size, boxShadow: ring ? `0 0 0 2px ${ring}, 0 6px 18px -6px ${ring}` : "0 0 0 1px rgba(255,255,255,.08)" }}
       title={name}
     >
       <div className="absolute inset-0" style={{ background: `linear-gradient(145deg, ${color}cc, ${color}33 60%, #0a0c12)` }} />
@@ -95,16 +113,18 @@ export function RankEmblem({ badge, size = 32, label = false }: { badge: number 
   const tier = tierOf(badge);
   const sub = badge ? badge % 10 : 0;
   const asset = bundle.ranks[tier];
-  const raw = asset ? (size >= 56 ? asset.sub[sub]?.large ?? asset.large : asset.sub[sub]?.small ?? asset.small) ?? asset.sub[sub]?.large : undefined;
+  // Bevorzugt: Badge mit eingezeichneter Division; sonst direkter Rang-Endpunkt der API; sonst gezeichnetes Emblem.
+  const candidates = bundle.source === "demo" ? [] : [asset?.sub[sub]?.badge, tier >= 1 && tier <= 11 && sub >= 1 && sub <= 6 ? rankImageUrl(tier, sub) : undefined, asset?.sub[sub]?.large, asset?.small];
+  const raw = candidates.find((c) => c && !BAD.has(c));
   const img = useImg(raw);
-  const color = TIER_COLORS[tier] ?? "#7b8497";
+  const color = asset?.color ?? TIER_COLORS[tier] ?? "#7b8497";
   const text = formatBadge(badge);
   if (!badge) return <span className="text-muted">–</span>;
   return (
     <span className="inline-flex items-center gap-2 whitespace-nowrap" title={text}>
       {img.src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={img.src} onError={img.onError} alt={text} width={size} height={size} style={{ width: size, height: size }} className="object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,.6)]" />
+        <img src={img.src} onError={img.onError} alt={text} width={size} height={size} style={{ width: size, height: size }} className="object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,.65)]" />
       ) : (
         <svg width={size} height={size} viewBox="0 0 48 48" aria-label={text}>
           <defs>

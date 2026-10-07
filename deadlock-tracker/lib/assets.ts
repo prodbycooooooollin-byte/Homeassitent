@@ -12,6 +12,7 @@ export interface HeroAsset {
   portrait?: string; // Karte/Hochformat
   small?: string; // Icon
   art?: string; // breite Illustration / Hintergrund
+  wordmark?: string; // Namenszug als Grafik
 }
 export interface RankAsset {
   tier: number;
@@ -19,7 +20,7 @@ export interface RankAsset {
   color?: string;
   small?: string;
   large?: string;
-  sub: Record<number, { small?: string; large?: string }>;
+  sub: Record<number, { small?: string; large?: string; badge?: string }>;
 }
 export interface AssetBundle {
   heroes: Record<number, HeroAsset>;
@@ -28,7 +29,9 @@ export interface AssetBundle {
   source: "live" | "cache" | "demo" | "none";
 }
 
-const ASSETS = () => (process.env.DEADLOCK_ASSETS_URL || "https://assets.deadlock-api.com").replace(/\/$/, "");
+const API = () => (process.env.DEADLOCK_API_URL || "https://api.deadlock-api.com").replace(/\/$/, "");
+/** Alter Host (v2) nur noch als Fallback – die Assets liegen inzwischen unter /v1/assets der Haupt-API. */
+const LEGACY = () => (process.env.DEADLOCK_ASSETS_URL || "https://assets.deadlock-api.com").replace(/\/$/, "");
 const TTL = 12 * 3600 * 1000;
 const g = globalThis as unknown as { __dlAssets?: AssetBundle };
 
@@ -71,10 +74,11 @@ export function normalizeHeroes(raw: unknown): Record<number, HeroAsset> {
     out[id] = {
       id,
       name,
-      color: toHex(colors.highlight) ?? toHex(colors.ui) ?? toHex(colors.glow_enemy) ?? hashColor(id),
-      portrait: imgUrl(firstStr(im, ["icon_hero_card", "selection_image", "top_bar_vertical_image", "icon_image_small"])),
-      small: imgUrl(firstStr(im, ["icon_image_small", "minimap_image", "icon_hero_card", "top_bar_vertical_image"])),
-      art: imgUrl(firstStr(im, ["background_image", "selection_image", "icon_hero_card", "top_bar_vertical_image"])),
+      color: toHex(colors.style_hex) ?? toHex(colors.ui) ?? toHex(colors.highlight) ?? hashColor(id),
+      portrait: imgUrl(firstStr(im, ["icon_hero_card", "top_bar_vertical_image", "hero_card_gloat", "icon_image_small", "icon_hero_card_webp"])),
+      small: imgUrl(firstStr(im, ["icon_image_small", "minimap_image", "icon_hero_card", "icon_image_small_webp"])),
+      art: imgUrl(firstStr(im, ["background_image", "hero_card_gloat", "hero_card_critical", "icon_hero_card", "background_image_webp"])),
+      wordmark: imgUrl(firstStr(im, ["name_image"])),
     };
   }
   return out;
@@ -90,8 +94,9 @@ export function normalizeRanks(raw: unknown): Record<number, RankAsset> {
     const sub: RankAsset["sub"] = {};
     for (let n = 1; n <= 6; n++) {
       sub[n] = {
-        small: imgUrl(firstStr(im, [`small_subrank${n}`, `small_subrank_${n}`])),
-        large: imgUrl(firstStr(im, [`large_subrank${n}`, `large_subrank_${n}`])),
+        small: imgUrl(firstStr(im, [`small_subrank${n}`])),
+        large: imgUrl(firstStr(im, [`large_subrank${n}`])),
+        badge: imgUrl(firstStr(im, [`subrank${n}`])), // Tier-Badge mit eingezeichneter Division
       };
     }
     out[tier] = {
@@ -122,7 +127,14 @@ export async function getAssets(): Promise<AssetBundle> {
   }
   if (g.__dlAssets && Date.now() - g.__dlAssets.fetchedAt < (g.__dlAssets.source === "live" ? TTL : 60_000)) return g.__dlAssets;
   try {
-    const [h, r] = await Promise.all([getJson(`${ASSETS()}/v2/heroes`), getJson(`${ASSETS()}/v2/ranks`).catch(() => [])]);
+    const load = async (path: string) => {
+      try {
+        return await getJson(`${API()}/v1/assets/${path}`);
+      } catch {
+        return getJson(`${LEGACY()}/v2/${path}`);
+      }
+    };
+    const [h, r] = await Promise.all([load("heroes"), load("ranks").catch(() => [])]);
     const bundle: AssetBundle = { heroes: normalizeHeroes(h), ranks: normalizeRanks(r), fetchedAt: Date.now(), source: "live" };
     if (!Object.keys(bundle.heroes).length) throw new Error("keine Helden");
     try {

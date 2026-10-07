@@ -1,4 +1,4 @@
-import { fetchHistory, fetchMatchDetails, fetchProfiles } from "./api";
+import { fetchActive, fetchHistory, fetchMatchDetails, fetchProfiles, fetchRank, type ActiveMatchDto } from "./api";
 import { getStore, saveStore } from "./store";
 import type { MatchRecord, TrackedPlayer } from "./types";
 
@@ -29,6 +29,7 @@ export async function addPlayer(accountId: number): Promise<TrackedPlayer> {
       name: profile?.name ?? `Spieler ${accountId}`,
       avatar: profile?.avatar,
       addedAt: Date.now(),
+      rank: profile?.lastTeamAvgBadge ? { badge: profile.lastTeamAvgBadge, at: 0 } : undefined,
     };
     saveStore();
   }
@@ -83,6 +84,17 @@ export async function syncPlayer(accountId: number, now = Date.now()): Promise<S
     player.lastSyncOk = true;
     player.lastError = undefined;
     if (result.newMatches.length) player.lastNewMatchAt = now;
+    // Rang: nach neuen Matches und sonst alle 10 Min aktualisieren; Rang-Fehler dürfen den Sync nie scheitern lassen.
+    if (result.newMatches.length || firstImport || !player.rank || now - player.rank.at > 10 * 60_000) {
+      const badge = await fetchRank(accountId).catch(() => null);
+      if (badge) player.rank = { badge, at: now };
+      else if (player.rank) player.rank = { ...player.rank, at: now };
+    }
+    // Namen/Avatar bei Gelegenheit auffrischen (z. B. Namensänderung)
+    if (!player.avatar || result.newMatches.length) {
+      const [pr] = await fetchProfiles([accountId]).catch(() => []);
+      if (pr) { player.name = pr.name; player.avatar = pr.avatar ?? player.avatar; }
+    }
   } catch (e) {
     player.lastSyncAt = now;
     player.lastSyncOk = false;
@@ -141,14 +153,51 @@ export async function enrichPending(now = Date.now()): Promise<number> {
   return ok;
 }
 
+/* ---- Live-Erkennung -------------------------------------------------------------
+ * /v1/matches/active zeigt laufende Matches. Verschwindet ein Match, ist es gerade beendet:
+ * dann pollen wir die Historie für einige Minuten im 5-s-Takt statt im Normaltakt – so ist das
+ * neue Match typischerweise innerhalb von Sekunden nach dem Eintrag in der API da. */
+interface LiveState { byAccount: Map<number, ActiveMatchDto>; fastUntil: number; checkedAt: number; ok: boolean }
+const gl = globalThis as unknown as { __dlLive?: LiveState };
+const live = (): LiveState => (gl.__dlLive ??= { byAccount: new Map(), fastUntil: 0, checkedAt: 0, ok: true });
+
+export function getLive(accountId: number): ActiveMatchDto | null {
+  return live().byAccount.get(accountId) ?? null;
+}
+export const liveStatus = () => ({ checkedAt: live().checkedAt, ok: live().ok, fast: Date.now() < live().fastUntil });
+
+export async function refreshLive(now = Date.now()): Promise<void> {
+  const L = live();
+  const ids = Object.values(getStore().players).map((p) => p.accountId);
+  if (!ids.length) return;
+  try {
+    const active = await fetchActive(ids);
+    const next = new Map<number, ActiveMatchDto>();
+    for (const m of active) for (const p of m.players) if (ids.includes(p.accountId)) next.set(p.accountId, m);
+    for (const id of L.byAccount.keys()) if (!next.has(id)) L.fastUntil = now + 4 * 60_000; // Match gerade beendet
+    L.byAccount = next;
+    L.ok = true;
+  } catch {
+    L.ok = false; // Live-Anzeige ist optional – Historie-Polling läuft unabhängig weiter
+  }
+  L.checkedAt = now;
+}
+
 let running: Promise<SyncResult[]> | null = null;
 
-/** Ein kompletter Zyklus. Parallele Aufrufe (Poller + manueller Sync) teilen sich denselben Lauf. */
-export function runCycle(): Promise<SyncResult[]> {
+/** Ein Zyklus. `force` ignoriert den Takt (manueller Sync); parallele Aufrufe teilen sich denselben Lauf. */
+export function runCycle(force = false): Promise<SyncResult[]> {
   if (running) return running;
   running = (async () => {
+    const now = Date.now();
     const results: SyncResult[] = [];
-    for (const p of Object.values(getStore().players)) results.push(await syncPlayer(p.accountId));
+    const baseMs = Math.max(5, Number(process.env.POLL_INTERVAL_S) || 20) * 1000;
+    await refreshLive(now);
+    const everyMs = now < live().fastUntil ? 5000 : baseMs;
+    for (const p of Object.values(getStore().players)) {
+      if (!force && p.lastSyncAt && now - p.lastSyncAt < everyMs - 500) continue;
+      results.push(await syncPlayer(p.accountId));
+    }
     await enrichPending();
     return results;
   })().finally(() => {

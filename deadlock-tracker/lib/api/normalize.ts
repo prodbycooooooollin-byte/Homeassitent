@@ -1,4 +1,5 @@
 import { averageBadge } from "../ranks";
+import { modeLabel } from "../modes";
 import type { HistoryEntry, MatchDetails, MatchPlayer, TeamId } from "../types";
 
 /* Alle Parser sind absichtlich tolerant: fehlende/umbenannte Felder führen zu 0/null statt zu Abstürzen. */
@@ -29,9 +30,10 @@ export function normalizeHistory(raw: unknown, accountId: number): HistoryEntry[
     const matchId = num(r.match_id);
     if (!matchId) continue;
     const t = teamFromRaw(r.player_team);
-    const result = r.match_result;
-    // match_result == player_team -> Sieg des eigenen Teams
-    const won = result !== undefined && result !== null && teamFromRaw(result) === t;
+    // player_match_outcome: 1 = Sieg, 2 = Niederlage, 3/4 = bestraft (zählt als Niederlage), sonst Fallback auf match_result (= Siegerteam)
+    const outcome = num(r.player_match_outcome);
+    const won = outcome === 1 ? true : outcome >= 2 && outcome <= 4 ? false : r.match_result !== undefined && r.match_result !== null && teamFromRaw(r.match_result) === t;
+    const badge = num(r.ranked_display_badge);
     out.push({
       matchId,
       accountId: num(r.account_id, accountId) || accountId,
@@ -48,8 +50,10 @@ export function normalizeHistory(raw: unknown, accountId: number): HistoryEntry[
       denies: num(r.denies),
       heroLevel: num(r.hero_level),
       abandoned: num(r.abandoned_time_s) > 0,
-      matchMode: typeof r.match_mode === "string" ? r.match_mode : undefined,
-      gameMode: typeof r.game_mode === "string" ? r.game_mode : undefined,
+      matchMode: modeLabel(r.match_mode, r.game_mode),
+      gameMode: typeof r.game_mode === "number" ? String(r.game_mode) : undefined,
+      badge: badge > 0 ? badge : null,
+      rankedDelta: typeof r.ranked_delta === "number" ? r.ranked_delta : null,
     });
   }
   return out;
@@ -79,7 +83,9 @@ export function normalizeMetadata(raw: unknown): MatchDetails | null {
       }
       return 0;
     };
-    const badgeRaw = num(p.rank ?? p.ranked_badge_level ?? p.badge_level, 0);
+    // Rang des Spielers zu Spielbeginn: player_rank_data.initial_display_rank (tier*10+subrank)
+    const rd = isObj(p.player_rank_data) ? p.player_rank_data : {};
+    const badgeRaw = num(rd.initial_display_rank ?? p.rank ?? p.ranked_badge_level ?? p.badge_level, 0);
     players.push({
       accountId: num(p.account_id),
       team: teamFromRaw(p.team ?? p.assigned_lane_team),
@@ -101,7 +107,9 @@ export function normalizeMetadata(raw: unknown): MatchDetails | null {
   }
 
   const wt = info.winning_team;
-  const winningTeam: TeamId | null = wt === undefined || wt === null ? null : teamFromRaw(wt);
+  // match_outcome: 0 = Teamsieg, 1 = Fehler, 2 = Unentschieden
+  const outcomeOk = info.match_outcome === undefined || info.match_outcome === 0 || info.match_outcome === "k_eOutcome_TeamWin";
+  const winningTeam: TeamId | null = !outcomeOk || wt === undefined || wt === null ? null : teamFromRaw(wt);
   const teamBadge = (t: TeamId, key: string): number | null => {
     const v = num(info[key]);
     if (v > 0) return v;
@@ -113,8 +121,8 @@ export function normalizeMetadata(raw: unknown): MatchDetails | null {
     startTime: num(info.start_time),
     durationS: num(info.duration_s),
     winningTeam,
-    matchMode: typeof info.match_mode === "string" ? info.match_mode : undefined,
-    gameMode: typeof info.game_mode === "string" ? info.game_mode : undefined,
+    matchMode: modeLabel(info.match_mode, info.game_mode),
+    gameMode: typeof info.game_mode === "number" ? String(info.game_mode) : undefined,
     avgBadge: [teamBadge(0, "average_badge_team0"), teamBadge(1, "average_badge_team1")],
     players,
   };

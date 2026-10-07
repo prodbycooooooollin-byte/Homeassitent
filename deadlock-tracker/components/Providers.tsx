@@ -1,6 +1,8 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AssetsProvider } from "./GameAssets";
+import type { HeroAgg, MateAgg, MatchListItem, Overview } from "@/lib/view";
+import type { ActiveMatchDto } from "@/lib/api";
 import { useInterval, useSelectedAccount, type TrackedPlayerDto } from "./useTracker";
 
 export interface Status {
@@ -25,6 +27,39 @@ interface TrackerCtx {
 }
 const Ctx = createContext<TrackerCtx>(null as unknown as TrackerCtx);
 export const useTracker = () => useContext(Ctx);
+
+export interface ProfileData { matches: MatchListItem[]; overview: Overview; heroes: HeroAgg[]; mates: MateAgg[] }
+interface DataCtx { data: ProfileData | null; live: ActiveMatchDto | null; loading: boolean }
+const DCtx = createContext<DataCtx>({ data: null, live: null, loading: true });
+/** Profildaten des gewählten Accounts – seitenübergreifend gecacht, damit Navigation nie „leer" aufblitzt. */
+export const useData = () => useContext(DCtx);
+
+function DataProvider({ children }: { children: React.ReactNode }) {
+  const { account } = useTracker();
+  const cache = useRef(new Map<number, ProfileData>());
+  const [data, setData] = useState<ProfileData | null>(null);
+  const [live, setLive] = useState<ActiveMatchDto | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!account) return;
+    try {
+      const d: ProfileData = await (await fetch(`/api/matches?account=${account}`)).json();
+      if (Array.isArray(d.matches)) { cache.current.set(account, d); setData(d); }
+    } catch { /* nächster Tick */ }
+    setLoading(false);
+  }, [account]);
+  const loadLive = useCallback(async () => {
+    if (!account) return;
+    try { setLive((await (await fetch(`/api/live?account=${account}`)).json()).match ?? null); } catch { /* ignorieren */ }
+  }, [account]);
+
+  useEffect(() => { setData(account ? cache.current.get(account) ?? null : null); setLive(null); setLoading(!account || !cache.current.has(account)); }, [account]);
+  useEffect(() => { load(); loadLive(); }, [load, loadLive]);
+  useInterval(load, 5000);
+  useInterval(loadLive, 6000);
+  return <DCtx.Provider value={{ data, live, loading }}>{children}</DCtx.Provider>;
+}
 
 function TrackerProvider({ children }: { children: React.ReactNode }) {
   const [account, setAccount] = useSelectedAccount();
@@ -107,7 +142,7 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <AssetsProvider>
-      <TrackerProvider>{children}</TrackerProvider>
+      <TrackerProvider><DataProvider>{children}</DataProvider></TrackerProvider>
     </AssetsProvider>
   );
 }
