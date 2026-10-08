@@ -1,6 +1,7 @@
 import asyncio
 import os
 import time
+from collections import Counter
 
 import discord
 from discord import app_commands
@@ -17,8 +18,43 @@ BYTES_PER_SEC = 48000 * 2 * 2  # 48 kHz, stereo, int16
 SILENCE_FLUSH = 0.9  # Sekunden Stille, bis ein Sprachabschnitt ausgewertet wird
 MAX_SEGMENT = 20  # Sekunden, danach wird in jedem Fall ausgewertet
 
+DEBUG_TEXT = os.getenv("DEBUG_TRANSCRIPTS", "") == "1"  # Konsole zeigt, was erkannt wurde (wird nicht gespeichert)
+stats = Counter()  # Diagnose-Zähler für die Konsole
+
 store = Store(os.getenv("DB_PATH", "counter.db"))
 transcriber = Transcriber(os.getenv("WHISPER_MODEL", "small"), os.getenv("WHISPER_LANGUAGE", "de"))
+
+
+def install_dave_decryption(vc: voice_recv.VoiceRecvClient) -> None:
+    """Discord verschlüsselt Sprache zusätzlich per DAVE (Ende-zu-Ende).
+    voice_recv entschlüsselt nur die Transportschicht, daher hier die DAVE-Schicht nachrüsten."""
+    try:
+        import davey
+    except ImportError:
+        print("WARNUNG: 'davey' fehlt, Sprache kann nicht entschlüsselt werden.")
+        return
+    decryptor = vc._reader.decryptor
+    transport_decrypt = decryptor.decrypt_rtp
+
+    def decrypt_rtp(packet):
+        data = transport_decrypt(packet)
+        stats["pakete"] += 1
+        state = vc._connection
+        session = getattr(state, "dave_session", None)
+        if session is None or not state.dave_protocol_version or not session.ready:
+            return data  # kein E2EE aktiv
+        user_id = vc._ssrc_to_id.get(packet.ssrc)
+        if user_id is None:
+            stats["unbekannter_sprecher"] += 1
+            return data
+        try:
+            data = session.decrypt(user_id, davey.MediaType.audio, data)
+            stats["dave_ok"] += 1
+        except Exception:
+            stats["dave_fehler"] += 1  # z. B. unverschlüsselte Stille-Pakete
+        return data
+
+    decryptor.decrypt_rtp = decrypt_rtp
 
 
 class CountingSink(voice_recv.AudioSink):
@@ -55,6 +91,11 @@ class CountingSink(voice_recv.AudioSink):
     async def _process(self, user_id: int, pcm: bytes) -> None:
         text = await self._loop.run_in_executor(None, transcriber.transcribe, pcm)
         hits = count_hits(text)
+        member = self.guild.get_member(user_id)
+        who = member.display_name if member else str(user_id)
+        secs = len(pcm) / BYTES_PER_SEC
+        stats["abschnitte"] += 1
+        print(f"[Sprache] {who}: {secs:.1f}s, Treffer: {hits}" + (f", Text: {text.strip()!r}" if DEBUG_TEXT else ""))
         if hits:
             member = self.guild.get_member(user_id)
             # Text selbst wird nicht gespeichert, nur Anzahl, Zeitpunkt und Anzeigename
@@ -81,6 +122,7 @@ async def join(interaction: discord.Interaction):
         return await interaction.response.send_message("Ich bin schon in einem Kanal.", ephemeral=True)
     vc = await member.voice.channel.connect(cls=voice_recv.VoiceRecvClient)
     vc.listen(CountingSink(interaction.guild))
+    install_dave_decryption(vc)
     await interaction.response.send_message(
         "🎙️ **Hinweis:** Ich höre diesem Kanal zu und zähle ein bestimmtes Wort pro Person. "
         "Audio wird lokal in Text umgewandelt und sofort verworfen; gespeichert wird nur die Anzahl. "
@@ -132,9 +174,19 @@ async def optin(interaction: discord.Interaction):
     await interaction.response.send_message("Du wirst wieder erfasst.", ephemeral=True)
 
 
+async def report_stats() -> None:
+    last = None
+    while True:
+        await asyncio.sleep(15)
+        if stats and dict(stats) != last:
+            last = dict(stats)
+            print(f"[Diagnose] {last}")
+
+
 @bot.event
 async def on_ready():
     await tree.sync()
+    bot.loop.create_task(report_stats())
     print(f"Eingeloggt als {bot.user}")
 
 

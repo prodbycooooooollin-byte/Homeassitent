@@ -3,7 +3,7 @@ import re
 import unicodedata
 
 # Deckt die üblichen Schreibweisen und Transkriptionsvarianten ab (inkl. Plural).
-_PATTERN = re.compile(r"\bn+[i1!]+g{2,}(?:[e3]r?|a|ah)?s?\b")
+_PATTERN = re.compile(r"\bn+[i1!y]+(?:[gk]{2,}(?:[e3]r?|a|ah|ha)?|[gk](?:a|ah|ha))s?\b")
 
 
 def _normalize(text: str) -> str:

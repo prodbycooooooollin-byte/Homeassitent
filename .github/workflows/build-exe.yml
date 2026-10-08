@@ -31,7 +31,7 @@ jobs:
           --add-data "dashboard.html;."
           --collect-all discord --collect-all discord.ext.voice_recv
           --collect-all faster_whisper --collect-all ctranslate2
-          --collect-all av --collect-all nacl --collect-all cffi --hidden-import _cffi_backend --collect-all tzdata
+          --collect-all av --collect-all nacl --collect-all cffi --collect-all davey --hidden-import _cffi_backend --collect-all tzdata
           --hidden-import bot --hidden-import dashboard
           main.py
       - name: Beispiel-Konfiguration beilegen

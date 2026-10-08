@@ -10,6 +10,7 @@ def test_matcher():
     assert count_hits("nigga nigga, niggas") == 3
     assert count_hits("n i g g e r") == 1
     assert count_hits("Nigeria und Niger sind Länder") == 0
+    assert count_hits("niga nikka nikker nigha") == 3 + 1  # Whisper-Schreibweisen
 
 
 def test_store(tmp_path):
