@@ -9,6 +9,7 @@ const updater = require("./updater");
 const desktopSettings = require("./desktop-settings");
 const ingest = require("./ingest");
 const matchwatch = require("./matchwatch");
+const { execFile } = require("child_process");
 
 // Umbenennung: Daten aus dem früheren Ordner „Deadlock Tracker“ einmalig übernehmen (Spieler, Matches, Einstellungen)
 try {
@@ -27,6 +28,29 @@ let serverPort = 0;
 let settings = desktopSettings.DEFAULTS;
 
 const asset = (name) => path.join(__dirname, "..", "app-icons", name);
+/** Meldet dem eingebetteten Server „Match <id> ist zu Ende“ – er lädt es im Hintergrund, sobald es verfügbar ist. */
+function postHint(matchId, source) {
+  try {
+    const req = http.request({ host: "127.0.0.1", port: serverPort, path: "/api/matches/hint", method: "POST", headers: { "content-type": "application/json" }, timeout: 5000 }, (res) => res.resume());
+    req.on("error", () => {}); req.on("timeout", () => req.destroy());
+    req.end(JSON.stringify({ matchId, source }));
+  } catch { /* optional */ }
+}
+
+/** Erkennt, ob Deadlock läuft (Prozess project8.exe): Der Server fragt dann schneller ab, nach Spielende noch eine Weile besonders schnell. */
+function startGameWatch() {
+  if (process.platform !== "win32") return;
+  globalThis.__dlGame = { running: false, since: null, endedAt: null };
+  const check = () => execFile("tasklist", ["/FI", "IMAGENAME eq project8.exe", "/NH", "/FO", "CSV"], { windowsHide: true, timeout: 8000 }, (err, out) => {
+    if (err) return;
+    const running = /project8\.exe/i.test(String(out));
+    const g = globalThis.__dlGame;
+    if (running && !g.running) globalThis.__dlGame = { running: true, since: Date.now(), endedAt: null };
+    else if (!running && g.running) globalThis.__dlGame = { running: false, since: g.since, endedAt: Date.now() };
+  });
+  check(); setInterval(check, 5000);
+}
+
 const standaloneDir = () => (app.isPackaged ? path.join(process.resourcesPath, "standalone") : path.join(__dirname, "..", ".next", "standalone"));
 
 function freePort() {
@@ -125,7 +149,9 @@ async function createWindow() {
   updater.setup(win);
   ingest.onChange((s) => { if (win && !win.isDestroyed()) win.webContents.send("ingest:state", s); });
   if (settings.ingest) ingest.start();
-  matchwatch.start((m) => { if (win && !win.isDestroyed()) win.webContents.send("match:ended", m); }).catch(() => { /* optional */ });
+  ingest.onHint((id) => postHint(id, "ingest"));
+  startGameWatch();
+  matchwatch.start((m) => { postHint(m.matchId, "cache"); if (win && !win.isDestroyed()) win.webContents.send("match:ended", m); }).catch(() => { /* optional */ });
   await win.loadURL(`http://127.0.0.1:${serverPort}/`);
   if (settings.closeToTray) buildTray();
 }

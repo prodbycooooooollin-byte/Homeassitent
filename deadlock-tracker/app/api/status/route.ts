@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
 import { isDemo } from "@/lib/api";
+import { gameState, hintStatus, liveStatus } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,8 @@ export async function GET() {
     coverage: { total: Object.keys(s.matches).length, withDetails: Object.values(s.matches).filter((m) => m.details && m.details.v === 3).length },
     pendingDetails: Object.values(s.matches).filter((m) => !m.details && m.nextDetailsAttemptAt < Number.MAX_SAFE_INTEGER).length,
     players: Object.values(s.players),
+    /** Erkennungs-Pipeline: Spielprozess, Match-Hinweise, Live-Feed (zur Fehlersuche) */
+    detection: { game: gameState(), hints: hintStatus(), liveFeed: liveStatus() },
     /** Zuletzt live erkannte Matches (für Benachrichtigungen) */
     live: Object.values(s.matches)
       .filter((m) => m.detectedLive && Object.keys(m.history).some((a) => !s.players[a]?.guest))

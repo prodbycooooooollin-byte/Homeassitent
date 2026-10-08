@@ -12,6 +12,10 @@ const MAX_AGE_MS = 7 * 24 * 3600_000;
 const IMAGE = "deadlock-api-ingest.exe";
 
 const MAX_LINES = 500;
+// Match-IDs aus dem Protokoll des Helfers: als Hinweis „Match beendet“ weitergeben (nicht in den ersten 30 s – da arbeitet er alte Einträge ab)
+let hintCb = () => {}, startedAt = Date.now();
+const seenIds = new Set();
+const onHint = (cb) => { hintCb = cb; };
 const MATCH_RE = /\b(match|salt)/i;
 const ERR_RE = /\b(error|fehler|panic|fatal|failed|fehlgeschlagen)\b/i;
 // lines: strukturierte Protokollzeilen { t: Zeitstempel (ms), src: "app" | "stdout" | "stderr", text }
@@ -29,7 +33,12 @@ function log(line, src = "app") {
   if (!t) return;
   const text = t.slice(0, 400);
   state.lines.push({ t: Date.now(), src, text });
-  if (src !== "app" && MATCH_RE.test(text)) state.matches++;
+  if (src !== "app" && MATCH_RE.test(text)) {
+    state.matches++;
+    if (Date.now() - startedAt > 30_000) {
+      for (const m of text.matchAll(/(?<![\d.])(\d{7,10})(?![\d.])/g)) { const id = Number(m[1]); if (id > 1e7 && !seenIds.has(id)) { seenIds.add(id); try { hintCb(id); } catch { /* egal */ } } }
+    }
+  }
   if (src === "stderr" ? ERR_RE.test(text) : src === "app" && /^(Fehler|Download fehlgeschlagen)/.test(text)) state.errors++;
   if (state.lines.length > MAX_LINES) state.lines.splice(0, state.lines.length - MAX_LINES);
 }
@@ -90,6 +99,7 @@ function isRunningElsewhere() {
 }
 
 async function start() {
+  startedAt = Date.now();
   if (process.platform !== "win32") { set({ state: "unsupported", message: "Nur unter Windows verfügbar" }); return; }
   stopping = false;
   if (child) return;
@@ -152,4 +162,4 @@ async function control(action) {
   return s;
 }
 
-module.exports = { start, stop, getStatus, onChange, control };
+module.exports = { start, stop, getStatus, onChange, onHint, control };

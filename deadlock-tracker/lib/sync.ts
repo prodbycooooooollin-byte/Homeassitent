@@ -239,6 +239,45 @@ export async function refreshLive(now = Date.now()): Promise<void> {
   L.checkedAt = now;
 }
 
+/* ---- Match-Hinweise ---------------------------------------------------------------
+ * Die Desktop-App erkennt das Match-Ende schon vor der API (Steam-Cache, Ingest-Protokoll, Spielprozess). Ein Hinweis mit Match-ID
+ * wird hier so lange im Hintergrund versucht, bis das Match geladen werden kann – unabhängig davon, wann die Historie es meldet. */
+interface Hint { matchId: number; source: string; at: number; tries: number; nextAt: number; last?: string; done?: "ok" | "fremd" | "aufgegeben" }
+const gh = globalThis as unknown as { __dlHints?: Map<number, Hint>; __dlGame?: { running: boolean; since: number | null; endedAt: number | null } };
+const hints = () => (gh.__dlHints ??= new Map());
+export const gameState = () => gh.__dlGame ?? { running: false, since: null, endedAt: null };
+export const hintStatus = () => [...hints().values()].sort((a, b) => b.at - a.at).slice(0, 8);
+
+export function hintMatch(matchId: number, source = "unbekannt", now = Date.now()): boolean {
+  if (!matchId || hints().has(matchId) || getStore().matches[matchId]?.details) return false;
+  hints().set(matchId, { matchId, source, at: now, tries: 0, nextAt: now });
+  live().fastUntil = Math.max(live().fastUntil, now + 25 * 60_000);
+  return true;
+}
+
+const hintDelayS = (tries: number) => [5, 10, 15, 20, 30][tries] ?? 45;
+
+export async function processHints(now = Date.now()): Promise<void> {
+  for (const h of hints().values()) {
+    if (h.done || now < h.nextAt) continue;
+    if (getStore().matches[h.matchId]?.details) { h.done = "ok"; continue; }
+    // Hinweise aus dem Ingest-Protokoll können beliebige Zahlen enthalten – nicht ewig versuchen
+    const maxTries = h.source === "ingest" ? 12 : 60;
+    // Steam-Fallback nur gelegentlich (Budget 3/h pro IP)
+    const allowSteam = (h.tries === 1 || h.tries % 12 === 11) && steamBudgetLeft(now) > 0;
+    if (allowSteam) useSteamBudget(now);
+    h.tries++;
+    const r = await importMatchById(h.matchId, now, { allowSteam, markLive: true }).catch((e) => ({ ok: false, error: String(e), notMine: false }));
+    if (r.ok) { h.done = "ok"; h.last = undefined; continue; }
+    h.last = r.error;
+    if (r.notMine) { h.done = "fremd"; continue; }
+    if (h.tries >= maxTries) { h.done = "aufgegeben"; continue; }
+    h.nextAt = now + hintDelayS(h.tries) * 1000;
+  }
+  // Erledigte Hinweise nach einer Weile vergessen
+  for (const [id, h] of hints()) if (h.done && now - h.at > 3600_000) hints().delete(id);
+}
+
 let running: Promise<SyncResult[]> | null = null;
 
 /** Ein Zyklus. `force` ignoriert den Takt (manueller Sync); parallele Aufrufe teilen sich denselben Lauf. */
@@ -249,7 +288,11 @@ export function runCycle(force = false): Promise<SyncResult[]> {
     const results: SyncResult[] = [];
     const baseMs = (getSettings().pollIntervalS || Number(process.env.POLL_INTERVAL_S) || 20) * 1000;
     await refreshLive(now);
-    const everyMs = now < live().fastUntil ? 5000 : baseMs;
+    await processHints(now).catch(() => null);
+    // Schnell abfragen: nach Spielende, bei laufendem Spiel (Desktop-App erkennt den Spielprozess) und nach Match-Hinweisen
+    const game = gameState();
+    const hot = now < live().fastUntil || (game.endedAt !== null && now - game.endedAt < 25 * 60_000);
+    const everyMs = hot ? 6000 : game.running ? Math.min(baseMs, 12_000) : baseMs;
     for (const p of Object.values(getStore().players)) {
       if (!force && p.lastSyncAt && now - p.lastSyncAt < (p.guest ? 10 * 60_000 : everyMs - 500)) continue;
       if (!force && p.historyBackoffUntil && now < p.historyBackoffUntil) continue;
@@ -274,18 +317,20 @@ export function parseMatchId(input: string): number | null {
  * Manueller Import per Match-ID – unabhängig von der Spieler-Historie, die der API manchmal erst Stunden später meldet.
  * Lädt die Details (mit Steam-Fallback) und legt das Match für alle getrackten Spieler an, die darin vorkommen.
  */
-export async function importMatchById(matchId: number, now = Date.now()): Promise<{ ok: boolean; error?: string; accounts?: number[] }> {
+export async function importMatchById(matchId: number, now = Date.now(), opts: { allowSteam?: boolean; markLive?: boolean } = {}): Promise<{ ok: boolean; error?: string; accounts?: number[]; notMine?: boolean }> {
   const store = getStore();
   let details;
   try {
-    details = await fetchMatchDetails(matchId, 1, true);
+    details = await fetchMatchDetails(matchId, 1, opts.allowSteam ?? true);
   } catch (e) {
     return { ok: false, error: e instanceof ApiError && e.status === 429 ? "Rate-Limit – bitte in einer Minute erneut versuchen." : e instanceof Error ? e.message : String(e) };
   }
   if (!details) return { ok: false, error: "Match ist noch nicht verfügbar (weder im Archiv noch bei Valve). Später erneut versuchen." };
   const mine = details.players.filter((p) => store.players[String(p.accountId)]);
-  if (!mine.length) return { ok: false, error: "Keiner deiner getrackten Spieler kommt in diesem Match vor." };
+  if (!mine.length) return { ok: false, error: "Keiner deiner getrackten Spieler kommt in diesem Match vor.", notMine: true };
+  const isNew = !store.matches[matchId];
   const rec = (store.matches[matchId] ??= { matchId, startTime: details.startTime, history: {}, detailsAttempts: 0, nextDetailsAttemptAt: Number.MAX_SAFE_INTEGER, firstSeenAt: now, detectedLive: false });
+  if (isNew && opts.markLive) rec.detectedLive = true; // erscheint wie ein im Betrieb erkanntes Match (Hinweis + Debrief)
   for (const p of mine) {
     rec.history[String(p.accountId)] ??= {
       matchId, accountId: p.accountId, heroId: p.heroId, startTime: details.startTime, durationS: details.durationS,

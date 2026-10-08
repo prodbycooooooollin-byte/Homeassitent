@@ -6,6 +6,7 @@ import { NavLink } from "@/components/NavLink";
 import { useTracker } from "@/components/Providers";
 import { INGEST_COLOR, useIngest } from "@/components/useIngest";
 import { useUpdater } from "@/components/useUpdater";
+import { useEffect } from "react";
 
 interface Check { name: string; url: string; ok: boolean; status: number | string; ms: number; summary: string; limits?: string }
 interface Diag {
@@ -59,6 +60,7 @@ export default function StatusPage() {
           {ing.lines.length > 0 && <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-black/30 p-3 text-[11px] leading-relaxed text-muted">{ing.lines.slice(-20).map((l) => `${new Date(l.t).toLocaleTimeString("de-DE")} ${l.text}`).join("\n")}</pre>}
         </section>
       )}
+      <Detection />
       <section className="surface p-5">
         <div className="label mb-1">Ein Match fehlt?</div>
         <p className="text-sm text-muted">
@@ -113,5 +115,41 @@ export default function StatusPage() {
         </section>
       )}
     </>
+  );
+}
+
+const ago = (t: number | null | undefined) => (t ? `vor ${Math.max(0, Math.round((Date.now() - t) / 1000))} s` : "–");
+
+/** Zeigt, welche Wege der Match-Erkennung gerade arbeiten – damit klar ist, woran es hängt, wenn ein Match nicht erscheint. */
+function Detection() {
+  const { status, account } = useTracker();
+  const ing = useIngest();
+  const [mw, setMw] = useState<{ dirs: string[]; last: { matchId: number; at: number } | null; error: string | null; watching: boolean } | null>(null);
+  useEffect(() => {
+    if (!window.desktop?.getMatchWatch) return;
+    const load = () => window.desktop!.getMatchWatch().then(setMw).catch(() => null);
+    load(); const t = setInterval(load, 4000); return () => clearInterval(t);
+  }, []);
+  const det = status?.detection;
+  const me = status?.players.find((p) => p.accountId === account);
+  const dot = (ok: boolean | null) => <i className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: ok === null ? "#8b94a8" : ok ? "#3ecf8e" : "#f0616d" }} />;
+  return (
+    <section className="surface p-5">
+      <div className="label mb-2">Match-Erkennung</div>
+      <ul className="space-y-1.5 text-sm">
+        <li>{dot(det ? det.game.running : null)}<b>Spiel:</b> {!window.desktop ? "wird nur in der Desktop-App erkannt" : det?.game.running ? `Deadlock läuft seit ${det.game.since ? new Date(det.game.since).toLocaleTimeString("de-DE") : "?"} – Abfrage im schnellen Takt` : det?.game.endedAt ? `Deadlock beendet ${ago(det.game.endedAt)} – Abfrage bleibt 25 Minuten schnell` : "Deadlock läuft gerade nicht (Prozess project8.exe nicht gefunden)"}</li>
+        <li>{dot(mw ? mw.watching : null)}<b>Steam-Cache:</b> {mw ? (mw.watching ? `beobachtet ${mw.dirs.length} Ordner${mw.last ? ` · zuletzt Match #${mw.last.matchId} (${ago(mw.last.at)})` : " · noch kein Match erkannt"}` : `nicht aktiv${mw.error ? ` (${mw.error})` : ""}`) : "nur in der Desktop-App"}</li>
+        <li>{dot(ing ? ing.state === "running" || ing.state === "external" : null)}<b>Match-Daten-Helfer:</b> {ing ? `${ing.message} · ${ing.matches} Salt-Meldungen, ${ing.errors} Fehler` : "nur in der Desktop-App"}</li>
+        <li>{dot(me ? me.lastSyncOk !== false : null)}<b>Historie:</b> {me ? `zuletzt abgefragt ${ago(me.lastSyncAt)}${me.lastError ? ` · Fehler: ${me.lastError}` : ""}` : "kein Account"}</li>
+        <li>{dot(det ? det.liveFeed.ok : null)}<b>Live-Feed der API:</b> {det ? `${det.liveFeed.ok ? "erreichbar" : "nicht erreichbar"} · geprüft ${ago(det.liveFeed.checkedAt)}` : "–"}</li>
+      </ul>
+      {det && det.hints.length > 0 && (
+        <div className="mt-3">
+          <div className="label mb-1 !text-[10px]">Match-Hinweise (werden im Hintergrund geladen)</div>
+          <ul className="space-y-0.5 text-xs text-muted">{det.hints.map((h) => <li key={h.matchId}>#{h.matchId} · {h.source} · {h.done === "ok" ? "geladen" : h.done === "fremd" ? "nicht dein Match" : h.done === "aufgegeben" ? "aufgegeben" : `Versuch ${h.tries}${h.last ? ` – ${h.last}` : ""}`}</li>)}</ul>
+        </div>
+      )}
+      <p className="mt-3 text-xs leading-relaxed text-muted">Die API bekommt Match-Daten erst, wenn das Spiel sie lädt: Das passiert nach Spielende und zuverlässig, wenn du im Spiel kurz den Match-Verlauf (Profil → Matches) öffnest. Der Helfer meldet die Daten dann sofort weiter, und das Match erscheint hier innerhalb von Sekunden bis wenigen Minuten. Echte Live-Daten gibt es nur für Matches, die die API im Zuschauer-Feed führt.</p>
+    </section>
   );
 }
