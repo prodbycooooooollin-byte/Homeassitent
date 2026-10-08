@@ -9,6 +9,8 @@ import { buildDebrief, type DebriefRow } from "@/lib/debrief";
 import { buildSample, type SampleKind } from "@/lib/debrief-sample";
 import { feed, objectiveLabel, teamAdvantage, turningPoint } from "@/lib/insights";
 import { subOf } from "@/lib/grade";
+import { Hero3D } from "./Hero3D";
+import { sharpUpscale } from "@/lib/upscale";
 import { fmtDuration } from "@/lib/format";
 import { formatBadge } from "@/lib/ranks";
 import type { Grade, MatchDetails, Rating } from "@/lib/types";
@@ -70,6 +72,7 @@ function useCountUp(target: number, delayMs = 0, ms = 1100): number {
   return v;
 }
 
+const ASKED3D = new Set<number>();
 const STAGE_W = 1360, STAGE_H = 800, CONTENT_W = 860;
 /** Feste Bühne, die so skaliert wird, dass der Debrief ohne Scrollen genau in das Fenster passt (oben Titelleiste, unten Aktionsleiste). */
 function useStage() {
@@ -125,19 +128,54 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
   const fig = useImg(hero?.figure);
   const stage = useStage();
   const [openRow, setOpenRow] = useState<string | null>(null);
-  // Bilder nie stärker als 1,25× ihrer echten Größe aufziehen (sonst wirken sie unscharf) – der Rest läuft weich in den Hintergrund aus
+  // Kleine Bilder werden vorab in Stufen hochgerechnet und nachgeschärft (statt vom Browser grob aufgezogen)
   const [artNat, setArtNat] = useState<{ w: number; h: number } | null>(null);
   const [figNat, setFigNat] = useState<{ w: number; h: number } | null>(null);
+  // 3D-Modell (Beta): vorhanden -> anzeigen; sonst im Hintergrund aus der Spiel-Installation exportieren lassen (klappt beim nächsten Mal)
+  const [m3d, setM3d] = useState<"none" | "ready" | "failed">("none");
+  const heroKey = me?.heroId;
+  useEffect(() => {
+    if (!heroKey || req.sample) return;
+    let alive = true;
+    (async () => {
+      try {
+        const p = await (await fetch(`/api/hero3d/${heroKey}?probe=1`)).json();
+        if (!alive) return;
+        if (p.ready) { setM3d("ready"); return; }
+        if (!ASKED3D.has(heroKey)) { ASKED3D.add(heroKey); fetch(`/api/hero3d/${heroKey}`, { method: "POST" }).catch(() => null); }
+      } catch { /* optional */ }
+    })();
+    return () => { alive = false; };
+  }, [heroKey, req.sample]);
+  const [artSharp, setArtSharp] = useState<string | null>(null);
+  const [figSharp, setFigSharp] = useState<string | null>(null);
   const vw = typeof window !== "undefined" ? window.innerWidth : 1600, vh = typeof window !== "undefined" ? window.innerHeight : 900;
+  const dpr = typeof window !== "undefined" ? Math.min(2, window.devicePixelRatio || 1) : 1;
+  useEffect(() => {
+    if (!artNat || !art.src) return;
+    const cover = Math.max((vw * 0.62) / artNat.w, vh / artNat.h);
+    if (cover <= 1.05) return;
+    let alive = true;
+    sharpUpscale(art.src, artNat.w * Math.min(cover, 3) * dpr, artNat.h * Math.min(cover, 3) * dpr).then((u) => alive && setArtSharp(u)).catch(() => null);
+    return () => { alive = false; };
+  }, [artNat, art.src]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!figNat || !fig.src) return;
+    const fit = Math.min((vw * 0.38) / figNat.w, (vh * 0.96) / figNat.h);
+    if (fit <= 1.05) return;
+    let alive = true;
+    sharpUpscale(fig.src, figNat.w * Math.min(fit, 3) * dpr, figNat.h * Math.min(fit, 3) * dpr).then((u) => alive && setFigSharp(u)).catch(() => null);
+    return () => { alive = false; };
+  }, [figNat, fig.src]); // eslint-disable-line react-hooks/exhaustive-deps
   const artStyle: React.CSSProperties = (() => {
     if (!artNat) return { inset: 0, width: "100%", height: "100%", objectFit: "cover" };
-    const cover = Math.max((vw * 0.62) / artNat.w, vh / artNat.h), sc = Math.min(cover, 1.25);
+    const cover = Math.max((vw * 0.62) / artNat.w, vh / artNat.h), sc = Math.min(cover, 3);
     return sc >= cover ? { inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: hero?.art ? "center" : "50% 20%" } : { right: 0, top: "50%", width: artNat.w * sc, height: artNat.h * sc, transform: "translateY(-50%)" };
   })();
   const figStyle: React.CSSProperties = (() => {
     const base = { filter: `drop-shadow(0 0 40px ${color}88) drop-shadow(0 12px 30px #000c)` };
     if (!figNat) return { ...base, inset: 0, width: "100%", height: "100%", objectFit: "contain", objectPosition: "bottom" };
-    const box = { w: vw * 0.38, h: vh * 0.96 }, fit = Math.min(box.w / figNat.w, box.h / figNat.h), sc = Math.min(fit, 1.25);
+    const box = { w: vw * 0.38, h: vh * 0.96 }, fit = Math.min(box.w / figNat.w, box.h / figNat.h), sc = Math.min(fit, 3);
     return { ...base, right: 0, bottom: 0, width: figNat.w * sc, height: figNat.h * sc };
   })();
   const noFx = useSettings().settings.effects === "off";
@@ -168,7 +206,7 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
         <div className="debrief-hero-img absolute inset-0">
           {art.src ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={art.src} onError={art.onError} onLoad={(e) => setArtNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} alt="" className="debrief-art-img absolute" style={artStyle} />
+            <img src={artSharp ?? art.src} onError={art.onError} onLoad={(e) => setArtNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} alt="" className="debrief-art-img absolute" style={artStyle} />
           ) : me ? (
             <div className="absolute inset-0 flex items-center justify-end pr-[8%]"><span className="display select-none text-[min(52vh,520px)] font-extrabold leading-none" style={{ color: `${color}40` }}>{heroName(me.heroId).slice(0, 1)}</span></div>
           ) : null}
@@ -176,10 +214,15 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
       </div>
 
       {/* Held als Figur: freigestellt, rechts unten, folgt der Maus */}
-      {fig.src && (
+      {m3d === "ready" && heroKey && (
+        <div className="debrief-figure pointer-events-none fixed bottom-0 right-[1%] top-[2%] z-[5] hidden w-[42%] lg:block">
+          <Hero3D url={`/api/hero3d/${heroKey}`} color={color} onFail={() => setM3d("failed")} />
+        </div>
+      )}
+      {m3d !== "ready" && fig.src && (
         <div className="debrief-figure pointer-events-none fixed bottom-0 right-[2%] top-[4%] hidden w-[38%] lg:block">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={fig.src} onError={fig.onError} onLoad={(e) => setFigNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} alt="" className="debrief-figure-img absolute" style={figStyle} />
+          <img src={figSharp ?? fig.src} onError={fig.onError} onLoad={(e) => setFigNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} alt="" className="debrief-figure-img absolute" style={figStyle} />
         </div>
       )}
 

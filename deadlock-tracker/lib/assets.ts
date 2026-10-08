@@ -16,6 +16,8 @@ export interface HeroAsset {
   art?: string; // breite Illustration / Hintergrund
   figure?: string; // freigestellte Heldenfigur (Auswahlbild)
   wordmark?: string; // Namenszug als Grafik
+  /** interner Name aus den Spieldaten (z. B. "inferno" für Infernus) – wird zum Finden des 3D-Modells genutzt */
+  codeName?: string;
   /** Fakten aus den Spieldaten */
   info?: HeroInfoAsset;
 }
@@ -115,6 +117,7 @@ export function normalizeHeroes(raw: unknown): Record<number, HeroAsset> {
       art: imgUrl(firstStr(im, ["background_image", "hero_card_gloat", "hero_card_critical", "icon_hero_card", "background_image_webp"])),
       figure: imgUrl(firstStr(im, ["selection_image", "hero_card_gloat", "selection_image_webp"])),
       wordmark: imgUrl(firstStr(im, ["name_image"])),
+      codeName: str(h.class_name)?.replace(/^hero_/, ""),
       info: heroInfo(h),
     };
   }
