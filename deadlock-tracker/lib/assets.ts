@@ -9,6 +9,8 @@ export interface HeroAsset {
   id: number;
   name: string;
   color: string; // #rrggbb
+  /** false bei deaktivierten/unveröffentlichten Helden (Test-/Entwicklungs-Einträge der Asset-API) */
+  playable?: boolean;
   portrait?: string; // Karte/Hochformat
   small?: string; // Icon
   art?: string; // breite Illustration / Hintergrund
@@ -105,6 +107,7 @@ export function normalizeHeroes(raw: unknown): Record<number, HeroAsset> {
     out[id] = {
       id,
       name,
+      playable: !(h.disabled === true || h.in_development === true || h.player_selectable === false),
       color: toHex(colors.style_hex) ?? toHex(colors.ui) ?? toHex(colors.highlight) ?? hashColor(id),
       portrait: imgUrl(firstStr(im, ["icon_hero_card", "top_bar_vertical_image", "hero_card_gloat", "icon_image_small", "icon_hero_card_webp"])),
       small: imgUrl(firstStr(im, ["icon_image_small", "minimap_image", "icon_hero_card", "icon_image_small_webp"])),

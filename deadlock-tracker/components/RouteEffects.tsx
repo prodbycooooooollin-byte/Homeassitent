@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { TIER_COLORS, useHero } from "./GameAssets";
 import { tierOf } from "@/lib/ranks";
-import { useData } from "./Providers";
+import { useData, useSettings } from "./Providers";
+import { ensureVivid, resolveAccent } from "@/lib/profile-customize";
 
 /** Fortschrittsbalken oben + Entfernen der Exit-Klasse nach Navigation. */
 export function RouteProgress() {
@@ -127,13 +128,17 @@ export function Aurora() {
   const { data } = useData();
   const path = usePathname();
   const theme = THEMES.find(([re]) => re.test(path))?.[1] ?? { pattern: "grid", scene: "grid" as Scene };
-  const mainId = data?.overview.heroes[0]?.heroId;
+  const { settings } = useSettings();
+  const home = path === "/";
+  const mainId = (home ? settings.profile.mainHero : null) ?? data?.overview.heroes[0]?.heroId;
   const routeId = Number(path.match(/^\/heroes\/(\d+)/)?.[1]) || undefined;
   const heroId = theme.art === "route" ? routeId : mainId;
   const { color, hero } = useHero(heroId);
   const { color: mainColor } = useHero(mainId);
   const tier = data?.overview.currentBadge ? TIER_COLORS[tierOf(data.overview.currentBadge)] : undefined;
-  const accent = theme.accent === "tier" ? tier ?? mainColor : theme.accent ?? (theme.art === "route" ? color : mainColor);
+  const raw = theme.accent === "tier" ? tier ?? mainColor : theme.accent ?? (theme.art === "route" ? color : mainColor);
+  // Übersicht: frei gewählte Akzentfarbe; Helden-/Rangfarben werden aufgehellt, damit dunkle Helden (z. B. Wraith) nicht untergehen.
+  const accent = home ? resolveAccent(settings.profile.accent, { heroColor: mainColor === "#5b6478" ? undefined : mainColor, rankColor: tier }) : raw && raw !== "#5b6478" && !theme.accent ? ensureVivid(raw, "#f0b44c") : raw;
   useEffect(() => {
     const a = !accent || accent === "#5b6478" ? "#f0b44c" : accent;
     const st = document.documentElement.style;
@@ -145,10 +150,10 @@ export function Aurora() {
   const sceneKey = theme.scene + path.split("/")[1];
   return (
     <>
-      <div className="aurora" aria-hidden><i /><i /><i /></div>
+      <div className="aurora" aria-hidden style={home ? { filter: "saturate(1.35) brightness(1.35)" } : undefined}><i /><i /><i /></div>
       <div key={theme.pattern + path.split("/")[1]} className="bg-pattern" data-p={theme.pattern} aria-hidden />
       {art && <div key={art} className="bg-art" style={{ backgroundImage: `url(${art})` }} aria-hidden />}
-      <div key={sceneKey} className="bg-scene" data-s={theme.scene} aria-hidden>
+      <div key={sceneKey} className="bg-scene" data-s={theme.scene} aria-hidden style={home ? { filter: "saturate(1.3) brightness(1.5)" } : undefined}>
         <div className="bg-beam b1" /><div className="bg-beam b2" /><div className="bg-beam b3" />
         <svg className="bg-motif" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice"><Motif scene={theme.scene} /></svg>
         <div className="bg-particles">{PARTICLES.map((p, i) => <span key={i} style={{ left: `${p.x}%`, width: p.s, height: p.s, animationDuration: `${p.d}s`, animationDelay: `${p.l}s`, ["--po" as string]: p.o }} />)}</div>

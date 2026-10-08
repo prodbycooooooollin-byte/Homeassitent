@@ -1,4 +1,5 @@
 import { laneDiff, aimRates, soloDeaths, topPlayers, type GoalSuggestion, type TrainingMatch, type TrainingReport } from "./training";
+import { reasonsFor, type Reason } from "./training-reasons";
 import type { MatchPlayer } from "./types";
 
 /* Aufbereitung der Trainingsanalyse für die Seite: Fähigkeiten-Scorecard, Hauptproblem, letztes Match. */
@@ -21,7 +22,7 @@ export interface Problem {
 }
 export interface MatchLine { tone: "good" | "bad"; text: string; w: number }
 export interface LastMatchView { matchId: number; heroId: number; won: boolean; lines: MatchLine[] }
-export interface TrainingView { skills: SkillView[]; problem: Problem | null; last: LastMatchView | null }
+export interface TrainingView { skills: SkillView[]; problem: Problem | null; last: LastMatchView | null; reasons: Partial<Record<SkillId, Reason[]>> }
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const nn = (x: number | null | undefined): x is number => typeof x === "number" && Number.isFinite(x);
@@ -90,7 +91,9 @@ export function buildView(ms: TrainingMatch[], report: TrainingReport): Training
     const a = sorted.length >= 8 ? skillOf(mt.id, old) : null, b = sorted.length >= 8 ? skillOf(mt.id, recent) : null;
     return { id: mt.id, label: mt.label, pct: now ? Math.round(now.pct) : null, trend: a && b ? Math.round(b.pct - a.pct) : null, line: now?.line ?? "Zu wenig Daten", focusIds: mt.focusIds };
   });
-  return { skills, problem: problemOf(skills, usable, report), last: lastMatch(usable) };
+  const reasons: Partial<Record<SkillId, Reason[]>> = {};
+  for (const sk of skills) if (sk.pct !== null) reasons[sk.id] = reasonsFor(sk.id, usable);
+  return { skills, problem: problemOf(skills, usable, report), last: lastMatch(usable), reasons };
 }
 
 function problemOf(skills: SkillView[], ms: TrainingMatch[], r: TrainingReport): Problem | null {

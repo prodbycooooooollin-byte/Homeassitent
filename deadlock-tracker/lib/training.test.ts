@@ -69,3 +69,17 @@ describe("Training-Ansicht", () => {
     for (const id of ["soloDeaths", "camps", "creepPct", "deadShare"]) expect(r.metrics.find((m) => m.id === id)!.values.some((x) => x.value !== null)).toBe(true);
   });
 });
+
+import { classifyDeaths, reasonsFor } from "./training-reasons";
+describe("Spielerspezifische Gründe", () => {
+  it("ordnet jedem Tod genau eine Ursache zu", () => {
+    const ms = build(10);
+    const deaths = classifyDeaths(ms);
+    expect(deaths.length).toBe(ms.reduce((a, m) => a + (m.me.deathLog?.length ?? 0), 0));
+  });
+  it("liefert konkrete Gründe mit Zahlen", () => {
+    const r = reasonsFor("survival", build(14));
+    expect(r.length).toBeGreaterThan(0);
+    expect(r[0].text).toMatch(/\d/);
+  });
+});

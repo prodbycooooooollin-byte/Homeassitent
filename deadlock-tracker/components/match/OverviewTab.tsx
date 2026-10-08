@@ -3,6 +3,7 @@ import { HeroPortrait, RankEmblem, useHeroName } from "../GameAssets";
 import { Icon, type IconName } from "../Icon";
 import { TeamTable, TEAMS, Versus, sum } from "./Scoreboard";
 import { awards, advantageSummary, turningPoint } from "@/lib/insights";
+import { explainDeaths } from "@/lib/training-reasons";
 import { formatBadge, tierOf } from "@/lib/ranks";
 import { TIER_COLORS } from "../GameAssets";
 import type { MatchDetails, Rating, TeamId } from "@/lib/types";
@@ -14,6 +15,7 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
   const aw = awards(d, ratings);
   const adv = me ? advantageSummary(d, me.team) : null;
   const tp = me ? turningPoint(d, me) : null;
+  const dths = me ? explainDeaths(d, me) : [];
   const mm = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
   const ranks = d.players.map((p) => p.badge).filter((b): b is number => !!b);
   const tiers = Array.from({ length: 12 }, (_, t) => ({ t, n: ranks.filter((b) => tierOf(b) === t).length })).filter((x) => x.n > 0);
@@ -51,6 +53,21 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
             {tp.myObjectivesLost ? `, ${tp.myObjectivesLost} eigene Objective${tp.myObjectivesLost > 1 ? "s" : ""} gingen verloren` : ""}{tp.myObjectivesTaken ? `, ${tp.myObjectivesTaken} gegnerische${tp.myObjectivesTaken > 1 ? "" : "s"} fielen` : ""}.
             {tp.swing < 0 ? " Hier ist dieses Match gekippt – schau dir den Kampf im Feed an." : " Hier hat dein Team das Match an sich gerissen."}
           </p>
+        </section>
+      )}
+
+      {dths.length > 0 && (
+        <section className="surface p-5">
+          <h2 className="label mb-3">Warum du gestorben bist</h2>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {dths.map((x, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl bg-white/[0.04] p-2.5">
+                <span className="num w-11 shrink-0 text-center text-sm font-bold text-[#f0616d]">{mm(x.t)}</span>
+                {x.killerHero ? <HeroPortrait id={x.killerHero} size={32} variant="small" className="!rounded-lg" /> : <span className="h-8 w-8 rounded-lg bg-white/[0.06]" />}
+                <div className="min-w-0"><div className="truncate text-sm font-semibold">{x.label}{x.killerHero ? ` · ${heroName(x.killerHero)}` : ""}</div><div className="truncate text-xs text-muted">{x.detail}</div></div>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 

@@ -7,10 +7,17 @@ import { AimPanel, CurveChart, SoulPlanPanel } from "@/components/TrainingParts"
 import { goalProgress, type Focus, type GoalSuggestion, type TrainingReport } from "@/lib/training";
 import type { SkillId, SkillView, TrainingView } from "@/lib/training-view";
 import type { Goal } from "@/lib/types";
+import type { Reason } from "@/lib/training-reasons";
 
 interface Resp { report: TrainingReport; view: TrainingView; hasReference: boolean; badge: number | null }
 const col = (pct: number | null) => (pct === null ? "#5b6478" : pct >= 92 ? "#3ecf8e" : pct >= 75 ? "#f0b44c" : "#f0616d");
 const ICON: Record<SkillId, string> = { lane: "swap", farming: "gem", jungle: "flame", survival: "heart", teamplay: "users", objectives: "tower", items: "layers", aim: "target" };
+
+/** Ersetzt {hero:ID} durch Heldennamen. */
+function useRich() {
+  const heroName = useHeroName();
+  return (t: string) => t.replace(/\{hero:(\d+)\}/g, (_, id) => heroName(Number(id)));
+}
 
 function Training({ account }: { account: number }) {
   const [n, setN] = useState(20);
@@ -21,6 +28,7 @@ function Training({ account }: { account: number }) {
   const [showCurve, setShowCurve] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
   const heroName = useHeroName();
+  const rich = useRich();
 
   useEffect(() => { setRes(null); setSel(null); fetch(`/api/training?account=${account}&n=${n}`).then((r) => r.json()).then(setRes).catch(() => setErr(true)); }, [account, n]);
   const loadGoals = useCallback(() => fetch("/api/goals").then((r) => r.json()).then((j) => setGoals(j.goals ?? [])).catch(() => {}), []);
@@ -40,6 +48,8 @@ function Training({ account }: { account: number }) {
   const maxH = Math.max(1, ...rep.deaths.histogram);
   const hasGoal = (g: GoalSuggestion) => goals.some((x) => x.metric === g.metric);
   const open = goals.slice(-3);
+  const why: Reason[] = view.reasons[active as SkillId] ?? [];
+  const whyMain: Reason[] = pr ? (view.reasons[pr.skill] ?? []).slice(0, 2) : [];
 
   return (
     <>
@@ -57,9 +67,15 @@ function Training({ account }: { account: number }) {
               <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-[#f0616d]"><Icon name="alert" size={14} />Dein Hauptproblem</div>
               <h2 className="display text-3xl font-extrabold leading-tight">{pr.headline}</h2>
               {pr.impact && <div className="mt-2 inline-block rounded-full bg-white/[0.07] px-3 py-1 text-sm text-muted">{pr.impact}</div>}
+              {whyMain.length > 0 && (
+                <div className="mt-4">
+                  <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted">Warum bei dir</div>
+                  <ul className="space-y-2">{whyMain.map((r, i) => <li key={i} className="text-sm"><b>{rich(r.title)}.</b> <span className="text-muted">{rich(r.text)}</span></li>)}</ul>
+                </div>
+              )}
               <div className="mt-4 rounded-xl border border-[#3ecf8e]/30 bg-[#3ecf8e]/[0.06] p-4">
                 <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-[#3ecf8e]">Mach das im nächsten Match</div>
-                <div className="text-base font-medium">{pr.action}</div>
+                <div className="text-base font-medium">{whyMain[0]?.fix ?? pr.action}</div>
               </div>
               {pr.goal && <button disabled={hasGoal(pr.goal)} onClick={() => addGoal(pr.goal!)} className="btn btn-gold mt-4 disabled:opacity-50"><Icon name="flag" size={15} /> {hasGoal(pr.goal) ? "Ziel gesetzt" : `Ziel setzen: ${pr.goal.label}`}</button>}
             </div>
@@ -98,7 +114,16 @@ function Training({ account }: { account: number }) {
         <div className="mb-3 flex items-center gap-2"><span style={{ color: col(skill.pct) }}><Icon name={ICON[skill.id] as never} size={18} /></span><h3 className="display text-xl font-bold">{skill.label}</h3><span className="text-sm text-muted">· {skill.line}</span></div>
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-4">
-            {details.length === 0 && <p className="text-sm text-muted">Hier gibt es aktuell nichts Auffälliges – deine Werte liegen nah an den Besten.</p>}
+            {why.length > 0 && (
+              <div className="rounded-xl border border-amber/30 bg-amber/[0.05] p-4">
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-amber">Warum genau bei dir</div>
+                <ul className="space-y-3">{why.map((r, i) => (
+                  <li key={i} className="text-sm"><div className="font-semibold">{rich(r.title)}</div><div className="text-muted">{rich(r.text)}</div>
+                    {r.fix && <div className="mt-1 flex gap-2 text-[13px]"><span className="mt-0.5 text-[#3ecf8e]"><Icon name="arrowRight" size={13} /></span><span>{r.fix}</span></div>}</li>
+                ))}</ul>
+              </div>
+            )}
+            {details.length === 0 && why.length === 0 && <p className="text-sm text-muted">Hier gibt es aktuell nichts Auffälliges – deine Werte liegen nah an den Besten.</p>}
             {details.map((f) => (
               <div key={f.id}>
                 <div className="font-semibold">{f.title}</div>

@@ -205,8 +205,13 @@ export interface AppSettings {
   effects: "full" | "reduced" | "off";
   /** Kompakte Darstellung */
   density: "comfortable" | "compact";
+  /** Anpassbares Profil-Banner (Übersicht) */
+  profile: ProfileSettings;
 }
-export const DEFAULT_SETTINGS: AppSettings = { pollIntervalS: 20, backfill: true, notifyNewMatch: true, showLive: true, effects: "full", density: "comfortable" };
+/** Persönliche Banner-Einstellungen: Titel, Main-Held (null = automatisch), Kennzahlen, Abzeichen, Akzent ("auto" | "rank" | "hero" | #rrggbb). */
+export interface ProfileSettings { title: string; mainHero: number | null; stats: string[]; badges: string[]; accent: string }
+export const DEFAULT_PROFILE: ProfileSettings = { title: "", mainHero: null, stats: ["winrate", "kda", "score", "matches"], badges: [], accent: "auto" };
+export const DEFAULT_SETTINGS: AppSettings = { pollIntervalS: 20, backfill: true, notifyNewMatch: true, showLive: true, effects: "full", density: "comfortable", profile: DEFAULT_PROFILE };
 
 /** Per Steam-OpenID verifizierte Verbindung */
 export interface SteamLink { steamId: string; accountId: number; verifiedAt: number }

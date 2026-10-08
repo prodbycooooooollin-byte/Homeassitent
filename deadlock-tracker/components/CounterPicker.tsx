@@ -17,7 +17,7 @@ export function CounterPicker({ heroes }: { heroes: HeroAgg[] }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const all = useMemo(() => Object.values(bundle.heroes).sort((a, b) => a.name.localeCompare(b.name, "de")), [bundle]);
+  const all = useMemo(() => Object.values(bundle.heroes).filter((h) => h.playable !== false).sort((a, b) => a.name.localeCompare(b.name, "de")), [bundle]);
   const shown = useMemo(() => all.filter((h) => h.name.toLowerCase().includes(q.trim().toLowerCase())), [all, q]);
 
   const key = sel.join(",");

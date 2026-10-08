@@ -26,7 +26,7 @@ export default function LeaderboardPage() {
   }, [region, hero]);
 
   const tracked = useMemo(() => new Set(status?.players.map((p) => p.accountId)), [status]);
-  const heroes = useMemo(() => Object.values(bundle.heroes).sort((a, b) => a.name.localeCompare(b.name)), [bundle]);
+  const heroes = useMemo(() => Object.values(bundle.heroes).filter((h) => h.playable !== false).sort((a, b) => a.name.localeCompare(b.name)), [bundle]);
   const needle = q.trim().toLowerCase();
   const list = (rows ?? []).filter((r) => !needle || r.name.toLowerCase().includes(needle));
   const podium = !needle && rows && rows.length >= 3 ? rows.slice(0, 3) : [];
