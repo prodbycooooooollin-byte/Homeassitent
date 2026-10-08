@@ -160,7 +160,7 @@ function Detection() {
 
 /** Signal-Aufnahme: zeichnet während einer Runde lokal auf, welche Dateien/Prozesse/Verbindungen sich ändern – Grundlage, um die Lobby-Erkennung beim Ladebildschirm zu bauen. */
 function Recorder() {
-  const [st, setSt] = useState<{ running: boolean; startedAt: number | null; count: number; text: string } | null>(null);
+  const [st, setSt] = useState<{ running: boolean; startedAt: number | null; count: number; text: string; file?: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!window.desktop?.recorder) return;
@@ -181,6 +181,7 @@ function Recorder() {
         </div>
       </div>
       {st.running && <p className="mt-2 text-xs text-amber">● Aufnahme läuft · {st.count} Ereignisse</p>}
+      {st.file && <p className="mt-2 break-all text-xs text-muted">Alles wird zusätzlich gespeichert in: {st.file}</p>}
       {st.count > 0 && <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-black/30 p-3 text-[11px] leading-relaxed text-muted">{st.text.split("\n").slice(-60).join("\n")}</pre>}
     </section>
   );

@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 
-const MAX_CHARS = 400_000;
+const MAX_CHARS = 6_000_000;
 let rec = null; // { t0, lines, watchers, timers, offsets, procs, dirs }
 
 const ts = () => `+${((Date.now() - rec.t0) / 1000).toFixed(1)}s`;
@@ -13,6 +13,9 @@ const add = (kind, text) => {
   if (!rec) return;
   const line = `${ts()} ${kind} ${String(text).replace(/[\r\n]+/g, " ⏎ ").slice(0, 600)}`;
   rec.lines.push(line);
+  // Nichts geht verloren: jede Zeile landet zusätzlich dauerhaft in einer Datei, Phasenzeilen auch in einer eigenen Liste ohne Begrenzung
+  if (kind === "PHASE" || kind === "DATEI" || kind === "CACHE" || kind === "INHALT" || kind === "PROZESS" || kind === "NETZ" || kind === "GELÖSCHT") rec.key.push(line);
+  try { if (rec.file) fs.appendFileSync(rec.file, line + "\n"); } catch { /* egal */ }
   rec.chars += line.length;
   while (rec.chars > MAX_CHARS && rec.lines.length > 10) rec.chars -= rec.lines.shift().length;
 };
@@ -80,7 +83,14 @@ function onFile(dir, name, label) {
 
 async function start() {
   if (rec) return status();
-  rec = { t0: Date.now(), lines: [], chars: 0, watchers: [], timers: [], offsets: new Map(), procs: new Set(), dirs: [] };
+  rec = { t0: Date.now(), key: [], file: null, lines: [], chars: 0, watchers: [], timers: [], offsets: new Map(), procs: new Set(), dirs: [] };
+  try {
+    const { app } = require("electron");
+    const dir = path.join(app.getPath("userData"), "aufnahmen");
+    fs.mkdirSync(dir, { recursive: true });
+    rec.file = path.join(dir, `aufnahme-${new Date().toISOString().replace(/[:.]/g, "-")}.log`);
+    fs.writeFileSync(rec.file, "");
+  } catch { /* ohne Datei weiter */ }
   const roots = await steamRoots();
   const watch = (dir, label, recursive) => {
     try {
@@ -163,7 +173,7 @@ function reset() { if (rec && !rec.stopped) stop(); rec = null; return status();
 
 function dedupe(lines) { const out = []; let prev = ""; for (const l of lines) { const k = l.replace(/^\S+\s+/, ""); if (k !== prev) out.push(l); prev = k; } return out; }
 function status() {
-  return rec ? { running: !rec.stopped, startedAt: rec.t0, count: rec.lines.length, text: ["=== ZEITLEISTE (Phasen & Kennungen) ===", ...dedupe(rec.lines.filter((l) => / PHASE /.test(l))).slice(-300), "=== ALLES ===", ...rec.lines.slice(-20000)].join("\n") } : { running: false, startedAt: null, count: 0, text: "" };
+  return rec ? { running: !rec.stopped, startedAt: rec.t0, count: rec.lines.length, file: rec.file, text: ["=== ZEITLEISTE (Phasen & Kennungen) ===", ...dedupe(rec.key.filter((l) => / PHASE /.test(l))).slice(0, 400), "=== WICHTIGE EREIGNISSE (Dateien, Prozesse, Netz) ===", ...rec.key.filter((l) => !/ PHASE /.test(l)).slice(0, 400), "=== ALLES (Datei: " + (rec.file || "keine") + ") ===", ...rec.lines.slice(0, 20000), ].join("\n") } : { running: false, startedAt: null, count: 0, text: "" };
 }
 
 module.exports = { start, stop, reset, status };
