@@ -88,7 +88,8 @@ body::before {
 .live-dot { width: 8px; height: 8px; border-radius: 9999px; background: #3ecf8e; animation: pulse-ring 1.6s infinite; }
 .grade-s { animation: grade-glow 2.4s ease-in-out infinite; }
 .toast-in { animation: slide-in .35s cubic-bezier(.2,.7,.2,1) both; }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+/* Betriebssystem „Animationen reduzieren“: App-weit aus – nur der Debrief ist ausgenommen (bewusste Vollbild-Inszenierung; mit „Effekte: aus“ trotzdem abschaltbar). */
+@media (prefers-reduced-motion: reduce) { *:not(.debrief):not(.debrief *) { animation: none !important; transition: none !important; } }
 
 /* ---------- Immersion: Aurora, Seitenübergänge, Tilt ---------- */
 :root { --hero: #f0b44c; }
@@ -287,3 +288,10 @@ html.desktop .debrief, html.desktop .debrief * { -webkit-app-region: no-drag; }
 @keyframes debrief-shock { 0% { opacity: .9; transform: scale(.6); } 100% { opacity: 0; transform: scale(1.5); } }
 html.fx-off .debrief *, html.fx-reduced .debrief * { animation-duration: .01s !important; animation-delay: 0s !important; }
 html.fx-off .debrief-spark, html.fx-reduced .debrief-spark, html.fx-off .debrief-burst, html.fx-off .debrief-flash { display: none; }
+
+.debrief-stage { mask-image: radial-gradient(ellipse 75% 70% at 62% 50%, #000 35%, transparent 78%); -webkit-mask-image: radial-gradient(ellipse 75% 70% at 62% 50%, #000 35%, transparent 78%); }
+.debrief-card-hero { animation: debrief-herocard 1.2s cubic-bezier(.2,.9,.2,1) .3s backwards; }
+@keyframes debrief-herocard { from { opacity: 0; transform: translateX(120px) rotate(4deg) scale(.92); } }
+.debrief-reveal { animation: debrief-reveal 1.6s cubic-bezier(.3,.7,.2,1) 2.8s backwards; }
+@keyframes debrief-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.debrief-dot { animation: debrief-pop .4s cubic-bezier(.2,1.6,.4,1) backwards; }

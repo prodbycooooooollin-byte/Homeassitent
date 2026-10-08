@@ -4,13 +4,17 @@ import { HeroPortrait, RankEmblem, useHero, useHeroName, useImg } from "./GameAs
 import { GradeBadge, GRADE_STYLE } from "./GradeBadge";
 import { Icon } from "./Icon";
 import { NavLink } from "./NavLink";
+import { useSettings } from "./Providers";
 import { buildDebrief, type DebriefRow } from "@/lib/debrief";
+import { buildSample, type SampleKind } from "@/lib/debrief-sample";
+import { teamAdvantage, turningPoint } from "@/lib/insights";
 import { subOf } from "@/lib/grade";
 import { fmtDuration } from "@/lib/format";
 import { formatBadge } from "@/lib/ranks";
 import type { Grade, MatchDetails, Rating } from "@/lib/types";
 
-export interface DebriefRequest { matchId: number; account: number; test?: boolean }
+export interface DebriefRequest { matchId: number; account: number; test?: boolean; /** Beispiel-Match statt echter Daten */ sample?: SampleKind; n?: number }
+export const DEBRIEF_BACK_KEY = "dl.debriefBack";
 export const DEBRIEF_EVENT = "dl-debrief";
 /** Öffnet den Debrief (aus beliebiger Stelle der App). */
 export const openDebrief = (r: DebriefRequest) => window.dispatchEvent(new CustomEvent<DebriefRequest>(DEBRIEF_EVENT, { detail: r }));
@@ -24,11 +28,11 @@ const GRADES: Grade[] = ["F", "D", "C", "B", "A", "S"];
 export function DebriefHost() {
   const [req, setReq] = useState<DebriefRequest | null>(null);
   useEffect(() => {
-    const on = (e: Event) => setReq((e as CustomEvent<DebriefRequest>).detail);
+    const on = (e: Event) => setReq({ ...(e as CustomEvent<DebriefRequest>).detail, n: Date.now() });
     window.addEventListener(DEBRIEF_EVENT, on);
     // Direktaufruf zum Testen: ?debrief=<Match-ID>&account=<ID>
     const q = new URLSearchParams(window.location.search);
-    if (q.get("debrief") && q.get("account")) setReq({ matchId: Number(q.get("debrief")), account: Number(q.get("account")), test: true });
+    if (q.get("debrief") && q.get("account")) setReq({ matchId: Number(q.get("debrief")), account: Number(q.get("account")), test: true, n: 1 });
     return () => window.removeEventListener(DEBRIEF_EVENT, on);
   }, []);
   const close = useCallback(() => setReq(null), []);
@@ -40,7 +44,14 @@ export function DebriefHost() {
     return () => { window.removeEventListener("keydown", k); document.body.style.overflow = ""; };
   }, [req, close]);
   if (!req) return null;
-  return <Overlay key={req.matchId + (req.test ? "t" : "")} req={req} onClose={close} />;
+  return <Overlay key={req.matchId + (req.test ? "t" : "") + (req.sample ?? "") + (req.n ?? 0)} req={req} onClose={() => { try { sessionStorage.removeItem(DEBRIEF_BACK_KEY); } catch { /* egal */ } close(); }} onLeave={close} />;
+}
+
+/** Merkt sich den Debrief, damit man aus dem Match per „Zurück zum Debrief“ wieder hierher kommt, und schließt das Overlay. */
+function keepBack(req: DebriefRequest, close: () => void) {
+  try { sessionStorage.setItem(DEBRIEF_BACK_KEY, JSON.stringify({ matchId: req.matchId, account: req.account, test: req.test })); } catch { /* egal */ }
+  window.dispatchEvent(new Event("dl-debrief-keep"));
+  close();
 }
 
 /** Zahl, die beim Einblenden hochzählt (ohne Animationen sofort der Endwert). */
@@ -61,12 +72,13 @@ function useCountUp(target: number, delayMs = 0, ms = 1100): number {
 
 const SPARKS = Array.from({ length: 22 }, (_, i) => { const r = (k: number) => { const x = Math.sin(i * 91.7 + k * 17.3) * 9301.5; return x - Math.floor(x); }; return { x: r(1) * 100, s: 2 + r(2) * 3, d: 5 + r(3) * 7, l: -r(4) * 10 }; });
 
-function Overlay({ req, onClose }: { req: DebriefRequest; onClose: () => void }) {
+function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () => void; onLeave: () => void }) {
   const [res, setRes] = useState<Res | null>(null);
   const [tries, setTries] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let alive = true;
+    if (req.sample) { setRes({ ...buildSample(req.sample, req.account), lobbyBadge: null }); return () => { alive = false; }; }
     const load = async () => {
       try {
         const r = await (await fetch(`/api/matches/${req.matchId}?account=${req.account}`)).json();
@@ -89,6 +101,7 @@ function Overlay({ req, onClose }: { req: DebriefRequest; onClose: () => void })
   const heroName = useHeroName();
   const { hero, color } = useHero(me?.heroId);
   const art = useImg(hero?.art ?? hero?.portrait);
+  const noFx = useSettings().settings.effects === "off";
   const score = useCountUp(rating?.score ?? 0, 1100, 1300);
   const grade = rating?.grade ?? null;
   const celebrate = !!rating && (grade === "S" || grade === "A") && won;
@@ -110,18 +123,19 @@ function Overlay({ req, onClose }: { req: DebriefRequest; onClose: () => void })
       <div className="pointer-events-none fixed inset-0 overflow-hidden">{SPARKS.map((p, i) => <span key={i} className="debrief-spark" style={{ left: `${p.x}%`, width: p.s, height: p.s, animationDuration: `${p.d}s`, animationDelay: `${p.l}s` }} />)}</div>
       {celebrate && <div className="debrief-burst pointer-events-none fixed inset-0" />}
 
-      {/* Held rechts: Illustration mit Heldenfarbe, Parallax */}
-      <div className="debrief-hero pointer-events-none fixed inset-y-0 right-0 hidden w-[52%] max-w-[880px] lg:block">
-        <div className="absolute inset-0" style={{ background: `radial-gradient(60% 55% at 62% 46%, ${color}66, ${color}1f 55%, transparent 75%)` }} />
-        <div className="debrief-hero-img absolute inset-0">
-          {art.src && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={art.src} onError={art.onError} alt="" className="absolute bottom-0 right-0 h-[96%] w-full object-contain object-right-bottom [mask-image:linear-gradient(to_right,transparent,#000_22%)]" />
+      {/* Held rechts: Karte mit Heldenfarbe, Wide-Art als Hintergrundlicht, Parallax */}
+      <div className="debrief-stage debrief-hero pointer-events-none fixed inset-y-0 right-0 hidden w-[54%] lg:block">
+        <div className="absolute inset-0" style={{ background: `radial-gradient(55% 60% at 60% 48%, ${color}55, ${color}18 55%, transparent 78%)` }} />
+        {art.src && <div className="absolute inset-0 opacity-40" style={{ backgroundImage: `url(${art.src})`, backgroundSize: "cover", backgroundPosition: "center" }} />}
+        <div className="debrief-hero-img absolute inset-0 flex items-start justify-center pt-[96px]">
+          {me && (
+            <div className="debrief-card-hero relative aspect-[4/5] h-[min(50vh,480px)] overflow-hidden rounded-3xl" style={{ boxShadow: `0 0 0 2px ${color}88, 0 30px 90px -20px ${color}, 0 0 120px -10px ${color}66` }}>
+              <HeroPortrait id={me.heroId} fill ratio={0.8} className="!rounded-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 p-5"><div className="display text-3xl font-extrabold drop-shadow">{heroName(me.heroId)}</div></div>
+            </div>
           )}
-          {!art.src && me && <div className="absolute right-[8%] top-[18%] opacity-70"><HeroPortrait id={me.heroId} size={300} h={380} ring={color} /></div>}
         </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-[#05060a] via-transparent to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#05060a] to-transparent" />
       </div>
 
       <div className="relative mx-auto flex min-h-full max-w-[1400px] flex-col px-6 pb-28 pt-8 sm:px-10 desktop-safe">
@@ -130,7 +144,7 @@ function Overlay({ req, onClose }: { req: DebriefRequest; onClose: () => void })
             {(!d ? "Auswertung" : draw ? "Unentschieden" : won ? "Sieg" : "Niederlage").split("").map((ch, i) => <span key={i} className="debrief-letter" style={{ animationDelay: `${0.15 + i * 0.06}s` }}>{ch}</span>)}
           </h1>
           <div className="debrief-line mt-2 h-[3px] w-48 rounded-full" style={{ background: `linear-gradient(90deg, ${accent}, transparent)` }} />
-          {d && me && <div className="debrief-fade mt-3 flex flex-wrap items-center gap-x-3 text-sm uppercase tracking-widest text-muted" style={{ ["--d" as string]: "0.6s" }}><b className="text-white">{heroName(me.heroId)}</b><span>/ {fmtDuration(d.durationS)}</span>{d.matchMode && <span>/ {d.matchMode}</span>}{req.test && <span className="rounded bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber">Testansicht</span>}</div>}
+          {d && me && <div className="debrief-fade mt-3 flex flex-wrap items-center gap-x-3 text-sm uppercase tracking-widest text-muted" style={{ ["--d" as string]: "0.6s" }}><b className="text-white">{heroName(me.heroId)}</b><span>/ {fmtDuration(d.durationS)}</span>{d.matchMode && <span>/ {d.matchMode}</span>}{req.test && <span className="rounded bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber">{req.sample ? "Beispiel" : "Testansicht"}</span>}{noFx && <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] normal-case tracking-normal">Effekte sind in den Einstellungen aus – daher ohne Animation</span>}</div>}
         </div>
 
         {d && !me ? (
@@ -157,8 +171,13 @@ function Overlay({ req, onClose }: { req: DebriefRequest; onClose: () => void })
             </div>
 
             <div className="relative z-10 grid items-start gap-4 lg:col-span-2 lg:grid-cols-3">
-              <Side title="Deine stärkste Seite" tone="#3ecf8e" icon="trendUp" item={db.best} delay={2.4} />
-              <Side title="Deine schwächste Seite" tone="#f0616d" icon="trendDown" item={db.worst} delay={2.6} />
+              <div className="space-y-4 lg:col-span-2">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Side title="Deine stärkste Seite" tone="#3ecf8e" icon="trendUp" item={db.best} delay={2.4} />
+                  <Side title="Deine schwächste Seite" tone="#f0616d" icon="trendDown" item={db.worst} delay={2.6} />
+                </div>
+                <MatchPulse d={d} me={me} accent={accent} />
+              </div>
               <div className="debrief-fade debrief-card rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur" style={{ ["--d" as string]: "2.8s" }}>
                 <div className="label mb-2 flex items-center gap-1.5"><Icon name="eye" size={13} />Analyse</div>
                 <ul className="space-y-1.5 text-sm">
@@ -176,8 +195,8 @@ function Overlay({ req, onClose }: { req: DebriefRequest; onClose: () => void })
       {/* Aktionsleiste unten: immer erreichbar, unabhängig von Fenstergröße und Titelleiste */}
       <div className="debrief-actions fixed inset-x-0 bottom-5 z-20 flex justify-center px-4">
         <div className="flex items-center gap-2 rounded-full border border-white/15 bg-[#0b0e15]/90 p-1.5 shadow-2xl backdrop-blur">
-          {d && me && <NavLink href={`/match/${req.matchId}?account=${req.account}`} onClick={onClose} className="btn btn-gold !rounded-full px-5">Zum Match</NavLink>}
-          {d && me && <NavLink href={`/match/${req.matchId}?account=${req.account}&tab=stats`} onClick={onClose} className="btn btn-ghost !rounded-full px-4">Alle Statistiken</NavLink>}
+          {d && me && !req.sample && <NavLink href={`/match/${req.matchId}?account=${req.account}`} onClick={() => keepBack(req, onLeave)} className="btn btn-gold !rounded-full px-5">Zum Match</NavLink>}
+          {d && me && !req.sample && <NavLink href={`/match/${req.matchId}?account=${req.account}&tab=stats`} onClick={() => keepBack(req, onLeave)} className="btn btn-ghost !rounded-full px-4">Alle Statistiken</NavLink>}
           <button onClick={onClose} className="btn btn-ghost !rounded-full px-5" autoFocus>Schließen <span className="ml-1 text-[10px] text-muted">Esc</span></button>
         </div>
       </div>
@@ -254,6 +273,65 @@ function Gauge({ rating, score }: { rating: Rating | null; score: number }) {
         {grade ? <GradeBadge grade={grade} size="xl" sub={subOf(rating?.label)} /> : <div className="display text-6xl font-extrabold text-muted">–</div>}
         <div className="display num mt-3 text-3xl font-extrabold">{rating ? score.toFixed(2) : "0.0"}</div>
         <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-muted">Match-Note</div>
+      </div>
+    </div>
+  );
+}
+
+/** Match-Puls: Souls-Vorsprung deines Teams über die Zeit, mit deinen Toden und Kills, den gefallenen Gebäuden und dem Wendepunkt. */
+function MatchPulse({ d, me, accent }: { d: MatchDetails; me: MatchDetails["players"][number]; accent: string }) {
+  const adv = useMemo(() => teamAdvantage(d).map((x) => ({ t: x.t, v: me.team === 0 ? x.diff : -x.diff })), [d, me.team]);
+  const tp = useMemo(() => turningPoint(d, me), [d, me]);
+  const [hover, setHover] = useState<number | null>(null);
+  if (adv.length < 4) return null;
+  const W = 760, H = 190, P = { l: 44, r: 12, t: 14, b: 24 };
+  const end = adv[adv.length - 1].t || 1;
+  const max = Math.max(1000, ...adv.map((a) => Math.abs(a.v))) * 1.1;
+  const x = (t: number) => P.l + (t / end) * (W - P.l - P.r);
+  const y = (v: number) => P.t + (1 - (v + max) / (2 * max)) * (H - P.t - P.b);
+  const zero = y(0);
+  const line = adv.map((a, i) => `${i ? "L" : "M"}${x(a.t).toFixed(1)},${y(a.v).toFixed(1)}`).join("");
+  const area = `${line}L${x(end)},${zero}L${x(0)},${zero}Z`;
+  const at = (t: number) => { let b = adv[0]; for (const a of adv) if (Math.abs(a.t - t) < Math.abs(b.t - t)) b = a; return b.v; };
+  const kills: number[] = [];
+  if (me.timeline) for (let i = 1; i < me.timeline.t.length; i++) if (me.timeline.k[i] > me.timeline.k[i - 1]) kills.push((me.timeline.t[i] + me.timeline.t[i - 1]) / 2);
+  const deaths = (me.deathLog ?? []).map((x) => x.t);
+  const objs = (d.objectives ?? []).map((o) => ({ t: o.t, mine: o.team !== me.team }));
+  const hv = hover !== null ? adv[hover] : null;
+  const k = (v: number) => `${v >= 0 ? "+" : "−"}${(Math.abs(v) / 1000).toFixed(1)}k`;
+  const id = `pulse${me.accountId}`;
+  return (
+    <div className="debrief-fade debrief-card rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur" style={{ ["--d" as string]: "3.2s" }}>
+      <div className="mb-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <div className="label flex items-center gap-1.5"><Icon name="trendUp" size={13} />Match-Puls <span className="normal-case tracking-normal text-muted">· Souls-Vorsprung deines Teams</span></div>
+        <div className="ml-auto flex flex-wrap items-center gap-x-3 text-[10px] text-muted">
+          <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#f0616d]" />Tod</span>
+          <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#3ecf8e]" />Kill</span>
+          <span className="flex items-center gap-1"><i className="h-2 w-2 rotate-45 bg-[#f0b44c]" />Gebäude</span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" onMouseLeave={() => setHover(null)}
+        onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * W; setHover(Math.max(0, Math.min(adv.length - 1, Math.round(((px - P.l) / (W - P.l - P.r)) * (adv.length - 1))))); }}>
+        <defs>
+          <clipPath id={`${id}u`}><rect x={P.l} y={0} width={W} height={zero} /></clipPath>
+          <clipPath id={`${id}d`}><rect x={P.l} y={zero} width={W} height={H} /></clipPath>
+        </defs>
+        <g className="debrief-reveal">
+          <path d={area} fill="#3ecf8e" opacity=".22" clipPath={`url(#${id}u)`} />
+          <path d={area} fill="#f0616d" opacity=".22" clipPath={`url(#${id}d)`} />
+          <path d={line} fill="none" stroke={accent} strokeWidth="2.6" strokeLinejoin="round" strokeLinecap="round" />
+        </g>
+        <line x1={P.l} x2={W - P.r} y1={zero} y2={zero} stroke="rgba(255,255,255,.3)" strokeDasharray="4 4" />
+        {[-max / 1.1, 0, max / 1.1].map((v) => <text key={v} x={P.l - 6} y={y(v) + 3} textAnchor="end" className="fill-[#8b94a8] text-[9px]">{v === 0 ? "0" : k(v)}</text>)}
+        {Array.from({ length: Math.floor(end / 300) + 1 }, (_, i) => i * 300).map((t) => <text key={t} x={x(t)} y={H - 6} textAnchor="middle" className="fill-[#8b94a8] text-[9px]">{t / 60}′</text>)}
+        {tp && <g><rect x={x(tp.from)} y={P.t} width={x(tp.to) - x(tp.from)} height={H - P.t - P.b} fill={tp.swing < 0 ? "#f0616d" : "#3ecf8e"} opacity=".12" /><text x={(x(tp.from) + x(tp.to)) / 2} y={P.t + 9} textAnchor="middle" className="fill-white text-[9px] font-bold">Wendepunkt</text></g>}
+        {objs.map((o, i) => <rect key={"o" + i} x={x(o.t) - 3.5} y={zero - 3.5 + (o.mine ? -14 : 14)} width="7" height="7" transform={`rotate(45 ${x(o.t)} ${zero + (o.mine ? -14 : 14)})`} fill="#f0b44c" opacity=".9" className="debrief-dot" style={{ animationDelay: `${3.4 + i * 0.06}s` }}><title>{o.mine ? "Gegnerisches Gebäude gefallen" : "Eigenes Gebäude gefallen"}</title></rect>)}
+        {kills.map((t, i) => <circle key={"k" + i} cx={x(t)} cy={y(at(t))} r="4.5" fill="#3ecf8e" stroke="#0b0e15" strokeWidth="1.5" className="debrief-dot" style={{ animationDelay: `${3.6 + i * 0.07}s` }}><title>Kill bei {Math.floor(t / 60)}:{String(Math.round(t % 60)).padStart(2, "0")}</title></circle>)}
+        {deaths.map((t, i) => <circle key={"d" + i} cx={x(t)} cy={y(at(t))} r="5.5" fill="#f0616d" stroke="#0b0e15" strokeWidth="1.5" className="debrief-dot" style={{ animationDelay: `${3.8 + i * 0.09}s` }}><title>Tod bei {Math.floor(t / 60)}:{String(Math.round(t % 60)).padStart(2, "0")}</title></circle>)}
+        {hv && <g><line x1={x(hv.t)} x2={x(hv.t)} y1={P.t} y2={H - P.b} stroke="rgba(255,255,255,.35)" /><circle cx={x(hv.t)} cy={y(hv.v)} r="4" fill="#fff" /></g>}
+      </svg>
+      <div className="flex min-h-[18px] flex-wrap items-center gap-x-4 text-[11px] text-muted">
+        {hv ? <span><b className="text-white">{Math.floor(hv.t / 60)}:{String(hv.t % 60).padStart(2, "0")}</b> · Vorsprung <b style={{ color: hv.v >= 0 ? "#3ecf8e" : "#f0616d" }}>{k(hv.v)}</b></span> : tp ? <span>Größte Verschiebung: <b style={{ color: tp.swing < 0 ? "#f0616d" : "#3ecf8e" }}>{k(tp.swing)}</b> zwischen {Math.floor(tp.from / 60)}:{String(tp.from % 60).padStart(2, "0")} und {Math.floor(tp.to / 60)}:{String(tp.to % 60).padStart(2, "0")}</span> : <span>Fahre über die Kurve für Details.</span>}
       </div>
     </div>
   );

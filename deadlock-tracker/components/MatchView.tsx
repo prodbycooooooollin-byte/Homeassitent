@@ -1,6 +1,6 @@
 "use client";
 import { subOf } from "@/lib/grade";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { GradeBadge, GRADE_STYLE } from "./GradeBadge";
 import { HeroBackdrop, HeroPortrait, RankEmblem, useHero, useHeroName } from "./GameAssets";
 import { Icon } from "./Icon";
@@ -11,6 +11,7 @@ import { GraphTab } from "./match/GraphTab";
 import { ItemsTab } from "./match/ItemsTab";
 import { LaneTab } from "./match/LaneTab";
 import { OverviewTab } from "./match/OverviewTab";
+import { DEBRIEF_BACK_KEY, openDebrief } from "./DebriefHost";
 import { SummaryTab } from "./match/SummaryTab";
 import { RatingHint } from "./match/RatingExplainer";
 import { TEAMS } from "./match/Scoreboard";
@@ -99,9 +100,13 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
   const { color } = useHero(me?.heroId);
   const resultColor = !me || draw ? "#8b94a8" : won ? "#3ecf8e" : "#f0616d";
 
+  const [backReq, setBackReq] = useState<{ matchId: number; account: number; test?: boolean } | null>(null);
+  useEffect(() => { try { const v = JSON.parse(sessionStorage.getItem(DEBRIEF_BACK_KEY) || "null"); if (v && v.matchId === d.matchId) setBackReq(v); } catch { /* egal */ } }, [d.matchId]);
+
   return (
     <>
       {back}
+      {backReq && <button onClick={() => openDebrief(backReq)} className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-amber/50 bg-[#0b0e15]/95 px-5 py-2.5 text-sm font-semibold text-amber shadow-2xl backdrop-blur transition hover:scale-[1.03]"><Icon name="arrowLeft" size={15} />Zurück zum Debrief</button>}
       <section className="surface relative overflow-hidden" style={{ boxShadow: `0 0 0 1px ${resultColor}33, 0 30px 60px -30px ${resultColor}44` }}>
         <HeroBackdrop id={me?.heroId} />
         <div className="relative grid items-center gap-6 p-6 md:grid-cols-[auto_1fr_auto] md:p-8">
