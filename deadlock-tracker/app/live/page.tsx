@@ -3,13 +3,14 @@ import { Suspense, useCallback, useEffect, useLayoutEffect, useState } from "rea
 import { useSearchParams } from "next/navigation";
 import { Empty, Gate } from "@/components/ui";
 import { Icon } from "@/components/Icon";
+import { BotMatch } from "@/components/BotMatch";
 import { ScoutBoard, ScoutCard, type LiveMatchMeta } from "@/components/ScoutBoard";
 import { useInterval } from "@/components/useTracker";
 import { useTracker } from "@/components/Providers";
 import type { ScoutPlayer } from "@/lib/live";
 import type { ScoutResult } from "@/lib/scout";
 
-type Mode = "live" | "last" | "player";
+type Mode = "live" | "last" | "player" | "bot";
 interface Res extends Partial<ScoutResult> { kind: Mode; active?: boolean; available?: boolean; match?: LiveMatchMeta; error?: string }
 interface Hit { accountId: number; name: string; avatar?: string; matches30d?: number }
 
@@ -52,7 +53,7 @@ function View({ account }: { account: number }) {
   const [target, setTarget] = useState<number | null>(initial?.get("mode") === "player" ? initId : null);
 
   const load = useCallback(async () => {
-    const url = mode === "player" ? (target ? `/api/scout?mode=player&id=${target}` : null) : `/api/scout?mode=${mode}&account=${account}`;
+    const url = mode === "bot" ? null : mode === "player" ? (target ? `/api/scout?mode=player&id=${target}` : null) : `/api/scout?mode=${mode}&account=${account}`;
     if (!url) { setRes(null); setLoading(false); return; }
     try { setRes(await (await fetch(url)).json()); } catch { setRes({ kind: mode, error: "Nicht erreichbar" }); }
     setLoading(false);
@@ -69,14 +70,14 @@ function View({ account }: { account: number }) {
 
   const isLive = mode === "live" && res?.active;
   const fit = useFit();
-  const board = mode !== "player" && !!res?.players;
+  const board = mode === "bot" || (mode !== "player" && !!res?.players);
 
   return (
     <div className="live-page -mb-12 flex flex-col gap-2" style={board ? { zoom: fit.z, height: fit.h / fit.z } : undefined}>
       <div className="flex items-center justify-between gap-3">
         <h1 className="display text-lg font-extrabold tracking-tight">Live & Scouting</h1>
         <div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
-          {([["live", "Live-Match"], ["last", "Letztes Match"], ["player", "Spieler scouten"]] as const).map(([k, l]) => (
+          {([["live", "Live-Match"], ["last", "Letztes Match"], ["player", "Spieler scouten"], ["bot", "Bot-Match (Test)"]] as const).map(([k, l]) => (
             <button key={k} onClick={() => setMode(k)} className={`tab flex items-center gap-1.5 !py-1 ${mode === k ? "tab-active" : ""}`}>{k === "live" && <span className={res?.kind === "live" && res.active ? "live-pulse !h-2 !w-2" : "h-2 w-2 rounded-full bg-white/20"} />}{l}</button>
           ))}
         </div>
@@ -93,7 +94,9 @@ function View({ account }: { account: number }) {
         </section>
       )}
 
-      {loading && mode !== "player" && <><div className="skeleton h-40" /><div className="skeleton h-96" /></>}
+      {mode === "bot" && <div className="min-h-0 flex-1"><BotMatch account={account} /></div>}
+
+      {loading && mode !== "player" && mode !== "bot" && <><div className="skeleton h-40" /><div className="skeleton h-96" /></>}
       {res?.error && <div className="surface p-5 text-loss">{res.error}</div>}
 
       {mode === "live" && res && res.active === false && !loading && <NoLive onLast={() => setMode("last")} />}
