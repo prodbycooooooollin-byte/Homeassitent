@@ -95,16 +95,16 @@ export function AimPanel({ aim }: { aim: AimStats }) {
 }
 
 /** Soul-Quellen: wo du gegen die Besten deiner Lobbys Souls liegen lässt – und was ein Ausgleich konkret bedeuten würde. */
-export function SoulPlanPanel({ plan, phases }: { plan: SoulPlan; phases: PhaseRate[] }) {
+export function SoulPlanPanel({ plan, phases, compact }: { plan: SoulPlan; phases: PhaseRate[]; compact?: boolean }) {
   const max = Math.max(1, ...plan.rows.flatMap((r) => [r.mine, r.ref]));
   const pmax = Math.max(1, ...phases.flatMap((p) => [p.mine, p.ref]));
   return (
-    <section className="surface p-5">
+    <section className={compact ? "" : "surface p-5"}>
       <div className="mb-4 flex flex-wrap items-baseline gap-x-4">
         <h3 className="label mr-auto">Woher deine Souls kommen</h3>
         <span className="text-xs text-muted">Du {Math.round(plan.mineTotal)}/Min · Beste deiner Lobbys {Math.round(plan.refTotal)}/Min · {plan.basis} Matches</span>
       </div>
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className={compact ? "grid gap-6" : "grid gap-8 lg:grid-cols-2"}>
         <div className="space-y-3">
           {plan.rows.map((r) => (
             <div key={r.key}>

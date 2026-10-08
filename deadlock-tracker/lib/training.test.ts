@@ -51,3 +51,21 @@ describe("Mustererkennung", () => {
     expect(souls!.title).toContain("Neutrale");
   });
 });
+
+import { buildView } from "./training-view";
+describe("Training-Ansicht", () => {
+  it("liefert Scorecard, Hauptproblem und letztes Match", () => {
+    const ms = build(14);
+    const rep = analyze(ms, null);
+    const v = buildView(ms, rep);
+    expect(v.skills).toHaveLength(8);
+    expect(v.skills.some((s) => s.pct !== null)).toBe(true);
+    expect(v.problem).not.toBeNull();
+    expect(v.problem!.action.length).toBeGreaterThan(10);
+    expect(v.last!.lines.length).toBeGreaterThan(0);
+  });
+  it("neue Metriken liefern Werte", () => {
+    const r = analyze(build(6), null);
+    for (const id of ["soloDeaths", "camps", "creepPct", "deadShare"]) expect(r.metrics.find((m) => m.id === id)!.values.some((x) => x.value !== null)).toBe(true);
+  });
+});

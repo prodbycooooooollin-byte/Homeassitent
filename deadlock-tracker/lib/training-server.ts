@@ -1,6 +1,7 @@
 import { fetchPerformanceCurve } from "./api";
 import type { ReferencePoint, TrainingMatch } from "./training";
 import { analyze, METRICS } from "./training";
+import { buildView } from "./training-view";
 import { classifyRoles, ratePlayer } from "./rating";
 import { cachedHeroRole } from "./hero-roles-server";
 import { getStore } from "./store";
@@ -53,5 +54,6 @@ export async function buildReport(accountId: number, n: number, heroId: number |
   const basis = mine.length ? mine : badges;
   const badge = basis.length ? Math.round(basis.reduce((a, b) => a + b, 0) / basis.length) : null;
   const ref = await reference(heroId, badge);
-  return { report: analyze(ms, ref), hasReference: !!ref, badge };
+  const report = analyze(ms, ref);
+  return { report, view: buildView(ms, report), hasReference: !!ref, badge };
 }

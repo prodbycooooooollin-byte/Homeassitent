@@ -75,6 +75,8 @@ export interface Focus {
   impact?: string;
 }
 
+export interface GoalSuggestion { metric: string; target: number; needed: number; window: number; label: string }
+
 export type SoulKey = "kills" | "lane" | "neutral" | "boss" | "treasure" | "denied";
 export const SOUL_LABELS: Record<SoulKey, string> = { kills: "Kills", lane: "Lane-Creeps", neutral: "Neutrale Camps", boss: "Objectives/Boss", treasure: "Kisten", denied: "Denies" };
 export interface SoulRow { key: SoulKey; label: string; mine: number; ref: number; gap: number }
@@ -125,7 +127,7 @@ function averageCurves(curves: number[][]): number[] | null {
 }
 
 /** Die besten (nach Note) Gegner-/Mitspieler eines Matches außer dir – Maßstab „so spielen die Besten deiner Lobby“. */
-function topPlayers(m: TrainingMatch, n = 2): MatchPlayer[] {
+export function topPlayers(m: TrainingMatch, n = 2): MatchPlayer[] {
   const all = m.details.players.filter((p) => p.accountId !== m.me.accountId && !p.abandoned && m.scores.has(p.accountId));
   // Vergleich bevorzugt mit Spielern gleicher Rolle (ein Support soll nicht an einem Carry gemessen werden)
   const myRole = m.roles?.get(m.me.accountId);
@@ -149,7 +151,7 @@ function aimOf(p: MatchPlayer) {
   };
 }
 
-function aimRates(players: MatchPlayer[]) {
+export function aimRates(players: MatchPlayer[]) {
   let hit = 0, shots = 0, hh = 0, cr = 0, n = 0;
   for (const p of players) {
     const a = aimOf(p);
@@ -168,9 +170,13 @@ export const METRICS: { id: string; label: string; unit: string; lowerIsBetter: 
   { id: "kda", label: "KDA", unit: "", lowerIsBetter: false, get: (m) => (m.me.kills + m.me.assists) / Math.max(1, m.me.deaths) },
   { id: "accuracy", label: "Trefferquote", unit: "%", lowerIsBetter: false, get: (m) => { const a = aimRates([m.me]).accuracy; return a === null ? null : a * 100; } },
   { id: "denies", label: "Denies", unit: "", lowerIsBetter: false, get: (m) => m.me.denies },
+  { id: "soloDeaths", label: "Tode ohne Team", unit: "", lowerIsBetter: true, get: (m) => (m.me.deathLog ? soloDeaths([m]).solo : null) },
+  { id: "camps", label: "Neutrale Camps", unit: "", lowerIsBetter: false, get: (m) => m.me.creeps?.neutral ?? null },
+  { id: "creepPct", label: "Lane-Creeps getroffen", unit: "%", lowerIsBetter: false, get: (m) => (m.me.creeps && m.me.creeps.possible > 0 ? (m.me.creeps.lane / m.me.creeps.possible) * 100 : null) },
+  { id: "deadShare", label: "Anteil tot", unit: "%", lowerIsBetter: true, get: (m) => (m.me.deadTimeS !== undefined ? (m.me.deadTimeS / m.details.durationS) * 100 : null) },
 ];
 
-function laneDiff(m: TrainingMatch): number | null {
+export function laneDiff(m: TrainingMatch): number | null {
   if (!m.me.lane || !m.me.timeline) return null;
   const r = laneReports(m.details).find((l) => l.lane === m.me.lane);
   if (!r) return null;
@@ -315,10 +321,10 @@ function buildPhaseRates(ms: TrainingMatch[]): PhaseRate[] {
   }).filter((p) => p.mine > 0 && p.ref > 0);
 }
 
-interface SoloStats { deaths: number; solo: number; soloLate: number }
+export interface SoloStats { deaths: number; solo: number; soloLate: number }
 
 /** Tode ohne sterbenden Mitspieler innerhalb von 25 s gelten als „allein gestorben“ (Pick-off), Tode mit Team als Teamfight. */
-function soloDeaths(ms: TrainingMatch[]): SoloStats {
+export function soloDeaths(ms: TrainingMatch[]): SoloStats {
   let deaths = 0, solo = 0, soloLate = 0;
   for (const m of ms) {
     const mates = m.details.players.filter((p) => p.team === m.me.team && p.accountId !== m.me.accountId && p.deathLog);
