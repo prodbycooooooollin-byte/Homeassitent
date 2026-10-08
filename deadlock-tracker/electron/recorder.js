@@ -160,7 +160,7 @@ function stop() {
 function reset() { if (rec && !rec.stopped) stop(); rec = null; return status(); }
 
 function status() {
-  return rec ? { running: !rec.stopped, startedAt: rec.t0, count: rec.lines.length, text: rec.lines.slice(-4000).join("\n") } : { running: false, startedAt: null, count: 0, text: "" };
+  return rec ? { running: !rec.stopped, startedAt: rec.t0, count: rec.lines.length, text: rec.lines.slice(-20000).join("\n") } : { running: false, startedAt: null, count: 0, text: "" };
 }
 
 module.exports = { start, stop, reset, status };
