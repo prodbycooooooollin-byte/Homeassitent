@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { achievements, activity, byDuration, byLobbyStrength, currentSession, insights, longestWinStreak, radar, records, streak } from "./profile";
+import { activity, byDuration, byLobbyStrength, currentSession, insights, longestWinStreak, radar, records, streak } from "./profile";
 import type { MatchListItem } from "./view";
 
 let id = 0;
 const M = (o: Partial<MatchListItem> = {}): MatchListItem => ({
   matchId: ++id, startTime: 1_000_000, durationS: 1800, heroId: 1, won: true, kills: 5, deaths: 3, assists: 4, netWorth: 30000, grade: "B", score: 1.0,
-  lobbyBadge: 63, detailsReady: true, detectedAfterS: null, myBadge: 63, parts: [1, 1, 1, 1, 1, 1, 1], rankedDelta: null, team: 0, level: 20, ...o,
+  lobbyBadge: 63, detailsReady: true, detectedAfterS: null, myBadge: 63, parts: [1, 1, 1, 1, 1, 1, 1], rankedDelta: null, team: 0, level: 20, role: null, ...o,
 });
 
 describe("profile analytics", () => {
@@ -43,8 +43,5 @@ describe("profile analytics", () => {
   it("insights and achievements", () => {
     const items = Array.from({ length: 8 }, () => M({ won: false }));
     expect(insights(items, () => "X").some((i) => i.text.includes("Niederlagen in Folge"))).toBe(true);
-    const ach = achievements([M({ kills: 20, grade: "S" })]);
-    expect(ach.find((a) => a.key === "kills15")?.progress).toBe(15);
-    expect(ach.find((a) => a.key === "s1")?.progress).toBe(1);
   });
 });

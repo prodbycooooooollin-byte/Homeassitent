@@ -51,6 +51,10 @@ const P: Record<string, React.ReactNode> = {
   grid: <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>,
   list: <><path d="M8 6h12M8 12h12M8 18h12" /><circle cx="4" cy="6" r="1" fill="currentColor" /><circle cx="4" cy="12" r="1" fill="currentColor" /><circle cx="4" cy="18" r="1" fill="currentColor" /></>,
   x: <path d="M6 6l12 12M18 6L6 18" />,
+  alert: <><path d="M12 3.5l10 17.5H2z" /><path d="M12 10v5" /><circle cx="12" cy="18" r=".6" fill="currentColor" /></>,
+  plusSign: <path d="M12 5v14M5 12h14" />,
+  arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
+  arrowLeft: <path d="M19 12H5M11 6l-6 6 6 6" />,
 };
 
 export type IconName = keyof typeof P;

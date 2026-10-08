@@ -1,5 +1,6 @@
 "use client";
 import { Fragment } from "react";
+import { Icon, type IconName } from "./Icon";
 import { useData, useTracker, type ProfileData } from "./Providers";
 import { Onboarding } from "./Onboarding";
 import type { TrackedPlayerDto } from "./useTracker";
@@ -26,10 +27,10 @@ export function PageSkeleton() {
   );
 }
 
-export function Empty({ icon = "◇", title, text }: { icon?: string; title: string; text?: string }) {
+export function Empty({ icon = "layers", title, text }: { icon?: IconName; title: string; text?: string }) {
   return (
     <div className="surface flex flex-col items-center justify-center gap-2 p-12 text-center">
-      <div className="display text-4xl text-white/20">{icon}</div>
+      <Icon name={icon} size={44} className="text-white/20" />
       <div className="font-semibold">{title}</div>
       {text && <div className="max-w-sm text-sm text-muted">{text}</div>}
     </div>

@@ -7,12 +7,18 @@ export interface UpdaterState {
   releasesUrl: string;
   lastCheck?: number;
 }
+export interface DesktopSettings { closeToTray: boolean; autoStart: boolean; startMinimized: boolean; desktopNotifications: boolean }
 export interface DesktopBridge {
   isDesktop: true;
   getInfo(): Promise<UpdaterState>;
   checkForUpdates(): Promise<UpdaterState>;
   installUpdate(): Promise<void>;
   onUpdateState(cb: (s: UpdaterState) => void): () => void;
+  platform: string;
+  getDesktopSettings(): Promise<DesktopSettings>;
+  setDesktopSettings(patch: Partial<DesktopSettings>): Promise<DesktopSettings>;
+  notify(n: { title: string; body: string; path?: string }): Promise<boolean>;
+  onNavigate(cb: (path: string) => void): () => void;
 }
 declare global {
   interface Window { desktop?: DesktopBridge }

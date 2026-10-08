@@ -2,6 +2,7 @@
 import { useCallback, useState } from "react";
 import { GradeBadge, GRADE_STYLE } from "./GradeBadge";
 import { HeroBackdrop, HeroPortrait, RankEmblem, useHero, useHeroName } from "./GameAssets";
+import { Icon } from "./Icon";
 import { NavLink } from "./NavLink";
 import { useInterval } from "./useTracker";
 import { FeedTab } from "./match/FeedTab";
@@ -51,7 +52,7 @@ export function MatchView({ matchId, account }: { matchId: number; account: numb
   }, [matchId, account]);
   useInterval(() => { if (!res || res.pending) load(); }, 8000);
 
-  const back = <NavLink href="/matches" className="btn btn-ghost !w-fit !px-3 !py-1.5 text-xs">← Alle Matches</NavLink>;
+  const back = <NavLink href="/matches" className="btn btn-ghost !w-fit !px-3 !py-1.5 text-xs"><Icon name="arrowLeft" size={14} />Alle Matches</NavLink>;
   if (err) return <div className="space-y-4">{back}<div className="surface p-6 text-loss">{err}</div></div>;
   if (!res) return <>{back}<div className="skeleton h-56" /><div className="skeleton h-80" /></>;
   if (!res.details) return <Pending res={res} account={account} back={back} />;
@@ -115,12 +116,12 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
               </p>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
-              <span className="chip">⏱ {fmtDuration(d.durationS)}</span>
+              <span className="chip"><Icon name="clock" size={13} />{fmtDuration(d.durationS)}</span>
               {d.matchMode && <span className="chip">{d.matchMode}</span>}
               <span className="chip">{new Date(d.startTime * 1000).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" })}</span>
               <span className="chip text-muted">#{d.matchId}</span>
               {rating && <span className="chip" style={{ borderColor: GRADE_STYLE[rating.grade].glow }}>{GRADE_STYLE[rating.grade].label} · Score {rating.score.toFixed(2)}<RatingHint rating={rating} who="Du" /></span>}
-              {me?.mvpRank === 1 && <span className="chip text-amber">★ MVP</span>}
+              {me?.mvpRank === 1 && <span className="chip text-amber"><Icon name="star" size={13} />MVP</span>}
             </div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/35 p-4 text-center backdrop-blur">

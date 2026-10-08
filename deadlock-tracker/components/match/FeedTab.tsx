@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { HeroPortrait, useHeroName } from "../GameAssets";
+import { Icon } from "../Icon";
 import { TEAMS } from "./Scoreboard";
 import { feed, objectiveLabel, type FeedEvent } from "@/lib/insights";
 import type { MatchDetails } from "@/lib/types";
@@ -34,14 +35,14 @@ export function FeedTab({ d, account }: { d: MatchDetails; account: number }) {
               {e.kind === "kill" && (
                 <>
                   {e.killer ? <HeroPortrait id={e.killer.heroId} size={30} variant="small" ring={TEAMS[e.killer.team].color} /> : <span className="w-[30px] text-center text-muted">?</span>}
-                  <span className="text-muted">⚔</span>
+                  <Icon name="sword" size={14} className="text-muted" />
                   <HeroPortrait id={e.victim.heroId} size={30} variant="small" ring={TEAMS[e.victim.team].color} />
                   <span className="min-w-0 flex-1 truncate"><b style={{ color: e.killer ? TEAMS[e.killer.team].color : undefined }}>{name(e.killer)}</b> besiegt <b style={{ color: TEAMS[e.victim.team].color }}>{name(e.victim)}</b></span>
                   {e === firstBlood && <span className="chip !py-0 text-[10px] text-loss">First Blood</span>}
                 </>
               )}
-              {e.kind === "objective" && (<><span className="text-lg" style={{ color: TEAMS[e.team].color }}>♜</span><span className="flex-1"><b style={{ color: TEAMS[e.team].color }}>{TEAMS[e.team].name}</b> verliert {objectiveLabel(e.id)}</span></>)}
-              {e.kind === "boss" && (<><span className="text-lg text-amber">✹</span><span className="flex-1"><b style={{ color: TEAMS[e.team].color }}>{TEAMS[e.team].name}</b> erobert den Mid-Boss</span></>)}
+              {e.kind === "objective" && (<><Icon name="tower" size={20} style={{ color: TEAMS[e.team].color }} /><span className="flex-1"><b style={{ color: TEAMS[e.team].color }}>{TEAMS[e.team].name}</b> verliert {objectiveLabel(e.id)}</span></>)}
+              {e.kind === "boss" && (<><Icon name="star" size={20} className="text-amber" /><span className="flex-1"><b style={{ color: TEAMS[e.team].color }}>{TEAMS[e.team].name}</b> erobert den Mid-Boss</span></>)}
             </div>
           ))}
           {!shown.length && <div className="p-8 text-center text-muted">Keine Ereignisse für diesen Filter.</div>}

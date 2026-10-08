@@ -4,6 +4,7 @@ import { Empty, Gate, PageTitle } from "@/components/ui";
 import { RankEmblem, TIER_COLORS } from "@/components/GameAssets";
 import { RankChart } from "@/components/RankChart";
 import { NavLink } from "@/components/NavLink";
+import { Icon } from "@/components/Icon";
 import { badgeToLinear, formatBadge, tierOf, TIER_NAMES } from "@/lib/ranks";
 import { byLobbyStrength } from "@/lib/profile";
 import type { MatchListItem, Overview } from "@/lib/view";
@@ -92,7 +93,7 @@ function RankView({ ov, matches }: { ov: Overview; matches: MatchListItem[] }) {
           {changes.length ? <div className="space-y-2">{changes.map(({ h, prev }) => {
             const up = (badgeToLinear(h.badge) ?? 0) > (badgeToLinear(prev!.badge) ?? 0);
             return (<NavLink key={h.matchId} href={`/match/${h.matchId}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition hover:bg-white/[0.05]">
-              <span className={up ? "text-win" : "text-loss"}>{up ? "▲" : "▼"}</span><span className="flex-1">{formatBadge(prev!.badge)} → <b>{formatBadge(h.badge)}</b></span>
+              <Icon name={up ? "trendUp" : "trendDown"} size={15} className={up ? "text-win" : "text-loss"} /><span className="flex-1">{formatBadge(prev!.badge)} → <b>{formatBadge(h.badge)}</b></span>
               <span className="text-xs text-muted">{new Date(h.t * 1000).toLocaleDateString("de-DE")}</span></NavLink>);
           })}</div> : <p className="text-sm text-muted">Noch keine Rangwechsel erfasst.</p>}
         </section>

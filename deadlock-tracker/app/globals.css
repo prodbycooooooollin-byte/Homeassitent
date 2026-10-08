@@ -42,13 +42,15 @@ body::before {
     @apply relative rounded-2xl border border-white/[0.06] bg-[#0f121a]/80 backdrop-blur-sm;
     box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 12px 32px -16px rgba(0,0,0,.8);
   }
+  .surface::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s; background: radial-gradient(260px circle at var(--gx, 50%) var(--gy, 50%), rgba(255,255,255,.07), transparent 65%); }
+  .surface:hover::before { opacity: 1; }
   .surface-hover { transition: border-color .2s, transform .2s, box-shadow .2s; }
   .surface-hover:hover { border-color: rgba(240,180,76,.35); box-shadow: 0 0 0 1px rgba(240,180,76,.12), 0 16px 40px -18px rgba(240,180,76,.25); }
   .label { @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-muted; }
   .display { font-family: "Oxanium", "Inter Variable", sans-serif; }
   .num { font-variant-numeric: tabular-nums; }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-[0.97];
   }
   .btn-gold {
     @apply text-black;
@@ -122,3 +124,39 @@ html.leaving main { opacity: 0; transform: translateY(-10px) scale(.995); filter
 
 .hover-card { animation: hover-in .16s cubic-bezier(.2,.8,.2,1) both; background: rgba(13,16,24,.96); backdrop-filter: blur(14px); border-color: rgba(255,255,255,.12); }
 @keyframes hover-in { from { opacity: 0; transform: translateY(4px) scale(.97); } to { opacity: 1; transform: none; } }
+
+/* ---------- Desktop-Titelleiste (Fenster-Buttons liegen rechts in der App-Leiste) ---------- */
+html.desktop header.topbar { -webkit-app-region: drag; user-select: none; }
+html.desktop header.topbar a, html.desktop header.topbar button, html.desktop header.topbar input,
+html.desktop header.topbar select, html.desktop header.topbar [role="tooltip"] { -webkit-app-region: no-drag; }
+html.desktop header.topbar > div:first-child { padding-right: 150px; }
+html.desktop .toast-zone { top: 80px; }
+
+/* ---------- Effekte: reduziert / aus, kompakte Darstellung ---------- */
+html.fx-reduced .aurora i, html.fx-reduced .float, html.fx-reduced .sheen::after, html.fx-reduced .bg-pattern { animation: none !important; }
+html.fx-reduced main, html.fx-reduced .page-enter { filter: none !important; }
+html.fx-off *, html.fx-off *::before, html.fx-off *::after { animation: none !important; transition: none !important; }
+html.fx-off .aurora, html.fx-off .bg-pattern { display: none; }
+html.density-compact main { padding-top: 1rem; }
+html.density-compact .page-enter { row-gap: 1rem; }
+html.density-compact .page-enter > * + * { margin-top: 1rem; }
+html.density-compact .surface .p-5 { padding: 0.9rem; }
+
+/* ---------- Seitenspezifische Hintergründe ---------- */
+:root { --accent: #f0b44c; }
+.bg-pattern { position: fixed; inset: 0; z-index: -1; pointer-events: none; animation: bg-in 1s ease both; }
+@keyframes bg-in { from { opacity: 0; } to { opacity: 1; } }
+.bg-pattern[data-p="hex"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 2 54 17v30L28 62 2 47V17zM28 62v35M2 47 0 48M54 47l2 1' fill='none' stroke='white' stroke-opacity='.05'/%3E%3C/svg%3E"); mask-image: radial-gradient(ellipse at 50% 0%, #000, transparent 75%); }
+.bg-pattern[data-p="dots"] { background-image: radial-gradient(rgba(255,255,255,.09) 1px, transparent 1.5px); background-size: 26px 26px; mask-image: radial-gradient(ellipse at 20% 10%, #000, transparent 70%); }
+.bg-pattern[data-p="scan"] { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.03) 0 1px, transparent 1px 16px); mask-image: linear-gradient(180deg, #000, transparent 80%); }
+.bg-pattern[data-p="rays"] { background: repeating-conic-gradient(from 0deg at 50% -8%, color-mix(in srgb, var(--accent) 12%, transparent) 0 3deg, transparent 3deg 9deg); mask-image: radial-gradient(ellipse at 50% 0%, #000, transparent 70%); animation: bg-in 1s ease both, rays 40s linear infinite; }
+@keyframes rays { to { transform: rotate(6deg) scale(1.05); } }
+.bg-pattern[data-p="grid"] { background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 44px 44px; mask-image: radial-gradient(ellipse at 70% 0%, #000, transparent 70%); }
+.bg-pattern[data-p="sparkles"] { background-image: radial-gradient(2px 2px at 20% 30%, var(--accent), transparent), radial-gradient(1.5px 1.5px at 70% 20%, #fff, transparent), radial-gradient(2px 2px at 85% 60%, var(--accent), transparent), radial-gradient(1.5px 1.5px at 35% 75%, #fff, transparent), radial-gradient(2px 2px at 55% 45%, var(--accent), transparent), radial-gradient(1.5px 1.5px at 10% 85%, #fff, transparent); background-size: 520px 520px; opacity: .55; animation: bg-in 1s ease both, twinkle 5s ease-in-out infinite; }
+@keyframes twinkle { 0%,100% { opacity: .25; } 50% { opacity: .7; } }
+.bg-pattern[data-p="chart"] { background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px); background-size: 100% 52px; mask-image: linear-gradient(180deg, #000, transparent 85%); }
+.bg-pattern[data-p="spotlight"] { background: conic-gradient(from 180deg at 50% -6%, transparent 0 164deg, color-mix(in srgb, var(--accent) 20%, transparent) 172deg, transparent 180deg, color-mix(in srgb, var(--accent) 20%, transparent) 188deg, transparent 196deg); mask-image: radial-gradient(ellipse at 50% 0%, #000, transparent 70%); }
+.bg-art { position: fixed; inset: 0; z-index: -1; pointer-events: none; background-size: cover; background-position: 70% 20%; opacity: .16; filter: blur(14px) saturate(1.2); mask-image: radial-gradient(ellipse at 75% 20%, #000, transparent 70%); animation: bg-in 1.2s ease both; transform: scale(1.1); }
+
+.drawer { animation: drawer-in .35s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes drawer-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }

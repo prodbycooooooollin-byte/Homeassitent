@@ -19,16 +19,19 @@ Ohne Netzwerk: `DEADLOCK_DEMO=1` startet mit generierten Demo-Daten.
 
 | Seite | Inhalt |
 | --- | --- |
-| Übersicht | Player Card, **Live-Match-Banner**, Kennzahlen inkl. Ø Lobby-Rang, Session-Bilanz mit Tilt-Warnung, Erkenntnisse, Rekorde, letzte Matches, Rang, Performance-Radar, Aktivitäts-Heatmap |
-| Matches | Alle Matches, Filter (Ergebnis/Modus/Held), Sortierung, Tagesgruppen |
-| Match | Tabs: **Übersicht** (Auszeichnungen, Teamvergleich, Lobby-Ränge), **Lane** (Souls/Kämpfe je Lane bis Minute X), **Verlauf** (Souls-Vorsprung, Spielerkurven), **Items** (Kaufreihenfolge), **Ereignisse** (Kill-Feed, Objectives, Mid-Boss, Todeszeiten) |
-| Helden | Eigene Helden-Karten, Detailseite je Held |
+| Übersicht | Player Card, **Live-Match-Banner**, Kennzahlen (mit Hover-Erklärungen), Session-Bilanz mit Tilt-Warnung, Erkenntnisse, Rekorde, letzte Matches, Rang, Performance-Radar, Aktivitäts-Heatmap |
+| Matches | Auswertung der Auswahl mit Gewinnkurve, sticky Filter (Suche, Ergebnis, Modus, Held, Noten), Listen-/Kachelansicht, Tagesgruppen mit Bilanz, **Hover-Vorschau** beider Teams, endloses Nachladen |
+| Match | Tabs: Übersicht (Auszeichnungen, Teamvergleich, Lobby-Ränge), Lane, Verlauf, Items, Ereignisse. Die Zusammensetzung der Note erscheint nur als Hover am Noten-Badge bzw. Info-Symbol |
+| Helden | Eigene Helden-Karten, Detailseite je Held, „Spielstil, Builds & Matchups“ |
 | Rang | Verlauf mit Ø Lobby-Rang, „Top X %“, Rang-Punkte pro Match, Rangänderungen, Winrate nach Lobby-Stärke |
 | Analyse | Winrate nach Tageszeit/Wochentag/Dauer/Lobby-Stärke, Radar, Rekorde, Erkenntnisse |
-| Erfolge | 12 freischaltbare Meilensteine |
-| Mitspieler · Vergleich | Stammspieler mit Winrate · zwei getrackte Accounts gegenüberstellen |
-| Meta · Bestenliste | Globale Helden-Tierliste · Leaderboard je Region |
-| Diagnose | Testet alle API-Endpunkte von deinem Rechner aus, zeigt Status/Rate-Limits/Fehler und die Update-Version |
+| Erfolge | 28 Serien mit bis zu 5 Stufen (Bronze–Diamant, ~100 Medaillen), Erfolgs-Level, „Als Nächstes“ |
+| Mitspieler | Über die **gesamte Historie** aus der API (`mate-stats`/`enemy-stats`): Mitspieler, Premade, Gegner, Bester Partner/Nemesis |
+| Vergleich | Duell zweier getrackter Spieler: Kennzahlen, Stärkenprofil, Notenverteilung, Heldenpool, gemeinsame Matches |
+| Meta | Globale Helden-Tierliste; Klick öffnet Spielstil, Startwerte, Fähigkeiten, **Community-Builds mit Build-ID**, Top-Items, Counter/Synergien |
+| Bestenliste | Podium, Region- und Helden-Filter, eigener Platz, Suche, Tracken per Klick |
+| Einstellungen | **Steam-Anmeldung (OpenID)**, Abfrage-Takt, Historie im Hintergrund vervollständigen, Benachrichtigungen, Effekte, Dichte; Desktop: Tray, Autostart, Updates |
+| Diagnose | Testet alle API-Endpunkte, zeigt Status, Rate-Limits und Fehler |
 
 **Live-Erkennung:** `/v1/matches/active` zeigt laufende Matches. Endet eines, pollt der Server die Historie
 einige Minuten im 5-s-Takt (sonst 20 s). Details (beide Teams, Ränge, Zeitreihen) werden ohne Steam-Fallback
@@ -41,6 +44,12 @@ Fortschrittsbalken, gestaffelter Aufbau), neigbare Heldenkarten, animierte Zahle
 Rang-Badges kommen von `api.deadlock-api.com/v1/assets/{heroes,ranks}` bzw. `/v1/assets/ranks/{tier}/{sub}/image`,
 laufen über `/api/img` (Host-Allowlist, Platten-Cache, überstehen Offline-Phasen) und fallen bei Fehlern auf
 eigene Grafiken zurück (Farbkachel mit Initialen, gezeichnetes Rang-Emblem).
+
+## Desktop-Fenster
+
+Eigene Titelleiste: Die System-Leiste entfällt, Minimieren/Maximieren/Schließen sitzen in der App-Leiste (`titleBarOverlay`). Taskleisten-/Installer-Icon: `build/icon.ico` (aus `app/icon.svg`, 16–256 px). Optional im Infobereich weiterlaufen (Tray), mit Windows starten, Windows-Benachrichtigungen – alles unter *Einstellungen → Desktop-App*.
+
+**Steam-Anmeldung:** *Einstellungen → Mit Steam anmelden* nutzt Steam-OpenID. Der Tracker bekommt nur deine öffentliche Steam-ID; die Signatur wird per `check_authentication` bei Steam bestätigt. Profilbilder werden immer in der großen Variante (184 px) geladen.
 
 ## Auto-Update (Desktop)
 

@@ -1,5 +1,7 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { DEFAULT_SETTINGS, type AppSettings, type SteamLink } from "@/lib/types";
 import { AssetsProvider } from "./GameAssets";
 import type { HeroAgg, MateAgg, MatchListItem, Overview } from "@/lib/view";
 import type { ActiveMatchDto } from "@/lib/api";
@@ -9,6 +11,7 @@ export interface Status {
   demo: boolean;
   pollIntervalS: number;
   pendingDetails: number;
+  coverage?: { total: number; withDetails: number };
   players: TrackedPlayerDto[];
   live: { matchId: number; firstSeenAt: number; accounts: number[] }[];
 }
@@ -25,6 +28,32 @@ interface TrackerCtx {
   toasts: Toast[];
   dismissToast: (id: number) => void;
 }
+/* ---- Einstellungen (serverseitig gespeichert, hier als Kontext + Klassen auf <html>) ---- */
+interface SettingsCtx { settings: AppSettings; steam: SteamLink | null; update: (patch: Partial<AppSettings>) => Promise<void>; disconnectSteam: () => Promise<void> }
+const SCtx = createContext<SettingsCtx>({ settings: DEFAULT_SETTINGS, steam: null, update: async () => {}, disconnectSteam: async () => {} });
+export const useSettings = () => useContext(SCtx);
+
+function SettingsProvider({ children }: { children: React.ReactNode }) {
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [steam, setSteam] = useState<SteamLink | null>(null);
+  useEffect(() => { fetch("/api/settings").then((r) => r.json()).then((j) => { setSettings(j.settings); setSteam(j.steam); }).catch(() => {}); }, []);
+  useEffect(() => {
+    const c = document.documentElement.classList;
+    c.toggle("fx-reduced", settings.effects === "reduced");
+    c.toggle("fx-off", settings.effects === "off");
+    c.toggle("density-compact", settings.density === "compact");
+  }, [settings]);
+  const update = useCallback(async (patch: Partial<AppSettings>) => {
+    setSettings((s) => ({ ...s, ...patch })); // optimistisch
+    try { setSettings((await (await fetch("/api/settings", { method: "PUT", body: JSON.stringify({ settings: patch }) })).json()).settings); } catch { /* bleibt optimistisch */ }
+  }, []);
+  const disconnectSteam = useCallback(async () => {
+    const j = await (await fetch("/api/settings", { method: "PUT", body: JSON.stringify({ disconnectSteam: true }) })).json();
+    setSettings(j.settings); setSteam(j.steam);
+  }, []);
+  return <SCtx.Provider value={{ settings, steam, update, disconnectSteam }}>{children}</SCtx.Provider>;
+}
+
 const Ctx = createContext<TrackerCtx>(null as unknown as TrackerCtx);
 export const useTracker = () => useContext(Ctx);
 
@@ -67,6 +96,15 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
   const [syncing, setSyncing] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seen = useRef<Set<number> | null>(null);
+  const router = useRouter();
+  const { settings } = useSettings();
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const acc = Number(q.get("account"));
+    if (q.get("steam") === "ok" && acc) { setAccount(acc); history.replaceState(null, "", window.location.pathname); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => window.desktop?.onNavigate((p) => router.push(p)), [router]);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -81,6 +119,10 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
             const acc = l.accounts.includes(account ?? -1) ? account! : l.accounts[0];
             const t: Toast = { id: l.matchId, matchId: l.matchId, account: acc };
             setToasts((cur) => [t, ...cur].slice(0, 3));
+            if (settings.notifyNewMatch) {
+              const n = { title: "Neues Match erkannt", body: `Match #${l.matchId} wurde angelegt.`, path: `/match/${l.matchId}?account=${acc}` };
+              if (window.desktop) window.desktop.notify(n); else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(n.title, { body: n.body });
+            }
             setTimeout(() => setToasts((cur) => cur.filter((x) => x.id !== t.id)), 12000);
           }
         }
@@ -89,7 +131,7 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* nächster Tick */
     }
-  }, [account, setAccount]);
+  }, [account, setAccount, settings.notifyNewMatch]);
 
   useInterval(loadStatus, 4000);
 
@@ -104,7 +146,7 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
   }, [loadStatus]);
 
   // Zusätzlicher Client-Sync (dedupliziert serverseitig) – falls kein Server-Poller läuft.
-  const everyS = Math.max(10, status?.pollIntervalS ?? 20);
+  const everyS = Math.max(10, settings.pollIntervalS);
   useInterval(() => {
     if (status?.players.length) fetch("/api/sync", { method: "POST" }).catch(() => {});
   }, everyS * 1000);
@@ -142,7 +184,7 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <AssetsProvider>
-      <TrackerProvider><DataProvider>{children}</DataProvider></TrackerProvider>
+      <SettingsProvider><TrackerProvider><DataProvider>{children}</DataProvider></TrackerProvider></SettingsProvider>
     </AssetsProvider>
   );
 }

@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "./Logo";
 import { Avatar } from "./GameAssets";
+import { Icon } from "./Icon";
 import { NavLink } from "./NavLink";
 import { useTracker } from "./Providers";
 import { fmtAgo } from "@/lib/format";
@@ -39,7 +40,7 @@ export function TopBar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[#080a10]/70 backdrop-blur-xl">
+      <header className="topbar sticky top-0 z-30 border-b border-white/[0.06] bg-[#080a10]/70 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1560px] items-center gap-4 px-5">
           <NavLink href="/" aria-label="Deadlock Tracker" className="transition hover:scale-[1.03]"><Logo /></NavLink>
           <nav ref={navRef} className="relative hidden h-full items-center gap-0 xl:flex">
@@ -62,12 +63,13 @@ export function TopBar() {
               </button>
             )}
             {status?.demo && <span className="chip border-amber/40 text-amber">DEMO</span>}
+            <NavLink href="/settings" aria-label="Einstellungen" title="Einstellungen" className={`flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-muted transition hover:border-white/25 hover:text-white ${path.startsWith("/settings") ? "!border-amber/50 !text-amber" : ""}`}><Icon name="sliders" size={17} /></NavLink>
             {status && status.players.length > 0 && (
               <div className="relative">
                 <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] py-1 pl-1 pr-3 transition hover:border-white/25">
                   <Avatar src={me?.avatar} name={me?.name ?? "?"} size={30} ring="#ffffff22" />
                   <span className="hidden max-w-[120px] truncate text-sm font-medium xl:block">{me?.name}</span>
-                  <span className="text-muted">▾</span>
+                  <Icon name="chevron" size={14} className="rotate-90 text-muted" />
                 </button>
                 {open && (
                   <div className="surface fade-up absolute right-0 mt-2 w-64 overflow-hidden p-1.5" onMouseLeave={() => setOpen(false)}>
@@ -78,8 +80,8 @@ export function TopBar() {
                         <span className="truncate text-sm">{p.name}</span>
                       </button>
                     ))}
-                    <NavLink href="/status" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-lg border-t border-white/[0.06] px-2 py-2 text-sm text-muted hover:bg-white/[0.06] hover:text-white">⚙ Diagnose & Updates</NavLink>
-                    <NavLink href="/?add=1" onClick={() => setOpen(false)} className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-amber hover:bg-white/[0.06]">＋ Account hinzufügen</NavLink>
+                    <NavLink href="/status" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-lg border-t border-white/[0.06] px-2 py-2 text-sm text-muted hover:bg-white/[0.06] hover:text-white"><Icon name="sliders" size={15} />Einstellungen</NavLink>
+                    <NavLink href="/?add=1" onClick={() => setOpen(false)} className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-amber hover:bg-white/[0.06]"><Icon name="plusSign" size={15} />Account hinzufügen</NavLink>
                   </div>
                 )}
               </div>
@@ -101,9 +103,9 @@ export function TopBar() {
             <span className="live-dot" />
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold">Neues Match erkannt</span>
-              <span className="block text-xs text-muted">#{t.matchId} · jetzt ansehen →</span>
+              <span className="block text-xs text-muted">#{t.matchId} · jetzt ansehen</span>
             </span>
-            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); dismissToast(t.id); }} className="text-muted hover:text-white">✕</button>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); dismissToast(t.id); }} className="text-muted hover:text-white"><Icon name="x" size={16} /></button>
           </NavLink>
         ))}
       </div>
@@ -151,12 +153,12 @@ function SearchBox() {
     <div className="relative hidden md:block">
       <input value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setFocus(true)} onBlur={() => setTimeout(() => setFocus(false), 180)}
         placeholder="Spieler suchen …" className="input !w-44 !rounded-full !py-1.5 pl-9 text-[13px] transition-all focus:!w-64 xl:!w-56" />
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">⌕</span>
+      <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
       {focus && q.trim().length >= 2 && (
         <div className="surface fade-up absolute right-0 mt-2 max-h-96 w-80 overflow-y-auto p-1.5">
           {idFromInput && (
             <button onClick={() => track(q)} className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-white/[0.06]">
-              <span>Account <b>{idFromInput}</b> tracken</span><span className="text-amber">＋</span>
+              <span>Account <b>{idFromInput}</b> tracken</span><Icon name="plusSign" size={16} className="text-amber" />
             </button>
           )}
           {busy && <div className="px-3 py-2 text-sm text-muted">Suche …</div>}
@@ -165,7 +167,7 @@ function SearchBox() {
               <Avatar src={r.avatar} name={r.name} size={32} ring="#ffffff22" />
               <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{r.name}</span>
                 <span className="block text-[11px] text-muted">{r.matches30d !== undefined ? `${r.matches30d} Matches (30 Tage)` : `ID ${r.accountId}`}</span></span>
-              <span className="text-xs text-amber">{known(r.accountId) ? "✓ getrackt" : "＋ tracken"}</span>
+              <span className="text-xs text-amber">{known(r.accountId) ? "getrackt" : "tracken"}</span>
             </button>
           ))}
           {!busy && !idFromInput && !res.length && !err && <div className="px-3 py-2 text-sm text-muted">Keine Treffer.</div>}

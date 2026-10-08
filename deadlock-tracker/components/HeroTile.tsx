@@ -1,6 +1,7 @@
 "use client";
 import { HeroPortrait, useHero, useHeroName, useTilt } from "./GameAssets";
 import { NavLink } from "./NavLink";
+import { HoverCard } from "./Popover";
 import type { HeroAgg } from "@/lib/view";
 
 export function HeroTile({ h }: { h: HeroAgg }) {
@@ -8,7 +9,12 @@ export function HeroTile({ h }: { h: HeroAgg }) {
   const { color } = useHero(h.heroId);
   const tilt = useTilt(6);
   const wr = h.wins / h.matches;
+  const tip = (
+    <div className="space-y-1.5 text-xs"><div className="flex items-center gap-2"><HeroPortrait id={h.heroId} size={34} variant="small" /><b className="text-sm">{heroName(h.heroId)}</b></div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted"><span>Spiele</span><b className="num text-white">{h.matches}</b><span>Winrate</span><b className="num text-white">{Math.round(wr * 100)}%</b><span>KDA</span><b className="num text-white">{h.kda.toFixed(2)}</b><span>Souls/Min</span><b className="num text-white">{Math.round(h.soulsPerMin)}</b><span>Ø Rating</span><b className="num text-white">{h.avgScore?.toFixed(2) ?? "–"}</b></div></div>
+  );
   return (
+    <HoverCard width={230} className="!block" content={tip}>
     <NavLink href={`/heroes/${h.heroId}`} className="block">
       <div {...tilt} className="tilt surface relative flex items-center gap-4 overflow-hidden p-4" style={{ boxShadow: `0 0 0 1px ${color}33` }}>
         <span className="shine" />
@@ -24,5 +30,6 @@ export function HeroTile({ h }: { h: HeroAgg }) {
         </div>
       </div>
     </NavLink>
+    </HoverCard>
   );
 }

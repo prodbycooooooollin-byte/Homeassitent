@@ -113,66 +113,40 @@ export function avgLobby(items: MatchListItem[], last = 20): number | null {
   return l.length ? l.reduce((a, b) => a + b, 0) / l.length : null;
 }
 
-export interface Insight { icon: string; text: string; tone: "good" | "bad" | "info" }
+export interface Insight { icon: string; /* IconName */ text: string; tone: "good" | "bad" | "info" }
 export function insights(items: MatchListItem[], heroName: (id: number) => string): Insight[] {
   const out: Insight[] = [];
   if (items.length < 3) return out;
   const st = streak(items);
-  if (st >= 3) out.push({ icon: "🔥", text: `${st} Siege in Folge – bleib dran!`, tone: "good" });
-  if (st <= -3) out.push({ icon: "🧊", text: `${-st} Niederlagen in Folge – vielleicht kurz Pause machen?`, tone: "bad" });
+  if (st >= 3) out.push({ icon: "flame", text: `${st} Siege in Folge – bleib dran!`, tone: "good" });
+  if (st <= -3) out.push({ icon: "trendDown", text: `${-st} Niederlagen in Folge – vielleicht kurz Pause machen?`, tone: "bad" });
   const heroes = new Map<number, { n: number; w: number }>();
   for (const m of items) { const h = heroes.get(m.heroId) ?? { n: 0, w: 0 }; h.n++; if (m.won) h.w++; heroes.set(m.heroId, h); }
   const ranked = [...heroes.entries()].filter(([, h]) => h.n >= 3).map(([id, h]) => ({ id, ...h, wr: h.w / h.n }));
   if (ranked.length >= 2) {
     const best = ranked.reduce((a, b) => (b.wr > a.wr ? b : a)), worst = ranked.reduce((a, b) => (b.wr < a.wr ? b : a));
-    if (best.wr > 0.55) out.push({ icon: "👑", text: `Dein stärkster Held: ${heroName(best.id)} – ${Math.round(best.wr * 100)}% Winrate in ${best.n} Spielen.`, tone: "good" });
-    if (worst.wr < 0.45 && worst.id !== best.id) out.push({ icon: "⚠", text: `Mit ${heroName(worst.id)} läuft es schwer: ${Math.round(worst.wr * 100)}% in ${worst.n} Spielen.`, tone: "bad" });
+    if (best.wr > 0.55) out.push({ icon: "crown", text: `Dein stärkster Held: ${heroName(best.id)} – ${Math.round(best.wr * 100)}% Winrate in ${best.n} Spielen.`, tone: "good" });
+    if (worst.wr < 0.45 && worst.id !== best.id) out.push({ icon: "alert", text: `Mit ${heroName(worst.id)} läuft es schwer: ${Math.round(worst.wr * 100)}% in ${worst.n} Spielen.`, tone: "bad" });
   }
   const hours = byHour(items).filter((b) => b.n >= 4);
   if (hours.length >= 2) {
     const best = hours.reduce((a, b) => (b.wins / b.n > a.wins / a.n ? b : a));
-    if (best.wins / best.n >= 0.55) out.push({ icon: "🕒", text: `Zwischen ${best.label} Uhr gewinnst du am häufigsten (${Math.round((best.wins / best.n) * 100)}%).`, tone: "info" });
+    if (best.wins / best.n >= 0.55) out.push({ icon: "clock", text: `Zwischen ${best.label} Uhr gewinnst du am häufigsten (${Math.round((best.wins / best.n) * 100)}%).`, tone: "info" });
   }
   const dur = byDuration(items).filter((b) => b.n >= 4);
   if (dur.length >= 2) {
     const best = dur.reduce((a, b) => (b.wins / b.n > a.wins / a.n ? b : a));
-    out.push({ icon: "⏱", text: `Matches mit ${best.label} liegen dir am besten (${Math.round((best.wins / best.n) * 100)}% Winrate).`, tone: "info" });
+    out.push({ icon: "hourglass", text: `Matches mit ${best.label} liegen dir am besten (${Math.round((best.wins / best.n) * 100)}% Winrate).`, tone: "info" });
   }
   const scored = items.filter((m) => m.score !== null);
   if (scored.length >= 12) {
     const avg = (xs: MatchListItem[]) => xs.reduce((a, m) => a + (m.score as number), 0) / xs.length;
     const diff = avg(scored.slice(0, 6)) - avg(scored.slice(6, 12));
-    if (Math.abs(diff) >= 0.08) out.push({ icon: diff > 0 ? "📈" : "📉", text: `Dein Rating der letzten 6 Matches ist ${diff > 0 ? "um" : "um"} ${Math.abs(diff).toFixed(2)} ${diff > 0 ? "gestiegen" : "gefallen"}.`, tone: diff > 0 ? "good" : "bad" });
+    if (Math.abs(diff) >= 0.08) out.push({ icon: diff > 0 ? "trendUp" : "trendDown", text: `Dein Rating der letzten 6 Matches ist ${diff > 0 ? "um" : "um"} ${Math.abs(diff).toFixed(2)} ${diff > 0 ? "gestiegen" : "gefallen"}.`, tone: diff > 0 ? "good" : "bad" });
   }
   const ls = byLobbyStrength(items);
-  if (ls[2].n >= 4 && ls[0].n >= 4) out.push({ icon: "⚔", text: `Gegen stärkere Lobbys gewinnst du ${Math.round((ls[2].wins / ls[2].n) * 100)}%, gegen schwächere ${Math.round((ls[0].wins / ls[0].n) * 100)}%.`, tone: "info" });
+  if (ls[2].n >= 4 && ls[0].n >= 4) out.push({ icon: "sword", text: `Gegen stärkere Lobbys gewinnst du ${Math.round((ls[2].wins / ls[2].n) * 100)}%, gegen schwächere ${Math.round((ls[0].wins / ls[0].n) * 100)}%.`, tone: "info" });
   return out.slice(0, 6);
-}
-
-export interface Achievement { key: string; icon: string; title: string; desc: string; progress: number; target: number }
-export function achievements(items: MatchListItem[]): Achievement[] {
-  const n = items.length;
-  const heroCount = new Map<number, number>();
-  for (const m of items) heroCount.set(m.heroId, (heroCount.get(m.heroId) ?? 0) + 1);
-  const sGrades = items.filter((m) => m.grade === "S").length;
-  const maxHero = Math.max(0, ...heroCount.values());
-  let sRun = 0, sBest = 0;
-  for (const m of [...items].reverse()) { sRun = m.grade === "S" ? sRun + 1 : 0; sBest = Math.max(sBest, sRun); }
-  const A = (key: string, icon: string, title: string, desc: string, progress: number, target: number): Achievement => ({ key, icon, title, desc, progress: Math.min(progress, target), target });
-  return [
-    A("m12", "◈", "Auf den Geschmack gekommen", "12 Matches getrackt", n, 12),
-    A("m100", "◆", "Veteran", "100 Matches getrackt", n, 100),
-    A("streak5", "🔥", "Siegesserie", "5 Siege in Folge", longestWinStreak(items), 5),
-    A("s1", "★", "Erster S-Rang", "Eine S-Note erreichen", sGrades, 1),
-    A("s3", "✦", "Meisterleistung", "3 S-Noten in Folge", sBest, 3),
-    A("ghost", "☠", "Unsterblich", "Ein Match ohne Tod gewinnen", items.filter((m) => m.won && m.deaths === 0).length, 1),
-    A("kills15", "⚔", "Gemetzel", "15 Kills in einem Match", Math.max(0, ...items.map((m) => m.kills)), 15),
-    A("souls60", "💰", "Souls-Magnat", "60.000 Souls in einem Match", Math.max(0, ...items.map((m) => m.netWorth)), 60000),
-    A("marathon", "⏳", "Marathon", "Ein Match über 50 Minuten", Math.max(0, ...items.map((m) => m.durationS)) / 60, 50),
-    A("blitz", "⚡", "Blitzkrieg", "Einen Sieg unter 22 Minuten", items.some((m) => m.won && m.durationS < 1320) ? 1 : 0, 1),
-    A("heroes10", "🎭", "Wandlungsfähig", "10 verschiedene Helden spielen", heroCount.size, 10),
-    A("master20", "♛", "Heldenmeister", "20 Matches mit demselben Helden", maxHero, 20),
-  ];
 }
 
 export { gradeFor };

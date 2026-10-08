@@ -1,5 +1,6 @@
 "use client";
 import { HeroPortrait, RankEmblem, useHeroName } from "../GameAssets";
+import { Icon, type IconName } from "../Icon";
 import { TeamTable, TEAMS, Versus, sum } from "./Scoreboard";
 import { awards, advantageSummary } from "@/lib/insights";
 import { formatBadge, tierOf } from "@/lib/ranks";
@@ -10,7 +11,7 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
   const heroName = useHeroName();
   const me = d.players.find((p) => p.accountId === account);
   const maxDmg = Math.max(1, ...d.players.map((p) => p.heroDamage));
-  const aw = awards(d);
+  const aw = awards(d, ratings);
   const adv = me ? advantageSummary(d, me.team) : null;
   const ranks = d.players.map((p) => p.badge).filter((b): b is number => !!b);
   const tiers = Array.from({ length: 12 }, (_, t) => ({ t, n: ranks.filter((b) => tierOf(b) === t).length })).filter((x) => x.n > 0);
@@ -25,7 +26,7 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
             {aw.map((a, i) => (
               <div key={a.key} className="surface surface-hover fade-up relative overflow-hidden p-3 text-center" style={{ animationDelay: `${i * 50}ms`, ...(a.player.accountId === account ? { boxShadow: "0 0 0 1px #f0b44c88" } : {}) }}>
-                <div className="display text-lg text-amber">{a.icon}</div>
+                <div className="flex justify-center text-amber"><Icon name={a.icon as IconName} size={20} /></div>
                 <div className="label !text-[9px]">{a.title}</div>
                 <div className="my-2 flex justify-center"><HeroPortrait id={a.player.heroId} size={48} variant="small" ring={TEAMS[a.player.team].color} /></div>
                 <div className="truncate text-xs font-semibold">{a.player.accountId === account ? "Du" : a.player.name ?? heroName(a.player.heroId)}</div>
@@ -48,7 +49,7 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
           {adv && (
             <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-muted">
               Größter Souls-Vorsprung <b className="text-win">+{(adv.max.diff / 1000).toFixed(1)}k</b> bei {Math.round(adv.max.t / 60)}′ · größter Rückstand <b className="text-loss">{(adv.min.diff / 1000).toFixed(1)}k</b> bei {Math.round(adv.min.t / 60)}′
-              {adv.comeback && <div className="mt-1 font-semibold text-amber">🔥 Comeback-Sieg!</div>}
+              {adv.comeback && <div className="mt-1 flex items-center gap-1.5 font-semibold text-amber"><Icon name="flame" size={14} />Comeback-Sieg!</div>}
               {adv.throwGame && <div className="mt-1 font-semibold text-loss">Ein sicher geglaubtes Match wurde noch verloren.</div>}
             </div>
           )}

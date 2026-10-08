@@ -1,7 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-// Heldenrollen kommen im Test nur dort vor, wo sie explizit übergeben werden (keine Abhängigkeit vom Asset-Cache).
-vi.mock("./hero-roles", () => ({ cachedHeroRole: () => null, roleFromText: () => null }));
 import { classifyRoles, COMPONENT_ORDER, gradeFor, ratePlayer, ratioScore, ROLE_WEIGHTS } from "./rating";
 import { averageBadge, formatBadge } from "./ranks";
 import type { MatchDetails, MatchPlayer, RoleKey } from "./types";

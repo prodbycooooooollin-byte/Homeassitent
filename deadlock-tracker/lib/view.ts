@@ -1,7 +1,8 @@
 import { averageBadge } from "./ranks";
 import { ratePlayer } from "./rating";
+import { cachedHeroRole } from "./hero-roles-server";
 import { getStore } from "./store";
-import type { Grade, HistoryEntry, MatchDetails } from "./types";
+import type { Grade, HistoryEntry, MatchDetails, RoleKey } from "./types";
 
 export interface MatchListItem {
   matchId: number;
@@ -26,6 +27,8 @@ export interface MatchListItem {
   rankedDelta: number | null;
   team: 0 | 1;
   level: number;
+  /** Erkannte Rolle (nur mit Match-Details) */
+  role: RoleKey | null;
 }
 
 export function lobbyBadge(d: MatchDetails | undefined): number | null {
@@ -41,7 +44,7 @@ export function listMatches(accountId: number): MatchListItem[] {
     const h: HistoryEntry | undefined = rec.history[String(accountId)];
     if (!h) continue;
     const d = rec.details;
-    const rating = d ? ratePlayer(d, accountId) : null;
+    const rating = d ? ratePlayer(d, accountId, cachedHeroRole) : null;
     // Mit Details ist das Ergebnis maßgeblich, sonst Historie.
     const me = d?.players.find((p) => p.accountId === accountId);
     const won = d && d.winningTeam !== null && me ? d.winningTeam === me.team : h.won;
@@ -63,6 +66,7 @@ export function listMatches(accountId: number): MatchListItem[] {
       detailsReady: !!d,
       detectedAfterS: rec.detectedLive && rec.firstSeenAt > endMs ? Math.round((rec.firstSeenAt - endMs) / 1000) : null,
       matchMode: d?.matchMode ?? h.matchMode,
+      role: rating ? rating.role.key : null,
       team: me?.team ?? h.team,
       level: me?.level ?? h.heroLevel,
       myBadge: h.badge ?? me?.badge ?? null,

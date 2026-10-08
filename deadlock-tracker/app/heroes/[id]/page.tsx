@@ -4,6 +4,9 @@ import { HeroBackdrop, HeroPortrait, useHero, useHeroName } from "@/components/G
 import { GradeBadge } from "@/components/GradeBadge";
 import { MatchRow } from "@/components/MatchRow";
 import { NavLink } from "@/components/NavLink";
+import { HeroDrawer } from "@/components/HeroDrawer";
+import { Icon } from "@/components/Icon";
+import { useState } from "react";
 import { Sparkline, WinRing } from "@/components/charts";
 import { gradeFor } from "@/lib/rating";
 
@@ -11,6 +14,7 @@ export default function HeroDetailPage({ params }: { params: { id: string } }) {
   const heroId = Number(params.id);
   const heroName = useHeroName();
   const { color } = useHero(heroId);
+  const [info, setInfo] = useState(false);
   return (
     <Gate>
       {({ me, data }) => {
@@ -19,7 +23,7 @@ export default function HeroDetailPage({ params }: { params: { id: string } }) {
         const trend = ms.filter((m) => m.score !== null).slice(0, 30).map((m) => m.score as number).reverse();
         return (
           <>
-            <NavLink href="/heroes" className="btn btn-ghost !w-fit !px-3 !py-1.5 text-xs">← Alle Helden</NavLink>
+            <div className="flex items-center justify-between"><NavLink href="/heroes" className="btn btn-ghost !w-fit !px-3 !py-1.5 text-xs"><Icon name="arrowLeft" size={14} />Alle Helden</NavLink><button onClick={() => setInfo(true)} className="btn btn-gold !py-1.5 text-xs"><Icon name="book" size={14} />Spielstil, Builds & Matchups</button><HeroDrawer heroId={info ? heroId : null} onClose={() => setInfo(false)} /></div>
             <section className="surface relative overflow-hidden" style={{ boxShadow: `0 0 0 1px ${color}40, 0 40px 80px -40px ${color}77` }}>
               <HeroBackdrop id={heroId} />
               <div className="relative flex flex-wrap items-center gap-6 p-6 md:p-8">

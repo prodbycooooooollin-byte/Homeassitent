@@ -26,10 +26,10 @@ export function PlayerCard({ name, avatar, accountId, ov, onRemove }: { name: st
         <HeroBackdrop id={mainId} />
       </div>
       <div className="absolute inset-0 bg-gradient-to-r from-[#07080c]/70 via-transparent to-transparent" />
-      <div className="relative grid items-center gap-7 p-6 md:grid-cols-[auto_1fr_auto] md:p-8">
-        <div {...tilt} className="tilt relative cursor-default rounded-2xl" style={{ width: 168 }}>
+      <div className="relative grid items-center gap-6 p-5 md:grid-cols-[auto_1fr_auto] md:p-6">
+        <div {...tilt} className="tilt relative cursor-default rounded-2xl" style={{ width: 150 }}>
           <div className="float">
-            {mainId ? <HeroPortrait id={mainId} size={168} h={216} ring={color} className="!rounded-2xl" /> : <div className="skeleton h-[216px] w-[168px]" />}
+            {mainId ? <HeroPortrait id={mainId} size={150} h={192} ring={color} className="!rounded-2xl" /> : <div className="skeleton h-[192px] w-[150px]" />}
           </div>
           <span className="shine" />
           <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/20 bg-black/80 px-3.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] shadow-lg backdrop-blur">
@@ -41,13 +41,13 @@ export function PlayerCard({ name, avatar, accountId, ov, onRemove }: { name: st
           <div className="flex items-center gap-4">
             <Avatar src={avatar} name={name} size={72} ring={color} />
             <div className="min-w-0">
-              <h1 className="display truncate text-4xl font-extrabold tracking-tight md:text-5xl">{name}</h1>
+              <h1 className="display truncate text-4xl font-extrabold tracking-tight">{name}</h1>
               <p className="text-xs text-muted">
                 Account {accountId}{onRemove && <> · <button onClick={onRemove} className="underline-offset-2 hover:text-loss hover:underline">nicht mehr tracken</button></>}
               </p>
             </div>
           </div>
-          <div className="mt-6 flex flex-wrap items-center gap-3">
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <div className="sheen flex items-center gap-3 rounded-2xl border border-white/10 bg-black/40 py-2 pl-3 pr-5 backdrop-blur">
               <RankEmblem badge={ov.currentBadge} size={56} />
               <div>

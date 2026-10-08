@@ -9,12 +9,13 @@ import { RankEmblem } from "@/components/GameAssets";
 import { ActivityHeatmap, InsightsCard, RadarCard, RecordsCard, SessionCard } from "@/components/widgets";
 import { HeroTile } from "@/components/HeroTile";
 import { FormDots, Sparkline } from "@/components/charts";
-import { useData, useTracker } from "@/components/Providers";
+import { useData, useSettings, useTracker } from "@/components/Providers";
 import { formatBadge } from "@/lib/ranks";
 
 export default function OverviewPage() {
   const { removePlayer } = useTracker();
   const { live } = useData();
+  const { settings } = useSettings();
   return (
     <Gate>
       {({ me, data }) => (
@@ -24,7 +25,7 @@ export default function OverviewPage() {
           {me.lastSyncOk === false && (
             <div className="surface border-loss/40 p-3 text-sm text-loss">Sync-Fehler: {me.lastError}. Der Tracker versucht es automatisch erneut – erkannte Matches bleiben erhalten.</div>
           )}
-          {live && <LiveBanner match={live} accountId={me.accountId} />}
+          {live && settings.showLive && <LiveBanner match={live} accountId={me.accountId} />}
           <StatStrip ov={data.overview} items={data.matches} />
           <div className="grid items-start gap-6 xl:grid-cols-[300px_minmax(0,1fr)_320px]">
             <aside className="order-2 space-y-6 xl:order-1">

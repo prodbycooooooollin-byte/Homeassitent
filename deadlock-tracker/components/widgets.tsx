@@ -1,9 +1,10 @@
 "use client";
 import { useMemo } from "react";
 import { HeroPortrait, useHeroName } from "./GameAssets";
+import { Icon, type IconName } from "./Icon";
 import { NavLink } from "./NavLink";
 import { GradeBadge } from "./GradeBadge";
-import { achievements as buildAch, activity, avgLobby, currentSession, insights, longestWinStreak, radar, records, streak, type Bucket } from "@/lib/profile";
+import { activity, avgLobby, currentSession, insights, longestWinStreak, radar, records, streak, type Bucket } from "@/lib/profile";
 import { linearToBadge, formatBadge } from "@/lib/ranks";
 import { fmtAgo } from "@/lib/format";
 import type { MatchListItem } from "@/lib/view";
@@ -22,8 +23,8 @@ export function SessionCard({ items }: { items: MatchListItem[] }) {
           </div>
           <div className="mt-3 flex gap-1">{[...s.matches].reverse().map((m) => <span key={m.matchId} title={m.won ? "Sieg" : "Niederlage"} className="h-2 flex-1 rounded-full" style={{ background: m.won ? "#3ecf8e" : "#f0616d" }} />)}</div>
           {s.avgScore !== null && <div className="mt-3 flex items-center gap-2 text-xs text-muted">Ø Rating <b className="num text-white">{s.avgScore.toFixed(2)}</b></div>}
-          {st <= -3 && <div className="mt-3 rounded-lg border border-loss/40 bg-loss/10 p-2 text-xs text-loss">🧊 {-st} Niederlagen in Folge – Tilt-Gefahr. Kurze Pause?</div>}
-          {st >= 3 && <div className="mt-3 rounded-lg border border-win/40 bg-win/10 p-2 text-xs text-win">🔥 {st} Siege in Folge!</div>}
+          {st <= -3 && <div className="mt-3 flex items-center gap-2 rounded-lg border border-loss/40 bg-loss/10 p-2 text-xs text-loss"><Icon name="alert" size={14} />{-st} Niederlagen in Folge – Tilt-Gefahr. Kurze Pause?</div>}
+          {st >= 3 && <div className="mt-3 flex items-center gap-2 rounded-lg border border-win/40 bg-win/10 p-2 text-xs text-win"><Icon name="flame" size={14} />{st} Siege in Folge!</div>}
         </>
       ) : <p className="mt-3 text-sm text-muted">Gerade keine aktive Session. Sobald du spielst, siehst du hier deine Bilanz.</p>}
     </section>
@@ -92,7 +93,7 @@ export function RecordsCard({ items }: { items: MatchListItem[] }) {
             <span className="display num font-bold">{r.value}</span>
           </NavLink>
         ))}
-        <div className="flex items-center gap-3 border-t border-white/[0.05] px-5 py-2"><span className="w-7 text-center">🔥</span><span className="flex-1 text-sm text-muted">Längste Siegesserie</span><span className="display num font-bold">{best}</span></div>
+        <div className="flex items-center gap-3 border-t border-white/[0.05] px-5 py-2"><span className="flex w-7 justify-center text-amber"><Icon name="flame" size={16} /></span><span className="flex-1 text-sm text-muted">Längste Siegesserie</span><span className="display num font-bold">{best}</span></div>
       </div>
     </section>
   );
@@ -109,7 +110,7 @@ export function InsightsCard({ items }: { items: MatchListItem[] }) {
       <div className="space-y-2.5">
         {list.map((i, k) => (
           <div key={k} className="fade-up flex gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-sm" style={{ animationDelay: `${k * 70}ms`, borderLeft: `3px solid ${col[i.tone]}` }}>
-            <span className="text-lg leading-none">{i.icon}</span><span className="text-white/90">{i.text}</span>
+            <Icon name={i.icon as IconName} size={18} className="mt-0.5 shrink-0" style={{ color: col[i.tone] }} /><span className="text-white/90">{i.text}</span>
           </div>
         ))}
       </div>
@@ -149,32 +150,6 @@ export function LobbyTile({ items, myBadge }: { items: MatchListItem[]; myBadge:
       <div className="display mt-1 text-2xl font-extrabold">{badge ? formatBadge(badge) : "–"}</div>
       <div className="mt-0.5 text-xs text-muted">{badge ? "Schnitt der letzten 20 Matches" : "Sobald Match-Details da sind"}{myBadge && badge ? ` · du: ${formatBadge(myBadge)}` : ""}</div>
     </div>
-  );
-}
-
-export function AchievementGrid({ items }: { items: MatchListItem[] }) {
-  const list = useMemo(() => buildAch(items), [items]);
-  const done = list.filter((a) => a.progress >= a.target).length;
-  return (
-    <>
-      <div className="text-sm text-muted">{done} von {list.length} freigeschaltet</div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {list.map((a, i) => {
-          const ok = a.progress >= a.target;
-          return (
-            <div key={a.key} className={`surface fade-up p-4 ${ok ? "" : "opacity-80"}`} style={{ animationDelay: `${i * 40}ms`, boxShadow: ok ? "0 0 0 1px #f0b44c66, 0 18px 40px -26px #f0b44c" : undefined }}>
-              <div className="flex items-center gap-3">
-                <span className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl ${ok ? "sheen bg-amber/20" : "bg-white/[0.05] grayscale"}`}>{a.icon}</span>
-                <div className="min-w-0"><div className="display font-bold">{a.title}</div><div className="text-xs text-muted">{a.desc}</div></div>
-                {ok && <span className="ml-auto text-amber">✓</span>}
-              </div>
-              <div className="mt-3 h-1.5 rounded-full bg-white/10"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${(a.progress / a.target) * 100}%`, background: ok ? "linear-gradient(90deg,#f0b44c,#fff1c9)" : "linear-gradient(90deg,#4aa3ff,#2a62b8)" }} /></div>
-              <div className="num mt-1 text-right text-[11px] text-muted">{Math.round(a.progress * 10) / 10} / {a.target}</div>
-            </div>
-          );
-        })}
-      </div>
-    </>
   );
 }
 

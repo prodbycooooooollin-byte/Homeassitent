@@ -73,27 +73,28 @@ export function feed(d: MatchDetails): FeedEvent[] {
   return ev.sort((a, b) => a.t - b.t);
 }
 
-export interface Award { key: string; title: string; player: MatchPlayer; value: string; icon: string }
+export interface Award { key: string; title: string; player: MatchPlayer; value: string; /** IconName */ icon: string }
 
 /** Auszeichnungen der Lobby – „Wer war wofür der Beste?“ */
-export function awards(d: MatchDetails): Award[] {
+export function awards(d: MatchDetails, ratings?: Record<number, { score: number } | null>): Award[] {
   const ps = d.players;
   if (ps.length < 2) return [];
   const top = (f: (p: MatchPlayer) => number) => ps.reduce((b, p) => (f(p) > f(b) ? p : b), ps[0]);
   const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
-  const mvp = ps.reduce((b, p) => ((ratePlayer(d, p.accountId)?.score ?? 0) > (ratePlayer(d, b.accountId)?.score ?? 0) ? p : b), ps[0]);
-  const out: Award[] = [{ key: "mvp", title: "MVP", player: mvp, value: `Score ${(ratePlayer(d, mvp.accountId)?.score ?? 0).toFixed(2)}`, icon: "★" }];
+  const score = (id: number) => (ratings ? ratings[id]?.score : ratePlayer(d, id)?.score) ?? 0;
+  const mvp = ps.reduce((b, p) => (score(p.accountId) > score(b.accountId) ? p : b), ps[0]);
+  const out: Award[] = [{ key: "mvp", title: "MVP", player: mvp, value: `Score ${score(mvp.accountId).toFixed(2)}`, icon: "star" }];
   const add = (key: string, title: string, icon: string, f: (p: MatchPlayer) => number, fmt: (v: number) => string, min = 1) => {
     const p = top(f);
     if (f(p) >= min) out.push({ key, title, player: p, value: fmt(f(p)), icon });
   };
-  add("souls", "Souls-König", "◆", (p) => p.netWorth, (v) => `${k(v)} Souls`);
-  add("kills", "Killer", "✦", (p) => p.kills, (v) => `${v} Kills`, 3);
-  add("damage", "Schadensmacher", "⚡", (p) => p.heroDamage, (v) => `${k(v)} Schaden`);
-  add("tank", "Frontline", "⛨", (p) => p.damageTaken, (v) => `${k(v)} erlitten`);
-  add("heal", "Lebensretter", "✚", (p) => p.healing, (v) => `${k(v)} Heilung`, 2000);
-  add("obj", "Turmbrecher", "♜", (p) => p.objectiveDamage, (v) => `${k(v)} Objective-Schaden`, 1000);
-  add("dead", "Stammgast im Jenseits", "☠", (p) => p.deadTimeS ?? 0, (v) => `${Math.round(v / 60)} Min. tot`, 120);
+  add("souls", "Souls-König", "gem", (p) => p.netWorth, (v) => `${k(v)} Souls`);
+  add("kills", "Killer", "target", (p) => p.kills, (v) => `${v} Kills`, 3);
+  add("damage", "Schadensmacher", "bolt", (p) => p.heroDamage, (v) => `${k(v)} Schaden`);
+  add("tank", "Frontline", "shield", (p) => p.damageTaken, (v) => `${k(v)} erlitten`);
+  add("heal", "Lebensretter", "plus", (p) => p.healing, (v) => `${k(v)} Heilung`, 2000);
+  add("obj", "Turmbrecher", "tower", (p) => p.objectiveDamage, (v) => `${k(v)} Objective-Schaden`, 1000);
+  add("dead", "Stammgast im Jenseits", "ghost", (p) => p.deadTimeS ?? 0, (v) => `${Math.round(v / 60)} Min. tot`, 120);
   return out;
 }
 

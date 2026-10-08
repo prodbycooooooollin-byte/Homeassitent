@@ -1,4 +1,4 @@
-import { cachedHeroRole, type HeroRoleProvider } from "./hero-roles";
+import type { HeroRoleProvider } from "./hero-roles";
 import { valueAt } from "./timeline";
 import type { ComponentKey, Grade, MatchDetails, MatchPlayer, Rating, RatingComponent, RoleKey, TeamId } from "./types";
 
@@ -14,6 +14,9 @@ import type { ComponentKey, Grade, MatchDetails, MatchPlayer, Rating, RatingComp
  *    Carry: Kampf, Wirtschaft, Überleben …). Nicht anwendbare Bausteine fallen weg, die Gewichte werden neu verteilt.
  * 4. Logarithmische Skala: doppelt so gut wie der Vergleich ist symmetrisch zu halb so gut.
  */
+
+/** Ohne Vorwissen zum Helden (z. B. im Browser oder in Tests) entscheidet allein das Verhalten. */
+const noPrior: HeroRoleProvider = () => null;
 
 export const COMPONENT_ORDER: ComponentKey[] = ["combat", "utility", "participation", "survival", "economy", "objectives", "lane"];
 export const COMPONENT_LABELS: Record<ComponentKey, string> = {
@@ -77,7 +80,7 @@ export interface RoleInfo { key: RoleKey; reason: string }
  * Support braucht Belege: entweder eine Support-Heldenrolle (die nur bei klar gegenteiligem Verhalten überstimmt wird)
  * oder sehr deutliche Mitspieler-Unterstützung bei gleichzeitig nicht überdurchschnittlichem Schaden.
  */
-export function classifyRoles(d: MatchDetails, prior: HeroRoleProvider = cachedHeroRole): Map<number, RoleInfo> {
+export function classifyRoles(d: MatchDetails, prior: HeroRoleProvider = noPrior): Map<number, RoleInfo> {
   const ms = metricsFor(d);
   const mu = { util: mean(ms.map((m) => m.util)), tank: mean(ms.map((m) => m.tank)), dmg: mean(ms.map((m) => m.dmg)), obj: mean(ms.map((m) => m.obj)) };
   const teamUtil = [0, 1].map((t) => ms.filter((m) => m.p.team === t).reduce((a, m) => a + m.util, 0));
@@ -122,7 +125,7 @@ function baseline(all: Metrics[], me: Metrics, peers: Metrics[], f: (m: Metrics)
 const LANE_AT_S = 480;
 
 /** Vollständige, erklärbare Bewertung eines Spielers. */
-export function ratePlayer(match: MatchDetails, accountId: number, prior: HeroRoleProvider = cachedHeroRole): Rating | null {
+export function ratePlayer(match: MatchDetails, accountId: number, prior: HeroRoleProvider = noPrior): Rating | null {
   const all = metricsFor(match);
   const me = all.find((m) => m.p.accountId === accountId);
   if (!me || all.length < 2) return null;
