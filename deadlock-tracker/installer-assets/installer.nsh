@@ -30,3 +30,27 @@
 !macro customUnInstall
   DetailPrint "Lockscope wurde entfernt. Deine Matchdaten bleiben im Benutzerordner erhalten."
 !macroend
+
+; Vor der Installation: laufende Lockscope-Prozesse beenden, damit die alte Version nicht blockiert wird
+!macro customInit
+  nsExec::Exec 'taskkill /F /T /IM "Lockscope.exe"'
+  Pop $0
+  nsExec::Exec 'taskkill /F /T /IM "deadlock-api-ingest.exe"'
+  Pop $0
+  Sleep 1500
+!macroend
+
+; Scheitert das Entfernen der alten Version (z. B. Code 2: Datei noch gesperrt), nicht abbrechen:
+; die neuen Dateien werden einfach über die alten kopiert.
+!macro customUnInstallCheck
+  ${if} $R0 != 0
+    DetailPrint "Alte Version ließ sich nicht vollständig entfernen (Code $R0) – wird überschrieben."
+  ${endif}
+  ClearErrors
+!macroend
+!macro customUnInstallCheckCurrentUser
+  ${if} $R0 != 0
+    DetailPrint "Alte Version ließ sich nicht vollständig entfernen (Code $R0) – wird überschrieben."
+  ${endif}
+  ClearErrors
+!macroend
