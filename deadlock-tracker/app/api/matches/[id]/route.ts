@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { enrichMatch } from "@/lib/sync";
-import { getStore } from "@/lib/store";
+import { getStore, saveStore } from "@/lib/store";
+import { alignAccount } from "@/lib/align";
 import { lobbyBadge } from "@/lib/view";
 import { refFor } from "@/lib/reference";
 import { ratePlayer } from "@/lib/rating";
@@ -16,6 +17,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   // ?peek=1: nur vorhandene Daten liefern (Hover-Vorschau), keine Netzwerk-Abrufe auslösen
   if (!rec.details && !new URL(req.url).searchParams.has("peek")) await enrichMatch(matchId);
   const d = rec.details;
+  if (d && alignAccount(d, account, rec.history[String(account)])) saveStore();
   const ratings = d ? Object.fromEntries(d.players.map((p) => [p.accountId, ratePlayer(d, p.accountId, cachedHeroRole, refFor(d, p.heroId))])) : {};
   return NextResponse.json({
     matchId,

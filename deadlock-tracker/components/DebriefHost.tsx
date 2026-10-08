@@ -86,7 +86,12 @@ function Overlay({ req, onClose }: { req: DebriefRequest; onClose: () => void })
           </div>
         </div>
 
-        {!d || !me || !db ? (
+        {d && !me ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+            <div className="display text-xl font-bold">Dich in diesem Match nicht gefunden</div>
+            <p className="max-w-md text-sm text-muted">Die Match-Details enthalten keinen Spieler mit deiner Account-ID und keinen eindeutig passenden Eintrag (Held, Team, K/D/A). Öffne das Match, um alle Spieler zu sehen.</p>
+          </div>
+        ) : !d || !me || !db ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
             <div className="h-12 w-12 animate-spin rounded-full border-2 border-white/10 border-t-amber" />
             <div className="display text-xl font-bold">Match-Daten werden vorbereitet …</div>
