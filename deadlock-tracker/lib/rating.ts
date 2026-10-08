@@ -26,11 +26,11 @@ export const ROLE_LABELS: Record<RoleKey, string> = { carry: "Carry / Damage", s
 
 /** Rollen-Gewichte (werden über die anwendbaren Bausteine neu normiert). */
 export const ROLE_WEIGHTS: Record<RoleKey, Partial<Record<ComponentKey, number>>> = {
-  carry:   { combat: 0.28, participation: 0.14, survival: 0.16, economy: 0.18, objectives: 0.08, lane: 0.16 },
+  carry:   { combat: 0.26, participation: 0.12, survival: 0.24, economy: 0.16, objectives: 0.06, lane: 0.16 },
   support: { utility: 0.30, participation: 0.20, survival: 0.18, combat: 0.08, economy: 0.08, objectives: 0.04, lane: 0.12 },
   tank:    { utility: 0.26, participation: 0.18, survival: 0.12, combat: 0.14, economy: 0.08, objectives: 0.08, lane: 0.14 },
-  pusher:  { objectives: 0.26, combat: 0.16, economy: 0.16, participation: 0.12, survival: 0.14, lane: 0.16 },
-  flex:    { combat: 0.22, participation: 0.18, survival: 0.16, economy: 0.16, objectives: 0.08, lane: 0.12 },
+  pusher:  { objectives: 0.24, combat: 0.14, economy: 0.14, participation: 0.12, survival: 0.22, lane: 0.14 },
+  flex:    { combat: 0.22, participation: 0.16, survival: 0.24, economy: 0.14, objectives: 0.06, lane: 0.12 },
 };
 
 /** Grenzen der Noten (Score 1.0 = durchschnittlich). */
@@ -165,8 +165,17 @@ export function ratePlayer(match: MatchDetails, accountId: number, prior: HeroRo
   raw.participation = bKp > 0 ? { ratio: me.kp / bKp, detail: `${me.p.kills} Kills + ${me.p.assists} Assists = ${Math.round(me.kp * 100)}% der Team-Kills (Vergleich Ø ${Math.round(bKp * 100)}%)` } : { ratio: null, detail: "" };
 
   // Überleben (weniger Tode pro Minute = besser)
+  // zusammen mit dem Verhältnis aus Kills+Assists zu Toden (KDA): Wer oft stirbt, ohne dafür entsprechend zu liefern,
+  // wird nicht mehr allein durch gute Team-Werte (Souls, Beteiligung eines Sieger-Teams) nach oben gezogen.
   const bDeaths = baseline(all, me, peers, (m) => m.deaths);
-  raw.survival = { ratio: (bDeaths + 0.02) / (me.deaths + 0.02), detail: `${me.p.deaths} Tode (Vergleich Ø ${(bDeaths * mins).toFixed(1)})${me.p.deadTimeS ? `, ${Math.round(me.p.deadTimeS / 60)} Min. tot` : ""}` };
+  const kdaOf = (m: Metrics) => (m.p.kills + m.p.assists) / Math.max(1, m.p.deaths);
+  const bKda = baseline(all, me, peers, kdaOf);
+  const deathRatio = (bDeaths + 0.02) / (me.deaths + 0.02);
+  const kdaRatio = bKda > 0 ? kdaOf(me) / bKda : 1;
+  raw.survival = {
+    ratio: Math.sqrt(clamp(deathRatio, 0.15, 6) * clamp(kdaRatio, 0.15, 6)),
+    detail: `${me.p.deaths} Tode (Vergleich Ø ${(bDeaths * mins).toFixed(1)}), KDA ${kdaOf(me).toFixed(1)} (Vergleich Ø ${bKda.toFixed(1)})${me.p.deadTimeS ? `, ${Math.round(me.p.deadTimeS / 60)} Min. tot` : ""}`,
+  };
 
   // Wirtschaft
   const bSouls = baseline(all, me, peers, (m) => m.souls);

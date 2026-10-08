@@ -275,3 +275,20 @@ export async function fetchRanks(accountIds: number[]): Promise<Map<number, numb
   } catch { /* ohne Ränge weiter */ }
   return out;
 }
+
+/* ---- Referenzkurven (Durchschnitt + Streuung je Spielfortschritt) ---- */
+export interface CurvePoint { pct: number; nw: [number, number]; k: [number, number]; d: [number, number]; a: [number, number]; dmg: [number, number] }
+
+/** Durchschnittlicher Verlauf von Spielern ähnlichen Ranges (optional auf einen Helden eingeschränkt). */
+export async function fetchPerformanceCurve(heroId: number | null, minBadge: number, maxBadge: number): Promise<CurvePoint[]> {
+  const q = new URLSearchParams({ match_mode: "ranked", resolution: "10", min_average_badge: String(minBadge), max_average_badge: String(maxBadge), min_unix_timestamp: String(Math.floor(Date.now() / 1000) - 30 * 86400) });
+  if (heroId) q.set("hero_ids", String(heroId));
+  const raw = await getJson(`${BASE()}/v1/analytics/player-performance-curve?${q}`, { retries: 1, timeoutMs: 25000 });
+  if (!Array.isArray(raw)) return [];
+  const pair = (r: Record<string, unknown>, key: string): [number, number] => [Number(r[`${key}_avg`]) || 0, Number(r[`${key}_std`]) || 0];
+  return raw
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+    .map((r) => ({ pct: Number(r.game_time), nw: pair(r, "net_worth"), k: pair(r, "kills"), d: pair(r, "deaths"), a: pair(r, "assists"), dmg: pair(r, "player_damage") }))
+    .filter((p) => Number.isFinite(p.pct))
+    .sort((a, b) => a.pct - b.pct);
+}

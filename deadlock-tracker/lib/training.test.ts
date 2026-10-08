@@ -1,0 +1,41 @@
+import { describe, expect, it } from "vitest";
+import { analyze, goalProgress, normalizedCurve } from "./training";
+import { demoMatch } from "./fixtures";
+import { ratePlayer } from "./rating";
+
+const build = (n: number) =>
+  Array.from({ length: n }, (_, i) => {
+    const details = demoMatch(70000000 + i, 1);
+    const me = details.players.find((p) => p.accountId === 1) ?? details.players[0];
+    const scores = new Map<number, number>();
+    for (const p of details.players) { const r = ratePlayer(details, p.accountId); if (r) scores.set(p.accountId, r.score); }
+    return { details, me, scores, won: details.winningTeam === me.team };
+  });
+
+describe("training", () => {
+  it("builds normalized curves of 11 points", () => {
+    const m = build(1)[0];
+    const c = normalizedCurve(m.me, m.details.durationS, "nw")!;
+    expect(c).toHaveLength(11);
+    expect(c[10]).toBeGreaterThan(c[2]);
+  });
+  it("analyzes matches and yields focus + metrics", () => {
+    const ms = build(8);
+    const r = analyze(ms, null);
+    expect(r.matches).toBeGreaterThan(0);
+    expect(r.curves[0].mine).toHaveLength(11);
+    expect(r.curves[0].top).not.toBeNull();
+    expect(r.focus.length).toBeGreaterThan(0);
+    expect(r.metrics.find((m) => m.id === "deaths")!.values).toHaveLength(8);
+  });
+  it("asks for more data when few matches", () => {
+    expect(analyze(build(1), null).focus[0].id).toBe("data");
+  });
+  it("tracks goal progress", () => {
+    const r = analyze(build(8), null);
+    const g = { id: "x", metric: "deaths", lowerIsBetter: true, target: 99, needed: 3, window: 5, createdAt: 0 };
+    const p = goalProgress(g, r.metrics);
+    expect(p.hits).toBe(5);
+    expect(p.done).toBe(true);
+  });
+});

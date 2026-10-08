@@ -220,3 +220,14 @@ describe("ranks", () => {
     expect(formatBadge(63)).toBe("Emissary 3");
   });
 });
+
+describe("Feeder in Sieger-Team", () => {
+  it("6/9 mit durchschnittlichen Teamwerten bekommt höchstens C", () => {
+    const { d } = lobby(5);
+    const me = d.players[0];
+    Object.assign(me, { kills: 6, deaths: 9, assists: 8 });
+    d.winningTeam = me.team;
+    const r = ratePlayer(d, me.accountId)!;
+    expect(["C", "D", "F"]).toContain(r.grade);
+  });
+});

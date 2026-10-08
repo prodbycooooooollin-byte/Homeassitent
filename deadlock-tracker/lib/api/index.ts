@@ -3,7 +3,7 @@ import { demoActive, demoBuilds, demoRanks, demoScoutHistory, demoHeroMeta, demo
 import type { HistoryEntry, MatchDetails } from "../types";
 
 export { ApiError } from "./deadlock-api";
-export type { ActiveMatchDto, BadgeBucket, BuildDto, HeroMeta, LeaderboardRow, MateRow, MatchupRow, SteamProfile } from "./deadlock-api";
+export type { CurvePoint, ActiveMatchDto, BadgeBucket, BuildDto, HeroMeta, LeaderboardRow, MateRow, MatchupRow, SteamProfile } from "./deadlock-api";
 
 const demo = () => process.env.DEADLOCK_DEMO === "1";
 
@@ -28,3 +28,7 @@ export const fetchSynergies = (heroId: number) => (demo() ? Promise.resolve(demo
 export const fetchRanks = (ids: number[]) => (demo() ? Promise.resolve(demoRanks(ids)) : real.fetchRanks(ids));
 /** Historie für das Scouting fremder Spieler (im Demo-Modus mit unterschiedlichen Profilen). */
 export const fetchScoutHistory = (id: number): Promise<HistoryEntry[]> => (demo() ? Promise.resolve(demoScoutHistory(id)) : real.fetchHistory(id));
+export const fetchPerformanceCurve = (heroId: number | null, minBadge: number, maxBadge: number) =>
+  demo()
+    ? Promise.resolve(Array.from({ length: 11 }, (_, i) => { const f = i / 10; return { pct: i * 10, nw: [38000 * Math.pow(f, 1.25), 3500 * f + 300] as [number, number], k: [7.5 * f, 2 * f + 0.3] as [number, number], d: [5.5 * f, 1.6 * f + 0.3] as [number, number], a: [10 * f, 3 * f + 0.4] as [number, number], dmg: [24000 * Math.pow(f, 1.15), 4200 * f + 300] as [number, number] }; }))
+    : real.fetchPerformanceCurve(heroId, minBadge, maxBadge);

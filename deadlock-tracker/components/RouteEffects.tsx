@@ -34,6 +34,7 @@ const THEMES: [RegExp, Theme][] = [
   [/^\/heroes\/\d+/, { pattern: "dots", art: "route" }],
   [/^\/heroes/, { pattern: "dots", art: "main" }],
   [/^\/rank/, { pattern: "rays", accent: "tier" as never }],
+  [/^\/training/, { pattern: "scan", accent: "#f0616d" }],
   [/^\/insights/, { pattern: "grid", accent: "#3ecf8e" }],
   [/^\/achievements/, { pattern: "sparkles", accent: "#f0b44c" }],
   [/^\/mates/, { pattern: "dots", accent: "#a77be8" }],

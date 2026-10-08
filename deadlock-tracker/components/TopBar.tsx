@@ -17,6 +17,7 @@ const NAV: NavEntry[] = [
   { kind: "link", key: "home", href: "/", label: "Übersicht", icon: "grid", desc: "" },
   { kind: "link", key: "live", href: "/live", label: "Live", icon: "eye", desc: "" },
   { kind: "link", key: "matches", href: "/matches", label: "Matches", icon: "list", desc: "" },
+  { kind: "link", key: "training", href: "/training", label: "Training", icon: "target", desc: "" },
   { kind: "menu", key: "player", label: "Spieler", items: [
     { href: "/heroes", label: "Helden", icon: "sword", desc: "Deine Helden-Statistiken" },
     { href: "/rank", label: "Rang", icon: "rocket", desc: "Verlauf, Peak und Einordnung" },

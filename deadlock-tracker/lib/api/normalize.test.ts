@@ -90,3 +90,13 @@ describe("steam avatars", () => {
     expect(upgradeAvatar(`https://x.example/pic.png`)).toBe("https://x.example/pic.png");
   });
 });
+
+describe("aim stats", () => {
+  it("reads shots and crits from the final stats", () => {
+    const d = normalizeMetadata({ match_info: { match_id: 3, duration_s: 600, match_outcome: 0, winning_team: 0, players: [
+      { account_id: 1, team: 0, hero_id: 1, stats: [{ time_stamp_s: 0 }, { time_stamp_s: 600, shots_hit: 120, shots_missed: 180, hero_bullets_hit: 70, hero_bullets_hit_crit: 14 }] },
+      { account_id: 2, team: 1, hero_id: 2, stats: [{ time_stamp_s: 0 }, { time_stamp_s: 600 }] }] } })!;
+    expect(d.players[0]).toMatchObject({ shotsHit: 120, shotsMissed: 180, heroHits: 70, heroCrits: 14 });
+    expect(d.players[1].shotsHit).toBeUndefined(); // keine erfundenen Nullen
+  });
+});

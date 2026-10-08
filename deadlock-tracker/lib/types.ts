@@ -45,6 +45,11 @@ export interface MatchPlayer {
   allyHealing?: number;
   /** Verhinderter Schaden (damage_mitigated) */
   mitigated?: number;
+  /** Trefferstatistik: Schüsse getroffen / verfehlt, Treffer auf Helden, davon Crits */
+  shotsHit?: number;
+  shotsMissed?: number;
+  heroHits?: number;
+  heroCrits?: number;
   /** Lobby-Slot (für Zuordnung von Killern) */
   slot?: number;
   /** Zugewiesene Lane (Farbcode laut Valve: 1 Gelb, 3 Grün, 4 Blau, 6 Lila) */
@@ -78,8 +83,8 @@ export interface MatchPlayer {
 
 export interface MatchObjective { id: number; /** Team, dem das Gebäude gehörte */ team: TeamId; t: number }
 
-/** Schema-Version der Match-Details: 3 = mit Zeitreihen, Items, Lanes, Objectives und Mitspieler-Heilung */
-export const DETAILS_VERSION = 3;
+/** Schema-Version der Match-Details: 4 = mit Zeitreihen, Items, Lanes, Objectives, Mitspieler-Heilung und Trefferstatistik */
+export const DETAILS_VERSION = 4;
 
 export interface MatchDetails {
   v?: number;
@@ -186,10 +191,23 @@ export const DEFAULT_SETTINGS: AppSettings = { pollIntervalS: 20, backfill: true
 /** Per Steam-OpenID verifizierte Verbindung */
 export interface SteamLink { steamId: string; accountId: number; verifiedAt: number }
 
+/** Persönliches Trainingsziel: in `window` Matches mindestens `needed`-mal `target` erreichen. */
+export interface Goal {
+  id: string;
+  metric: string;
+  /** true = Wert muss <= Ziel sein (z. B. Tode), sonst >= */
+  lowerIsBetter: boolean;
+  target: number;
+  needed: number;
+  window: number;
+  createdAt: number; // unix s – gezählt werden nur Matches danach
+}
+
 export interface StoreShape {
   version: 1;
   players: Record<string, TrackedPlayer>;
   matches: Record<string, MatchRecord>;
   settings?: Partial<AppSettings>;
   steam?: SteamLink;
+  goals?: Goal[];
 }

@@ -104,6 +104,13 @@ export function demoHistory(accountId: number, now = Date.now()): HistoryEntry[]
   return out;
 }
 
+function shots(r: () => number, mins: number, skill: number) {
+  const total = Math.round(mins * (180 + r() * 90));
+  const acc = Math.min(0.55, 0.22 + (skill - 0.6) * 0.1 + r() * 0.08);
+  const hit = Math.round(total * acc), heroHits = Math.round(hit * (0.55 + r() * 0.2));
+  return { shotsHit: hit, shotsMissed: total - hit, heroHits, heroCrits: Math.round(heroHits * (0.1 + r() * 0.12)) };
+}
+
 export const DEMO_ITEMS = ["Schnellfeuer", "Pufferladung", "Lebensfunke", "Dolch des Schattens", "Glaskanone", "Seelenanker", "Pulsschild", "Zeitriss", "Aderlass", "Eisenhaut", "Nebelschritt", "Sturmherz",
   "Kristallkern", "Rachenspiegel", "Blutmond", "Wächterglas", "Phantomklinge", "Funkenschlag", "Obsidianpanzer", "Gnadenstoß", "Wanderstab", "Sirenengesang", "Titanfaust", "Echoschuss"];
 
@@ -140,6 +147,7 @@ export function demoMatch(matchId: number, focusAccount: number, now = Date.now(
       netWorth, lastHits: Math.round(skill * mins * (4 + r() * 3)), denies: Math.floor(r() * 15), heroDamage,
       objectiveDamage: Math.round(skill * mins * (60 + r() * 200)), healing, damageTaken,
       allyHealing: healing ? Math.round(healing * 0.9) : Math.round(mins * r() * 60), mitigated: Math.round(damageTaken * (0.2 + r() * 0.5)),
+      ...shots(r, mins, skill),
       badge: 50 + Math.floor(r() * 3) * 10 + 1 + Math.floor(r() * 6), abandoned: false,
       slot, lane: [1, 4, 6][Math.floor((s % 6) / 2)], mvpRank: undefined,
       deadTimeS: deathTimes.reduce((a, t) => a + 10 + Math.round(t / 60) * 2, 0),
