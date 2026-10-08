@@ -1,11 +1,12 @@
 /** Auswahl des „Ich"-Accounts: rein, damit testbar. Fremde Spieler werden nie automatisch gewählt. */
-export interface PlayerRef { accountId: number }
+export interface PlayerRef { accountId: number; guest?: boolean }
 
 /**
  * Primärer Account: 1. gespeicherte Markierung (falls getrackt), 2. per Steam verbundener (falls getrackt),
  * 3. der zuerst hinzugefügte Account (kleinstes addedAt, sonst Listenreihenfolge).
  */
-export function resolvePrimary(players: (PlayerRef & { addedAt?: number })[], stored: number | null, steamAccountId?: number | null): number | null {
+export function resolvePrimary(all: (PlayerRef & { addedAt?: number })[], stored: number | null, steamAccountId?: number | null): number | null {
+  const players = all.filter((p) => !p.guest);
   if (!players.length) return null;
   const has = (id?: number | null) => !!id && players.some((p) => p.accountId === id);
   if (has(stored)) return stored!;

@@ -17,3 +17,10 @@ describe("effectiveAccount", () => {
   it("temporäre Auswahl bleibt, solange getrackt", () => expect(effectiveAccount([P(1), P(2)], 1, 2)).toBe(2));
   it("entfernte Auswahl -> primär", () => expect(effectiveAccount([P(1)], 1, 2)).toBe(1));
 });
+
+describe("Gäste", () => {
+  it("zählen nie als primärer Account", () => {
+    expect(resolvePrimary([{ accountId: 9, guest: true }, { accountId: 3, addedAt: 5 }], null, null)).toBe(3);
+    expect(resolvePrimary([{ accountId: 9, guest: true }], 9, 9)).toBeNull();
+  });
+});

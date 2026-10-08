@@ -4,7 +4,7 @@ import { HeroPortrait, useHeroName } from "../GameAssets";
 import { NavLink } from "../NavLink";
 import { HoverCard } from "../Popover";
 import { valueAt } from "@/lib/timeline";
-import { profileViewHref } from "@/lib/primary";
+import { useTracker } from "../Providers";
 import { fmtK } from "@/lib/format";
 import type { MatchDetails, MatchPlayer, TeamId } from "@/lib/types";
 
@@ -100,6 +100,7 @@ const SECTIONS: Section[] = [
 
 export function SummaryTab({ d, account }: { d: MatchDetails; account: number }) {
   const heroName = useHeroName();
+  const { viewPlayer } = useTracker();
   const me = d.players.find((p) => p.accountId === account);
   const myTeam: TeamId = me?.team ?? 0;
   const ctx = useMemo<Ctx>(() => ({
@@ -117,7 +118,7 @@ export function SummaryTab({ d, account }: { d: MatchDetails; account: number })
       <HeroPortrait id={p.heroId} size={38} variant="small" className="!rounded-lg" />
       {p.accountId === account || !p.accountId
         ? <span className="max-w-full truncate text-[10px] font-semibold">{p.accountId === account ? "Du" : p.name ?? heroName(p.heroId)}</span>
-        : <NavLink href={profileViewHref(p.accountId)} className="max-w-full truncate text-[10px] font-semibold hover:text-amber hover:underline" title="Profil ansehen">{p.name ?? heroName(p.heroId)}</NavLink>}
+        : <button onClick={() => void viewPlayer(p.accountId)} className="max-w-full truncate text-[10px] font-semibold hover:text-amber hover:underline" title="Profil ansehen">{p.name ?? heroName(p.heroId)}</button>}
     </div>
   );
 

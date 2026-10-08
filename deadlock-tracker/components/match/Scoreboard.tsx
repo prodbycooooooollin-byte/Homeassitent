@@ -2,8 +2,7 @@
 import { HeroPortrait, RankEmblem, useHeroName } from "../GameAssets";
 import { GradeWithBreakdown } from "./RatingExplainer";
 import { fmtK } from "@/lib/format";
-import { NavLink } from "../NavLink";
-import { profileViewHref } from "@/lib/primary";
+import { useTracker } from "../Providers";
 import type { MatchDetails, MatchPlayer, Rating, TeamId } from "@/lib/types";
 
 export const TEAMS = [
@@ -33,6 +32,7 @@ export function Versus({ label, a, b, k }: { label: string; a: number; b: number
 
 export function TeamTable({ team, d, account, ratings, maxDmg }: { team: TeamId; d: MatchDetails; account: number; ratings: Record<number, Rating | null>; maxDmg: number }) {
   const heroName = useHeroName();
+  const { viewPlayer } = useTracker();
   const players = d.players.filter((p) => p.team === team).sort((a, b) => b.netWorth - a.netWorth);
   const won = d.winningTeam === team;
   const T = TEAMS[team];
@@ -63,7 +63,7 @@ export function TeamTable({ team, d, account, ratings, maxDmg }: { team: TeamId;
                       {isMe && <span className="absolute inset-y-1 left-0 w-1 rounded-r bg-amber shadow-[0_0_12px_#f0b44c]" />}
                       <HeroPortrait id={p.heroId} size={42} />
                       <div className="min-w-0">
-                        <div className="truncate font-semibold">{isMe || !p.accountId ? (isMe ? "Du" : p.name ?? `Spieler ${p.accountId}`) : <NavLink href={profileViewHref(p.accountId)} className="hover:text-amber hover:underline" title="Profil ansehen">{p.name ?? `Spieler ${p.accountId}`}</NavLink>}{p.abandoned && <span className="ml-1.5 text-xs font-normal text-loss">verlassen</span>}</div>
+                        <div className="truncate font-semibold">{isMe || !p.accountId ? (isMe ? "Du" : p.name ?? `Spieler ${p.accountId}`) : <button onClick={() => void viewPlayer(p.accountId)} className="hover:text-amber hover:underline" title="Profil ansehen">{p.name ?? `Spieler ${p.accountId}`}</button>}{p.abandoned && <span className="ml-1.5 text-xs font-normal text-loss">verlassen</span>}</div>
                         <div className="truncate text-xs text-muted">{heroName(p.heroId)} · Lv {p.level}</div>
                       </div>
                     </div>

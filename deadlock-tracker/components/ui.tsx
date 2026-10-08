@@ -43,7 +43,7 @@ export function Gate({ children }: { children: (ctx: { me: TrackedPlayerDto; dat
   const { data } = useData();
   const adding = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("add");
   if (!status) return <PageSkeleton />;
-  if (!status.players.length || adding) return <Onboarding first={!status.players.length} />;
+  if (!status.players.filter((p) => !p.guest).length || adding) return <Onboarding first={!status.players.filter((p) => !p.guest).length} />;
   const me = status.players.find((p) => p.accountId === account);
   if (!me || !data) return <PageSkeleton />;
   return <Fragment>{children({ me, data })}</Fragment>;

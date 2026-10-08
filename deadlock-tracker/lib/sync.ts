@@ -23,9 +23,20 @@ export function nextAttemptDelayMs(attempts: number): number {
   return RETRY_SCHEDULE_S[Math.min(attempts, RETRY_SCHEDULE_S.length - 1)] * 1000;
 }
 
-export async function addPlayer(accountId: number): Promise<TrackedPlayer> {
+export const MAX_GUESTS = 5;
+
+/** Fügt einen Spieler hinzu. `guest` = nur ansehen (wird später selten synchronisiert und automatisch aufgeräumt). */
+export async function addPlayer(accountId: number, opts: { guest?: boolean } = {}): Promise<TrackedPlayer> {
   const store = getStore();
   const key = String(accountId);
+  if (store.players[key]) {
+    if (store.players[key].guest) {
+      if (opts.guest) store.players[key].lastViewedAt = Date.now();
+      else { store.players[key].guest = false; store.players[key].addedAt = Date.now(); }
+      saveStore();
+    }
+    return store.players[key];
+  }
   if (!store.players[key]) {
     const [profile] = await fetchProfiles([accountId]);
     store.players[key] = {
@@ -33,7 +44,11 @@ export async function addPlayer(accountId: number): Promise<TrackedPlayer> {
       name: profile?.name ?? `Spieler ${accountId}`,
       avatar: profile?.avatar,
       addedAt: Date.now(),
+      ...(opts.guest ? { guest: true, lastViewedAt: Date.now() } : {}),
     };
+    // Gäste begrenzen: die am längsten nicht angesehenen entfernen
+    const guests = Object.values(store.players).filter((p) => p.guest).sort((a, b) => (b.lastViewedAt ?? 0) - (a.lastViewedAt ?? 0));
+    for (const g of guests.slice(MAX_GUESTS)) removePlayer(g.accountId);
     saveStore();
   }
   return store.players[key];
@@ -236,7 +251,7 @@ export function runCycle(force = false): Promise<SyncResult[]> {
     await refreshLive(now);
     const everyMs = now < live().fastUntil ? 5000 : baseMs;
     for (const p of Object.values(getStore().players)) {
-      if (!force && p.lastSyncAt && now - p.lastSyncAt < everyMs - 500) continue;
+      if (!force && p.lastSyncAt && now - p.lastSyncAt < (p.guest ? 10 * 60_000 : everyMs - 500)) continue;
       if (!force && p.historyBackoffUntil && now < p.historyBackoffUntil) continue;
       results.push(await syncPlayer(p.accountId));
     }

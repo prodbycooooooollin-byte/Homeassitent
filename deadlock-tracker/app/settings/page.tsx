@@ -58,7 +58,7 @@ export default function SettingsPage() {
         {steamMsg && <p className="mt-3 text-sm text-loss">Steam-Anmeldung fehlgeschlagen: {steamMsg}</p>}
         <div className="mt-5 border-t border-white/[0.07] pt-4">
           <div className="label mb-2">Getrackte Accounts</div>
-          <div className="space-y-1.5">{status?.players.map((p) => (
+          <div className="space-y-1.5">{status?.players.filter((p) => !p.guest).map((p) => (
             <div key={p.accountId} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2">
               <Avatar src={p.avatar} name={p.name} size={34} ring="#ffffff22" />
               <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{p.name}{p.accountId === primary && <span className="chip ml-2 !py-0 text-[10px] text-amber">Ich</span>}{p.accountId === account && p.accountId !== primary && <span className="chip ml-2 !py-0 text-[10px]">angezeigt</span>}</div><div className="text-[11px] text-muted">ID {p.accountId}</div></div>

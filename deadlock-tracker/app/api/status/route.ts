@@ -14,9 +14,9 @@ export async function GET() {
     players: Object.values(s.players),
     /** Zuletzt live erkannte Matches (für Benachrichtigungen) */
     live: Object.values(s.matches)
-      .filter((m) => m.detectedLive)
+      .filter((m) => m.detectedLive && Object.keys(m.history).some((a) => !s.players[a]?.guest))
       .sort((a, b) => b.firstSeenAt - a.firstSeenAt)
       .slice(0, 10)
-      .map((m) => ({ matchId: m.matchId, firstSeenAt: m.firstSeenAt, accounts: Object.keys(m.history).map(Number) })),
+      .map((m) => ({ matchId: m.matchId, firstSeenAt: m.firstSeenAt, accounts: Object.keys(m.history).filter((a) => !s.players[a]?.guest).map(Number) })),
   });
 }

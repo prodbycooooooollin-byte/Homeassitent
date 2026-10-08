@@ -39,7 +39,7 @@ const isActive = (href: string, path: string) => (href === "/" ? path === "/" ||
 const entryActive = (n: NavEntry, path: string) => (n.kind === "link" ? isActive(n.href, path) : n.items.some((i) => isActive(i.href, path)));
 
 export function TopBar() {
-  const { status, account, primary, setAccount, setPrimary, syncNow, syncing, toasts, dismissToast } = useTracker();
+  const { status, account, primary, setAccount, setPrimary, keepGuest, syncNow, syncing, toasts, dismissToast } = useTracker();
   const [open, setOpen] = useState(false);
   const path = usePathname();
   const me = status?.players.find((p) => p.accountId === account);
@@ -122,7 +122,7 @@ export function TopBar() {
                 </button>
                 {open && (
                   <div className="surface fade-up absolute right-0 mt-2 w-64 overflow-hidden p-1.5" onMouseLeave={() => setOpen(false)}>
-                    {status.players.map((p) => (
+                    {status.players.filter((p) => !p.guest).map((p) => (
                       <div key={p.accountId} className={`group flex items-center gap-1 rounded-lg pr-1 hover:bg-white/[0.06] ${p.accountId === account ? "bg-white/[0.06]" : ""}`}>
                         <button onClick={() => { setAccount(p.accountId); setOpen(false); }} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left">
                           <Avatar src={p.avatar} name={p.name} size={28} ring="#ffffff22" />
@@ -130,6 +130,15 @@ export function TopBar() {
                           {p.accountId === primary && <span className="chip ml-auto !py-0 text-[10px] text-amber">Ich</span>}
                         </button>
                         {p.accountId !== primary && <button onClick={() => { setPrimary(p.accountId); setOpen(false); }} title="Als meinen Account festlegen" className="rounded-md px-1.5 py-0.5 text-[10px] text-muted opacity-0 transition hover:text-white group-hover:opacity-100">Als Ich</button>}
+                      </div>
+                    ))}
+                    {status.players.some((p) => p.guest) && <div className="label mt-1 border-t border-white/[0.06] px-2 pb-1 pt-2 !text-[9px]">Zuletzt angesehen</div>}
+                    {status.players.filter((p) => p.guest).map((p) => (
+                      <div key={p.accountId} className={`group flex items-center gap-1 rounded-lg pr-1 hover:bg-white/[0.06] ${p.accountId === account ? "bg-white/[0.06]" : ""}`}>
+                        <button onClick={() => { setAccount(p.accountId); setOpen(false); }} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left">
+                          <Avatar src={p.avatar} name={p.name} size={24} ring="#ffffff22" /><span className="truncate text-sm text-white/80">{p.name}</span>
+                        </button>
+                        <button onClick={() => void keepGuest(p.accountId)} title="Dauerhaft tracken" className="rounded-md px-1.5 py-0.5 text-[10px] text-muted opacity-0 transition hover:text-white group-hover:opacity-100">Tracken</button>
                       </div>
                     ))}
                     <NavLink href="/status" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-lg border-t border-white/[0.06] px-2 py-2 text-sm text-muted hover:bg-white/[0.06] hover:text-white"><Icon name="sliders" size={15} />Einstellungen</NavLink>
@@ -147,6 +156,15 @@ export function TopBar() {
           ))}
         </nav>
       </header>
+      {me?.guest && (
+        <div className="border-b border-amber/30 bg-amber/10">
+          <div className="mx-auto flex max-w-[1560px] flex-wrap items-center gap-3 px-5 py-1.5 text-sm">
+            <Icon name="eye" size={15} className="text-amber" /><span>Gastansicht: <b>{me.name}</b> – du siehst das Profil eines anderen Spielers. Daten werden nur für die Ansicht geladen.</span>
+            <button onClick={() => void keepGuest(me.accountId)} className="btn btn-ghost !px-2.5 !py-0.5 text-xs">Dauerhaft tracken</button>
+            <button onClick={() => { setAccount(primary); }} className="btn btn-gold !px-2.5 !py-0.5 text-xs">Zurück zu mir</button>
+          </div>
+        </div>
+      )}
 
       <div className="pointer-events-none fixed right-4 top-24 z-40 flex w-80 flex-col gap-2">
         {toasts.map((t) => (
@@ -172,7 +190,7 @@ const writeRecent = (r: Result) => { try { const list = [r, ...readRecent().filt
 
 /** Spielersuche per Name (Steam-Profile) oder ID – Treffer lassen sich direkt tracken. */
 function SearchBox() {
-  const { addPlayer, status } = useTracker();
+  const { addPlayer, viewPlayer, status } = useTracker();
   const router = useRouter();
   const [q, setQ] = useState("");
   const [res, setRes] = useState<Result[]>([]);
@@ -201,7 +219,7 @@ function SearchBox() {
 
   const close = () => { setQ(""); setFocus(false); };
   /** Fremde Spieler nur ansehen – ohne Tracking und ohne die Kontoauswahl zu ändern. */
-  const view = (id: number, who?: Result) => { setRecent(writeRecent(who ?? res.find((r) => r.accountId === id) ?? recent.find((r) => r.accountId === id) ?? { accountId: id, name: `Spieler ${id}` })); close(); router.push(profileViewHref(id)); };
+  const view = (id: number, who?: Result) => { setRecent(writeRecent(who ?? res.find((r) => r.accountId === id) ?? recent.find((r) => r.accountId === id) ?? { accountId: id, name: `Spieler ${id}` })); close(); void viewPlayer(id); };
   const track = async (input: string) => {
     const e = await addPlayer(input);
     setErr(e);

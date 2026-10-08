@@ -84,3 +84,23 @@ describe("parseMatchId", () => {
     expect(parseMatchId("abc")).toBeNull();
   });
 });
+
+describe("Gast-Profile", () => {
+  it("begrenzt Gäste auf 5 und lässt das Ich-Konto unberührt", async () => {
+    const store = getStore() as any;
+    store.players = {};
+    await addPlayer(1);
+    for (let i = 100; i < 108; i++) { await addPlayer(i, { guest: true }); store.players[String(i)].lastViewedAt = i; }
+    await addPlayer(109, { guest: true });
+    const guests = Object.values(store.players).filter((p: any) => p.guest);
+    expect(guests.length).toBeLessThanOrEqual(5);
+    expect(store.players["1"].guest).toBeUndefined();
+  });
+  it("Gast lässt sich dauerhaft übernehmen", async () => {
+    const store = getStore() as any;
+    await addPlayer(500, { guest: true });
+    expect(store.players["500"].guest).toBe(true);
+    await addPlayer(500);
+    expect(store.players["500"].guest).toBe(false);
+  });
+});

@@ -193,6 +193,9 @@ export interface TrackedPlayer {
   rank?: { badge: number; at: number };
   /** Backoff bei Rate-Limit der Historie (ms-Zeitstempel) */
   historyBackoffUntil?: number;
+  /** Gast: nur zum Ansehen geöffnet (zählt nie als „Ich“, wird selten synchronisiert, höchstens 5 gleichzeitig) */
+  guest?: boolean;
+  lastViewedAt?: number;
 }
 
 /** Vom Nutzer einstellbare Optionen (serverseitig gespeichert). */

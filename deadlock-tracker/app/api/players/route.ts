@@ -10,7 +10,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { input } = (await req.json().catch(() => ({}))) as { input?: string };
+  const { input, guest } = (await req.json().catch(() => ({}))) as { input?: string; guest?: boolean };
   const id = parseAccountId(String(input ?? ""));
   if (!id) {
     return NextResponse.json(
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const player = await addPlayer(id);
+  const player = await addPlayer(id, { guest: !!guest });
   const sync = await syncPlayer(id);
   return NextResponse.json({ player: getStore().players[String(id)] ?? player, sync });
 }

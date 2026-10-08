@@ -5,6 +5,7 @@ import { Empty, Gate } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { ScoutBoard, ScoutCard, type LiveMatchMeta } from "@/components/ScoutBoard";
 import { useInterval } from "@/components/useTracker";
+import { useTracker } from "@/components/Providers";
 import type { ScoutPlayer } from "@/lib/live";
 import type { ScoutResult } from "@/lib/scout";
 
@@ -37,6 +38,7 @@ function View({ account }: { account: number }) {
   const initId = Number(initial?.get("id")) || null;
   const [mode, setMode] = useState<Mode>(initial?.get("mode") === "player" && initId ? "player" : "live");
   // Die Seite bleibt beim Wechsel zwischen /live-URLs gemountet: Parameter (z. B. aus der Spielersuche) müssen reaktiv übernommen werden.
+  const { viewPlayer } = useTracker();
   const sp = useSearchParams();
   useEffect(() => {
     const id = Number(sp.get("id")) || null;
@@ -100,7 +102,7 @@ function View({ account }: { account: number }) {
       {res?.players && (mode === "live" ? res.active : mode === "last" ? res.available : true) && (
         <>
           {mode === "player" ? (
-            <div className="max-w-xl">{(res.players as ScoutPlayer[]).map((p) => <ScoutCard key={p.accountId} p={p} />)}</div>
+            <div className="max-w-xl space-y-3">{(res.players as ScoutPlayer[]).map((p) => <ScoutCard key={p.accountId} p={p} />)}{target && <button onClick={() => void viewPlayer(target)} className="btn btn-gold w-full justify-center"><Icon name="user" size={15} />Vollständiges Profil öffnen</button>}</div>
           ) : (
             <div className="min-h-0 flex-1"><ScoutBoard r={res as ScoutResult} match={res.match} live={!!isLive} /></div>
           )}

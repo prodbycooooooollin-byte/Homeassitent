@@ -8,6 +8,7 @@ export interface TrackedPlayerDto {
   lastSyncAt?: number;
   lastSyncOk?: boolean;
   lastError?: string;
+  guest?: boolean;
 }
 
 /** Gespeicherter „Ich"-Account (localStorage ist optional – nie darauf verlassen). */

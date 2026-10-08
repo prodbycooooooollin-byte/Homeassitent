@@ -31,6 +31,10 @@ interface TrackerCtx {
   setPrimary: (id: number) => void;
   /** Fügt einen Account zum Tracking hinzu – ändert die Auswahl nie. */
   addPlayer: (input: string) => Promise<string | null>;
+  /** Fremdes Profil komplett ansehen (als Gast, ohne dauerhaft zu tracken) */
+  viewPlayer: (id: number) => Promise<void>;
+  /** Gast dauerhaft tracken */
+  keepGuest: (id: number) => Promise<void>;
   removePlayer: (id: number) => Promise<void>;
   syncNow: () => Promise<void>;
   syncing: boolean;
@@ -179,6 +183,21 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [loadStatus]);
 
+  const viewPlayer = useCallback(async (id: number) => {
+    const own = status?.players.find((p) => p.accountId === id);
+    if (!own) {
+      try { await fetch("/api/players", { method: "POST", body: JSON.stringify({ input: String(id), guest: true }) }); } catch { /* unten prüfen */ }
+      await loadStatus();
+    } else if (own.guest) fetch("/api/players", { method: "POST", body: JSON.stringify({ input: String(id), guest: true }) }).catch(() => {});
+    setPicked(id);
+    router.push("/");
+  }, [status, loadStatus, router]);
+
+  const keepGuest = useCallback(async (id: number) => {
+    await fetch("/api/players", { method: "POST", body: JSON.stringify({ input: String(id) }) });
+    await loadStatus();
+  }, [loadStatus]);
+
   const removePlayer = useCallback(async (id: number) => {
     await fetch(`/api/players?account=${id}`, { method: "DELETE" });
     const s: Status = await (await fetch("/api/status")).json();
@@ -190,7 +209,7 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => setToasts([]), [account]);
 
   return (
-    <Ctx.Provider value={{ status, account, primary, setAccount, setPrimary, addPlayer, removePlayer, syncNow, syncing, toasts, dismissToast: (id) => setToasts((c) => c.filter((t) => t.id !== id)) }}>
+    <Ctx.Provider value={{ status, account, primary, setAccount, setPrimary, addPlayer, viewPlayer, keepGuest, removePlayer, syncNow, syncing, toasts, dismissToast: (id) => setToasts((c) => c.filter((t) => t.id !== id)) }}>
       {children}
     </Ctx.Provider>
   );
