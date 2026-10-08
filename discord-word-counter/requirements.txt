@@ -1,0 +1,8 @@
+discord.py[voice]>=2.4
+discord-ext-voice-recv>=0.4
+faster-whisper>=1.0
+numpy>=1.26
+python-dotenv>=1.0
+tzdata
+davey
+matplotlib

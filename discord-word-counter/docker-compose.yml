@@ -1,0 +1,7 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped   # startet nach Absturz und Server-Neustart automatisch neu
+    env_file: .env
+    volumes:
+      - ./data:/data          # Zähler-Datenbank und Whisper-Modell bleiben erhalten
