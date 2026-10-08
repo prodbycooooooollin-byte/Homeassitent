@@ -246,7 +246,7 @@ interface Hint { matchId: number; source: string; at: number; tries: number; nex
 const gh = globalThis as unknown as { __dlHints?: Map<number, Hint>; __dlGame?: { running: boolean; since: number | null; endedAt: number | null } };
 const hints = () => (gh.__dlHints ??= new Map());
 export interface GameLog { available: boolean; file: string | null; state: string | null; stateN: number | null; stateAt: number | null; server: string | null; heroes: string[]; matchStartedAt: number | null; matchEndedAt: number | null; updatedAt: number | null }
-export const gameLog = (): GameLog | null => (globalThis as unknown as { __dlLog?: GameLog }).__dlLog ?? null;
+export const gameLog = (): GameLog | null => (globalThis as unknown as { __dlGameLog?: GameLog }).__dlGameLog ?? null;
 export const gameState = () => gh.__dlGame ?? { running: false, since: null, endedAt: null };
 export const hintStatus = () => [...hints().values()].sort((a, b) => b.at - a.at).slice(0, 8);
 

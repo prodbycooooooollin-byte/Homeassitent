@@ -1,6 +1,6 @@
 // Liest die console.log des Spiels (Steam-Startoption -condebug) – eine normale Textdatei, die das Spiel selbst schreibt.
 // Daraus: Spielphase (Heldenauswahl → Laden → läuft → Ende), Server-Adresse und die Helden, die im Match respawnen. Kein Zugriff auf den Spielspeicher.
-// Zustand liegt in globalThis.__dlLog (vom eingebetteten Server und der Statusseite lesbar).
+// Zustand liegt in globalThis.__dlGameLog (vom eingebetteten Server und der Statusseite lesbar).
 const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
@@ -31,7 +31,7 @@ let log = fresh();
 let timer = null, file = null, pos = 0;
 let listeners = [];
 
-function publish() { globalThis.__dlLog = log; }
+function publish() { globalThis.__dlGameLog = log; }
 function emit(ev) { for (const l of listeners) { try { l(ev, log); } catch { /* egal */ } } }
 
 function handle(line, now) {
