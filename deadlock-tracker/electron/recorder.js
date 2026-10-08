@@ -20,7 +20,7 @@ const add = (kind, text) => {
 // Dauerrauschen der console.log (Tausende Zeilen pro Sekunde) – nicht aufzeichnen
 const NOISE = /OnPostPredictionError|\[Particles\]|\[Localization System\]|\[ResourceSystem\]|Dynamic prop|Camera Pose|without yielding|Job .* has spent/i;
 // Zeilen, die Phasenwechsel oder Match-Kennungen verraten – werden zusätzlich als PHASE markiert und oben im Bericht als Zeitleiste zusammengefasst
-const KEY = /ChangeGameState|Loaded hero|Post ?Game|\[Networking\]|SDR server|match[_ ]?id|matchid|salt|matchmak|queue|party|lobby|connect(ing|ed) to|disconnect|map load|loadmap|server @/i;
+const KEY = /Loading map|Connected to '|\[Client\] (Map|Players|Server Number|Build)|Destroying the match data watcher|ChangeGameState|Loaded hero|Post ?Game|\[Networking\]|SDR server|match[_ ]?id|matchid|salt|matchmak|queue|party|lobby|connect(ing|ed) to|disconnect|map load|loadmap|server @/i;
 function run(cmd, args, timeout = 8000) {
   return new Promise((resolve) => execFile(cmd, args, { windowsHide: true, timeout, maxBuffer: 16 * 1024 * 1024 }, (e, out) => resolve(e ? "" : String(out))));
 }
