@@ -45,7 +45,13 @@ function setup(mainWindow) {
   autoUpdater.on("update-not-available", () => push({ status: "uptodate", message: "", lastCheck: Date.now() }));
   autoUpdater.on("download-progress", (p) => push({ status: "downloading", percent: Math.round(p.percent) }));
   autoUpdater.on("update-downloaded", (i) => push({ status: "ready", version: i.version, percent: 100 }));
-  autoUpdater.on("error", (e) => push({ status: "error", message: String((e && e.message) || e).slice(0, 200), lastCheck: Date.now() }));
+  const friendly = (e) => {
+  const m = String((e && e.message) || e);
+  // Prüfsummenfehler: Meist wird gerade ein neuer Build veröffentlicht (Manifest und Installer stammen aus unterschiedlichen Läufen).
+  if (/sha512|checksum/i.test(m)) return "Das Update wird gerade veröffentlicht (Prüfsumme passt noch nicht). Bitte in ein paar Minuten erneut suchen.";
+  return m.slice(0, 200);
+};
+autoUpdater.on("error", (e) => push({ status: "error", message: friendly(e), lastCheck: Date.now() }));
 
   setTimeout(check, 8000);
   setInterval(check, CHECK_EVERY_MS);
@@ -56,7 +62,7 @@ async function check() {
   try {
     await autoUpdater.checkForUpdates();
   } catch (e) {
-    push({ status: "error", message: String((e && e.message) || e).slice(0, 200), lastCheck: Date.now() });
+    push({ status: "error", message: friendly(e), lastCheck: Date.now() });
   }
   return state;
 }
