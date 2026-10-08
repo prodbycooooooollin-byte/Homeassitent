@@ -14,6 +14,7 @@ export interface HeroAsset {
   portrait?: string; // Karte/Hochformat
   small?: string; // Icon
   art?: string; // breite Illustration / Hintergrund
+  figure?: string; // freigestellte Heldenfigur (Auswahlbild)
   wordmark?: string; // Namenszug als Grafik
   /** Fakten aus den Spieldaten */
   info?: HeroInfoAsset;
@@ -112,6 +113,7 @@ export function normalizeHeroes(raw: unknown): Record<number, HeroAsset> {
       portrait: imgUrl(firstStr(im, ["icon_hero_card", "top_bar_vertical_image", "hero_card_gloat", "icon_image_small", "icon_hero_card_webp"])),
       small: imgUrl(firstStr(im, ["icon_image_small", "minimap_image", "icon_hero_card", "icon_image_small_webp"])),
       art: imgUrl(firstStr(im, ["background_image", "hero_card_gloat", "hero_card_critical", "icon_hero_card", "background_image_webp"])),
+      figure: imgUrl(firstStr(im, ["selection_image", "hero_card_gloat", "selection_image_webp"])),
       wordmark: imgUrl(firstStr(im, ["name_image"])),
       info: heroInfo(h),
     };

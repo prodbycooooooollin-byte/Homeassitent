@@ -70,6 +70,19 @@ function useCountUp(target: number, delayMs = 0, ms = 1100): number {
   return v;
 }
 
+const STAGE_W = 1360, STAGE_H = 720;
+/** Feste Bühne, die so skaliert wird, dass der Debrief ohne Scrollen genau in das Fenster passt (oben Titelleiste, unten Aktionsleiste). */
+function useStage() {
+  const calc = () => {
+    const top = document.documentElement.classList.contains("desktop") ? 60 : 16, bottom = 84;
+    const h = Math.max(200, window.innerHeight - top - bottom), w = Math.max(300, window.innerWidth - 32);
+    return { k: Math.max(0.45, Math.min(1.6, w / STAGE_W, h / STAGE_H)), top, h };
+  };
+  const [st, setSt] = useState(calc);
+  useEffect(() => { const on = () => setSt(calc()); on(); window.addEventListener("resize", on); return () => window.removeEventListener("resize", on); }, []);
+  return st;
+}
+
 const SPARKS = Array.from({ length: 22 }, (_, i) => { const r = (k: number) => { const x = Math.sin(i * 91.7 + k * 17.3) * 9301.5; return x - Math.floor(x); }; return { x: r(1) * 100, s: 2 + r(2) * 3, d: 5 + r(3) * 7, l: -r(4) * 10 }; });
 
 function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () => void; onLeave: () => void }) {
@@ -101,6 +114,8 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
   const heroName = useHeroName();
   const { hero, color } = useHero(me?.heroId);
   const art = useImg(hero?.art ?? hero?.portrait);
+  const fig = useImg(hero?.figure);
+  const stage = useStage();
   const noFx = useSettings().settings.effects === "off";
   const score = useCountUp(rating?.score ?? 0, 1100, 1300);
   const grade = rating?.grade ?? null;
@@ -114,7 +129,7 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
   };
 
   return (
-    <div ref={root} onMouseMove={onMove} className="debrief fixed inset-0 z-[120] overflow-y-auto bg-[#05060a]" role="dialog" aria-modal="true" aria-label="Match-Debrief" style={{ ["--hc" as string]: color, ["--ac" as string]: accent }}>
+    <div ref={root} onMouseMove={onMove} className="debrief fixed inset-0 z-[120] overflow-hidden bg-[#05060a]" role="dialog" aria-modal="true" aria-label="Match-Debrief" style={{ ["--hc" as string]: color, ["--ac" as string]: accent }}>
       {/* Eröffnung: Lichtblitz in der Ergebnisfarbe */}
       <div className="debrief-flash pointer-events-none fixed inset-0" />
       {/* Hintergrund: Heldenfarbe, Raster, Funken */}
@@ -139,58 +154,68 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#05060a]/70 to-transparent" />
       </div>
 
-      <div className="relative mx-auto flex min-h-full max-w-[1400px] flex-col px-6 pb-28 pt-8 sm:px-10 desktop-safe">
-        <div className="min-w-0">
-          <h1 className="debrief-title display text-5xl font-extrabold uppercase sm:text-7xl" style={{ color: accent }}>
-            {(!d ? "Auswertung" : draw ? "Unentschieden" : won ? "Sieg" : "Niederlage").split("").map((ch, i) => <span key={i} className="debrief-letter" style={{ animationDelay: `${0.15 + i * 0.06}s` }}>{ch}</span>)}
-          </h1>
-          <div className="debrief-line mt-2 h-[3px] w-48 rounded-full" style={{ background: `linear-gradient(90deg, ${accent}, transparent)` }} />
-          {d && me && <div className="debrief-fade mt-3 flex flex-wrap items-center gap-x-3 text-sm uppercase tracking-widest text-muted" style={{ ["--d" as string]: "0.6s" }}><b className="text-white">{heroName(me.heroId)}</b><span>/ {fmtDuration(d.durationS)}</span>{d.matchMode && <span>/ {d.matchMode}</span>}{req.test && <span className="rounded bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber">{req.sample ? "Beispiel" : "Testansicht"}</span>}{noFx && <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] normal-case tracking-normal">Effekte sind in den Einstellungen aus – daher ohne Animation</span>}</div>}
+      {/* Held als Figur: freigestellt, rechts unten, folgt der Maus */}
+      {fig.src && (
+        <div className="debrief-figure pointer-events-none fixed bottom-0 right-[2%] top-[4%] hidden w-[38%] lg:block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={fig.src} onError={fig.onError} alt="" className="debrief-figure-img absolute inset-0 h-full w-full object-contain object-bottom" style={{ filter: `drop-shadow(0 0 40px ${color}88) drop-shadow(0 12px 30px #000c)` }} />
         </div>
+      )}
 
-        {d && !me ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-            <div className="display text-xl font-bold">Dich in diesem Match nicht gefunden</div>
-            <p className="max-w-md text-sm text-muted">Die Match-Details enthalten keinen Spieler mit deiner Account-ID und keinen eindeutig passenden Eintrag (Held, Team, K/D/A). Öffne das Match, um alle Spieler zu sehen.</p>
-          </div>
-        ) : !d || !me || !db ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-            <div className="h-12 w-12 animate-spin rounded-full border-2 border-white/10 border-t-amber" />
-            <div className="display text-xl font-bold">Match-Daten werden vorbereitet …</div>
-            <p className="max-w-md text-sm text-muted">Valve und die Deadlock-API liefern die Details meist wenige Minuten nach dem Ende. Dieses Fenster aktualisiert sich selbst.</p>
-          </div>
-        ) : (
-          <div className="mt-8 grid flex-1 gap-8 lg:grid-cols-[minmax(360px,500px)_minmax(0,1fr)]">
-            <div className="relative z-10">
-              <div className="debrief-fade mb-2 grid grid-cols-[1fr_58px_58px] px-1 text-[10px] font-semibold uppercase tracking-widest text-muted" style={{ ["--d" as string]: "0.7s" }}><span>Tippe eine Zeile an</span><span className="text-center">Team</span><span className="text-center">Lobby</span></div>
-              <div className="space-y-1.5">{db.rows.map((r, i) => <Row key={r.label} r={r} i={i} d={d} me={me} accent={accent} />)}</div>
+      <div className="absolute left-1/2 z-10" style={{ top: stage.top + stage.h / 2, width: STAGE_W, height: STAGE_H, transform: `translate(-50%, -50%) scale(${stage.k})` }}>
+        <div className="flex h-full flex-col">
+          <div className="flex h-[78px] shrink-0 items-start justify-between gap-6">
+            <div className="min-w-0">
+              <h1 className="debrief-title display text-5xl font-extrabold uppercase leading-none" style={{ color: accent }}>
+                {(!d ? "Auswertung" : draw ? "Unentschieden" : won ? "Sieg" : "Niederlage").split("").map((ch, i) => <span key={i} className="debrief-letter" style={{ animationDelay: `${0.15 + i * 0.06}s` }}>{ch}</span>)}
+              </h1>
+              <div className="debrief-line mt-2 h-[3px] w-48 rounded-full" style={{ background: `linear-gradient(90deg, ${accent}, transparent)` }} />
+              {d && me && <div className="debrief-fade mt-2 flex flex-wrap items-center gap-x-3 text-xs uppercase tracking-widest text-muted" style={{ ["--d" as string]: "0.6s" }}><b className="text-white">{heroName(me.heroId)}</b><span>/ {fmtDuration(d.durationS)}</span>{d.matchMode && <span>/ {d.matchMode}</span>}{req.test && <span className="rounded bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber">{req.sample ? "Beispiel" : "Testansicht"}</span>}{noFx && <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] normal-case tracking-normal">Effekte aus</span>}</div>}
             </div>
+            {d && me?.badge && <div className="debrief-fade mr-[150px] flex items-center gap-3 rounded-full border border-white/10 bg-black/40 py-1.5 pl-2 pr-5 backdrop-blur" style={{ ["--d" as string]: "0.9s" }}><RankEmblem badge={me.badge} size={34} /><span className="text-xs text-muted">Rang im Match<br /><b className="text-sm text-white">{formatBadge(me.badge)}</b>{res?.lobbyBadge ? <span> · Lobby-Ø <b className="text-white">{formatBadge(res.lobbyBadge)}</b></span> : null}</span></div>}
+          </div>
 
-            <div className="relative z-10 flex flex-col items-center lg:items-start">
-              <div className="lg:ml-8"><Gauge rating={rating} score={score} /></div>
-              <p className="debrief-fade mt-4 max-w-md text-center text-base text-white/90 lg:ml-8 lg:text-left" style={{ ["--d" as string]: "2.2s" }}>{db.verdict}</p>
+          {d && !me ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+              <div className="display text-xl font-bold">Dich in diesem Match nicht gefunden</div>
+              <p className="max-w-md text-sm text-muted">Die Match-Details enthalten keinen Spieler mit deiner Account-ID und keinen eindeutig passenden Eintrag (Held, Team, K/D/A). Öffne das Match, um alle Spieler zu sehen.</p>
             </div>
+          ) : !d || !me || !db ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+              <div className="h-12 w-12 animate-spin rounded-full border-2 border-white/10 border-t-amber" />
+              <div className="display text-xl font-bold">Match-Daten werden vorbereitet …</div>
+              <p className="max-w-md text-sm text-muted">Valve und die Deadlock-API liefern die Details meist wenige Minuten nach dem Ende. Dieses Fenster aktualisiert sich selbst.</p>
+            </div>
+          ) : (
+            <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3.5">
+              <div className="grid h-[380px] shrink-0 grid-cols-[430px_minmax(0,1fr)_430px] gap-6">
+                <div className="relative min-w-0">
+                  <div className="debrief-fade mb-1.5 grid grid-cols-[1fr_52px_52px] px-1 text-[10px] font-semibold uppercase tracking-widest text-muted" style={{ ["--d" as string]: "0.7s" }}><span>Tippe eine Zeile an</span><span className="text-center">Team</span><span className="text-center">Lobby</span></div>
+                  <div className="space-y-1">{db.rows.map((r, i) => <Row key={r.label} r={r} i={i} d={d} me={me} accent={accent} />)}</div>
+                </div>
 
-            <div className="relative z-10 grid items-start gap-4 lg:col-span-2 lg:grid-cols-3">
-              <div className="space-y-4 lg:col-span-2">
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex min-w-0 flex-col items-center justify-center">
+                  <Gauge rating={rating} score={score} />
+                  <p className="debrief-fade mt-1 max-w-[420px] text-center text-[15px] leading-snug text-white/90" style={{ ["--d" as string]: "2.2s" }}>{db.verdict}</p>
+                </div>
+
+                <div className="flex min-w-0 flex-col gap-3">
                   <Side title="Deine stärkste Seite" tone="#3ecf8e" icon="trendUp" item={db.best} delay={2.4} />
                   <Side title="Deine schwächste Seite" tone="#f0616d" icon="trendDown" item={db.worst} delay={2.6} />
+                  <div className="debrief-fade debrief-card min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-3.5 backdrop-blur" style={{ ["--d" as string]: "2.8s" }}>
+                    <div className="label mb-1.5 flex items-center gap-1.5"><Icon name="eye" size={13} />Analyse</div>
+                    <ul className="space-y-1 text-[12.5px] leading-snug">
+                      {db.good.slice(0, 2).map((t, i) => <li key={"g" + i} className="debrief-item flex gap-2" style={{ ["--d" as string]: `${3 + i * 0.15}s` }}><Icon name="check" size={13} className="mt-0.5 shrink-0 text-[#3ecf8e]" /><span>{t}</span></li>)}
+                      {db.bad.slice(0, 2).map((t, i) => <li key={"b" + i} className="debrief-item flex gap-2" style={{ ["--d" as string]: `${3.4 + i * 0.15}s` }}><Icon name="x" size={13} className="mt-0.5 shrink-0 text-[#f0616d]" /><span>{t}</span></li>)}
+                      {!db.good.length && !db.bad.length && <li className="text-muted">Keine auffälligen Stärken oder Schwächen.</li>}
+                    </ul>
+                  </div>
                 </div>
-                <MatchPulse d={d} me={me} accent={accent} />
               </div>
-              <div className="debrief-fade debrief-card rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur" style={{ ["--d" as string]: "2.8s" }}>
-                <div className="label mb-2 flex items-center gap-1.5"><Icon name="eye" size={13} />Analyse</div>
-                <ul className="space-y-1.5 text-sm">
-                  {db.good.map((t, i) => <li key={"g" + i} className="debrief-item flex gap-2" style={{ ["--d" as string]: `${3 + i * 0.15}s` }}><Icon name="check" size={14} className="mt-0.5 shrink-0 text-[#3ecf8e]" /><span>{t}</span></li>)}
-                  {db.bad.map((t, i) => <li key={"b" + i} className="debrief-item flex gap-2" style={{ ["--d" as string]: `${3.4 + i * 0.15}s` }}><Icon name="x" size={14} className="mt-0.5 shrink-0 text-[#f0616d]" /><span>{t}</span></li>)}
-                  {!db.good.length && !db.bad.length && <li className="text-muted">Keine auffälligen Stärken oder Schwächen.</li>}
-                </ul>
-              </div>
+              <div className="min-h-0 flex-1"><MatchPulse d={d} me={me} accent={accent} /></div>
             </div>
-            {me.badge && <div className="debrief-fade relative z-10 flex items-center gap-3 lg:col-span-2" style={{ ["--d" as string]: "3.6s" }}><RankEmblem badge={me.badge} size={36} /><span className="text-sm text-muted">Rang im Match: <b className="text-white">{formatBadge(me.badge)}</b>{res?.lobbyBadge ? <> · Lobby-Ø <b className="text-white">{formatBadge(res.lobbyBadge)}</b></> : null}</span></div>}
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Aktionsleiste unten: immer erreichbar, unabhängig von Fenstergröße und Titelleiste */}
@@ -216,12 +241,12 @@ function Row({ r, i, d, me, accent }: { r: DebriefRow; i: number; d: MatchDetail
   const lo = Math.min(...vals.map((x) => x.v)), hi = Math.max(...vals.map((x) => x.v));
   const pos = (v: number) => (hi === lo ? 50 : ((v - lo) / (hi - lo)) * 100);
   const chip = (place: number, of: number, k: number) => (
-    <span className="debrief-pop mx-auto flex h-7 w-11 items-center justify-center rounded-md text-[12px] font-extrabold" style={{ background: place <= 3 ? PLACE[place - 1] : "rgba(255,255,255,.1)", color: place <= 3 ? "#1a1204" : "#c7cdd9", animationDelay: `${0.9 + i * 0.12 + k * 0.08}s`, boxShadow: place === 1 ? "0 0 14px #f0b44c88" : undefined }} title={`Platz ${place} von ${of}`}>{place}.</span>
+    <span className="debrief-pop mx-auto flex h-6 w-10 items-center justify-center rounded-md text-[11px] font-extrabold" style={{ background: place <= 3 ? PLACE[place - 1] : "rgba(255,255,255,.1)", color: place <= 3 ? "#1a1204" : "#c7cdd9", animationDelay: `${0.9 + i * 0.12 + k * 0.08}s`, boxShadow: place === 1 ? "0 0 14px #f0b44c88" : undefined }} title={`Platz ${place} von ${of}`}>{place}.</span>
   );
   return (
-    <button type="button" onClick={() => setOpen((o) => !o)} className="debrief-row group block w-full rounded-lg border-b border-white/[0.06] px-1 py-1.5 text-left transition hover:bg-white/[0.05]" style={{ ["--d" as string]: `${0.6 + i * 0.12}s` }}>
-      <div className="grid grid-cols-[1fr_58px_58px] items-center">
-        <div className="flex items-baseline justify-between pr-5"><span className="text-[13px] font-semibold uppercase tracking-widest text-muted transition group-hover:text-white">{r.label}</span><span className="display num text-2xl font-extrabold">{text}</span></div>
+    <button type="button" onClick={() => setOpen((o) => !o)} className="debrief-row group block w-full rounded-lg border-b border-white/[0.06] px-1 py-1 text-left transition hover:bg-white/[0.05]" style={{ ["--d" as string]: `${0.6 + i * 0.12}s` }}>
+      <div className="grid grid-cols-[1fr_52px_52px] items-center">
+        <div className="flex items-baseline justify-between pr-5"><span className="text-xs font-semibold uppercase tracking-widest text-muted transition group-hover:text-white">{r.label}</span><span className="display num text-xl font-extrabold">{text}</span></div>
         {chip(r.team, r.teamSize, 0)}{chip(r.lobby, r.lobbySize, 1)}
       </div>
       <div className="grid transition-[grid-template-rows] duration-300" style={{ gridTemplateRows: open ? "1fr" : "0fr" }}>
@@ -247,9 +272,9 @@ const DEFS: Record<string, (p: MatchDetails["players"][number]) => number> = {
 
 function Side({ title, tone, icon, item, delay }: { title: string; tone: string; icon: "trendUp" | "trendDown"; item: { label: string; score: number; detail: string } | null; delay: number }) {
   return (
-    <div className="debrief-fade debrief-card rounded-2xl border p-4 backdrop-blur" style={{ borderColor: `${tone}55`, background: `linear-gradient(160deg, ${tone}14, rgba(0,0,0,.45))`, ["--d" as string]: `${delay}s` }}>
+    <div className="debrief-fade debrief-card shrink-0 rounded-2xl border p-3.5 backdrop-blur" style={{ borderColor: `${tone}55`, background: `linear-gradient(160deg, ${tone}14, rgba(0,0,0,.45))`, ["--d" as string]: `${delay}s` }}>
       <div className="label mb-1.5 flex items-center gap-1.5" style={{ color: tone }}><Icon name={icon} size={13} />{title}</div>
-      {item ? <><div className="display text-2xl font-extrabold">{item.label}</div><div className="num text-sm font-bold" style={{ color: tone }}>Score {item.score.toFixed(2)}</div><p className="mt-1 text-xs leading-snug text-muted">{item.detail}</p></> : <p className="text-sm text-muted">Nicht bewertbar.</p>}
+      {item ? <><div className="flex items-baseline justify-between gap-2"><div className="display truncate text-xl font-extrabold">{item.label}</div><div className="num shrink-0 text-sm font-bold" style={{ color: tone }}>Score {item.score.toFixed(2)}</div></div><p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-muted">{item.detail}</p></> : <p className="text-sm text-muted">Nicht bewertbar.</p>}
     </div>
   );
 }
@@ -263,7 +288,7 @@ function Gauge({ rating, score }: { rating: Rating | null; score: number }) {
   const seg = C / GRADES.length;
   const col = grade ? GRADE_STYLE[grade].glow.replace(/,[^,]*\)$/, ",1)") : "#8b94a8";
   return (
-    <div className="relative h-[300px] w-[300px]">
+    <div className="relative h-[270px] w-[270px]"><div className="absolute left-0 top-0 h-[300px] w-[300px] origin-top-left scale-90">
       <div className="debrief-shock absolute inset-6 rounded-full" style={{ borderColor: col }} />
       <svg viewBox="0 0 300 300" className="absolute inset-0 -rotate-90">
         {GRADES.map((g, i) => <circle key={g} cx="150" cy="150" r={R} fill="none" stroke={GRADE_STYLE[g].glow.replace(/,[^,]*\)$/, ",.22)")} strokeWidth="14" strokeDasharray={`${seg - 6} ${C - seg + 6}`} strokeDashoffset={-i * seg} />)}
@@ -275,7 +300,7 @@ function Gauge({ rating, score }: { rating: Rating | null; score: number }) {
         <div className="display num mt-3 text-3xl font-extrabold">{rating ? score.toFixed(2) : "0.0"}</div>
         <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-muted">Match-Note</div>
       </div>
-    </div>
+    </div></div>
   );
 }
 
@@ -285,8 +310,8 @@ function MatchPulse({ d, me, accent }: { d: MatchDetails; me: MatchDetails["play
   const tp = useMemo(() => turningPoint(d, me), [d, me]);
   const [hover, setHover] = useState<number | null>(null);
   if (adv.length < 4) return null;
-  const W = 760, CH = 150, LANE = 15, P = { l: 46, r: 14, t: 12 };
-  const H = P.t + CH + 12 + LANE * 3 + 22;
+  const W = 1310, CH = 84, LANE = 13, P = { l: 56, r: 14, t: 8 };
+  const H = P.t + CH + 10 + LANE * 3 + 18;
   const end = adv[adv.length - 1].t || 1;
   const lim = Math.max(1500, ...adv.map((a) => Math.abs(a.v)));
   const nice = Math.ceil(lim / 1000) * 1000;
@@ -311,17 +336,17 @@ function MatchPulse({ d, me, accent }: { d: MatchDetails; me: MatchDetails["play
   const hv = hover !== null ? adv[hover] : null;
   const near = (list: number[], t: number) => list.filter((q) => Math.abs(q - t) <= 45).length;
   const id = `pulse${me.accountId}`;
-  const laneY = (i: number) => P.t + CH + 14 + i * LANE;
+  const laneY = (i: number) => P.t + CH + 12 + i * LANE;
   const ticks = Array.from({ length: Math.floor(end / 300) + 1 }, (_, i) => i * 300);
   return (
-    <div className="debrief-fade debrief-card rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur" style={{ ["--d" as string]: "3.2s" }}>
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-3">
+    <div className="debrief-fade debrief-card h-full rounded-2xl border border-white/10 bg-black/40 px-4 py-2.5 backdrop-blur" style={{ ["--d" as string]: "3.2s" }}>
+      <div className="mb-1 flex flex-wrap items-baseline gap-x-3">
         <div className="label flex items-center gap-1.5"><Icon name="trendUp" size={13} />Match-Puls</div>
         <span className="text-[11px] text-muted">Souls-Vorsprung deines Teams im Verlauf</span>
         {tp && <span className="ml-auto text-[11px] text-muted">Wendepunkt <b style={{ color: tp.swing < 0 ? "#f0616d" : "#3ecf8e" }}>{mm(tp.from)}–{mm(tp.to)} ({k(tp.swing)})</b></span>}
       </div>
       <div className="relative">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" onMouseLeave={() => setHover(null)}
+        <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" onMouseLeave={() => setHover(null)}
           onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * W; setHover(Math.max(0, Math.min(adv.length - 1, Math.round(((px - P.l) / (W - P.l - P.r)) * (adv.length - 1))))); }}>
           <defs>
             <linearGradient id={`${id}g`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#3ecf8e" stopOpacity=".42" /><stop offset="1" stopColor="#3ecf8e" stopOpacity="0" /></linearGradient>
@@ -351,7 +376,7 @@ function MatchPulse({ d, me, accent }: { d: MatchDetails; me: MatchDetails["play
           </div>
         )}
       </div>
-      <div className="mt-1 flex flex-wrap gap-x-4 text-[10px] text-muted">
+      <div className="flex flex-wrap gap-x-4 text-[10px] text-muted">
         <span><i className="mr-1 inline-block h-2.5 w-[3px] rounded bg-[#f0616d] align-middle" />Tod</span>
         <span><i className="mr-1 inline-block h-2.5 w-[3px] rounded bg-[#3ecf8e] align-middle" />Kill</span>
         <span><i className="mr-1 inline-block h-2 w-2 rotate-45 bg-[#3ecf8e] align-middle" />gegnerisches Gebäude</span>
