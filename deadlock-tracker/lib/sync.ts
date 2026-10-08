@@ -246,3 +246,44 @@ export function runCycle(force = false): Promise<SyncResult[]> {
   });
   return running;
 }
+
+/** Zieht eine Match-ID aus Text oder Link (z. B. statlocker.gg/match/12345678). */
+export function parseMatchId(input: string): number | null {
+  const m = input.match(/\d{6,}/g);
+  return m ? Number(m[m.length - 1]) : null;
+}
+
+/**
+ * Manueller Import per Match-ID – unabhängig von der Spieler-Historie, die der API manchmal erst Stunden später meldet.
+ * Lädt die Details (mit Steam-Fallback) und legt das Match für alle getrackten Spieler an, die darin vorkommen.
+ */
+export async function importMatchById(matchId: number, now = Date.now()): Promise<{ ok: boolean; error?: string; accounts?: number[] }> {
+  const store = getStore();
+  let details;
+  try {
+    details = await fetchMatchDetails(matchId, 1, true);
+  } catch (e) {
+    return { ok: false, error: e instanceof ApiError && e.status === 429 ? "Rate-Limit – bitte in einer Minute erneut versuchen." : e instanceof Error ? e.message : String(e) };
+  }
+  if (!details) return { ok: false, error: "Match ist noch nicht verfügbar (weder im Archiv noch bei Valve). Später erneut versuchen." };
+  const mine = details.players.filter((p) => store.players[String(p.accountId)]);
+  if (!mine.length) return { ok: false, error: "Keiner deiner getrackten Spieler kommt in diesem Match vor." };
+  const rec = (store.matches[matchId] ??= { matchId, startTime: details.startTime, history: {}, detailsAttempts: 0, nextDetailsAttemptAt: Number.MAX_SAFE_INTEGER, firstSeenAt: now, detectedLive: false });
+  for (const p of mine) {
+    rec.history[String(p.accountId)] ??= {
+      matchId, accountId: p.accountId, heroId: p.heroId, startTime: details.startTime, durationS: details.durationS,
+      won: details.winningTeam === p.team, team: p.team, kills: p.kills, deaths: p.deaths, assists: p.assists,
+      netWorth: p.netWorth, lastHits: p.lastHits, denies: p.denies, heroLevel: p.level, abandoned: p.abandoned,
+      matchMode: details.matchMode, gameMode: details.gameMode, badge: p.badge,
+    };
+  }
+  const profiles = await fetchProfiles(details.players.filter((p) => !p.name).map((p) => p.accountId).filter(Boolean)).catch(() => []);
+  const byId = new Map(profiles.map((p) => [p.accountId, p]));
+  for (const p of details.players) { const pr = byId.get(p.accountId); if (pr) { p.name = pr.name; p.avatar = pr.avatar; } }
+  rec.details = details;
+  rec.detailsAt = now;
+  rec.lastError = undefined;
+  rec.nextDetailsAttemptAt = Number.MAX_SAFE_INTEGER;
+  saveStore();
+  return { ok: true, accounts: mine.map((p) => p.accountId) };
+}

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Empty, Gate, PageTitle } from "@/components/ui";
+import { ImportMatch } from "@/components/ImportMatch";
 import { MatchRow } from "@/components/MatchRow";
 import { MatchCard } from "@/components/MatchCard";
 import { Icon } from "@/components/Icon";
@@ -71,7 +72,7 @@ function MatchesView({ account, matches }: { account: number; matches: MatchList
 
   return (
     <>
-      <PageTitle title="Matches" sub="Deine komplette Match-Historie – filtern, sortieren, vergleichen" />
+      <PageTitle title="Matches" sub="Deine komplette Match-Historie – filtern, sortieren, vergleichen" right={<ImportMatch />} />
 
       {/* Auswertung der aktuellen Auswahl */}
       <section className="surface relative overflow-hidden p-5">

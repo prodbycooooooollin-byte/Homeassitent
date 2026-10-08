@@ -75,3 +75,12 @@ describe("sync", () => {
     expect(nextAttemptDelayMs(99)).toBe(900_000);
   });
 });
+
+import { parseMatchId } from "./sync";
+describe("parseMatchId", () => {
+  it("erkennt ID und Links", () => {
+    expect(parseMatchId("12345678")).toBe(12345678);
+    expect(parseMatchId("https://statlocker.gg/match/87654321?x=1")).toBe(87654321);
+    expect(parseMatchId("abc")).toBeNull();
+  });
+});
