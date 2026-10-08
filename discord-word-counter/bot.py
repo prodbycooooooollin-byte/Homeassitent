@@ -28,6 +28,31 @@ store = Store(os.getenv("DB_PATH", "counter.db"))
 transcriber = Transcriber(os.getenv("WHISPER_MODEL", "small"), os.getenv("WHISPER_LANGUAGE", "de"))
 
 
+SILENCE_FRAME = b"\xf8\xff\xfe"  # gültiger Opus-Stille-Frame
+_first_errors: list[str] = []
+
+
+def protect_opus_decoding() -> None:
+    """Ein einziger Opus-Fehler würde in voice_recv das Zuhören dauerhaft beenden.
+    Defekte Pakete werden deshalb als Stille behandelt."""
+    from discord.ext.voice_recv import opus as vr_opus
+    from discord.opus import OpusError
+
+    original = vr_opus.PacketDecoder._decode_packet
+    if getattr(original, "_protected", False):
+        return
+
+    def safe_decode(self, packet):
+        try:
+            return original(self, packet)
+        except OpusError:
+            diag["opus_fehler"] += 1
+            return packet, b"\x00" * 3840  # 20 ms Stille (48 kHz, stereo, int16)
+
+    safe_decode._protected = True
+    vr_opus.PacketDecoder._decode_packet = safe_decode
+
+
 def install_dave_decryption(vc: voice_recv.VoiceRecvClient) -> None:
     """Discord verschlüsselt Sprache zusätzlich per DAVE (Ende-zu-Ende).
     voice_recv entschlüsselt nur die Transportschicht, daher hier die DAVE-Schicht nachrüsten."""
@@ -36,6 +61,7 @@ def install_dave_decryption(vc: voice_recv.VoiceRecvClient) -> None:
     except ImportError:
         print("WARNUNG: 'davey' fehlt, Sprache kann nicht entschlüsselt werden.")
         return
+    protect_opus_decoding()
     decryptor = vc._reader.decryptor
     transport_decrypt = decryptor.decrypt_rtp
 
@@ -44,18 +70,27 @@ def install_dave_decryption(vc: voice_recv.VoiceRecvClient) -> None:
         diag["pakete"] += 1
         state = vc._connection
         session = getattr(state, "dave_session", None)
-        if session is None or not state.dave_protocol_version or not session.ready:
+        if not state.dave_protocol_version:
             return data  # kein E2EE aktiv
+        if session is None or not session.ready:
+            diag["dave_noch_nicht_bereit"] += 1
+            return SILENCE_FRAME  # verschlüsselt, aber Schlüssel noch nicht da
         user_id = vc._ssrc_to_id.get(packet.ssrc)
         if user_id is None:
             diag["unbekannter_sprecher"] += 1
-            return data
+            return SILENCE_FRAME
+        if data == SILENCE_FRAME:
+            return data  # unverschlüsselte Stille
         try:
-            data = session.decrypt(user_id, davey.MediaType.audio, data)
+            out = session.decrypt(user_id, davey.MediaType.audio, data)
             diag["dave_ok"] += 1
-        except Exception:
-            diag["dave_fehler"] += 1  # z. B. unverschlüsselte Stille-Pakete
-        return data
+            return out
+        except Exception as e:
+            diag["dave_fehler"] += 1
+            if len(_first_errors) < 3:
+                _first_errors.append(repr(e))
+                print(f"[Diagnose] DAVE-Entschlüsselung fehlgeschlagen: {e!r}")
+            return SILENCE_FRAME
 
     decryptor.decrypt_rtp = decrypt_rtp
 
