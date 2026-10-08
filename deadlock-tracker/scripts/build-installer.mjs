@@ -1,4 +1,4 @@
-// Baut den eigenen Installer (installer-app) als einzelne EXE nach release/Deadlock-Tracker-Installer.exe.
+// Baut den eigenen Installer (installer-app) als einzelne EXE nach release/Lockscope-Installer.exe.
 // Der Installer lädt zur Laufzeit das aktuelle Installationspaket aus dem Update-Release – er muss also nicht bei jeder Version neu gebaut werden.
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";

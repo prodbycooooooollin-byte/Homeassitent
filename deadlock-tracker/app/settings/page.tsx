@@ -1,4 +1,5 @@
 "use client";
+import { BRAND } from "@/lib/brand";
 import { useEffect, useState } from "react";
 import { PageTitle } from "@/components/ui";
 import { Avatar } from "@/components/GameAssets";
@@ -114,6 +115,7 @@ export default function SettingsPage() {
       <Card icon="info" title="Hilfe">
         <Row title="Verbindung prüfen" desc="Testet alle Schnittstellen und zeigt Fehler und Rate-Limits."><NavLink href="/status" className="btn btn-ghost text-sm">Diagnose öffnen</NavLink></Row>
       </Card>
+      <p className="pb-6 text-center text-[11px] leading-relaxed text-muted">{BRAND.disclaimer}</p>
     </>
   );
 }

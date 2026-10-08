@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Deadlock Tracker – Installation</title>
+<title>Lockscope – Installation</title>
 <style>
 @font-face { font-family: Oxanium; font-weight: 700; src: url(fonts/oxanium-latin-700-normal.woff2) format("woff2"); }
 @font-face { font-family: Oxanium; font-weight: 800; src: url(fonts/oxanium-latin-800-normal.woff2) format("woff2"); }
@@ -43,7 +43,7 @@ canvas#fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-eve
 @keyframes float { 50% { transform: translateY(-8px); } }
 @keyframes pulse { 50% { opacity: .55; transform: scale(1.08); } }
 @keyframes pop { from { opacity: 0; transform: scale(.4) rotate(-12deg); } }
-.name { margin-top: 26px; font: 800 38px/1 Oxanium; letter-spacing: .16em; text-align: center; background: linear-gradient(180deg, #fff, #f0dcae 55%, var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; animation: up .8s .3s cubic-bezier(.2,.9,.2,1) backwards; }
+.name { margin-top: 26px; font: 800 34px/1 Oxanium; letter-spacing: .16em; text-align: center; background: linear-gradient(180deg, #fff, #f0dcae 55%, var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; animation: up .8s .3s cubic-bezier(.2,.9,.2,1) backwards; }
 .sub { margin-top: 10px; font: 700 12px Oxanium; letter-spacing: .5em; color: var(--gold); text-transform: uppercase; animation: up .8s .45s cubic-bezier(.2,.9,.2,1) backwards; padding-left: .5em; }
 .line { margin-top: 18px; width: 150px; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); animation: line .9s .6s ease backwards; }
 @keyframes line { from { transform: scaleX(0); } }
@@ -111,14 +111,14 @@ h1 em { font-style: normal; color: var(--gold); }
   <div class="hex"></div>
   <canvas id="fx"></canvas>
   <div class="bar">
-    <span class="t">Deadlock Tracker · Setup</span>
+    <span class="t">Lockscope · Setup</span>
     <div class="btns"><button id="min" title="Minimieren">&#8211;</button><button id="x" class="x" title="Schließen">&#10005;</button></div>
   </div>
 
   <div class="brand">
     <div class="logo"><div class="halo"></div><div class="ring"></div><div class="ring b"></div><img src="logo.png" alt="" /></div>
-    <div class="name">DEADLOCK</div>
-    <div class="sub">Tracker</div>
+    <div class="name">LOCKSCOPE</div>
+    <div class="sub">Match-Analyse</div>
     <div class="line"></div>
     <div class="ver" id="ver">Version wird ermittelt …</div>
   </div>
@@ -151,8 +151,8 @@ h1 em { font-style: normal; color: var(--gold); }
     <section class="step" id="s-done">
       <div class="check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
       <h1 style="margin-top:22px">Alles <em>bereit.</em></h1>
-      <p class="lead" id="doneText">Der Deadlock Tracker ist installiert. Beim ersten Start trägst du deine Steam-ID ein – danach erscheinen deine Matches automatisch.</p>
-      <label class="opt on" id="opt"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Deadlock Tracker jetzt starten</label>
+      <p class="lead" id="doneText">Lockscope ist installiert. Beim ersten Start trägst du deine Steam-ID ein – danach erscheinen deine Matches automatisch.</p>
+      <label class="opt on" id="opt"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Lockscope jetzt starten</label>
       <button class="cta" id="fin">Los geht's</button>
     </section>
 
@@ -173,7 +173,7 @@ h1 em { font-style: normal; color: var(--gold); }
 const $ = (id) => document.getElementById(id);
 const demo = !window.setup;
 const api = window.setup || {
-  info: async () => ({ dir: "C:\\Users\\Du\\AppData\\Local\\Programs\\Deadlock Tracker", version: "0.1.57", installed: false }),
+  info: async () => ({ dir: "C:\\Users\\Du\\AppData\\Local\\Programs\\Lockscope", version: "0.1.57", installed: false }),
   chooseDir: async () => null, launch: async () => {}, minimize: async () => {}, close: async () => {},
   onEvent: (cb) => { window.__demoEmit = cb; return () => {}; },
   install: async () => { runDemo(); return true; },
@@ -204,7 +204,7 @@ const steps = ["welcome", "prog", "done", "err"];
 const show = (k) => steps.forEach((s) => $("s-" + s).classList.toggle("on", s === k));
 const fmtMB = (b) => (b / 1048576).toFixed(b > 1e8 ? 0 : 1);
 
-let dir = "", exe = "", cur = 0, shown = 0;
+let dir = "", exe = "", cur = 0, shown = 0, mode = "install";
 function setPct(p) { cur = Math.max(cur, Math.min(1, p)); }
 // Anzeige läuft weich zum Zielwert
 setInterval(() => {
@@ -225,7 +225,7 @@ api.onEvent((m) => {
   }
   if (m.type === "download") { setPct(m.pct * 0.5); $("detail").textContent = `${fmtMB(m.got)} von ${m.total ? fmtMB(m.total) : "?"} MB${m.speed ? " · " + (m.speed / 1048576).toFixed(1) + " MB/s" : ""}`; }
   if (m.type === "install") setPct(0.5 + m.pct * 0.5);
-  if (m.type === "done") { exe = m.exe; clearInterval(tipTimer); setPct(1); setTimeout(() => show("done"), 500); }
+  if (m.type === "done") { exe = m.exe; clearInterval(tipTimer); setPct(1); setTimeout(() => show("done"), 500); if (mode === "update") setTimeout(() => api.launch(exe, ["--updated"]), 3500); }
   if (m.type === "error") { clearInterval(tipTimer); $("errText").textContent = m.message; show("err"); }
 });
 
@@ -237,20 +237,25 @@ function start() {
 $("go").onclick = start; $("retry").onclick = start;
 $("chg").onclick = async () => { const d = await api.chooseDir(); if (d) { dir = d; $("dirText").textContent = d; } };
 $("opt").onclick = () => $("opt").classList.toggle("on");
-$("fin").onclick = () => { if ($("opt").classList.contains("on") && exe) api.launch(exe); else api.close(); };
+$("fin").onclick = () => { if ($("opt").classList.contains("on") && exe) api.launch(exe, mode === "update" ? ["--updated"] : []); else api.close(); };
 $("quit").onclick = $("x").onclick = () => api.close();
 $("min").onclick = () => api.minimize();
 
 api.info().then((i) => {
   dir = i.dir; $("dirText").textContent = dir;
   $("ver").textContent = i.version ? "Version " + i.version : "Aktuelle Version";
-  if (i.installed) { $("wt").innerHTML = "Zeit für ein <em>Update.</em>"; $("go").textContent = "Aktualisieren"; $("doneText").textContent = "Der Deadlock Tracker ist auf dem neuesten Stand. Deine Daten bleiben erhalten."; }
+  mode = i.mode || "install";
+  if (mode === "update") { // Update aus der App: Download entfällt, es geht direkt los
+    $("st1").textContent = "Vorbereitet"; $("doneText").textContent = "Lockscope ist auf dem neuesten Stand. Deine Daten bleiben erhalten – die App startet gleich neu."; $("opt").style.display = "none"; $("fin").textContent = "Lockscope starten";
+    setTimeout(start, 600);
+  }
+  if (i.installed && mode !== "update") { $("wt").innerHTML = "Zeit für ein <em>Update.</em>"; $("go").textContent = "Aktualisieren"; $("doneText").textContent = "Lockscope ist auf dem neuesten Stand. Deine Daten bleiben erhalten."; }
 });
 
 // Nur für die Vorschau im Browser
 function runDemo() {
   const emit = window.__demoEmit; let p = 0;
-  emit({ type: "phase", phase: "download", text: "Lade Deadlock Tracker 0.1.57", version: "0.1.57" });
+  emit({ type: "phase", phase: "download", text: "Lade Lockscope 0.1.57", version: "0.1.57" });
   const t = setInterval(() => {
     p += 0.012;
     if (p < 1) emit({ type: "download", got: p * 96e6, total: 96e6, speed: 11e6, pct: p });

@@ -1,4 +1,4 @@
-name: Release Deadlock Tracker (Windows)
+name: Release Lockscope (Windows)
 
 # Baut die Windows-EXE (NSIS-Installer + portable) auf echtem Windows und veröffentlicht sie
 # als GitHub-Pre-Release "dt-v<version>" und aktualisiert zusätzlich das rollende Release "dt-latest",
@@ -97,7 +97,7 @@ jobs:
           test -f release/latest.yml
           grep -q "version: ${APP_VERSION}" release/latest.yml
           ls release/*.exe release/latest.yml
-          test -f release-installer/Deadlock-Tracker-Installer.exe
+          test -f release-installer/Lockscope-Installer.exe
 
       - name: Artefakte hochladen
         uses: actions/upload-artifact@v4
@@ -107,7 +107,7 @@ jobs:
             deadlock-tracker/release/*.exe
             deadlock-tracker/release/*.blockmap
             deadlock-tracker/release/latest.yml
-            deadlock-tracker/release-installer/Deadlock-Tracker-Installer.exe
+            deadlock-tracker/release-installer/Lockscope-Installer.exe
           if-no-files-found: error
 
       - name: GitHub-Release erstellen
@@ -115,21 +115,21 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           target_commitish: ${{ github.sha }}
-          name: Deadlock Tracker ${{ env.RELEASE_TAG }}
+          name: Lockscope ${{ env.RELEASE_TAG }}
           prerelease: true
           body: |
-            Windows-Build des Deadlock Trackers.
+            Windows-Build von Lockscope.
 
-            - `Deadlock-Tracker-Installer.exe`: **hier starten** – eigener Installer mit Fortschrittsanzeige (lädt immer die aktuelle Version)
-            - `Deadlock-Tracker-Setup.exe`: Installationspaket (wird vom Installer und vom Auto-Update genutzt)
-            - `Deadlock-Tracker-*-portable.exe`: ohne Installation lauffähig
+            - `Lockscope-Installer.exe`: **hier starten** – eigener Installer mit Fortschrittsanzeige (lädt immer die aktuelle Version)
+            - `Lockscope-Setup.exe`: Installationspaket (wird vom Installer und vom Auto-Update genutzt)
+            - `Lockscope-*-portable.exe`: ohne Installation lauffähig
 
             Hinweise: Die EXE ist nicht signiert (Windows SmartScreen kann warnen).
             Matches werden nur erkannt, solange die App läuft. Die Deadlock-API-Anbindung
             ist noch nicht gegen die Live-API verifiziert (siehe deadlock-tracker/README.md).
           files: |
             deadlock-tracker/release/*.exe
-            deadlock-tracker/release-installer/Deadlock-Tracker-Installer.exe
+            deadlock-tracker/release-installer/Lockscope-Installer.exe
           overwrite_files: true
 
       # Rollendes Release: feste URL für den Auto-Updater (latest.yml + aktueller Installer)
@@ -138,16 +138,16 @@ jobs:
         with:
           tag_name: dt-latest
           target_commitish: ${{ github.sha }}
-          name: Deadlock Tracker – aktuelle Version (Auto-Update-Quelle)
+          name: Lockscope – aktuelle Version (Auto-Update-Quelle)
           prerelease: true
           body: |
             Wird bei jedem Build überschrieben. Diese Dateien nutzt die installierte App für Auto-Updates –
             zum manuellen Installieren bitte das versionierte Release `dt-v*` verwenden.
             Aktuell: ${{ env.APP_VERSION }}
           files: |
-            deadlock-tracker/release/Deadlock-Tracker-Setup.exe
-            deadlock-tracker/release/Deadlock-Tracker-Setup.exe.blockmap
-            deadlock-tracker/release-installer/Deadlock-Tracker-Installer.exe
+            deadlock-tracker/release/Lockscope-Setup.exe
+            deadlock-tracker/release/Lockscope-Setup.exe.blockmap
+            deadlock-tracker/release-installer/Lockscope-Installer.exe
           overwrite_files: true
 
       # latest.yml ZULETZT hochladen: Sie verweist auf den Installer; ein Update-Check darf sie erst sehen,
@@ -165,7 +165,7 @@ jobs:
           BASE="https://github.com/${{ github.repository }}/releases/download/dt-latest"
           EXPECT=$(node -e "const y=require('fs').readFileSync('release/latest.yml','utf8');console.log(y.match(/^sha512: (.+)$/m)[1])")
           for i in 1 2 3 4 5 6; do
-            curl -sSL -o remote.exe "$BASE/Deadlock-Tracker-Setup.exe" || true
+            curl -sSL -o remote.exe "$BASE/Lockscope-Setup.exe" || true
             curl -sSL -o remote.yml "$BASE/latest.yml" || true
             GOT=$(node -e "const c=require('crypto'),f=require('fs');console.log(c.createHash('sha512').update(f.readFileSync('remote.exe')).digest('base64'))")
             VER=$(node -e "const y=require('fs').readFileSync('remote.yml','utf8');console.log((y.match(/^version: (.+)$/m)||[])[1]||'')")

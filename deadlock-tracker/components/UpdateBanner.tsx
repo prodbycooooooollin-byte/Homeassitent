@@ -13,7 +13,8 @@ export function UpdateBanner() {
       <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-5 bg-[#05060a]/95 text-center backdrop-blur">
         <div className="h-14 w-14 animate-spin rounded-full border-[3px] border-white/10 border-t-amber" />
         <div className="display text-2xl font-extrabold">Update wird installiert</div>
-        <p className="max-w-sm text-sm text-muted">Version {u.current} → <b className="text-white">{u.version}</b>. Die App schließt sich gleich, ein Installationsfenster zeigt den Fortschritt, danach startet der Tracker von selbst neu.</p>
+        <p className="max-w-sm text-sm text-muted">Version {u.current} → <b className="text-white">{u.version}</b>. {u.message || "Die App schließt sich gleich, ein Installationsfenster zeigt den Fortschritt, danach startet Lockscope von selbst neu."}</p>
+        {u.percent > 0 && u.percent < 100 && <div className="h-1.5 w-64 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-amber to-[#fff1c9] transition-all" style={{ width: `${u.percent}%` }} /></div>}
       </div>
     );
   }

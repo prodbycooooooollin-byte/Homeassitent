@@ -1,4 +1,4 @@
-# Deadlock Tracker
+# Lockscope
 
 Match-Tracker für **Deadlock** (Funktionsumfang angelehnt an statlocker.gg): trackt deine Matches, zeigt pro Match eine
 vollständige Summary beider Teams, dein **Performance-Rating (S/A/B/C/D/F)** und den **Ø Rang der Lobby**.
@@ -70,7 +70,7 @@ Der Workflow `.github/workflows/release-deadlock-tracker.yml` baut auf `windows-
 portable EXE (Electron + eingebetteter Next-Server inkl. Poller) und legt sie als Pre-Release `dt-v<version>` ab.
 Start: Tag `dt-v*` pushen, Push auf `main`/`claude/**` (Änderungen in `deadlock-tracker/`) oder manuell über
 *Actions → Run workflow*. Lokal unter Windows: `npm run dist:win` (Ausgabe in `release/`), zum Ausprobieren `npm run desktop`.
-Daten liegen im Benutzerprofil (`%APPDATA%/Deadlock Tracker/store.json`). Die EXE ist nicht signiert.
+Daten liegen im Benutzerprofil (`%APPDATA%/Lockscope/store.json`). Die EXE ist nicht signiert.
 
 ## Wie Matches zuverlässig & schnell erkannt werden
 

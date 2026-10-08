@@ -36,7 +36,7 @@ function log(line, src = "app") {
 
 function get(url, redirects = 5) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { "user-agent": "deadlock-tracker" } }, (res) => {
+    const req = https.get(url, { headers: { "user-agent": "lockscope" } }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
         res.resume();
         resolve(get(new URL(res.headers.location, url).toString(), redirects - 1));

@@ -7,7 +7,7 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { DebriefHost } from "@/components/DebriefHost";
 
 export const metadata: Metadata = {
-  title: "Deadlock Tracker",
+  title: "Lockscope",
   description: "Match-Tracking, Match Summaries und Performance-Rating für Deadlock",
 };
 

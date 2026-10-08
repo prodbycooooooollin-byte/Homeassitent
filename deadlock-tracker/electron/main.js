@@ -10,6 +10,13 @@ const desktopSettings = require("./desktop-settings");
 const ingest = require("./ingest");
 const matchwatch = require("./matchwatch");
 
+// Umbenennung: Daten aus dem früheren Ordner „Deadlock Tracker“ einmalig übernehmen (Spieler, Matches, Einstellungen)
+try {
+  const oldData = path.join(app.getPath("appData"), "Deadlock Tracker"), newData = app.getPath("userData");
+  if (oldData !== newData && fs.existsSync(path.join(oldData, "store.json")) && !fs.existsSync(path.join(newData, "store.json"))) {
+    fs.cpSync(oldData, newData, { recursive: true, force: false, filter: (p) => !/[\\/](Cache|Code Cache|GPUCache|DawnCache|ShaderCache|blob_storage)([\\/]|$)/i.test(p) });
+  }
+} catch { /* nicht kritisch */ }
 app.setAppUserModelId("local.deadlock-tracker"); // gruppiert die Taskbar-Symbole und sorgt für korrekte Benachrichtigungen
 if (!app.requestSingleInstanceLock()) app.quit();
 
@@ -76,9 +83,9 @@ function buildTray() {
   if (tray) return;
   const img = nativeImage.createFromPath(asset("tray.png"));
   tray = new Tray(img.isEmpty() ? nativeImage.createFromPath(asset("icon.png")).resize({ width: 24, height: 24 }) : img);
-  tray.setToolTip("Deadlock Tracker – läuft im Hintergrund");
+  tray.setToolTip("Lockscope – läuft im Hintergrund");
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Deadlock Tracker öffnen", click: showWindow },
+    { label: "Lockscope öffnen", click: showWindow },
     { type: "separator" },
     { label: "Beenden", click: () => { quitting = true; app.quit(); } },
   ]));
@@ -94,7 +101,7 @@ async function createWindow() {
     minWidth: 980,
     minHeight: 640,
     backgroundColor: "#07080c",
-    title: "Deadlock Tracker",
+    title: "Lockscope",
     icon: asset("icon.ico"),
     autoHideMenuBar: true,
     show: false,
@@ -140,7 +147,7 @@ ipcMain.handle("desktop:set", (_e, patch) => {
 });
 ipcMain.handle("desktop:notify", (_e, n) => {
   if (!settings.desktopNotifications || !Notification.isSupported()) return false;
-  const note = new Notification({ title: String(n.title || "Deadlock Tracker").slice(0, 80), body: String(n.body || "").slice(0, 200), icon: asset("icon-256.png") });
+  const note = new Notification({ title: String(n.title || "Lockscope").slice(0, 80), body: String(n.body || "").slice(0, 200), icon: asset("icon-256.png") });
   note.on("click", () => { showWindow(); if (n.path && win) win.webContents.send("desktop:navigate", String(n.path)); });
   note.show();
   return true;
@@ -152,7 +159,7 @@ app.on("before-quit", () => { quitting = true; ingest.stop(); matchwatch.stop();
 app.whenReady().then(() => {
   settings = desktopSettings.load();
   return createWindow().catch((e) => {
-    dialog.showErrorBox("Deadlock Tracker konnte nicht starten", String(e && e.stack ? e.stack : e));
+    dialog.showErrorBox("Lockscope konnte nicht starten", String(e && e.stack ? e.stack : e));
     app.quit();
   });
 });

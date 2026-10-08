@@ -1,4 +1,4 @@
-// Eigener Installer für den Deadlock Tracker: zeigt eine eigene Oberfläche, lädt das aktuelle Installationspaket (NSIS) aus dem
+// Eigener Installer für Lockscope: zeigt eine eigene Oberfläche, lädt das aktuelle Installationspaket (NSIS) aus dem
 // Update-Release, prüft die Prüfsumme und führt es still aus. Dadurch sieht der Benutzer nie den Standard-Windows-Installer.
 const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const path = require("path");
@@ -9,8 +9,11 @@ const crypto = require("crypto");
 const { spawn } = require("child_process");
 
 const BASE = "https://github.com/prodbycooooooollin-byte/Homeassitent/releases/download/dt-latest";
-const APP_EXE = "Deadlock Tracker.exe";
-const defaultDir = () => path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Programs", "Deadlock Tracker");
+const APP_EXE = "Lockscope.exe";
+const arg = (k) => { const a = process.argv.find((x) => x.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : null; };
+// Update-Modus: Die App hat das Update schon geladen und geprüft und startet uns mit dem Pfad – dann entfällt der Download
+const UPDATE_FILE = arg("update"), UPDATE_DIR = arg("dir"), UPDATE_VERSION = arg("version");
+const defaultDir = () => UPDATE_DIR || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "Programs", "Lockscope");
 
 let win = null;
 let installing = false;
@@ -19,7 +22,7 @@ const emit = (m) => { if (win && !win.isDestroyed()) win.webContents.send("setup
 /** HTTPS-GET mit Weiterleitungen (GitHub leitet auf einen Objektspeicher um). */
 function get(url, onResponse, hops = 0) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { "user-agent": "deadlock-tracker-installer" } }, (res) => {
+    const req = https.get(url, { headers: { "user-agent": "lockscope-installer" } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && hops < 6) {
         res.resume();
         return get(new URL(res.headers.location, url).href, onResponse, hops + 1).then(resolve, reject);
@@ -70,12 +73,18 @@ function dirSize(dir) {
 async function install(dir) {
   if (installing) return;
   installing = true;
-  const tmp = path.join(os.tmpdir(), `deadlock-tracker-setup-${Date.now()}.exe`);
+  let tmp = path.join(os.tmpdir(), `lockscope-setup-${Date.now()}.exe`);
   try {
-    emit({ type: "phase", phase: "prepare", text: "Verbindung zum Server …", pct: 0 });
-    const m = await manifest();
-    emit({ type: "phase", phase: "download", text: `Lade Deadlock Tracker ${m.version}`, pct: 0, version: m.version });
-    await download(`${BASE}/${encodeURIComponent(m.file)}`, tmp, m, (p) => emit({ type: "download", ...p, pct: p.total ? p.got / p.total : 0 }));
+    let m;
+    if (UPDATE_FILE) {
+      tmp = UPDATE_FILE; // schon geladen und von der App geprüft
+      m = { version: UPDATE_VERSION, size: fs.existsSync(tmp) ? fs.statSync(tmp).size : 0 };
+    } else {
+      emit({ type: "phase", phase: "prepare", text: "Verbindung zum Server …", pct: 0 });
+      m = await manifest();
+      emit({ type: "phase", phase: "download", text: `Lade Lockscope ${m.version}`, pct: 0, version: m.version });
+      await download(`${BASE}/${encodeURIComponent(m.file)}`, tmp, m, (p) => emit({ type: "download", ...p, pct: p.total ? p.got / p.total : 0 }));
+    }
 
     emit({ type: "phase", phase: "install", text: "Installiere Dateien", pct: 0 });
     const t0 = Date.now();
@@ -93,7 +102,7 @@ async function install(dir) {
       child.on("exit", (c) => resolve(c));
     }).finally(() => clearInterval(timer));
     const exe = path.join(dir, APP_EXE);
-    if (!fs.existsSync(exe)) throw new Error(code ? `Die Installation wurde mit Code ${code} beendet. Bitte schließe einen laufenden Deadlock Tracker und versuche es erneut.` : "Die Installation ist unvollständig geblieben.");
+    if (!fs.existsSync(exe)) throw new Error(code ? `Die Installation wurde mit Code ${code} beendet. Bitte schließe ein laufendes Lockscope und versuche es erneut.` : "Die Installation ist unvollständig geblieben.");
     emit({ type: "phase", phase: "finish", text: "Fertigstellen …", pct: 1 });
     await new Promise((r) => setTimeout(r, 900));
     emit({ type: "done", exe, version: m.version });
@@ -101,14 +110,14 @@ async function install(dir) {
     emit({ type: "error", message: e instanceof Error ? e.message : String(e) });
   } finally {
     installing = false;
-    fs.rm(tmp, { force: true }, () => {});
+    if (!UPDATE_FILE) fs.rm(tmp, { force: true }, () => {});
   }
 }
 
 function createWindow() {
   win = new BrowserWindow({
     width: 980, height: 600, frame: false, resizable: false, maximizable: false, show: false, center: true,
-    backgroundColor: "#07090e", title: "Deadlock Tracker – Installation", icon: path.join(__dirname, "icon.ico"),
+    backgroundColor: "#07090e", title: "Lockscope – Installation", icon: path.join(__dirname, "icon.ico"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, sandbox: false },
   });
   win.setMenuBarVisibility(false);
@@ -117,20 +126,22 @@ function createWindow() {
 }
 
 if (!app.requestSingleInstanceLock()) app.quit();
+// Alte Fenster-/Installationsreste: bei Fehlern im Update-Modus kann der Nutzer den Standard-Installer weiter über die App-Einstellungen anstoßen.
 app.whenReady().then(() => {
   ipcMain.handle("setup:info", async () => {
     const dir = defaultDir();
     let version = null;
     try { version = (await manifest()).version; } catch { /* offline: wird beim Installieren gemeldet */ }
-    return { dir, version, installed: fs.existsSync(path.join(dir, APP_EXE)) };
+    if (UPDATE_FILE) return { mode: "update", dir, version: UPDATE_VERSION, installed: true };
+    return { mode: "install", dir, version, installed: fs.existsSync(path.join(dir, APP_EXE)) };
   });
   ipcMain.handle("setup:chooseDir", async () => {
     const r = await dialog.showOpenDialog(win, { title: "Installationsordner wählen", properties: ["openDirectory", "createDirectory"], defaultPath: path.dirname(defaultDir()) });
-    return r.canceled || !r.filePaths[0] ? null : path.join(r.filePaths[0], "Deadlock Tracker");
+    return r.canceled || !r.filePaths[0] ? null : path.join(r.filePaths[0], "Lockscope");
   });
   ipcMain.handle("setup:install", (_e, dir) => { install(String(dir || defaultDir())); return true; });
-  ipcMain.handle("setup:launch", (_e, exe) => {
-    try { spawn(String(exe), [], { detached: true, stdio: "ignore" }).unref(); } catch { /* egal */ }
+  ipcMain.handle("setup:launch", (_e, exe, args) => {
+    try { spawn(String(exe), Array.isArray(args) ? args.map(String) : [], { detached: true, stdio: "ignore" }).unref(); } catch { /* egal */ }
     setTimeout(() => app.quit(), 400);
   });
   ipcMain.handle("setup:minimize", () => win?.minimize());

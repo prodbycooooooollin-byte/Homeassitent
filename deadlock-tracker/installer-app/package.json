@@ -1,17 +1,17 @@
 {
-  "name": "deadlock-tracker-installer",
+  "name": "lockscope-installer",
   "version": "1.0.0",
   "private": true,
-  "description": "Installer für den Deadlock Tracker (lädt das aktuelle Installationspaket und richtet es mit eigener Oberfläche ein)",
+  "description": "Installer für Lockscope (lädt das aktuelle Installationspaket und richtet es mit eigener Oberfläche ein)",
   "main": "main.js",
   "author": "prodbycooooooollin-byte",
   "build": {
-    "appId": "local.deadlock-tracker.installer",
-    "productName": "Deadlock Tracker Installer",
+    "appId": "local.lockscope.installer",
+    "productName": "Lockscope Installer",
     "directories": { "output": "../release-installer" },
     "files": ["main.js", "preload.js", "ui/**", "icon.ico", "package.json"],
     "npmRebuild": false,
     "win": { "target": ["portable"], "icon": "icon.ico", "requestedExecutionLevel": "asInvoker" },
-    "portable": { "artifactName": "Deadlock-Tracker-Installer.exe" }
+    "portable": { "artifactName": "Lockscope-Installer.exe" }
   }
 }

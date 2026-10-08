@@ -1,5 +1,5 @@
 {
-  "name": "deadlock-tracker",
+  "name": "lockscope",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -37,12 +37,12 @@
     "typescript": "^5.5.4",
     "vitest": "^2.0.5"
   },
-  "description": "Deadlock-Match-Tracker (Web-App + Windows-Desktop-App)",
+  "description": "Lockscope – Match-Analyse für Deadlock (Web-App + Windows-Desktop-App)",
   "main": "electron/main.js",
   "author": "prodbycooooooollin-byte",
   "build": {
     "appId": "local.deadlock-tracker",
-    "productName": "Deadlock Tracker",
+    "productName": "Lockscope",
     "directories": {
       "output": "release"
     },
@@ -65,13 +65,13 @@
       "icon": "app-icons/icon.ico"
     },
     "nsis": {
-      "artifactName": "Deadlock-Tracker-Setup.${ext}",
+      "artifactName": "Lockscope-Setup.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "app-icons/icon.ico",
       "uninstallerIcon": "app-icons/icon.ico",
       "installerHeaderIcon": "app-icons/icon.ico",
-      "shortcutName": "Deadlock Tracker",
+      "shortcutName": "Lockscope",
       "include": "installer-assets/installer.nsh",
       "installerHeader": "installer-assets/header.bmp",
       "installerSidebar": "installer-assets/sidebar.bmp",
@@ -84,7 +84,7 @@
       "deleteAppDataOnUninstall": false
     },
     "portable": {
-      "artifactName": "Deadlock-Tracker-${version}-portable.${ext}"
+      "artifactName": "Lockscope-${version}-portable.${ext}"
     },
     "publish": [
       {
