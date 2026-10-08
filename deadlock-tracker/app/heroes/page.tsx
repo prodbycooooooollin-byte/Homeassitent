@@ -1,10 +1,11 @@
 "use client";
+import { subOf } from "@/lib/grade";
 import { useMemo, useState } from "react";
 import { Empty, Gate, PageTitle } from "@/components/ui";
 import { HeroPortrait, useHero, useHeroName, useTilt } from "@/components/GameAssets";
 import { GradeBadge } from "@/components/GradeBadge";
 import { NavLink } from "@/components/NavLink";
-import { gradeFor } from "@/lib/rating";
+import { gradeFor, gradeLabel } from "@/lib/rating";
 import { CounterPicker } from "@/components/CounterPicker";
 import type { HeroAgg } from "@/lib/view";
 
@@ -59,7 +60,7 @@ function HeroCard({ h, i }: { h: HeroAgg; i: number }) {
         <div className="relative aspect-[4/5] overflow-hidden">
           <div className="absolute inset-0 transition-transform duration-500 group-hover:scale-105"><HeroPortrait id={h.heroId} fill ratio={0.8} className="!rounded-none" /></div>
           <div className="absolute inset-0 bg-gradient-to-t from-[#0f121a] via-[#0f121a]/20 to-transparent" />
-          <div className="absolute right-3 top-3"><GradeBadge grade={h.avgScore === null ? null : gradeFor(h.avgScore)} size="sm" title="Ø Note" /></div>
+          <div className="absolute right-3 top-3"><GradeBadge grade={h.avgScore === null ? null : gradeFor(h.avgScore)} size="sm" sub={subOf(h.avgScore === null ? null : gradeLabel(h.avgScore))} title="Ø Note" /></div>
           <div className="absolute bottom-3 left-4 right-4">
             <div className="display text-2xl font-extrabold leading-none drop-shadow">{heroName(h.heroId)}</div>
             <div className="num mt-1 text-xs text-white/70">{h.matches} Spiele · {h.wins}S {h.matches - h.wins}N</div>

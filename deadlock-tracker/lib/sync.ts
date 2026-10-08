@@ -2,6 +2,7 @@ import { ApiError, fetchActive, fetchHistory, fetchMatchDetails, fetchProfiles, 
 import { getStore, saveStore } from "./store";
 import { steamBudgetLeft, useSteamBudget } from "./diag";
 import { getSettings } from "./settings";
+import { refreshRefs } from "./reference";
 import { DETAILS_VERSION } from "./types";
 import type { MatchRecord, TrackedPlayer } from "./types";
 
@@ -240,6 +241,7 @@ export function runCycle(force = false): Promise<SyncResult[]> {
       results.push(await syncPlayer(p.accountId));
     }
     await enrichPending();
+    await refreshRefs(now).catch(() => 0);
     return results;
   })().finally(() => {
     running = null;

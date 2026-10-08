@@ -1,6 +1,6 @@
 import type { HeroRoleProvider } from "./hero-roles";
 import { valueAt } from "./timeline";
-import type { ComponentKey, Grade, MatchDetails, MatchPlayer, Rating, RatingComponent, RoleKey, TeamId } from "./types";
+import type { ComponentKey, Grade, MatchDetails, MatchPlayer, Rating, RatingComponent, RefStats, RoleKey, TeamId } from "./types";
 
 /*
  * Rollenbewusstes Performance-Rating
@@ -40,6 +40,17 @@ export const GRADE_STEPS: [number, Grade][] = [
 export function gradeFor(score: number): Grade {
   for (const [min, g] of GRADE_STEPS) if (score >= min) return g;
   return "F";
+}
+
+/** Note mit Plus/Minus: oberes bzw. unteres Drittel eines Notenbereichs (S nur „+“ ab sehr hoch, F nur „−“ ab sehr tief). */
+export function gradeLabel(score: number): string {
+  const g = gradeFor(score);
+  const i = GRADE_STEPS.findIndex(([, x]) => x === g);
+  const lo = GRADE_STEPS[i][0], hi = i === 0 ? lo + 0.3 : GRADE_STEPS[i - 1][0];
+  if (g === "S") return score >= 1.5 ? "S+" : "S";
+  if (g === "F") return score < 0.45 ? "F−" : "F";
+  const f = (score - lo) / (hi - lo);
+  return f >= 2 / 3 ? `${g}+` : f < 1 / 3 ? `${g}−` : g;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -125,7 +136,30 @@ function baseline(all: Metrics[], me: Metrics, peers: Metrics[], f: (m: Metrics)
 const LANE_AT_S = 480;
 
 /** Vollständige, erklärbare Bewertung eines Spielers. */
-export function ratePlayer(match: MatchDetails, accountId: number, prior: HeroRoleProvider = noPrior): Rating | null {
+/** Mittlere Matchlänge der Referenzdaten (Sekunden) – dient nur zur Umrechnung von Match-Summen auf deine Matchlänge. */
+export const REF_DURATION_S = 1700;
+const ABS_WEIGHT = 0.35;
+
+/** Einordnung gegen das Niveau deines Ranges (nicht nur gegen diese Lobby): KDA, Tode, Souls und Schaden. */
+function absoluteAnchor(p: MatchPlayer, durationS: number, role: RoleKey, ref: RefStats) {
+  const f = clamp(durationS / REF_DURATION_S, 0.4, 2.2);
+  // (K+A)/D als Mittel von Verhältnissen liegt über dem Verhältnis der Mittel – leichte Korrektur
+  const kdaRef = ((ref.k + ref.a) / Math.max(0.5, ref.d)) * 1.12;
+  const kda = (p.kills + p.assists) / Math.max(1, p.deaths);
+  const rows = [
+    { label: "KDA", w: 0.35, mine: kda.toFixed(1), ref: kdaRef.toFixed(1), s: ratioScore(kda / kdaRef) },
+    { label: "Tode", w: 0.3, mine: String(p.deaths), ref: (ref.d * f).toFixed(1), s: ratioScore((ref.d * f + 0.5) / (p.deaths + 0.5)) },
+    { label: "Souls", w: 0.2, mine: fmtK(p.netWorth), ref: fmtK(ref.nw * f), s: ratioScore(p.netWorth / Math.max(1, ref.nw * f)) },
+    { label: "Heldenschaden", w: 0.15, mine: fmtK(p.heroDamage), ref: fmtK(ref.dmg * f), s: ratioScore(p.heroDamage / Math.max(1, ref.dmg * f)) },
+  ];
+  // Support/Frontline liefern Souls und Schaden nicht als Hauptaufgabe – nur KDA und Tode zählen
+  const used = role === "support" || role === "tank" ? rows.slice(0, 2) : rows;
+  const tw = used.reduce((a, r) => a + r.w, 0);
+  const score = used.reduce((a, r) => a + r.s * r.w, 0) / tw;
+  return { score, rows: used.map((r) => ({ label: r.label, mine: r.mine, ref: r.ref, score: Math.round(r.s * 100) / 100 })) };
+}
+
+export function ratePlayer(match: MatchDetails, accountId: number, prior: HeroRoleProvider = noPrior, ref: RefStats | null = null): Rating | null {
   const all = metricsFor(match);
   const me = all.find((m) => m.p.accountId === accountId);
   if (!me || all.length < 2) return null;
@@ -208,6 +242,18 @@ export function ratePlayer(match: MatchDetails, accountId: number, prior: HeroRo
     return { key: k, label: COMPONENT_LABELS[k], ratio: ratio === null ? null : Math.round(ratio * 100) / 100, score: Math.round(score * 100) / 100, weight: Math.round(weight * 1000) / 1000, contribution: Math.round(score * weight * 1000) / 1000, applicable: ok, detail: raw[k].detail };
   });
   let score = applicable.reduce((a, k) => a + ratioScore(raw[k].ratio as number) * ((base[k] ?? 0) / total), 0);
+  // Verlustaversion: schwache Bausteine ziehen stärker nach unten, als starke Bausteine nach oben ziehen –
+  // wer in einem wichtigen Bereich katastrophal spielt, kann das nicht komplett durch andere Bereiche ausgleichen.
+  // Nur Hauptaufgaben der Rolle (Gewicht ≥ 0.11) zählen – ein Support wird nicht für fehlenden Schaden bestraft.
+  const shortfall = applicable.filter((k) => (base[k] ?? 0) >= 0.11).reduce((a, k) => a + Math.max(0, 1 - ratioScore(raw[k].ratio as number)) * ((base[k] ?? 0) / total), 0);
+  score -= 0.3 * shortfall - 0.025; // Zentrierung: ein durchschnittlicher Spieler hat im Schnitt etwas Rückstand in einzelnen Bausteinen
+  let absolute: Rating["absolute"];
+  if (ref && ref.d > 0) {
+    const a = absoluteAnchor(me.p, match.durationS, role.key, ref);
+    absolute = { score: Math.round(a.score * 100) / 100, weight: ABS_WEIGHT, rows: a.rows };
+    score = score * (1 - ABS_WEIGHT) + a.score * ABS_WEIGHT;
+    notes.push(`Einordnung gegen das Rang-Niveau (Durchschnitt aller Ranked-Spieler deines Ranges): zählt zu ${Math.round(ABS_WEIGHT * 100)} % in die Note – ${a.rows.map((r) => `${r.label} ${r.mine} (Ø ${r.ref})`).join(", ")}.`);
+  }
 
   // Kurze Matches sind weniger aussagekräftig: Note zum Durchschnitt hin dämpfen
   const reliability = clamp((mins - 6) / 12, 0.25, 1);
@@ -237,9 +283,9 @@ export function ratePlayer(match: MatchDetails, accountId: number, prior: HeroRo
   if (me.p.abandoned) notes.push("Match vorzeitig verlassen – automatisch Note F.");
 
   return {
-    grade, score,
+    grade, label: me.p.abandoned ? "F−" : gradeLabel(score), score,
     role: { key: role.key, label: ROLE_LABELS[role.key], reason: role.reason },
-    components, bonus, notes,
+    components, bonus, notes, absolute,
     parts: components.map((c) => (c.applicable ? c.score : 1)),
   };
 }

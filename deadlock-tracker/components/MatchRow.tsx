@@ -1,4 +1,5 @@
 "use client";
+import { subOf } from "@/lib/grade";
 import { HeroPortrait, RankEmblem, useHeroName } from "./GameAssets";
 import { GradeBadge } from "./GradeBadge";
 import { Icon } from "./Icon";
@@ -18,7 +19,7 @@ export function MatchRow({ m, account, delay = 0, peek = true }: { m: MatchListI
       <span className="absolute inset-y-0 left-0 w-1 transition-all group-hover:w-1.5" style={{ background: col, boxShadow: `0 0 14px ${col}` }} />
       <div className="relative transition-transform duration-300 group-hover:scale-105">
         <HeroPortrait id={m.heroId} size={54} />
-        <span className="absolute -bottom-1 -right-1"><GradeBadge grade={m.grade} size="xs" title={m.grade ? `Note ${m.grade} · Score ${m.score?.toFixed(2)}` : undefined} /></span>
+        <span className="absolute -bottom-1 -right-1"><GradeBadge grade={m.grade} size="xs" sub={subOf(m.gradeLabel)} title={m.grade ? `Note ${m.grade} · Score ${m.score?.toFixed(2)}` : undefined} /></span>
       </div>
       <div className="w-36 min-w-0 md:w-52">
         <div className="truncate font-semibold">{heroName(m.heroId)}</div>

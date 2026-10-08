@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { enrichMatch } from "@/lib/sync";
 import { getStore } from "@/lib/store";
 import { lobbyBadge } from "@/lib/view";
+import { refFor } from "@/lib/reference";
 import { ratePlayer } from "@/lib/rating";
 import { cachedHeroRole } from "@/lib/hero-roles-server";
 
@@ -15,7 +16,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   // ?peek=1: nur vorhandene Daten liefern (Hover-Vorschau), keine Netzwerk-Abrufe auslösen
   if (!rec.details && !new URL(req.url).searchParams.has("peek")) await enrichMatch(matchId);
   const d = rec.details;
-  const ratings = d ? Object.fromEntries(d.players.map((p) => [p.accountId, ratePlayer(d, p.accountId, cachedHeroRole)])) : {};
+  const ratings = d ? Object.fromEntries(d.players.map((p) => [p.accountId, ratePlayer(d, p.accountId, cachedHeroRole, refFor(d))])) : {};
   return NextResponse.json({
     matchId,
     details: d ?? null,

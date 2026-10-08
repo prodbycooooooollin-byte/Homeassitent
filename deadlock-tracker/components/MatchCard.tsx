@@ -1,4 +1,5 @@
 "use client";
+import { subOf } from "@/lib/grade";
 import { HeroBackdrop, HeroPortrait, RankEmblem, useHero, useHeroName, useTilt } from "./GameAssets";
 import { GradeBadge } from "./GradeBadge";
 import { MatchPeek } from "./MatchPeek";
@@ -26,7 +27,7 @@ export function MatchCard({ m, account, i = 0 }: { m: MatchListItem; account: nu
               <div className="truncate font-bold">{heroName(m.heroId)}</div>
               <div className="text-xs" style={{ color: col }}>{m.won ? "Sieg" : "Niederlage"} <span className="text-muted">· {fmtDuration(m.durationS)}</span></div>
             </div>
-            <GradeBadge grade={m.grade} size="md" />
+            <GradeBadge grade={m.grade} size="md" sub={subOf(m.gradeLabel)} />
           </div>
           <div className="relative mt-3 flex items-end justify-between">
             <div className="num"><div className="display text-xl font-extrabold">{m.kills}<span className="text-muted"> / </span><span className="text-loss">{m.deaths}</span><span className="text-muted"> / </span>{m.assists}</div><div className="text-[11px] text-muted">{((m.kills + m.assists) / Math.max(1, m.deaths)).toFixed(2)} KDA</div></div>

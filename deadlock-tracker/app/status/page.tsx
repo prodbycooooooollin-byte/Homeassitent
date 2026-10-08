@@ -47,6 +47,15 @@ export default function StatusPage() {
           </div>
         </section>
       )}
+      <section className="surface p-5">
+        <div className="label mb-1">Ein Match fehlt?</div>
+        <p className="text-sm text-muted">
+          Die Deadlock-API bekommt Match-Daten nicht direkt von Valve, sondern über sogenannte Match-Salts: Spieler lassen das Open-Source-Programm{" "}
+          <a className="underline text-white" href="https://github.com/deadlock-api/deadlock-api-ingest" target="_blank" rel="noreferrer">deadlock-api-ingest</a>{" "}
+          auf ihrem PC laufen, das Salts aus dem Steam-Cache liest und an die API schickt; dazu kommen Steam-Konten der Betreiber mit begrenzten Abrufen pro Tag. Läuft in deinem Match niemand mit dem Tool, kann es Stunden dauern, bis es auftaucht.
+          Installierst du das Tool selbst, stehen <b className="text-white">deine</b> Matches meist kurz nach dem Spiel bereit. Bis dahin hilft „Match per ID“ auf der Matches-Seite, sobald die API das Match kennt.
+        </p>
+      </section>
       {status?.demo && <div className="surface p-4 text-sm text-amber">Demo-Modus aktiv – es werden keine echten API-Aufrufe gemacht.</div>}
       {!d && <div className="surface p-8 text-center text-muted">Klicke „Verbindung testen“, um alle Endpunkte (Assets, Historie, Rang, Details, Live, Meta) zu prüfen.</div>}
       {d && d.checks.length > 0 && (

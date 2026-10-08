@@ -1,7 +1,8 @@
 "use client";
+import { subOf } from "@/lib/grade";
 import { GRADE_STYLE, GradeBadge } from "./GradeBadge";
 import { useCountUp } from "./charts";
-import { gradeFor } from "@/lib/rating";
+import { gradeFor, gradeLabel } from "@/lib/rating";
 import { LobbyTile } from "./widgets";
 import { HoverCard } from "./Popover";
 import type { MatchListItem } from "@/lib/view";
@@ -30,7 +31,7 @@ export function StatStrip({ ov, items = [] }: { ov: Overview; items?: MatchListI
       <Tile label="Ø Rating" value={ov.avgScore === null ? "–" : score.toFixed(2)} sub="1.00 = Lobby-Schnitt" tip={<p className="text-xs leading-relaxed text-muted">Durchschnitt deiner Match-Scores. <b className="text-white">1.00</b> = so gut wie vergleichbare Spieler in der Lobby, darüber besser. Der Score berücksichtigt deine Rolle und vergleicht dich mit Spielern gleicher Rolle.</p>} />
       <LobbyTile items={items} myBadge={ov.currentBadge} />
       <div className="surface surface-hover flex items-center gap-4 p-4">
-        <GradeBadge grade={avgGrade} size="md" />
+        <GradeBadge grade={avgGrade} size="md" sub={subOf(ov.avgScore === null ? null : gradeLabel(ov.avgScore))} />
         <div><div className="label">Ø Note</div><div className="text-sm text-muted">{avgGrade ? GRADE_STYLE[avgGrade].label : "Noch keine Bewertung"}</div></div>
       </div>
     </div>

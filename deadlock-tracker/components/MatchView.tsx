@@ -1,4 +1,5 @@
 "use client";
+import { subOf } from "@/lib/grade";
 import { useCallback, useState } from "react";
 import { GradeBadge, GRADE_STYLE } from "./GradeBadge";
 import { HeroBackdrop, HeroPortrait, RankEmblem, useHero, useHeroName } from "./GameAssets";
@@ -103,7 +104,7 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
         <HeroBackdrop id={me?.heroId} />
         <div className="relative grid items-center gap-6 p-6 md:grid-cols-[auto_1fr_auto] md:p-8">
           <div className="flex items-center gap-5">
-            <GradeBadge grade={rating?.grade ?? null} size="xl" />
+            <GradeBadge grade={rating?.grade ?? null} size="xl" sub={subOf(rating?.label)} />
             {me && <HeroPortrait id={me.heroId} size={120} h={150} ring={color} className="!rounded-2xl" />}
           </div>
           <div className="min-w-0">
@@ -120,7 +121,7 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
               {d.matchMode && <span className="chip">{d.matchMode}</span>}
               <span className="chip">{new Date(d.startTime * 1000).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" })}</span>
               <span className="chip text-muted">#{d.matchId}</span>
-              {rating && <span className="chip" style={{ borderColor: GRADE_STYLE[rating.grade].glow }}>{GRADE_STYLE[rating.grade].label} · Score {rating.score.toFixed(2)}<RatingHint rating={rating} who="Du" /></span>}
+              {rating && <span className="chip" style={{ borderColor: GRADE_STYLE[rating.grade].glow }}>{rating.label || rating.grade} · {GRADE_STYLE[rating.grade].label} · Score {rating.score.toFixed(2)}<RatingHint rating={rating} who="Du" /></span>}
               {me?.mvpRank === 1 && <span className="chip text-amber"><Icon name="star" size={13} />MVP</span>}
             </div>
           </div>

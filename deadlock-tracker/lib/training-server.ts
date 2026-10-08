@@ -5,6 +5,7 @@ import { buildView } from "./training-view";
 import { classifyRoles, ratePlayer } from "./rating";
 import { cachedHeroRole } from "./hero-roles-server";
 import { getStore } from "./store";
+import { refFor } from "./reference";
 import { lobbyBadge } from "./view";
 
 export { METRICS };
@@ -38,7 +39,7 @@ export function trainingMatches(accountId: number, n: number, heroId: number | n
     if (heroId && me.heroId !== heroId) continue;
     const scores = new Map<number, number>();
     for (const p of d.players) {
-      const r = ratePlayer(d, p.accountId, cachedHeroRole);
+      const r = ratePlayer(d, p.accountId, cachedHeroRole, refFor(d));
       if (r) scores.set(p.accountId, r.score);
     }
     const roles = new Map([...classifyRoles(d, cachedHeroRole)].map(([id, r]) => [id, r.key as string]));

@@ -145,12 +145,16 @@ export interface RatingComponent {
 
 export interface Rating {
   grade: Grade;
+  /** Note mit Zusatz, z. B. "B+" oder "D−" */
+  label: string;
   /** 1.0 = durchschnittlich; > 1 besser als der Vergleich */
   score: number;
   role: { key: RoleKey; label: string; reason: string };
   components: RatingComponent[];
   /** Sieg/Niederlage-Anpassung */
   bonus: { label: string; value: number } | null;
+  /** Einordnung gegen das Rang-Niveau (nur wenn Referenzdaten vorliegen) */
+  absolute?: { score: number; weight: number; rows: { label: string; mine: string; ref: string; score: number }[] };
   /** Erläuterungen (z. B. gedämpft wegen kurzem Match, Rolle) */
   notes: string[];
   /** Baustein-Scores in fester Reihenfolge (COMPONENT_ORDER) – für das Radar; nicht anwendbar = 1.0 */
@@ -228,6 +232,9 @@ export interface Goal {
   createdAt: number; // unix s – gezählt werden nur Matches danach
 }
 
+/** Durchschnitt eines abgeschlossenen Ranked-Matches auf einem Rang-Niveau */
+export interface RefStats { k: number; d: number; a: number; nw: number; dmg: number }
+
 export interface StoreShape {
   version: 1;
   players: Record<string, TrackedPlayer>;
@@ -235,4 +242,6 @@ export interface StoreShape {
   settings?: Partial<AppSettings>;
   steam?: SteamLink;
   goals?: Goal[];
+  /** Durchschnittswerte je Rang-Tier (aus der API, für die Einordnung gegen das Rang-Niveau) */
+  refs?: Record<string, RefStats & { at: number }>;
 }

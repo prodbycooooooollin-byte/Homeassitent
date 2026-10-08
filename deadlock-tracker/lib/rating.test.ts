@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyRoles, COMPONENT_ORDER, gradeFor, ratePlayer, ratioScore, ROLE_WEIGHTS } from "./rating";
+import { classifyRoles, COMPONENT_ORDER, gradeFor, gradeLabel, ratePlayer, ratioScore, ROLE_WEIGHTS } from "./rating";
 import { averageBadge, formatBadge } from "./ranks";
 import type { MatchDetails, MatchPlayer, RoleKey } from "./types";
 
@@ -229,5 +229,25 @@ describe("Feeder in Sieger-Team", () => {
     d.winningTeam = me.team;
     const r = ratePlayer(d, me.accountId)!;
     expect(["C", "D", "F"]).toContain(r.grade);
+  });
+});
+
+describe("Einordnung gegen das Rang-Niveau", () => {
+  const ref = { k: 7.5, d: 5.5, a: 10, nw: 38000, dmg: 24000 };
+  it("katastrophales Spiel (2/14/3) wird mit Referenz höchstens D", () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const { d } = lobby(seed);
+      const me = d.players[0];
+      Object.assign(me, { kills: 2, deaths: 14, assists: 3 });
+      d.winningTeam = me.team === 0 ? 1 : 0;
+      const r = ratePlayer(d, me.accountId, undefined, ref)!;
+      expect(["D", "F"], `seed ${seed}: ${r.label} ${r.score}`).toContain(r.grade);
+      expect(r.absolute).toBeDefined();
+    }
+  });
+  it("Plus/Minus-Zusätze", () => {
+    expect(gradeLabel(1.5)).toBe("S+");
+    expect(gradeLabel(1.05)).toMatch(/^B/);
+    expect(gradeLabel(0.4)).toBe("F−");
   });
 });

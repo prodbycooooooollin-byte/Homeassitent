@@ -1,4 +1,5 @@
 "use client";
+import { subOf } from "@/lib/grade";
 import { useEffect, useState } from "react";
 import { HeroPortrait, ItemIcon, RankEmblem, useHeroName } from "./GameAssets";
 import { GradeBadge } from "./GradeBadge";
@@ -39,7 +40,7 @@ export function MatchPeek({ matchId, account }: { matchId: number; account: numb
           <div className="truncate text-sm font-semibold">{heroName(p.heroId)}</div>
           <div className="num text-[11px] text-muted">{p.kills}/{p.deaths}/{p.assists} · {d.matchMode ?? "Match"} · {fmtDuration(d.durationS)}</div>
         </div>
-        <GradeBadge grade={res.ratings[account]?.grade ?? null} size="sm" title="" />
+        <GradeBadge grade={res.ratings[account]?.grade ?? null} size="sm" sub={subOf(res.ratings[account]?.label)} title="" />
       </div>
       <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted">
         <span>Gekaufte Items{list.length ? ` · ${list.length}` : ""}</span>

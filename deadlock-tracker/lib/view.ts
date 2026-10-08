@@ -2,6 +2,7 @@ import { averageBadge } from "./ranks";
 import { ratePlayer } from "./rating";
 import { cachedHeroRole } from "./hero-roles-server";
 import { getStore } from "./store";
+import { refFor } from "./reference";
 import type { Grade, HistoryEntry, MatchDetails, RoleKey } from "./types";
 
 export interface MatchListItem {
@@ -15,6 +16,8 @@ export interface MatchListItem {
   assists: number;
   netWorth: number;
   grade: Grade | null;
+  /** Note mit Zusatz (z. B. "B+") */
+  gradeLabel?: string | null;
   score: number | null;
   lobbyBadge: number | null;
   detailsReady: boolean;
@@ -44,7 +47,7 @@ export function listMatches(accountId: number): MatchListItem[] {
     const h: HistoryEntry | undefined = rec.history[String(accountId)];
     if (!h) continue;
     const d = rec.details;
-    const rating = d ? ratePlayer(d, accountId, cachedHeroRole) : null;
+    const rating = d ? ratePlayer(d, accountId, cachedHeroRole, refFor(d)) : null;
     // Mit Details ist das Ergebnis maßgeblich, sonst Historie.
     const me = d?.players.find((p) => p.accountId === accountId);
     const won = d && d.winningTeam !== null && me ? d.winningTeam === me.team : h.won;
@@ -61,6 +64,7 @@ export function listMatches(accountId: number): MatchListItem[] {
       assists: me?.assists ?? h.assists,
       netWorth: me?.netWorth ?? h.netWorth,
       grade: rating?.grade ?? null,
+      gradeLabel: rating?.label ?? null,
       score: rating?.score ?? null,
       lobbyBadge: lobbyBadge(d),
       detailsReady: !!d,

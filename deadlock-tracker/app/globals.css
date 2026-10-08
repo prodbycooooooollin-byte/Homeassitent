@@ -223,3 +223,23 @@ main:has(.live-page) { max-width: none; }
 html { font-size: 16px; }
 html.density-compact { font-size: 14px; }
 html.density-compact .surface { border-radius: 0.9rem; }
+
+/* ---------- Noten-Embleme ---------- */
+.grade-emblem svg { transform-box: fill-box; }
+.grade-emblem .grade-shine { animation: grade-shine 3.6s ease-in-out infinite; }
+.grade-emblem .grade-spark { animation: grade-twinkle 2.6s ease-in-out infinite; }
+.grade-emblem .grade-spark-2 { animation-delay: 1.3s; }
+.grade-emblem-S { animation: grade-float 4s ease-in-out infinite; }
+.grade-emblem-F svg { animation: grade-faint 2.8s ease-in-out infinite; }
+@keyframes grade-shine { 0%, 55% { transform: translateX(0) skewX(-20deg); } 100% { transform: translateX(170px) skewX(-20deg); } }
+@keyframes grade-twinkle { 0%, 100% { opacity: .15; transform: scale(.5); } 50% { opacity: 1; transform: scale(1); } }
+@keyframes grade-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+@keyframes grade-faint { 0%, 100% { opacity: 1; } 50% { opacity: .78; } }
+.grade-scale-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; border-radius: 10px; padding: 4px 2px; border: 1px solid transparent; }
+.grade-scale-cell[data-active="true"] { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.22); }
+.grade-scale-step { font-family: "Oxanium", "Inter Variable", sans-serif; font-size: 10px; font-weight: 700; line-height: 1; padding: 2px 4px; border-radius: 5px; color: rgba(255,255,255,.45); }
+.grade-scale-step[data-on="true"] { color: #10141c; }
+html.fx-reduced .grade-emblem .grade-shine, html.fx-reduced .grade-emblem .grade-spark, html.fx-reduced .grade-emblem-S, html.fx-reduced .grade-emblem-F svg,
+html.fx-off .grade-emblem .grade-shine, html.fx-off .grade-emblem .grade-spark, html.fx-off .grade-emblem-S, html.fx-off .grade-emblem-F svg { animation: none !important; }
+html.fx-reduced .grade-emblem .grade-spark, html.fx-off .grade-emblem .grade-spark { opacity: .9; }
+html.fx-reduced .grade-emblem .grade-shine, html.fx-off .grade-emblem .grade-shine { display: none; }
