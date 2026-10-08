@@ -138,3 +138,70 @@ export function scoutInsights(players: ScoutPlayer[], heroName: (id: number) => 
   }
   return out.slice(0, 7);
 }
+
+/* ---- Bedrohung & Spielplan ---- */
+
+/** Bedrohungswert 5–99: wie gefährlich/stark ein Spieler im Vergleich wirkt (Rang, Winrate, Heldenroutine, KDA, Form). */
+export function threatScore(p: ScoutPlayer): number {
+  if (p.games === null) return 50;
+  const lin = badgeToLinear(p.badge);
+  let t = 50;
+  if (lin !== null) t += (lin - 30) * 0.7;
+  if (p.wr !== null) t += (p.wr - 0.5) * 60;
+  if (p.heroId > 0 && p.heroGames !== null) {
+    if (p.heroGames === 0) t -= 12;
+    else if (p.heroGames <= 4) t -= 5;
+    else if (p.heroGames >= 25) t += 10;
+    if (p.heroWr !== null && p.heroGames >= 6) t += (p.heroWr - 0.5) * 20;
+  }
+  if (p.kda !== null) t += Math.max(-6, Math.min(8, (p.kda - 2.5) * 3));
+  const has = (k: string) => p.tags.some((x) => x.key === k);
+  if (has("hot")) t += 5;
+  if (has("tilt")) t -= 6;
+  if (has("smurf")) t += 12;
+  if (has("firstever") || has("newbie")) t -= 8;
+  return Math.round(Math.max(5, Math.min(99, t)));
+}
+
+/** Kurzgrund für einen Spieler: die wichtigsten Auffälligkeiten als Text. */
+export function reasonFor(p: ScoutPlayer): string {
+  const order = ["smurf", "firstever", "firsthero", "newbie", "tilt", "heroweak", "main", "herostrong", "hot", "aggressive", "efficient", "veteran"];
+  const tags = order.map((k) => p.tags.find((t) => t.key === k)).filter((t): t is ScoutTag => !!t).slice(0, 2);
+  return tags.length ? tags.map((t) => t.label).join(" · ") : "Unauffällig";
+}
+
+export interface GamePlan {
+  /** Schwächster Gegner – hier lohnt Druck */
+  target: ScoutPlayer | null;
+  /** Gefährlichster Gegner – Vorsicht, nicht allein begegnen */
+  threat: ScoutPlayer | null;
+  /** Schwächstes Glied im eigenen Team – Absprache/Unterstützung */
+  weak: ScoutPlayer | null;
+  /** Wie viele Punkte jede Seite insgesamt hat (Summe der Bedrohungswerte) */
+  power: [number, number];
+  tips: string[];
+}
+
+/** Aus den Bedrohungswerten einen konkreten Spielplan ableiten (reine Heuristik). */
+/** `power` ist nach Team-Index (0/1) geordnet. */
+export function gamePlan(players: ScoutPlayer[], myTeam: 0 | 1): GamePlan {
+  const known = (ps: ScoutPlayer[]) => ps.filter((p) => p.games !== null);
+  const mine = players.filter((p) => p.team === myTeam && !p.isMe);
+  const enemy = players.filter((p) => p.team !== myTeam);
+  const byT = (a: ScoutPlayer, b: ScoutPlayer) => threatScore(b) - threatScore(a);
+  const eK = known(enemy).sort(byT), mK = known(mine).sort(byT);
+  const target = eK.length > 1 ? eK[eK.length - 1] : null;
+  const threat = eK[0] ?? null;
+  const weak = mK.length > 1 ? mK[mK.length - 1] : null;
+  const sum = (ps: ScoutPlayer[]) => ps.reduce((a, p) => a + threatScore(p), 0);
+  const power: [number, number] = [sum(players.filter((p) => p.team === 0)), sum(players.filter((p) => p.team === 1))];
+  const tips: string[] = [];
+  if (target && threatScore(target) < 45) tips.push("Setze früh Druck auf den schwächsten Gegner – dort bekommst du am ehesten Kills und Souls.");
+  if (threat && threatScore(threat) >= 65) tips.push("Der stärkste Gegner entscheidet Teamfights – Cooldowns merken und nicht allein begegnen.");
+  const smurf = enemy.find((p) => p.tags.some((t) => t.key === "smurf"));
+  if (smurf) tips.push(`${smurf.name ?? "Ein Gegner"} wirkt wie ein Smurf – die Lane nicht unterschätzen.`);
+  const aggro = enemy.filter((p) => p.tags.some((t) => t.key === "aggressive")).length;
+  if (aggro >= 2) tips.push("Mehrere aggressive Gegner: lieber gemeinsam ziehen und Flanken absichern.");
+  if (weak && threatScore(weak) < 42) tips.push("Ein Mitspieler wirkt unsicher – spiele seine Lane mit und hilf beim Farmen.");
+  return { target, threat, weak, power, tips: tips.slice(0, 4) };
+}

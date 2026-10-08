@@ -72,7 +72,7 @@ function View({ account }: { account: number }) {
       {res?.players && (mode === "live" ? res.active : mode === "last" ? res.available : true) && (
         <>
           {mode !== "player" && res.match && (
-            <section className={`surface relative overflow-hidden p-4 ${isLive ? "live-bar" : ""}`}>
+            <section className={`surface relative overflow-hidden px-4 py-2.5 ${isLive ? "live-bar" : ""}`}>
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                 {isLive ? <div className="flex items-center gap-3"><span className="live-pulse" /><span className="display text-sm font-extrabold uppercase tracking-[0.25em] text-loss">Live</span></div> : <span className="chip">Letztes Match</span>}
                 <span className="text-sm text-muted">{res.match.mode ?? "Match"} · #{res.match.id}</span>

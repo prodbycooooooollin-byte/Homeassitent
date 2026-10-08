@@ -64,3 +64,18 @@ describe("team summary, win chance and insights", () => {
     expect(lines.join(" ")).toContain("zum ersten Mal überhaupt");
   });
 });
+
+import { gamePlan, threatScore } from "./live";
+describe("Spielplan", () => {
+  const mk = (id: number, team: 0 | 1, wr: number, badge: number, extra: Partial<import("./live").ScoutPlayer> = {}): import("./live").ScoutPlayer => ({ accountId: id, heroId: 1, team, badge, isMe: id === 1, games: 100, wr, heroGames: 10, heroWr: 0.5, kda: 2.5, kpm: null, dpm: null, apm: null, recent: [], topHeroes: [], tags: [], ...extra });
+  it("stuft stärkere Spieler höher ein", () => {
+    expect(threatScore(mk(2, 1, 0.65, 90))).toBeGreaterThan(threatScore(mk(3, 1, 0.4, 30)));
+  });
+  it("wählt Ziel, Gefahr und Schwachstelle", () => {
+    const ps = [mk(1, 0, 0.5, 60), mk(2, 0, 0.3, 20), mk(3, 0, 0.55, 60), mk(4, 1, 0.7, 90), mk(5, 1, 0.3, 20), mk(6, 1, 0.5, 60)];
+    const plan = gamePlan(ps, 0);
+    expect(plan.threat?.accountId).toBe(4);
+    expect(plan.target?.accountId).toBe(5);
+    expect(plan.weak?.accountId).toBe(2);
+  });
+});
