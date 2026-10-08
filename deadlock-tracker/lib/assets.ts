@@ -13,6 +13,21 @@ export interface HeroAsset {
   small?: string; // Icon
   art?: string; // breite Illustration / Hintergrund
   wordmark?: string; // Namenszug als Grafik
+  /** Fakten aus den Spieldaten */
+  info?: HeroInfoAsset;
+}
+export interface HeroInfoAsset {
+  /** assassin | brawler | marksman | mystic */
+  type?: string;
+  role?: string;
+  playstyle?: string;
+  lore?: string;
+  complexity?: number;
+  tags: string[];
+  /** Ausgewählte Startwerte */
+  stats: { key: string; label: string; value: number }[];
+  /** Klassennamen der Fähigkeiten (zum Auflösen über die Item-Assets) */
+  abilityClasses: string[];
 }
 export interface RankAsset {
   tier: number;
@@ -63,6 +78,21 @@ function toHex(v: unknown): string | undefined {
   return undefined;
 }
 
+const STAT_LABELS: Record<string, string> = { max_health: "Leben", max_move_speed: "Lauftempo", sprint_speed: "Sprinttempo", weapon_power: "Waffenkraft", stamina: "Ausdauer", light_melee_damage: "Nahkampf", reload_speed: "Nachladen", base_health_regen: "Regeneration" };
+function heroInfo(h: Obj): HeroInfoAsset {
+  const d = (typeof h.description === "object" && h.description ? h.description : {}) as Obj;
+  const st = (typeof h.starting_stats === "object" && h.starting_stats ? h.starting_stats : {}) as Record<string, Obj | null>;
+  const stats = Object.keys(STAT_LABELS).flatMap((k) => (st[k] && typeof st[k]!.value === "number" ? [{ key: k, label: STAT_LABELS[k], value: st[k]!.value as number }] : []));
+  const items = (typeof h.items === "object" && h.items ? h.items : {}) as Record<string, unknown>;
+  return {
+    type: str(h.hero_type), role: str(d.role), playstyle: str(d.playstyle), lore: str(d.lore),
+    complexity: typeof h.complexity === "number" ? h.complexity : undefined,
+    tags: Array.isArray(h.tags) ? (h.tags as unknown[]).filter((t): t is string => typeof t === "string") : [],
+    stats,
+    abilityClasses: Object.entries(items).filter(([k, v]) => /ability/i.test(k) && typeof v === "string").map(([, v]) => v as string),
+  };
+}
+
 export function normalizeHeroes(raw: unknown): Record<number, HeroAsset> {
   const out: Record<number, HeroAsset> = {};
   if (!Array.isArray(raw)) return out;
@@ -80,6 +110,7 @@ export function normalizeHeroes(raw: unknown): Record<number, HeroAsset> {
       small: imgUrl(firstStr(im, ["icon_image_small", "minimap_image", "icon_hero_card", "icon_image_small_webp"])),
       art: imgUrl(firstStr(im, ["background_image", "hero_card_gloat", "hero_card_critical", "icon_hero_card", "background_image_webp"])),
       wordmark: imgUrl(firstStr(im, ["name_image"])),
+      info: heroInfo(h),
     };
   }
   return out;
@@ -163,7 +194,7 @@ export async function getAssets(): Promise<AssetBundle> {
 }
 
 /* ---- Items (nur kaufbare Upgrades; große Antwort, daher getrennt und lange zwischengespeichert) ---- */
-export interface ItemAsset { id: number; name: string; image?: string; tier: number; slot: string; cost?: number }
+export interface ItemAsset { id: number; name: string; image?: string; tier: number; slot: string; cost?: number; cls?: string; type?: string }
 const gi = globalThis as unknown as { __dlItems?: { at: number; map: Record<number, ItemAsset> } };
 const itemsFile = () => path.join(dataDir(), "items-cache.json");
 
@@ -179,9 +210,9 @@ export async function getItems(): Promise<Record<number, ItemAsset>> {
     const map: Record<number, ItemAsset> = {};
     for (const it of Array.isArray(raw) ? (raw as Obj[]) : []) {
       const id = Number(it.id);
-      if (!id || it.type !== "upgrade" || !str(it.name)) continue;
+      if (!id || !str(it.name) || (it.type !== "upgrade" && it.type !== "ability")) continue;
       map[id] = {
-        id, name: String(it.name), tier: Number(it.item_tier) || 1, slot: str(it.item_slot_type) ?? "weapon",
+        id, name: String(it.name), tier: Number(it.item_tier) || 1, slot: str(it.item_slot_type) ?? "weapon", cls: str(it.class_name), type: String(it.type),
         cost: typeof it.cost === "number" ? it.cost : undefined,
         image: imgUrl(firstStr(it, ["shop_image_small", "image", "shop_image"])),
       };

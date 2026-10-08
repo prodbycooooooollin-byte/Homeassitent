@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Heldenrollen kommen im Test nur dort vor, wo sie explizit übergeben werden (keine Abhängigkeit vom Asset-Cache).
+vi.mock("./hero-roles", () => ({ cachedHeroRole: () => null, roleFromText: () => null }));
 import { classifyRoles, COMPONENT_ORDER, gradeFor, ratePlayer, ratioScore, ROLE_WEIGHTS } from "./rating";
 import { averageBadge, formatBadge } from "./ranks";
 import type { MatchDetails, MatchPlayer, RoleKey } from "./types";
@@ -21,7 +24,7 @@ function player(id: number, team: 0 | 1, arch: keyof typeof ARCH, skill: number,
   const f = (v: number) => Math.round(v * mins * good * n());
   const deaths = Math.max(0, Math.round(A.d * mins * Math.exp(-skill * 0.8 + gauss(r) * 0.25)));
   return {
-    accountId: id, team, heroId: 1, kills: f(A.k), deaths, assists: f(A.a), level: 20, netWorth: f(A.souls), lastHits: 0, denies: 0,
+    accountId: id, team, heroId: ({ carry: 1, support: 2, tank: 3, flex: 4 } as Record<string, number>)[arch], kills: f(A.k), deaths, assists: f(A.a), level: 20, netWorth: f(A.souls), lastHits: 0, denies: 0,
     heroDamage: f(A.dmg), objectiveDamage: f(A.obj), healing: f(A.util * 0.2), allyHealing: f(A.util), mitigated: f(A.tank * 0.5),
     damageTaken: Math.round(A.tank * mins * n()), badge: 50, abandoned: false, ...over,
   };
@@ -68,6 +71,56 @@ describe("role detection", () => {
     expect(roles.get(4)?.key).toBe("support"); // Spieler 4 = Support (Team 0)
     expect(roles.get(10)?.key).toBe("support");
     expect(roles.get(1)?.key).toBe("carry");
+  });
+});
+
+describe("role detection: lifesteal is not support", () => {
+  it("a carry who heals himself through damage is still a carry", () => {
+    const { d } = lobby(51);
+    const me = d.players[0]; // Carry
+    me.healing = me.healing * 40; // riesige Eigenheilung
+    me.allyHealing = 0;
+    const r = ratePlayer(d, me.accountId)!;
+    expect(r.role.key).toBe("carry");
+  });
+  it("without ally-healing data nobody is promoted to support by healing alone", () => {
+    const { d } = lobby(52);
+    for (const p of d.players) { delete p.allyHealing; p.healing = p.healing * 20; }
+    for (const p of d.players) expect(ratePlayer(d, p.accountId)!.role.key).not.toBe("support");
+  });
+  it("missing ally data: the support component drops out, no approximation from self healing", () => {
+    const { d } = lobby(53);
+    for (const p of d.players) delete p.allyHealing;
+    const prior = (id: number) => (id === 2 ? ("support" as const) : null);
+    const r = ratePlayer(d, 4, prior)!; // Support-Spieler (heroId 2)
+    expect(r.role.key).toBe("support");
+    expect(r.components.find((c) => c.key === "utility")!.applicable).toBe(false);
+    expect(r.notes.join(" ")).toContain("keine Daten zu Heilung");
+  });
+});
+
+describe("hero knowledge (e.g. Paige is a support)", () => {
+  const support2 = (id: number) => (id === 2 ? ("support" as const) : null);
+  it("a support hero is rated as support even with modest healing – and a 0-kill game is not punished", () => {
+    const { d } = lobby(61);
+    const sup = d.players[3];
+    Object.assign(sup, { kills: 0, allyHealing: Math.round((sup.allyHealing ?? 0) * 0.5) });
+    const r = ratePlayer(d, sup.accountId, support2)!;
+    expect(r.role.key).toBe("support");
+    expect(r.role.reason).toContain("Support");
+  });
+  it("behaviour can overrule a support hero that actually plays pure damage", () => {
+    const { d } = lobby(62);
+    const sup = d.players[3];
+    Object.assign(sup, { heroDamage: sup.heroDamage * 4, allyHealing: 0 });
+    expect(ratePlayer(d, sup.accountId, support2)!.role.key).not.toBe("support");
+  });
+  it("a non-support hero keeps its role even if healing is highest of the team", () => {
+    const { d } = lobby(63);
+    const car = d.players[0];
+    car.allyHealing = (car.allyHealing ?? 0) + 5000; // etwas Unterstützung, aber kein Support-Held
+    car.heroDamage = car.heroDamage * 1.3;
+    expect(ratePlayer(d, car.accountId, support2)!.role.key).toBe("carry");
   });
 });
 

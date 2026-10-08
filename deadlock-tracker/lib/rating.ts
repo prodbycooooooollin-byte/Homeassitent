@@ -1,3 +1,4 @@
+import { cachedHeroRole, type HeroRoleProvider } from "./hero-roles";
 import { valueAt } from "./timeline";
 import type { ComponentKey, Grade, MatchDetails, MatchPlayer, Rating, RatingComponent, RoleKey, TeamId } from "./types";
 
@@ -55,8 +56,9 @@ function metricsFor(d: MatchDetails): Metrics[] {
   return d.players.map((p) => ({
     p,
     dmg: p.heroDamage / mins,
-    // Ohne teammate_healing-Daten (ältere Matches) dient Heilung als grobe Näherung.
-    util: (p.allyHealing ?? p.healing * 0.5) / mins,
+    // Nur Heilung/Schilde, die an MITSPIELER gingen. Eigenheilung (Lifesteal durch Schaden) ist kein Support-Signal und
+    // wird nie herangezogen – fehlen die Daten, ist der Wert 0 und die Rolle kann nicht aus Heilung abgeleitet werden.
+    util: (p.allyHealing ?? 0) / mins,
     tank: (p.damageTaken + (p.mitigated ?? 0)) / mins,
     obj: p.objectiveDamage / mins,
     souls: p.netWorth / mins,
@@ -68,8 +70,14 @@ function metricsFor(d: MatchDetails): Metrics[] {
 
 export interface RoleInfo { key: RoleKey; reason: string }
 
-/** Rolle jedes Spielers aus seinem Verhalten relativ zur Lobby. */
-export function classifyRoles(d: MatchDetails): Map<number, RoleInfo> {
+/**
+ * Rolle jedes Spielers. Zwei Quellen, die sich ergänzen:
+ *  - Vorwissen zum Helden (z. B. Paige = Support) aus den Spieldaten,
+ *  - Verhalten im Match (Heilung/Schilde für Mitspieler, erlittener Schaden, Schaden, Objectives).
+ * Support braucht Belege: entweder eine Support-Heldenrolle (die nur bei klar gegenteiligem Verhalten überstimmt wird)
+ * oder sehr deutliche Mitspieler-Unterstützung bei gleichzeitig nicht überdurchschnittlichem Schaden.
+ */
+export function classifyRoles(d: MatchDetails, prior: HeroRoleProvider = cachedHeroRole): Map<number, RoleInfo> {
   const ms = metricsFor(d);
   const mu = { util: mean(ms.map((m) => m.util)), tank: mean(ms.map((m) => m.tank)), dmg: mean(ms.map((m) => m.dmg)), obj: mean(ms.map((m) => m.obj)) };
   const teamUtil = [0, 1].map((t) => ms.filter((m) => m.p.team === t).reduce((a, m) => a + m.util, 0));
@@ -80,14 +88,18 @@ export function classifyRoles(d: MatchDetails): Map<number, RoleInfo> {
     const dmgRel = mu.dmg > 0 ? m.dmg / mu.dmg : 1;
     const tankRel = mu.tank > 0 ? m.tank / mu.tank : 1;
     const objRel = mu.obj > 0 ? m.obj / mu.obj : 1;
+    const hero = prior(m.p.heroId);
+    const supportBehaviour = m.utilExact && utilRel >= 1.8 && share >= 0.4 && m.util >= 150;
     let role: RoleInfo;
-    if (utilRel >= 1.8 && share >= 0.4 && m.util >= 150) {
-      role = { key: "support", reason: `${utilRel.toFixed(1)}× so viel Heilung/Schilde für Mitspieler wie der Lobby-Schnitt (${Math.round(share * 100)}% der Team-Unterstützung)` };
+    if (hero === "support" && !(m.utilExact && dmgRel >= 1.5 && utilRel < 1)) {
+      role = { key: "support", reason: `dieser Held ist ein Support${supportBehaviour ? `; dazu ${utilRel.toFixed(1)}× so viel Unterstützung für Mitspieler wie der Lobby-Schnitt` : ""}` };
+    } else if (supportBehaviour && dmgRel < 1.1 && (hero === null || utilRel >= 3)) {
+      role = { key: "support", reason: `${utilRel.toFixed(1)}× so viel Heilung/Schilde für Mitspieler wie der Lobby-Schnitt (${Math.round(share * 100)}% der Team-Unterstützung) bei unterdurchschnittlichem Schaden` };
     } else if (objRel >= 2.2 && dmgRel < 1.3) {
       role = { key: "pusher", reason: `${objRel.toFixed(1)}× so viel Objective-Schaden wie der Lobby-Schnitt` };
-    } else if (tankRel >= 1.35 && dmgRel <= 1.0) {
-      role = { key: "tank", reason: `${tankRel.toFixed(1)}× so viel erlittener/verhinderter Schaden bei unterdurchschnittlichem eigenem Schaden` };
-    } else if (dmgRel >= 1.08) {
+    } else if (hero === "tank" ? dmgRel < 1.35 : tankRel >= 1.35 && dmgRel <= 1.0) {
+      role = { key: "tank", reason: hero === "tank" ? "Frontline-Held mit Fokus auf Aufnehmen von Schaden" : `${tankRel.toFixed(1)}× so viel erlittener/verhinderter Schaden bei unterdurchschnittlichem eigenem Schaden` };
+    } else if (dmgRel >= 1.08 || (hero === "carry" && dmgRel >= 0.85)) {
       role = { key: "carry", reason: `${dmgRel.toFixed(1)}× so viel Heldenschaden wie der Lobby-Schnitt` };
     } else {
       role = { key: "flex", reason: "kein klarer Schwerpunkt (Schaden, Unterstützung und Frontline jeweils im Schnitt)" };
@@ -110,11 +122,11 @@ function baseline(all: Metrics[], me: Metrics, peers: Metrics[], f: (m: Metrics)
 const LANE_AT_S = 480;
 
 /** Vollständige, erklärbare Bewertung eines Spielers. */
-export function ratePlayer(match: MatchDetails, accountId: number): Rating | null {
+export function ratePlayer(match: MatchDetails, accountId: number, prior: HeroRoleProvider = cachedHeroRole): Rating | null {
   const all = metricsFor(match);
   const me = all.find((m) => m.p.accountId === accountId);
   if (!me || all.length < 2) return null;
-  const roles = classifyRoles(match);
+  const roles = classifyRoles(match, prior);
   const role = roles.get(accountId)!;
   const peers = all.filter((m) => m !== me && roles.get(m.p.accountId)?.key === role.key);
   const mins = Math.max(1, match.durationS / 60);
@@ -131,7 +143,10 @@ export function ratePlayer(match: MatchDetails, accountId: number): Rating | nul
   if (role.key === "support" || role.key === "tank") {
     const unit = role.key === "support" ? "Heilung/Schilde für Mitspieler" : "erlittener + verhinderter Schaden";
     const mine = utilOf(me);
-    if (peers.length) {
+    if (role.key === "support" && !me.utilExact) {
+      raw.utility = { ratio: null, detail: "" };
+      notes.push("Für dieses Match liegen keine Daten zu Heilung/Schilden für Mitspieler vor – der Support-Baustein entfällt, Beteiligung und Überleben zählen stärker.");
+    } else if (peers.length) {
       const b = mean(peers.map(utilOf));
       // Ein einzelner Vergleichsspieler ist ein rauschiger Maßstab (1-gegen-1) – das Verhältnis wird dann zur Mitte hin gedämpft.
       raw.utility = b > 0 ? { ratio: Math.pow(mine / b, peers.length >= 2 ? 1 : 0.65), detail: `${fmtK(mine * mins)} ${unit} (Vergleich Ø ${fmtK(b * mins)} bei ${peers.length} ${peers.length === 1 ? "Spieler gleicher Rolle – Abweichung gedämpft" : "Spielern gleicher Rolle"})` } : { ratio: null, detail: "" };
@@ -140,7 +155,6 @@ export function ratePlayer(match: MatchDetails, accountId: number): Rating | nul
       const top = Math.max(0, ...all.filter((m) => m !== me).map(utilOf));
       raw.utility = { ratio: top > 0 ? clamp(mine / top, 0.6, 1.4) : 1.2, detail: `${fmtK(mine * mins)} ${unit} (keine Vergleichsspieler gleicher Rolle – nur eingeschränkt bewertet)` };
     }
-    if (role.key === "support" && !me.utilExact) notes.push("Für dieses Match fehlen Daten zu Heilung/Schilden für Mitspieler – Heilung dient als Näherung.");
   } else raw.utility = { ratio: null, detail: "" };
 
   // Beteiligung

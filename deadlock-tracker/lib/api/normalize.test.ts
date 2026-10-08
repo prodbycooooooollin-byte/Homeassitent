@@ -80,3 +80,13 @@ describe("assets (api.deadlock-api.com/v1/assets)", () => {
     expect(r[7].name).toBe("Archon");
   });
 });
+
+import { upgradeAvatar } from "./deadlock-api";
+describe("steam avatars", () => {
+  it("always uses the 184px variant", () => {
+    const h = "a".repeat(40);
+    expect(upgradeAvatar(`https://avatars.steamstatic.com/${h}.jpg`)).toBe(`https://avatars.steamstatic.com/${h}_full.jpg`);
+    expect(upgradeAvatar(`https://avatars.steamstatic.com/${h}_medium.jpg`)).toBe(`https://avatars.steamstatic.com/${h}_full.jpg`);
+    expect(upgradeAvatar(`https://x.example/pic.png`)).toBe("https://x.example/pic.png");
+  });
+});

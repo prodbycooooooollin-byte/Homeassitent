@@ -9,6 +9,7 @@ import { GraphTab } from "./match/GraphTab";
 import { ItemsTab } from "./match/ItemsTab";
 import { LaneTab } from "./match/LaneTab";
 import { OverviewTab } from "./match/OverviewTab";
+import { RatingHint } from "./match/RatingExplainer";
 import { TEAMS } from "./match/Scoreboard";
 import { fmtDuration } from "@/lib/format";
 import { formatBadge } from "@/lib/ranks";
@@ -118,7 +119,7 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
               {d.matchMode && <span className="chip">{d.matchMode}</span>}
               <span className="chip">{new Date(d.startTime * 1000).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" })}</span>
               <span className="chip text-muted">#{d.matchId}</span>
-              {rating && <span className="chip" style={{ borderColor: GRADE_STYLE[rating.grade].glow }}>{GRADE_STYLE[rating.grade].label} · Score {rating.score.toFixed(2)}</span>}
+              {rating && <span className="chip" style={{ borderColor: GRADE_STYLE[rating.grade].glow }}>{GRADE_STYLE[rating.grade].label} · Score {rating.score.toFixed(2)}<RatingHint rating={rating} who="Du" /></span>}
               {me?.mvpRank === 1 && <span className="chip text-amber">★ MVP</span>}
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { averageBadge } from "../ranks";
 import { modeLabel } from "../modes";
-import type { HistoryEntry, MatchDetails, MatchPlayer, PlayerDeath, PlayerItem, PlayerTimeline, TeamId } from "../types";
+import { DETAILS_VERSION, type HistoryEntry, type MatchDetails, type MatchPlayer, type PlayerDeath, type PlayerItem, type PlayerTimeline, type TeamId } from "../types";
 
 /* Alle Parser sind absichtlich tolerant: fehlende/umbenannte Felder führen zu 0/null statt zu Abstürzen. */
 
@@ -146,7 +146,7 @@ export function normalizeMetadata(raw: unknown): MatchDetails | null {
   };
 
   return {
-    v: 2,
+    v: DETAILS_VERSION,
     matchId,
     startTime: num(info.start_time),
     durationS: num(info.duration_s),

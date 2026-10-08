@@ -78,8 +78,10 @@ export interface MatchPlayer {
 
 export interface MatchObjective { id: number; /** Team, dem das Gebäude gehörte */ team: TeamId; t: number }
 
+/** Schema-Version der Match-Details: 3 = mit Zeitreihen, Items, Lanes, Objectives und Mitspieler-Heilung */
+export const DETAILS_VERSION = 3;
+
 export interface MatchDetails {
-  /** Schema-Version der Details (2 = mit Zeitreihen, Items, Lanes, Objectives) */
   v?: number;
   matchId: number;
   objectives?: MatchObjective[];
@@ -164,8 +166,30 @@ export interface TrackedPlayer {
   historyBackoffUntil?: number;
 }
 
+/** Vom Nutzer einstellbare Optionen (serverseitig gespeichert). */
+export interface AppSettings {
+  /** Abfrage-Takt der Match-Historie in Sekunden */
+  pollIntervalS: number;
+  /** Alle älteren Matches im Hintergrund vollständig nachladen (für Mitspieler, Analysen, Match-Tabs) */
+  backfill: boolean;
+  /** Benachrichtigung bei neu erkannten Matches */
+  notifyNewMatch: boolean;
+  /** Live-Match-Banner anzeigen */
+  showLive: boolean;
+  /** Visuelle Effekte: voll, reduziert (weniger Bewegung) oder aus */
+  effects: "full" | "reduced" | "off";
+  /** Kompakte Darstellung */
+  density: "comfortable" | "compact";
+}
+export const DEFAULT_SETTINGS: AppSettings = { pollIntervalS: 20, backfill: true, notifyNewMatch: true, showLive: true, effects: "full", density: "comfortable" };
+
+/** Per Steam-OpenID verifizierte Verbindung */
+export interface SteamLink { steamId: string; accountId: number; verifiedAt: number }
+
 export interface StoreShape {
   version: 1;
   players: Record<string, TrackedPlayer>;
   matches: Record<string, MatchRecord>;
+  settings?: Partial<AppSettings>;
+  steam?: SteamLink;
 }

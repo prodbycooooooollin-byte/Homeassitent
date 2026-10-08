@@ -1,6 +1,8 @@
 import { ApiError, fetchActive, fetchHistory, fetchMatchDetails, fetchProfiles, fetchRank, type ActiveMatchDto } from "./api";
 import { getStore, saveStore } from "./store";
 import { steamBudgetLeft, useSteamBudget } from "./diag";
+import { getSettings } from "./settings";
+import { DETAILS_VERSION } from "./types";
 import type { MatchRecord, TrackedPlayer } from "./types";
 
 /**
@@ -115,7 +117,7 @@ export async function enrichMatch(matchId: number, now = Date.now()): Promise<bo
   const store = getStore();
   const rec = store.matches[matchId];
   if (!rec) return false;
-  const upgrading = !!rec.details && rec.details.v !== 2;
+  const upgrading = !!rec.details && rec.details.v !== DETAILS_VERSION;
   if (rec.details && !upgrading) return true;
   const focus = Number(Object.keys(rec.history)[0]) || 1;
   const ageMs = now - rec.startTime * 1000;
@@ -170,11 +172,20 @@ export async function enrichMatch(matchId: number, now = Date.now()): Promise<bo
 export async function enrichPending(now = Date.now()): Promise<number> {
   const store = getStore();
   // Ältere Details (ohne Zeitreihen etc.) werden für die neuesten Matches einmalig aufgewertet.
-  for (const m of Object.values(store.matches).sort((a, b) => b.startTime - a.startTime).slice(0, 30)) {
-    if (m.details && m.details.v !== 2 && m.nextDetailsAttemptAt === Number.MAX_SAFE_INTEGER && (m.upgradeTries ?? 0) < 3) m.nextDetailsAttemptAt = now;
+  for (const m of Object.values(store.matches).sort((a, b) => b.startTime - a.startTime).slice(0, 150)) {
+    if (m.details && m.details.v !== DETAILS_VERSION && m.nextDetailsAttemptAt === Number.MAX_SAFE_INTEGER && (m.upgradeTries ?? 0) < 3) m.nextDetailsAttemptAt = now;
+  }
+  // Hintergrund-Nachladen: noch nie versuchte (ältere) Matches nach und nach vollständig laden – damit Mitspieler,
+  // Analysen und Match-Tabs auf der gesamten Historie beruhen. Bewusst sanft (3 pro Takt), das API-Limit liegt bei 100/10 s.
+  if (getSettings().backfill) {
+    const backlog = Object.values(store.matches)
+      .filter((m) => !m.details && m.detailsAttempts === 0 && m.nextDetailsAttemptAt === Number.MAX_SAFE_INTEGER)
+      .sort((a, b) => b.startTime - a.startTime)
+      .slice(0, 3);
+    for (const m of backlog) m.nextDetailsAttemptAt = now;
   }
   const due = Object.values(store.matches)
-    .filter((m) => (!m.details || m.details.v !== 2) && m.nextDetailsAttemptAt <= now)
+    .filter((m) => (!m.details || m.details.v !== DETAILS_VERSION) && m.nextDetailsAttemptAt <= now)
     .sort((a, b) => b.startTime - a.startTime)
     .slice(0, ENRICH_PER_CYCLE);
   let ok = 0;
@@ -220,7 +231,7 @@ export function runCycle(force = false): Promise<SyncResult[]> {
   running = (async () => {
     const now = Date.now();
     const results: SyncResult[] = [];
-    const baseMs = Math.max(5, Number(process.env.POLL_INTERVAL_S) || 20) * 1000;
+    const baseMs = (getSettings().pollIntervalS || Number(process.env.POLL_INTERVAL_S) || 20) * 1000;
     await refreshLive(now);
     const everyMs = now < live().fastUntil ? 5000 : baseMs;
     for (const p of Object.values(getStore().players)) {

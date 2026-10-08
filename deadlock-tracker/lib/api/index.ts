@@ -1,9 +1,9 @@
 import * as real from "./deadlock-api";
-import { demoActive, demoHeroMeta, demoHistory, demoLeaderboard, demoMatch, demoProfiles, demoRank, demoSearch } from "../fixtures";
+import { demoActive, demoBuilds, demoHeroMeta, demoHistory, demoLeaderboard, demoMatch, demoMates, demoMatchups, demoProfiles, demoRank, demoSearch, demoTopItems } from "../fixtures";
 import type { HistoryEntry, MatchDetails } from "../types";
 
 export { ApiError } from "./deadlock-api";
-export type { ActiveMatchDto, BadgeBucket, HeroMeta, LeaderboardRow, SteamProfile } from "./deadlock-api";
+export type { ActiveMatchDto, BadgeBucket, BuildDto, HeroMeta, LeaderboardRow, MateRow, MatchupRow, SteamProfile } from "./deadlock-api";
 
 const demo = () => process.env.DEADLOCK_DEMO === "1";
 
@@ -19,4 +19,9 @@ export const fetchActive = (ids: number[]) =>
 export const fetchHeroMeta = () => (demo() ? Promise.resolve(demoHeroMeta()) : real.fetchHeroMeta());
 export const fetchBadgeDistribution = () =>
   demo() ? Promise.resolve(Array.from({ length: 11 }, (_, t) => Array.from({ length: 6 }, (_, k) => ({ badge: (t + 1) * 10 + k + 1, players: Math.round(4000 * Math.exp(-Math.pow((t - 4) / 2.6, 2))) }))).flat()) : real.fetchBadgeDistribution();
-export const fetchLeaderboard = (region: string) => (demo() ? Promise.resolve(demoLeaderboard()) : real.fetchLeaderboard(region));
+export const fetchLeaderboard = (region: string, heroId?: number) => (demo() ? Promise.resolve(demoLeaderboard(heroId)) : real.fetchLeaderboard(region, heroId));
+export const fetchMates = (id: number, kind: "mates" | "enemies" | "party") => (demo() ? Promise.resolve(demoMates(kind)) : real.fetchMates(id, kind));
+export const fetchBuilds = (heroId: number) => (demo() ? Promise.resolve(demoBuilds(heroId)) : real.fetchBuilds(heroId));
+export const fetchTopItems = (heroId: number) => (demo() ? Promise.resolve(demoTopItems(heroId)) : real.fetchTopItems(heroId));
+export const fetchCounters = (heroId: number) => (demo() ? Promise.resolve(demoMatchups(heroId)) : real.fetchCounters(heroId));
+export const fetchSynergies = (heroId: number) => (demo() ? Promise.resolve(demoMatchups(heroId + 1)) : real.fetchSynergies(heroId));

@@ -1,7 +1,5 @@
 "use client";
 import { HeroPortrait, RankEmblem, useHeroName } from "../GameAssets";
-import { useState } from "react";
-import { RatingExplainer } from "./RatingExplainer";
 import { TeamTable, TEAMS, Versus, sum } from "./Scoreboard";
 import { awards, advantageSummary } from "@/lib/insights";
 import { formatBadge, tierOf } from "@/lib/ranks";
@@ -14,9 +12,6 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
   const maxDmg = Math.max(1, ...d.players.map((p) => p.heroDamage));
   const aw = awards(d);
   const adv = me ? advantageSummary(d, me.team) : null;
-  const [selected, setSelected] = useState(account);
-  const shown = d.players.find((p) => p.accountId === selected) ?? me;
-  const rating = ratings[shown?.accountId ?? account];
   const ranks = d.players.map((p) => p.badge).filter((b): b is number => !!b);
   const tiers = Array.from({ length: 12 }, (_, t) => ({ t, n: ranks.filter((b) => tierOf(b) === t).length })).filter((x) => x.n > 0);
   const maxN = Math.max(1, ...tiers.map((x) => x.n));
@@ -84,18 +79,7 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
         </section>
       </div>
 
-      {rating && shown && (
-        <div id="rating-explain" className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
-            <span>Note erklären für:</span>
-            {me && <button onClick={() => setSelected(account)} className={`chip ${selected === account ? "border-amber text-white" : ""}`}>Du</button>}
-            <span className="text-xs">oder auf eine Note in der Tabelle klicken</span>
-          </div>
-          <RatingExplainer rating={rating} title={shown.accountId === account ? "du" : `${shown.name ?? heroName(shown.heroId)}`} />
-        </div>
-      )}
-
-      {([0, 1] as TeamId[]).map((t) => <TeamTable key={t} team={t} d={d} account={account} ratings={ratings} maxDmg={maxDmg} selected={selected} onSelect={(id) => { setSelected(id); window.scrollTo({ top: document.getElementById("rating-explain")?.offsetTop ?? 0, behavior: "smooth" }); }} />)}
+      {([0, 1] as TeamId[]).map((t) => <TeamTable key={t} team={t} d={d} account={account} ratings={ratings} maxDmg={maxDmg} />)}
     </div>
   );
 }

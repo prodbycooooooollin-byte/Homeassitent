@@ -1,6 +1,6 @@
 import { linearToBadge } from "./ranks";
-import type { HistoryEntry, MatchDetails, MatchPlayer, TeamId } from "./types";
-import type { ActiveMatchDto, HeroMeta, LeaderboardRow, SteamProfile } from "./api/deadlock-api";
+import { DETAILS_VERSION, type HistoryEntry, type MatchDetails, type MatchPlayer, type TeamId } from "./types";
+import type { ActiveMatchDto, BuildDto, HeroMeta, LeaderboardRow, MateRow, MatchupRow, SteamProfile } from "./api/deadlock-api";
 
 export interface HeroInfo { id: number; name: string }
 
@@ -47,9 +47,41 @@ export function demoHeroMeta(): HeroMeta[] {
   return DEMO_HEROES.map((h) => { const r = rng(h.id * 31); const matches = Math.round(2000 + r() * 18000); return { heroId: h.id, matches, wins: Math.round(matches * (0.44 + r() * 0.12)) }; });
 }
 
-export function demoLeaderboard(): LeaderboardRow[] {
-  const r = rng(7);
-  return Array.from({ length: 100 }, (_, i) => ({ rank: i + 1, name: `${NAMES[i % NAMES.length]}${(i * 37) % 99}`, badge: 110 + (i < 10 ? 6 : i < 40 ? 5 : 4) - 4 + 0, heroIds: [1 + Math.floor(r() * 20), 1 + Math.floor(r() * 20), 1 + Math.floor(r() * 20)] }));
+export function demoLeaderboard(heroId?: number): LeaderboardRow[] {
+  const r = rng(7 + (heroId ?? 0));
+  return Array.from({ length: 100 }, (_, i) => ({
+    place: i + 1, name: `${NAMES[i % NAMES.length]}${(i * 37) % 99}`,
+    badge: i < 12 ? 116 : i < 40 ? 115 : i < 70 ? 114 : 113,
+    heroIds: heroId ? [heroId] : [1 + Math.floor(r() * 20), 1 + Math.floor(r() * 20), 1 + Math.floor(r() * 20)],
+    accountIds: [900000 + i],
+  }));
+}
+
+export function demoMates(kind: "mates" | "enemies" | "party"): MateRow[] {
+  const r = rng(kind === "enemies" ? 5 : 3);
+  return Array.from({ length: kind === "party" ? 4 : 14 }, (_, i) => {
+    const games = Math.round((kind === "party" ? 40 : 60) / (i + 1.4)) + 2;
+    return { accountId: 600000 + i, games, wins: Math.round(games * (0.35 + r() * 0.4)), matchIds: Array.from({ length: Math.min(games, 8) }, (_, k) => 70000000 + k * 2 + i) };
+  });
+}
+
+export function demoBuilds(heroId: number): BuildDto[] {
+  const r = rng(heroId * 13);
+  return ["Standard-Build", "Burst-Meta", "Sustain"].map((name, i) => ({
+    id: 100000 + heroId * 10 + i, name: `${name}`, description: "Beliebter Build der Community.", authorId: 400000 + i, favorites: 900 - i * 220 + Math.round(r() * 80), weeklyFavorites: 160 - i * 40,
+    updated: Math.floor(Date.now() / 1000) - i * 86400 * 3,
+    categories: [["Early Game", 3], ["Mid Game", 4], ["Late Game", 4]].map(([n, c]) => ({ name: n as string, itemIds: Array.from({ length: c as number }, () => 1000 + Math.floor(r() * 24)) })),
+  }));
+}
+
+export function demoTopItems(heroId: number): { itemId: number; builds: number }[] {
+  const r = rng(heroId * 17);
+  return Array.from({ length: 12 }, (_, i) => ({ itemId: 1000 + ((i * 5 + heroId) % 24), builds: Math.round(900 / (i + 1) + r() * 30) }));
+}
+
+export function demoMatchups(heroId: number): MatchupRow[] {
+  const r = rng(heroId * 19);
+  return DEMO_HEROES.filter((h) => h.id !== heroId).map((h) => { const matches = Math.round(600 + r() * 2400); return { heroId: h.id, matches, wins: Math.round(matches * (0.4 + r() * 0.2)) }; });
 }
 
 const DEMO_COUNT = 30;
@@ -125,7 +157,7 @@ export function demoMatch(matchId: number, focusAccount: number, now = Date.now(
   const objectives = [1, 2, 3, 5, 6, 7, 9, 0].map((id, i) => ({ id, team: loser, t: Math.round(durationS * (0.25 + i * 0.1)) }))
     .concat([1, 5].map((id, i) => ({ id, team: winningTeam, t: Math.round(durationS * (0.45 + i * 0.2)) })));
   return {
-    v: 2, matchId, startTime, durationS, winningTeam, matchMode: "Ranked", gameMode: "1",
+    v: DETAILS_VERSION, matchId, startTime, durationS, winningTeam, matchMode: "Ranked", gameMode: "1",
     avgBadge: [avg(0), avg(1)], players, objectives, midBoss: [{ team: winningTeam, t: Math.round(durationS * 0.4) }],
   };
 }

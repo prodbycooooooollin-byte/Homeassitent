@@ -74,6 +74,11 @@ export interface SteamProfile {
   matches30d?: number;
 }
 
+/** Steam-Avatare gibt es in 32/64/184 px (Endung, _medium, _full) – wir wollen immer die große Variante. */
+export function upgradeAvatar(url: string): string {
+  return url.replace(/\/([0-9a-f]{40})(_medium|_full)?\.jpg(\?.*)?$/i, "/$1_full.jpg");
+}
+
 const toProfile = (r: Record<string, unknown>): SteamProfile[] => {
   const id = Number(r.account_id);
   const name = String(r.personaname ?? r.name ?? "");
@@ -82,7 +87,7 @@ const toProfile = (r: Record<string, unknown>): SteamProfile[] => {
   return [{
     accountId: id,
     name,
-    avatar: typeof av === "string" ? av : undefined,
+    avatar: typeof av === "string" ? upgradeAvatar(av) : undefined,
     lastTeamAvgBadge: typeof r.last_team_avg_badge === "number" ? r.last_team_avg_badge : undefined,
     matches30d: typeof r.matches_played_last_30d === "number" ? r.matches_played_last_30d : undefined,
   }];
@@ -156,16 +161,27 @@ export async function fetchHeroMeta(days = 14): Promise<HeroMeta[]> {
   return raw.flatMap((r: Record<string, unknown>) => (Number(r.hero_id) ? [{ heroId: Number(r.hero_id), matches: Number(r.matches) || 0, wins: Number(r.wins) || 0 }] : []));
 }
 
-export interface LeaderboardRow { rank: number; name: string; heroIds: number[]; badge?: number }
+export interface LeaderboardRow {
+  /** Platz in der Liste (1 = bester) */
+  place: number;
+  name: string;
+  heroIds: number[];
+  /** Rang-Badge (tier*10+subtier) laut API-Feld `rank` */
+  badge?: number;
+  /** Mögliche Steam-Account-IDs (laut API nicht immer korrekt) */
+  accountIds: number[];
+}
 
-export async function fetchLeaderboard(region: string): Promise<LeaderboardRow[]> {
-  const raw = (await getJson(`${BASE()}/v1/leaderboard/${encodeURIComponent(region)}`, { retries: 1, timeoutMs: 20000 })) as Record<string, unknown>;
+export async function fetchLeaderboard(region: string, heroId?: number): Promise<LeaderboardRow[]> {
+  const path = heroId ? `/v1/leaderboard/${encodeURIComponent(region)}/${heroId}` : `/v1/leaderboard/${encodeURIComponent(region)}`;
+  const raw = (await getJson(`${BASE()}${path}`, { retries: 1, timeoutMs: 20000 })) as Record<string, unknown>;
   const entries = Array.isArray(raw?.entries) ? (raw.entries as Record<string, unknown>[]) : [];
-  return entries.slice(0, 200).map((e, i) => ({
-    rank: Number(e.rank) || i + 1,
+  return entries.slice(0, 250).map((e, i) => ({
+    place: i + 1,
     name: String(e.account_name ?? "Unbekannt"),
     heroIds: Array.isArray(e.top_hero_ids) ? (e.top_hero_ids as number[]).slice(0, 3) : [],
-    badge: typeof e.badge_level === "number" ? e.badge_level : undefined,
+    badge: typeof e.rank === "number" && e.rank > 0 ? e.rank : undefined,
+    accountIds: Array.isArray(e.possible_account_ids) ? (e.possible_account_ids as number[]).slice(0, 3) : [],
   }));
 }
 
@@ -177,4 +193,66 @@ export async function fetchBadgeDistribution(): Promise<BadgeBucket[]> {
   const raw = await getJson(`${BASE()}/v1/analytics/badge-distribution?match_mode=ranked&min_unix_timestamp=${since}`, { retries: 1, timeoutMs: 20000 });
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((r: Record<string, unknown>) => (Number(r.badge_level) > 0 ? [{ badge: Number(r.badge_level), players: Number(r.unique_players) || Number(r.total_matches) || 0 }] : []));
+}
+
+/* ---- Mitspieler / Gegner über die gesamte Historie (serverseitig vom API aggregiert) ---- */
+export interface MateRow { accountId: number; games: number; wins: number; matchIds: number[] }
+
+export async function fetchMates(accountId: number, kind: "mates" | "enemies" | "party", minGames = 2): Promise<MateRow[]> {
+  const path = kind === "enemies" ? "enemy-stats" : "mate-stats";
+  const extra = kind === "party" ? "&same_party=true" : "";
+  const raw = await getJson(`${BASE()}/v1/players/${accountId}/${path}?min_matches_played=${minGames}${extra}`, { retries: 1, timeoutMs: 25000 });
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((r: Record<string, unknown>) => {
+    const id = Number(kind === "enemies" ? r.enemy_id : r.mate_id);
+    if (!id) return [];
+    return [{ accountId: id, games: Number(r.matches_played) || 0, wins: Number(r.wins) || 0, matchIds: Array.isArray(r.matches) ? (r.matches as number[]).slice(-12) : [] }];
+  }).sort((a, b) => b.games - a.games).slice(0, 80);
+}
+
+/* ---- Helden-Wissen: Community-Builds, beliebte Items, Counter, Synergien ---- */
+export interface BuildDto { id: number; name: string; description?: string; authorId: number; favorites: number; weeklyFavorites: number; updated?: number; categories: { name: string; itemIds: number[] }[] }
+
+export async function fetchBuilds(heroId: number, limit = 4): Promise<BuildDto[]> {
+  const raw = await getJson(`${BASE()}/v1/builds?hero_id=${heroId}&sort_by=weekly_favorites&sort_direction=desc&only_latest=true&limit=${limit}`, { retries: 1, timeoutMs: 20000 });
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((b: Record<string, unknown>) => {
+    const hb = (b.hero_build ?? {}) as Record<string, unknown>;
+    const id = Number(hb.hero_build_id);
+    if (!id) return [];
+    const det = (hb.details ?? {}) as Record<string, unknown>;
+    const cats = Array.isArray(det.mod_categories) ? (det.mod_categories as Record<string, unknown>[]) : [];
+    return [{
+      id, name: String(hb.name ?? `Build ${id}`), description: typeof hb.description === "string" ? hb.description : undefined,
+      authorId: Number(hb.author_account_id) || 0, favorites: Number(b.num_favorites) || 0, weeklyFavorites: Number(b.num_weekly_favorites) || 0,
+      updated: Number(hb.last_updated_timestamp) || undefined,
+      categories: cats.slice(0, 8).map((c) => ({
+        name: String(c.name ?? ""),
+        itemIds: (Array.isArray(c.mods) ? (c.mods as Record<string, unknown>[]) : []).map((m) => Number(m.ability_id)).filter(Boolean).slice(0, 12),
+      })),
+    }];
+  });
+}
+
+export async function fetchTopItems(heroId: number): Promise<{ itemId: number; builds: number }[]> {
+  const raw = await getJson(`${BASE()}/v1/analytics/build-item-stats?hero_id=${heroId}`, { retries: 1, timeoutMs: 20000 });
+  return Array.isArray(raw) ? raw.map((r: Record<string, unknown>) => ({ itemId: Number(r.item_id), builds: Number(r.builds) || 0 })).filter((r) => r.itemId).sort((a, b) => b.builds - a.builds).slice(0, 14) : [];
+}
+
+export interface MatchupRow { heroId: number; matches: number; wins: number }
+
+export async function fetchCounters(heroId: number): Promise<MatchupRow[]> {
+  const since = Math.floor(Date.now() / 1000) - 21 * 86400;
+  const raw = await getJson(`${BASE()}/v1/analytics/hero-counter-stats?match_mode=ranked&min_unix_timestamp=${since}`, { retries: 1, timeoutMs: 25000 });
+  return Array.isArray(raw) ? raw.flatMap((r: Record<string, unknown>) => (Number(r.hero_id) === heroId ? [{ heroId: Number(r.enemy_hero_id), matches: Number(r.matches_played) || 0, wins: Number(r.wins) || 0 }] : [])) : [];
+}
+
+export async function fetchSynergies(heroId: number): Promise<MatchupRow[]> {
+  const since = Math.floor(Date.now() / 1000) - 21 * 86400;
+  const raw = await getJson(`${BASE()}/v1/analytics/hero-synergy-stats?match_mode=ranked&min_unix_timestamp=${since}`, { retries: 1, timeoutMs: 25000 });
+  return Array.isArray(raw) ? raw.flatMap((r: Record<string, unknown>) => {
+    const a = Number(r.hero_id1), b = Number(r.hero_id2);
+    if (a !== heroId && b !== heroId) return [];
+    return [{ heroId: a === heroId ? b : a, matches: Number(r.matches_played) || 0, wins: Number(r.wins) || 0 }];
+  }) : [];
 }
