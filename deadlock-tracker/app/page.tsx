@@ -6,7 +6,8 @@ import { StatStrip } from "@/components/StatStrip";
 import { MatchRow } from "@/components/MatchRow";
 import { NavLink } from "@/components/NavLink";
 import { RankEmblem } from "@/components/GameAssets";
-import { ActivityHeatmap, FormTrendCard, InsightsCard, RadarCard, RecordsCard, SessionCard } from "@/components/widgets";
+import { PerformanceCard } from "@/components/PerformanceCard";
+import { InsightsCard, RadarCard, RecordsCard, SessionCard } from "@/components/widgets";
 import { Icon } from "@/components/Icon";
 import { HeroTile } from "@/components/HeroTile";
 import { useData, useSettings, useTracker } from "@/components/Providers";
@@ -60,10 +61,7 @@ export default function OverviewPage() {
           {/* Zeile 2: gleiche Spaltenbreiten wie oben */}
           <div className="grid items-stretch gap-5 xl:grid-cols-[300px_minmax(0,1fr)_320px]">
             <RecordsCard items={data.matches} />
-            <div className="flex flex-col gap-5">
-              <ActivityHeatmap items={data.matches} />
-              <FormTrendCard form={data.overview.form} trend={data.overview.trend} className="flex-1" />
-            </div>
+            <PerformanceCard items={data.matches} />
             <section className="surface flex flex-col p-5">
               <div className="mb-3 flex items-center justify-between"><h2 className="label">Top-Helden</h2><NavLink href="/heroes" className="flex items-center gap-1 text-xs text-amber hover:underline">Alle<Icon name="arrowRight" size={12} /></NavLink></div>
               <div className="flex flex-1 flex-col justify-between gap-3">{data.heroes.slice(0, 3).map((h) => <HeroTile key={h.heroId} h={h} />)}</div>
