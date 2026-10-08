@@ -6,6 +6,7 @@ import { fmtDuration, fmtK } from "@/lib/format";
 import { formatBadge } from "@/lib/ranks";
 import { carryShare, duelPairs, gamePlan, reasonFor, threatScore, type ScoutPlayer, type ScoutTag, type TagTone } from "@/lib/live";
 import type { ScoutResult } from "@/lib/scout";
+import { CoachPanel, useCoach } from "./CoachPanel";
 
 const TONE: Record<TagTone, { c: string; bg: string }> = {
   good: { c: "#3ecf8e", bg: "rgba(62,207,142,.12)" },
@@ -22,7 +23,7 @@ export function TagChip({ t }: { t: ScoutTag }) {
   const tone = TONE[t.tone];
   return (
     <HoverCard width={250} content={<div className="text-xs leading-relaxed"><div className="mb-1 flex items-center gap-1.5 font-semibold" style={{ color: tone.c }}><Icon name={t.icon as IconName} size={13} />{t.label}</div><p className="text-muted">{t.tip}</p></div>}>
-      <span className="inline-flex cursor-help items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:brightness-125" style={{ color: tone.c, background: tone.bg, borderColor: `${tone.c}44` }}>
+      <span className="inline-flex cursor-help items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:brightness-125" style={{ color: tone.c, background: tone.bg, borderColor: `${tone.c}44` }}>
         <Icon name={t.icon as IconName} size={11} />{t.label}
       </span>
     </HoverCard>
@@ -81,24 +82,30 @@ export function ScoutBoard({ r, match, live }: { r: ScoutResult; match?: LiveMat
   const en = other(r.myTeam);
   const pairs = duelPairs(r.players, r.myTeam);
   const mu = new Map(r.matchups.map((m) => [m.heroId, m]));
+  const coach = useCoach(r, match, !!live);
   return (
-    <div className="space-y-2">
-      <HeadBar r={r} match={match} live={live} />
-      <GamePlanCards r={r} />
-      <section className="surface overflow-hidden">
-        <div className="grid grid-cols-[1fr_52px_1fr] border-b border-white/[0.07] px-3 py-1 text-[10px] font-bold uppercase tracking-widest">
-          <span style={{ color: COL[r.myTeam] }}>Dein Team</span>
-          <span className="text-center font-normal text-muted">Δ</span>
-          <span className="text-right" style={{ color: COL[en] }}>Gegner</span>
-        </div>
-        {pairs.map((d, i) => (
-          <div key={i} className="grid grid-cols-[1fr_52px_1fr] items-center border-b border-white/[0.05] last:border-0">
-            {d.mine ? <ScoutRow p={d.mine} /> : <div />}
-            <Delta diff={d.diff} />
-            {d.enemy ? <ScoutRow p={d.enemy} flip vs={mu.get(d.enemy.heroId)} /> : <div />}
+    <div className="flex h-full min-h-0 gap-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <HeadBar r={r} match={match} live={live} />
+        <GamePlanCards r={r} />
+        <section className="surface flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="grid shrink-0 grid-cols-[1fr_52px_1fr] border-b border-white/[0.07] px-3 py-1 text-[10px] font-bold uppercase tracking-widest">
+            <span style={{ color: COL[r.myTeam] }}>Dein Team</span>
+            <span className="text-center font-normal text-muted">Δ</span>
+            <span className="text-right" style={{ color: COL[en] }}>Gegner</span>
           </div>
-        ))}
-      </section>
+          <div className="grid min-h-0 flex-1" style={{ gridTemplateRows: `repeat(${Math.max(1, pairs.length)}, minmax(0, 1fr))` }}>
+            {pairs.map((d, i) => (
+              <div key={i} className="grid min-h-0 grid-cols-[1fr_52px_1fr] items-stretch border-b border-white/[0.05] last:border-0">
+                {d.mine ? <ScoutRow p={d.mine} /> : <div />}
+                <div className="flex items-center justify-center"><Delta diff={d.diff} /></div>
+                {d.enemy ? <ScoutRow p={d.enemy} flip vs={mu.get(d.enemy.heroId)} /> : <div />}
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+      {live && coach.active && <div className="w-[300px] shrink-0"><CoachPanel coach={coach} /></div>}
     </div>
   );
 }
@@ -171,12 +178,12 @@ export function ScoutRow({ p, flip, vs }: { p: ScoutPlayer; flip?: boolean; vs?:
   const tags = [...p.tags].sort((a, b) => PRIO.indexOf(a.key) - PRIO.indexOf(b.key));
   const tcol = t >= 65 ? "#f0616d" : t >= 45 ? "#f0b44c" : "#3ecf8e";
   return (
-    <div className={`relative flex h-[54px] items-center gap-2.5 px-3 ${flip ? "flex-row-reverse text-right" : ""} ${p.isMe ? "bg-amber/[0.06]" : ""}`}>
+    <div className={`relative flex h-full items-center gap-3 px-3 ${flip ? "flex-row-reverse text-right" : ""} ${p.isMe ? "bg-amber/[0.06]" : ""}`}>
       <span className="absolute inset-y-1.5 w-[3px] rounded" style={{ [flip ? "right" : "left"]: 0, background: c } as React.CSSProperties} />
-      {p.heroId > 0 ? <HeroPortrait id={p.heroId} size={36} h={44} ring={color} /> : <Avatar src={p.avatar} name={p.name ?? "?"} size={36} ring={c} />}
+      {p.heroId > 0 ? <HeroPortrait id={p.heroId} size={46} h={56} ring={color} /> : <Avatar src={p.avatar} name={p.name ?? "?"} size={46} ring={c} />}
       <div className="min-w-0 flex-1">
         <div className={`flex items-center gap-1.5 ${flip ? "flex-row-reverse" : ""}`}>
-          <span className="truncate text-sm font-bold">{p.isMe ? "Du" : p.name ?? (p.accountId ? `Spieler ${p.accountId}` : "Unbekannt")}</span>
+          <span className="truncate text-[15px] font-bold">{p.isMe ? "Du" : p.name ?? (p.accountId ? `Spieler ${p.accountId}` : "Unbekannt")}</span>
           {p.heroId > 0 && <span className="truncate text-[11px] text-muted">{heroName(p.heroId)}</span>}
         </div>
         <div className={`mt-0.5 flex items-center gap-1 ${flip ? "flex-row-reverse" : ""}`}>
@@ -184,7 +191,7 @@ export function ScoutRow({ p, flip, vs }: { p: ScoutPlayer; flip?: boolean; vs?:
           {tags.length > 2 && <HoverCard width={230} content={<div className="space-y-1 text-xs">{tags.slice(2).map((x) => <div key={x.key}><b>{x.label}</b> <span className="text-muted">– {x.tip}</span></div>)}</div>}><span className="cursor-help rounded-full border border-white/10 px-1.5 text-[10px] text-muted">+{tags.length - 2}</span></HoverCard>}
         </div>
       </div>
-      <div className="hidden shrink-0 grid-cols-3 gap-x-2.5 text-center xl:grid">
+      <div className="grid shrink-0 grid-cols-3 gap-x-2.5 text-center">
         <Mini l="WR" v={p.wr === null ? "–" : `${Math.round(p.wr * 100)}%`} c={wrCol(p.wr)} />
         <Mini l="KDA" v={p.kda === null ? "–" : p.kda.toFixed(1)} />
         <Mini l="Held" v={p.heroId > 0 && p.heroGames !== null ? `${p.heroGames}×` : "–"} />
@@ -196,7 +203,7 @@ export function ScoutRow({ p, flip, vs }: { p: ScoutPlayer; flip?: boolean; vs?:
       )}
       <HoverCard width={240} content={<div className="text-xs"><div className="mb-1 font-semibold">Stärke-Wert {t}/100</div><p className="text-muted">Aus Rang, Winrate, Routine auf dem Helden, KDA und aktueller Form. {reasonFor(p)}.</p></div>}>
         <div className="flex w-12 shrink-0 cursor-help flex-col items-center gap-0.5">
-          <RankEmblem badge={p.badge} size={24} />
+          <RankEmblem badge={p.badge} size={30} />
           <div className="flex w-full items-center gap-1"><div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full" style={{ width: `${t}%`, background: tcol }} /></div><span className="num text-[9px] text-muted">{t}</span></div>
         </div>
       </HoverCard>

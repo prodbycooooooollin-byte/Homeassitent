@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Empty, Gate } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { ScoutBoard, ScoutCard, type LiveMatchMeta } from "@/components/ScoutBoard";
@@ -10,6 +10,22 @@ import type { ScoutResult } from "@/lib/scout";
 type Mode = "live" | "last" | "player";
 interface Res extends Partial<ScoutResult> { kind: Mode; active?: boolean; available?: boolean; match?: LiveMatchMeta; error?: string }
 interface Hit { accountId: number; name: string; avatar?: string; matches30d?: number }
+
+/** Skaliert die Ansicht so, dass sie den Bildschirm ohne Leerraum füllt (Höhe der Topbar: 64 px). */
+function useFit() {
+  const [fit, setFit] = useState({ z: 1, h: 800 });
+  useLayoutEffect(() => {
+    const calc = () => {
+      const H = window.innerHeight - 64 - 24, W = window.innerWidth - 40;
+      const z = Math.max(0.75, Math.min(1.5, Math.min(W / 1480, H / 640)));
+      setFit({ z, h: H });
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    return () => window.removeEventListener("resize", calc);
+  }, []);
+  return fit;
+}
 
 export default function LivePage() {
   return <Gate>{({ me }) => <View account={me.accountId} />}</Gate>;
@@ -43,9 +59,11 @@ function View({ account }: { account: number }) {
   }, [q]);
 
   const isLive = mode === "live" && res?.active;
+  const fit = useFit();
+  const board = mode !== "player" && !!res?.players;
 
   return (
-    <div className="space-y-2">
+    <div className="live-page -mb-12 flex flex-col gap-2" style={board ? { zoom: fit.z, height: fit.h / fit.z } : undefined}>
       <div className="flex items-center justify-between gap-3">
         <h1 className="display text-lg font-extrabold tracking-tight">Live & Scouting</h1>
         <div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
@@ -77,7 +95,7 @@ function View({ account }: { account: number }) {
           {mode === "player" ? (
             <div className="max-w-xl">{(res.players as ScoutPlayer[]).map((p) => <ScoutCard key={p.accountId} p={p} />)}</div>
           ) : (
-            <ScoutBoard r={res as ScoutResult} match={res.match} live={!!isLive} />
+            <div className="min-h-0 flex-1"><ScoutBoard r={res as ScoutResult} match={res.match} live={!!isLive} /></div>
           )}
         </>
       )}

@@ -74,7 +74,7 @@ export default function SettingsPage() {
         <Row title="Effekte" desc="Aurora-Hintergrund, Übergänge und Animationen. „Reduziert“ lässt die Bewegung im Hintergrund weg, „Aus“ deaktiviert alle Animationen.">
           <Seg value={settings.effects} onChange={(v) => update({ effects: v })} options={[["full", "Voll"], ["reduced", "Reduziert"], ["off", "Aus"]]} />
         </Row>
-        <Row title="Dichte" desc="Kompakter = weniger Abstände, mehr Inhalt pro Bildschirm."><Seg value={settings.density} onChange={(v) => update({ density: v })} options={[["comfortable", "Komfortabel"], ["compact", "Kompakt"]]} /></Row>
+        <Row title="Dichte" desc="Kompakt verkleinert Schrift und Abstände der ganzen Oberfläche (ca. 12 %) – mehr Inhalt pro Bildschirm."><Seg value={settings.density} onChange={(v) => update({ density: v })} options={[["comfortable", "Komfortabel"], ["compact", "Kompakt"]]} /></Row>
       </Card>
 
       {desk && (

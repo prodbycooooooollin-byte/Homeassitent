@@ -59,7 +59,7 @@ export function TopBar() {
   return (
     <>
       <header className="topbar sticky top-0 z-30 border-b border-white/[0.06] bg-[#080a10]/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-[1560px] items-center gap-4 px-5">
+        <div className="mx-auto flex h-[64px] max-w-[1560px] items-center gap-4 px-5">
           <NavLink href="/" aria-label="Deadlock Tracker" className="transition hover:scale-[1.03]"><Logo /></NavLink>
           <nav ref={navRef} className="relative hidden h-full items-center gap-1 lg:flex">
             {NAV.map((n) => {

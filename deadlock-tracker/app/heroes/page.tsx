@@ -5,6 +5,7 @@ import { HeroPortrait, useHero, useHeroName, useTilt } from "@/components/GameAs
 import { GradeBadge } from "@/components/GradeBadge";
 import { NavLink } from "@/components/NavLink";
 import { gradeFor } from "@/lib/rating";
+import { CounterPicker } from "@/components/CounterPicker";
 import type { HeroAgg } from "@/lib/view";
 
 export default function HeroesPage() {
@@ -13,6 +14,7 @@ export default function HeroesPage() {
 
 function HeroesView({ heroes }: { heroes: HeroAgg[] }) {
   const [sort, setSort] = useState<"matches" | "wr" | "kda" | "score">("matches");
+  const [tab, setTab] = useState<"mine" | "counter">("mine");
   const sorted = useMemo(() => {
     const f = [...heroes];
     const wr = (h: HeroAgg) => h.wins / h.matches;
@@ -23,13 +25,20 @@ function HeroesView({ heroes }: { heroes: HeroAgg[] }) {
     <>
       <PageTitle title="Helden" sub={`${heroes.length} gespielte Helden`}
         right={
+          <div className="flex flex-wrap items-center gap-3">
           <div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+            {([["mine", "Meine Helden"], ["counter", "Counter-Picker"]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setTab(k)} className={`tab ${tab === k ? "tab-active" : ""}`}>{l}</button>
+            ))}
+          </div>
+          {tab === "mine" && <div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
             {([["matches", "Spiele"], ["wr", "Winrate"], ["kda", "KDA"], ["score", "Note"]] as const).map(([k, l]) => (
               <button key={k} onClick={() => setSort(k)} className={`tab ${sort === k ? "tab-active" : ""}`}>{l}</button>
             ))}
+          </div>}
           </div>
         } />
-      {heroes.length === 0 ? <Empty title="Noch keine Helden" text="Sobald Matches erkannt wurden, siehst du hier deine Helden-Statistiken." /> : (
+      {tab === "counter" ? <CounterPicker heroes={heroes} /> : heroes.length === 0 ? <Empty title="Noch keine Helden" text="Sobald Matches erkannt wurden, siehst du hier deine Helden-Statistiken." /> : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {sorted.map((h, i) => <HeroCard key={h.heroId} h={h} i={i} />)}
         </div>
