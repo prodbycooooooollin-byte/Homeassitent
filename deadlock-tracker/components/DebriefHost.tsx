@@ -133,6 +133,11 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
   const [figNat, setFigNat] = useState<{ w: number; h: number } | null>(null);
   // 3D-Modell (Beta): vorhanden -> anzeigen; sonst im Hintergrund aus der Spiel-Installation exportieren lassen (klappt beim nächsten Mal)
   const [m3d, setM3d] = useState<"none" | "ready" | "failed">("none");
+  const [m3dOn, setM3dOn] = useState(false); // 3D erst nach dem Einblenden laden (sonst ruckelt die Eröffnung) und erst zeigen, wenn es fertig gerendert ist
+  const [m3dMount, setM3dMount] = useState(false);
+  const [m3dGone2d, setM3dGone2d] = useState(false); // 2D-Bild erst nach dem Überblenden ausblenden
+  useEffect(() => { if (!m3dOn) return; const t = setTimeout(() => setM3dGone2d(true), 900); return () => clearTimeout(t); }, [m3dOn]);
+  useEffect(() => { if (m3d !== "ready") return; const t = setTimeout(() => setM3dMount(true), 2600); return () => clearTimeout(t); }, [m3d]);
   const heroKey = me?.heroId;
   useEffect(() => {
     if (!heroKey || req.sample) return;
@@ -214,12 +219,12 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
       </div>
 
       {/* Held als Figur: freigestellt, rechts unten, folgt der Maus */}
-      {m3d === "ready" && heroKey && (
-        <div className="debrief-figure pointer-events-none fixed bottom-0 right-[1%] top-[2%] z-[5] hidden w-[42%] lg:block">
-          <Hero3D url={`/api/hero3d/${heroKey}`} color={color} onFail={() => setM3d("failed")} />
+      {m3d === "ready" && m3dMount && heroKey && (
+        <div className="pointer-events-none fixed bottom-0 right-0 top-0 z-[5] hidden w-[48%] transition-opacity duration-700 lg:block" style={{ opacity: m3dOn ? 1 : 0 }}>
+          <Hero3D url={`/api/hero3d/${heroKey}`} color={color} onFail={() => setM3d("failed")} onReady={() => setM3dOn(true)} />
         </div>
       )}
-      {m3d !== "ready" && fig.src && (
+      {!(m3dGone2d && m3d === "ready") && fig.src && (
         <div className="debrief-figure pointer-events-none fixed bottom-0 right-[2%] top-[4%] hidden w-[38%] lg:block">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={figSharp ?? fig.src} onError={fig.onError} onLoad={(e) => setFigNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} alt="" className="debrief-figure-img absolute" style={figStyle} />

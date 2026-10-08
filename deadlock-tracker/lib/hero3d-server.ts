@@ -13,7 +13,8 @@ const jobs = () => (g.__dlHero3d ??= new Map());
 
 const modelsDir = () => path.join(dataDir(), "models");
 const toolDir = () => path.join(dataDir(), "tools", "s2v");
-export const glbPath = (heroId: number) => path.join(modelsDir(), `hero-${heroId}.glb`);
+// v2: Export mit Materialien/Texturen (v1 hatte keine)
+export const glbPath = (heroId: number) => path.join(modelsDir(), `hero-${heroId}.v2.glb`);
 export const hasModel = (heroId: number) => fs.existsSync(glbPath(heroId));
 export const modelJob = (heroId: number) => jobs().get(heroId) ?? null;
 
@@ -124,9 +125,22 @@ export async function startModel(heroId: number, codeName: string | undefined): 
       job.message = "Exportiere das Modell …";
       const out = path.join(os.tmpdir(), `dl-hero3d-${heroId}-${Date.now()}`);
       fs.mkdirSync(out, { recursive: true });
-      const r = await run(cli, ["-i", pak, "-f", model, "-d", "-o", out, "--gltf_export_format", "glb", "--gltf_export_animations"], 600_000);
-      const glb = (function walk(d: string): string | null { for (const f of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) { const x = walk(p); if (x) return x; } else if (/\.glb$/i.test(f.name)) return p; } return null; })(out);
-      if (!glb) throw new Error(`Export lieferte keine GLB-Datei. ${r.out.slice(-240)}`);
+      // Zuerst mit allen Optionen (Texturen, Animationen); falls das Werkzeug eine Option nicht kennt, mit weniger noch einmal
+      const attempts = [
+        ["--gltf_export_format", "glb", "--gltf_export_materials", "--gltf_textures_adapt", "--gltf_export_animations"],
+        ["--gltf_export_format", "glb", "--gltf_export_materials", "--gltf_export_animations"],
+        ["--gltf_export_format", "glb", "--gltf_export_materials"],
+        ["--gltf_export_format", "glb"],
+      ];
+      const findGlb = (d: string): string | null => { for (const f of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) { const x = findGlb(p); if (x) return x; } else if (/\.glb$/i.test(f.name)) return p; } return null; };
+      let glb: string | null = null, last = "";
+      for (const flags of attempts) {
+        const r = await run(cli, ["-i", pak, "-f", model, "-d", "-o", out, ...flags], 900_000);
+        last = r.out;
+        glb = findGlb(out);
+        if (glb) break;
+      }
+      if (!glb) throw new Error(`Export lieferte keine GLB-Datei. ${last.slice(-240)}`);
       fs.mkdirSync(modelsDir(), { recursive: true });
       fs.copyFileSync(glb, glbPath(heroId));
       fs.rmSync(out, { recursive: true, force: true });

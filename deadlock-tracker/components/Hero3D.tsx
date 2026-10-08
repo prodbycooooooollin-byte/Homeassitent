@@ -2,7 +2,7 @@
 import { useEffect, useRef } from "react";
 
 /** Zeigt ein exportiertes Heldenmodell (GLB) in 3D: sanftes Atmen, Kopf/Oberkörper folgen dem Mauszeiger. Bei Problemen ruft `onFail` auf, damit das 2D-Bild einspringt. */
-export function Hero3D({ url, color = "#f0b44c", onFail }: { url: string; color?: string; onFail?: () => void }) {
+export function Hero3D({ url, color = "#f0b44c", onFail, onReady }: { url: string; color?: string; onFail?: () => void; onReady?: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let disposed = false;
@@ -13,7 +13,7 @@ export function Hero3D({ url, color = "#f0b44c", onFail }: { url: string; color?
         const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
         const el = box.current; if (!el || disposed) return;
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-        renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+        renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.15;
@@ -33,12 +33,11 @@ export function Hero3D({ url, color = "#f0b44c", onFail }: { url: string; color?
         // Modell auf Höhe 1 normieren und mittig auf den Boden stellen
         const bb = new THREE.Box3().setFromObject(model); const size = bb.getSize(new THREE.Vector3()); const ctr = bb.getCenter(new THREE.Vector3());
         const sc = 1 / Math.max(0.001, size.y); model.scale.setScalar(sc); model.position.set(-ctr.x * sc, -bb.min.y * sc - 0.5, -ctr.z * sc);
-        camera.position.set(0, 0.05, 3.1); camera.lookAt(0, 0.05, 0);
+        camera.position.set(0, 0.02, 2.25); camera.lookAt(0, 0.02, 0);
         let mixer: InstanceType<typeof THREE.AnimationMixer> | null = null;
-        if (gltf.animations.length) {
-          const idle = gltf.animations.find((a) => /idle|stand|loadout|select|breath/i.test(a.name)) ?? gltf.animations[0];
-          mixer = new THREE.AnimationMixer(model); mixer.clipAction(idle).play();
-        }
+        // Nur eine ruhige Haltung abspielen (Idle/Auswahl) – nie Nachladen, Schießen, Laufen usw.; ohne passende Animation bleibt die Grundpose stehen
+        const calm = gltf.animations.find((a) => /(idle|loadout|select|breath|pose|stand)/i.test(a.name) && !/(reload|fire|shoot|attack|melee|death|run|walk|jump|dash|slide|ability|ult|hit|flinch|crouch)/i.test(a.name));
+        if (calm) { mixer = new THREE.AnimationMixer(model); mixer.clipAction(calm).play(); }
         const tgt = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
         const onMove = (e: MouseEvent) => { tgt.x = (e.clientX / window.innerWidth - 0.5) * 2; tgt.y = (e.clientY / window.innerHeight - 0.5) * 2; };
         window.addEventListener("mousemove", onMove);
@@ -55,7 +54,9 @@ export function Hero3D({ url, color = "#f0b44c", onFail }: { url: string; color?
           renderer.render(scene, camera);
           raf = requestAnimationFrame(tick);
         };
+        renderer.compile(scene, camera);
         tick();
+        requestAnimationFrame(() => onReady?.());
         cleanup = () => {
           cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener("mousemove", onMove);
           scene.traverse((o) => { const m = o as import("three").Mesh; if (m.geometry) m.geometry.dispose(); const mat = m.material as import("three").Material | import("three").Material[] | undefined; (Array.isArray(mat) ? mat : mat ? [mat] : []).forEach((x) => x.dispose()); });
