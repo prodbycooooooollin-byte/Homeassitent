@@ -36,6 +36,24 @@ export interface PlayerTimeline {
   heal: number[]; // Heilung (kumuliert)
   taken: number[]; // erlittener Schaden (kumuliert)
 }
+/** Woher die Souls eines Spielers stammen (kumuliert über das Match; aus den gold_*-Statistiken) */
+export interface SoulsBreakdown {
+  /** Kills und Kill-Orbs */
+  kills: number;
+  /** Lane-Creeps (inkl. Orbs) */
+  lane: number;
+  /** Neutrale Camps (Jungle, inkl. Orbs) */
+  neutral: number;
+  /** Boss/Objectives (inkl. Orbs) */
+  boss: number;
+  /** Kisten/Breakables */
+  treasure: number;
+  /** Durch Denies erhalten */
+  denied: number;
+  /** Durch Tode verlorene Souls */
+  lost: number;
+}
+export interface CreepStats { lane: number; possible: number; neutral: number }
 export interface PlayerDeath { t: number; killerSlot?: number; durS?: number }
 export interface PlayerItem { id: number; t: number; sold?: number }
 
@@ -50,6 +68,8 @@ export interface MatchPlayer {
   shotsMissed?: number;
   heroHits?: number;
   heroCrits?: number;
+  souls?: SoulsBreakdown;
+  creeps?: CreepStats;
   /** Lobby-Slot (für Zuordnung von Killern) */
   slot?: number;
   /** Zugewiesene Lane (Farbcode laut Valve: 1 Gelb, 3 Grün, 4 Blau, 6 Lila) */
@@ -83,8 +103,8 @@ export interface MatchPlayer {
 
 export interface MatchObjective { id: number; /** Team, dem das Gebäude gehörte */ team: TeamId; t: number }
 
-/** Schema-Version der Match-Details: 4 = mit Zeitreihen, Items, Lanes, Objectives, Mitspieler-Heilung und Trefferstatistik */
-export const DETAILS_VERSION = 4;
+/** Schema-Version der Match-Details: 5 = mit Zeitreihen, Items, Lanes, Objectives, Mitspieler-Heilung, Trefferstatistik und Soul-Quellen */
+export const DETAILS_VERSION = 5;
 
 export interface MatchDetails {
   v?: number;

@@ -114,6 +114,18 @@ function shots(r: () => number, mins: number, skill: number) {
 export const DEMO_ITEMS = ["Schnellfeuer", "Pufferladung", "Lebensfunke", "Dolch des Schattens", "Glaskanone", "Seelenanker", "Pulsschild", "Zeitriss", "Aderlass", "Eisenhaut", "Nebelschritt", "Sturmherz",
   "Kristallkern", "Rachenspiegel", "Blutmond", "Wächterglas", "Phantomklinge", "Funkenschlag", "Obsidianpanzer", "Gnadenstoß", "Wanderstab", "Sirenengesang", "Titanfaust", "Echoschuss"];
 
+/** Soul-Quellen für die Demo: der erste Spieler (du) farmt auffällig wenig im Jungle und stirbt oft allein. */
+function soulParts(r: () => number, nw: number, mins: number, weakJungle: boolean) {
+  const neutralShare = weakJungle ? 0.1 : 0.2 + r() * 0.1;
+  const lane = nw * (weakJungle ? 0.42 : 0.3 + r() * 0.08), neutral = nw * neutralShare, boss = nw * (0.03 + r() * 0.05), treasure = nw * (0.04 + r() * 0.04), denied = nw * 0.015;
+  const kills = Math.max(0, nw - lane - neutral - boss - treasure - denied);
+  const laneKills = Math.round(mins * (weakJungle ? 5.2 : 6 + r() * 1.5));
+  return {
+    souls: { kills: Math.round(kills), lane: Math.round(lane), neutral: Math.round(neutral), boss: Math.round(boss), treasure: Math.round(treasure), denied: Math.round(denied), lost: Math.round(nw * 0.04) },
+    creeps: { lane: laneKills, possible: Math.round(mins * 8.6), neutral: Math.round(neutral / 105) },
+  };
+}
+
 export function demoMatch(matchId: number, focusAccount: number, now = Date.now()): MatchDetails {
   const idx = matchId - 70000000;
   const r = rng(matchId * 7919);
@@ -148,6 +160,7 @@ export function demoMatch(matchId: number, focusAccount: number, now = Date.now(
       objectiveDamage: Math.round(skill * mins * (60 + r() * 200)), healing, damageTaken,
       allyHealing: healing ? Math.round(healing * 0.9) : Math.round(mins * r() * 60), mitigated: Math.round(damageTaken * (0.2 + r() * 0.5)),
       ...shots(r, mins, skill),
+      ...soulParts(r, netWorth, mins, s === 0),
       badge: 50 + Math.floor(r() * 3) * 10 + 1 + Math.floor(r() * 6), abandoned: false,
       slot, lane: [1, 4, 6][Math.floor((s % 6) / 2)], mvpRank: undefined,
       deadTimeS: deathTimes.reduce((a, t) => a + 10 + Math.round(t / 60) * 2, 0),

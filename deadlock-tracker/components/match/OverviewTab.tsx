@@ -2,7 +2,7 @@
 import { HeroPortrait, RankEmblem, useHeroName } from "../GameAssets";
 import { Icon, type IconName } from "../Icon";
 import { TeamTable, TEAMS, Versus, sum } from "./Scoreboard";
-import { awards, advantageSummary } from "@/lib/insights";
+import { awards, advantageSummary, turningPoint } from "@/lib/insights";
 import { formatBadge, tierOf } from "@/lib/ranks";
 import { TIER_COLORS } from "../GameAssets";
 import type { MatchDetails, Rating, TeamId } from "@/lib/types";
@@ -13,6 +13,8 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
   const maxDmg = Math.max(1, ...d.players.map((p) => p.heroDamage));
   const aw = awards(d, ratings);
   const adv = me ? advantageSummary(d, me.team) : null;
+  const tp = me ? turningPoint(d, me) : null;
+  const mm = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
   const ranks = d.players.map((p) => p.badge).filter((b): b is number => !!b);
   const tiers = Array.from({ length: 12 }, (_, t) => ({ t, n: ranks.filter((b) => tierOf(b) === t).length })).filter((x) => x.n > 0);
   const maxN = Math.max(1, ...tiers.map((x) => x.n));
@@ -36,6 +38,33 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
           </div>
         </section>
       )}
+
+      {tp && me && (
+        <section className="surface flex flex-wrap items-center gap-x-8 gap-y-3 p-5" style={{ borderColor: tp.swing < 0 ? "#f0616d55" : "#3ecf8e55" }}>
+          <div>
+            <div className="label flex items-center gap-1.5"><Icon name="flag" size={13} />Wendepunkt</div>
+            <div className="display text-2xl font-bold">{mm(tp.from)} – {mm(tp.to)}</div>
+          </div>
+          <div className={`display num text-3xl font-extrabold ${tp.swing < 0 ? "text-[#f0616d]" : "text-[#3ecf8e]"}`}>{tp.swing > 0 ? "+" : "−"}{(Math.abs(tp.swing) / 1000).toFixed(1)}k <span className="text-sm font-normal text-muted">Souls Verschiebung</span></div>
+          <p className="min-w-[260px] flex-1 text-sm text-muted">
+            In diesem Zeitfenster fielen {tp.myDeaths} deiner Teamkollegen{tp.yourDeaths ? ` (davon ${tp.yourDeaths}× du)` : ""} gegen {tp.enemyDeaths} Gegner
+            {tp.myObjectivesLost ? `, ${tp.myObjectivesLost} eigene Objective${tp.myObjectivesLost > 1 ? "s" : ""} gingen verloren` : ""}{tp.myObjectivesTaken ? `, ${tp.myObjectivesTaken} gegnerische${tp.myObjectivesTaken > 1 ? "" : "s"} fielen` : ""}.
+            {tp.swing < 0 ? " Hier ist dieses Match gekippt – schau dir den Kampf im Feed an." : " Hier hat dein Team das Match an sich gerissen."}
+          </p>
+        </section>
+      )}
+
+      {me?.souls && (() => {
+        const parts = [["Lane-Creeps", me.souls.lane, "#4aa3ff"], ["Neutrale Camps", me.souls.neutral, "#3ecf8e"], ["Kills", me.souls.kills, "#f0616d"], ["Objectives", me.souls.boss, "#a77be8"], ["Kisten", me.souls.treasure, "#f0b44c"], ["Denies", me.souls.denied, "#8b94a8"]] as const;
+        const tot = parts.reduce((a, x) => a + x[1], 0) || 1;
+        return (
+          <section className="surface p-5">
+            <div className="mb-3 flex items-baseline gap-3"><h2 className="label mr-auto">Woher deine Souls kamen</h2>{me.souls.lost > 0 && <span className="text-xs text-muted">{(me.souls.lost / 1000).toFixed(1)}k Souls durch Tode verloren</span>}</div>
+            <div className="flex h-3 overflow-hidden rounded-full">{parts.map((x) => <div key={x[0]} style={{ width: `${(x[1] / tot) * 100}%`, background: x[2] }} title={`${x[0]}: ${x[1]}`} />)}</div>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs">{parts.map((x) => <span key={x[0]} className="flex items-center gap-1.5 text-muted"><i className="h-2 w-2 rounded-sm" style={{ background: x[2] }} />{x[0]} <b className="num text-white">{Math.round((x[1] / tot) * 100)} %</b></span>)}</div>
+          </section>
+        );
+      })()}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="surface p-5">

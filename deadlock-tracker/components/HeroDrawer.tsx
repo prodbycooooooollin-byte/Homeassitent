@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { HeroBackdrop, HeroPortrait, useHero, useHeroName } from "./GameAssets";
+import { HeroBackdrop, HeroPortrait, ItemIcon, useHero, useHeroName } from "./GameAssets";
 import { Icon, type IconName } from "./Icon";
-import { ItemIcon } from "./match/ItemIcon";
+
 import { useData } from "./Providers";
 import type { HeroAsset, ItemAsset } from "@/lib/assets";
 

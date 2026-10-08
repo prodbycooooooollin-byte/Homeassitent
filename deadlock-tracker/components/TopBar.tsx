@@ -8,6 +8,7 @@ import { NavLink } from "./NavLink";
 import { useData, useTracker } from "./Providers";
 import { fmtAgo } from "@/lib/format";
 import { parseAccountId } from "@/lib/steamid";
+import { profileViewHref } from "@/lib/primary";
 
 interface NavItem { href: string; label: string; icon: IconName; desc: string }
 type NavEntry = ({ kind: "link"; key: string } & NavItem) | { kind: "menu"; key: string; label: string; items: NavItem[] };
@@ -36,7 +37,7 @@ const isActive = (href: string, path: string) => (href === "/" ? path === "/" ||
 const entryActive = (n: NavEntry, path: string) => (n.kind === "link" ? isActive(n.href, path) : n.items.some((i) => isActive(i.href, path)));
 
 export function TopBar() {
-  const { status, account, setAccount, syncNow, syncing, toasts, dismissToast } = useTracker();
+  const { status, account, primary, setAccount, setPrimary, syncNow, syncing, toasts, dismissToast } = useTracker();
   const [open, setOpen] = useState(false);
   const path = usePathname();
   const me = status?.players.find((p) => p.accountId === account);
@@ -113,11 +114,14 @@ export function TopBar() {
                 {open && (
                   <div className="surface fade-up absolute right-0 mt-2 w-64 overflow-hidden p-1.5" onMouseLeave={() => setOpen(false)}>
                     {status.players.map((p) => (
-                      <button key={p.accountId} onClick={() => { setAccount(p.accountId); setOpen(false); }}
-                        className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-white/[0.06] ${p.accountId === account ? "bg-white/[0.06]" : ""}`}>
-                        <Avatar src={p.avatar} name={p.name} size={28} ring="#ffffff22" />
-                        <span className="truncate text-sm">{p.name}</span>
-                      </button>
+                      <div key={p.accountId} className={`group flex items-center gap-1 rounded-lg pr-1 hover:bg-white/[0.06] ${p.accountId === account ? "bg-white/[0.06]" : ""}`}>
+                        <button onClick={() => { setAccount(p.accountId); setOpen(false); }} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left">
+                          <Avatar src={p.avatar} name={p.name} size={28} ring="#ffffff22" />
+                          <span className="truncate text-sm">{p.name}</span>
+                          {p.accountId === primary && <span className="chip ml-auto !py-0 text-[10px] text-amber">Ich</span>}
+                        </button>
+                        {p.accountId !== primary && <button onClick={() => { setPrimary(p.accountId); setOpen(false); }} title="Als meinen Account festlegen" className="rounded-md px-1.5 py-0.5 text-[10px] text-muted opacity-0 transition hover:text-white group-hover:opacity-100">Als Ich</button>}
+                      </div>
                     ))}
                     <NavLink href="/status" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-lg border-t border-white/[0.06] px-2 py-2 text-sm text-muted hover:bg-white/[0.06] hover:text-white"><Icon name="sliders" size={15} />Einstellungen</NavLink>
                     <NavLink href="/?add=1" onClick={() => setOpen(false)} className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-amber hover:bg-white/[0.06]"><Icon name="plusSign" size={15} />Account hinzufügen</NavLink>
@@ -181,10 +185,13 @@ function SearchBox() {
     return () => clearTimeout(t);
   }, [q, idFromInput]);
 
+  const close = () => { setQ(""); setFocus(false); };
+  /** Fremde Spieler nur ansehen – ohne Tracking und ohne die Kontoauswahl zu ändern. */
+  const view = (id: number) => { close(); router.push(profileViewHref(id)); };
   const track = async (input: string) => {
     const e = await addPlayer(input);
     setErr(e);
-    if (!e) { setQ(""); setFocus(false); router.push("/"); }
+    if (!e) close();
   };
   const known = (id: number) => status?.players.some((p) => p.accountId === id);
 
@@ -196,18 +203,23 @@ function SearchBox() {
       {focus && q.trim().length >= 2 && (
         <div className="surface fade-up absolute right-0 mt-2 max-h-96 w-80 overflow-y-auto p-1.5">
           {idFromInput && (
-            <button onClick={() => track(q)} className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-white/[0.06]">
-              <span>Account <b>{idFromInput}</b> tracken</span><Icon name="plusSign" size={16} className="text-amber" />
-            </button>
+            <div className="flex items-center gap-1 rounded-lg hover:bg-white/[0.06]">
+              <button onClick={() => view(idFromInput)} className="flex-1 px-3 py-2 text-left text-sm">Profil <b>{idFromInput}</b> ansehen</button>
+              {!known(idFromInput) && <button onClick={() => track(q)} className="btn btn-ghost !mr-1 !px-2 !py-1 text-xs" title="Zusätzlich tracken"><Icon name="plusSign" size={13} />Tracken</button>}
+            </div>
           )}
           {busy && <div className="px-3 py-2 text-sm text-muted">Suche …</div>}
           {res.map((r) => (
-            <button key={r.accountId} onClick={() => track(String(r.accountId))} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-white/[0.06]">
-              <Avatar src={r.avatar} name={r.name} size={32} ring="#ffffff22" />
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{r.name}</span>
-                <span className="block text-[11px] text-muted">{r.matches30d !== undefined ? `${r.matches30d} Matches (30 Tage)` : `ID ${r.accountId}`}</span></span>
-              <span className="text-xs text-amber">{known(r.accountId) ? "getrackt" : "tracken"}</span>
-            </button>
+            <div key={r.accountId} className="flex items-center gap-1 rounded-lg hover:bg-white/[0.06]">
+              <button onClick={() => view(r.accountId)} className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left">
+                <Avatar src={r.avatar} name={r.name} size={32} ring="#ffffff22" />
+                <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{r.name}</span>
+                  <span className="block text-[11px] text-muted">{r.matches30d !== undefined ? `${r.matches30d} Matches (30 Tage)` : `ID ${r.accountId}`}</span></span>
+              </button>
+              {known(r.accountId)
+                ? <span className="pr-2 text-[11px] text-muted">getrackt</span>
+                : <button onClick={() => track(String(r.accountId))} className="btn btn-ghost !mr-1 !px-2 !py-1 text-xs" title="Zusätzlich tracken"><Icon name="plusSign" size={13} />Tracken</button>}
+            </div>
           ))}
           {!busy && !idFromInput && !res.length && !err && <div className="px-3 py-2 text-sm text-muted">Keine Treffer.</div>}
           {err && <div className="px-3 py-2 text-sm text-loss">{err}</div>}

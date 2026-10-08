@@ -10,7 +10,7 @@ import type { DesktopSettings } from "@/lib/desktop";
 
 export default function SettingsPage() {
   const { settings, update, steam, disconnectSteam } = useSettings();
-  const { status, removePlayer, setAccount, account } = useTracker();
+  const { status, removePlayer, setAccount, setPrimary, primary, account } = useTracker();
   const up = useUpdater();
   const [desk, setDesk] = useState<DesktopSettings | null>(null);
   const [steamMsg, setSteamMsg] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2"><span className="display text-xl font-bold">{linked?.name ?? `Account ${steam.accountId}`}</span><span className="chip !py-0 text-[11px] text-win"><Icon name="badge" size={12} />verifiziert</span></div>
               <div className="num text-xs text-muted">Steam-ID {steam.steamId} · verbunden am {new Date(steam.verifiedAt).toLocaleDateString("de-DE")}</div>
             </div>
-            <button onClick={() => { setAccount(steam.accountId); }} className="btn btn-ghost text-sm">Als aktiven Account wählen</button>
+            <button onClick={() => { setPrimary(steam.accountId); }} className="btn btn-ghost text-sm">Als meinen Account festlegen</button>
             <button onClick={disconnectSteam} className="btn btn-ghost text-sm text-loss">Trennen</button>
           </div>
         ) : (
@@ -51,8 +51,9 @@ export default function SettingsPage() {
           <div className="space-y-1.5">{status?.players.map((p) => (
             <div key={p.accountId} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2">
               <Avatar src={p.avatar} name={p.name} size={34} ring="#ffffff22" />
-              <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{p.name}{p.accountId === account && <span className="chip ml-2 !py-0 text-[10px] text-amber">aktiv</span>}</div><div className="text-[11px] text-muted">ID {p.accountId}</div></div>
-              {p.accountId !== account && <button onClick={() => setAccount(p.accountId)} className="btn btn-ghost !px-2.5 !py-1 text-xs">Wählen</button>}
+              <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{p.name}{p.accountId === primary && <span className="chip ml-2 !py-0 text-[10px] text-amber">Ich</span>}{p.accountId === account && p.accountId !== primary && <span className="chip ml-2 !py-0 text-[10px]">angezeigt</span>}</div><div className="text-[11px] text-muted">ID {p.accountId}</div></div>
+              {p.accountId !== primary && <button onClick={() => setPrimary(p.accountId)} className="btn btn-ghost !px-2.5 !py-1 text-xs">Als Ich</button>}
+              {p.accountId !== account && <button onClick={() => setAccount(p.accountId)} className="btn btn-ghost !px-2.5 !py-1 text-xs">Ansehen</button>}
               <button onClick={() => confirm(`${p.name} nicht mehr tracken?`) && removePlayer(p.accountId)} className="btn btn-ghost !px-2.5 !py-1 text-xs text-loss">Entfernen</button>
             </div>))}</div>
         </div>

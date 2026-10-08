@@ -1,6 +1,8 @@
 "use client";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { AssetBundle, HeroAsset } from "@/lib/assets";
+import type { AssetBundle, HeroAsset, ItemAsset } from "@/lib/assets";
+import { HoverCard } from "./Popover";
+import { Icon } from "./Icon";
 import { formatBadge, tierOf } from "@/lib/ranks";
 import { imgUrl, rankImageUrl } from "@/lib/img";
 
@@ -178,4 +180,43 @@ export function Avatar({ src, name, size = 64, ring = "#f0b44c" }: { src?: strin
 export function useHeroName() {
   const { bundle, loaded } = useAssets();
   return useMemo(() => (id: number) => bundle.heroes[id]?.name ?? (loaded ? "Unbekannter Held" : "…"), [bundle, loaded]);
+}
+
+/* ---- Items ---- */
+export const SLOT_COLORS: Record<string, string> = { weapon: "#f0a04c", vitality: "#3ecf8e", spirit: "#a77be8" };
+const SLOT_LABELS: Record<string, string> = { weapon: "Waffe", vitality: "Vitalität", spirit: "Geist" };
+const ROMAN = ["", "I", "II", "III", "IV"];
+
+/**
+ * Einheitliches Item-Symbol mit echtem Shop-Bild, Slot-Rahmen (Waffe/Vitalität/Geist) und Hover-Karte.
+ * Ohne Bild bzw. bei Ladefehler: neutraler Rahmen mit Anfangsbuchstaben.
+ */
+export function ItemIcon({ id, item, size = 40, sold, hover = true }: { id: number; item?: ItemAsset; size?: number; sold?: boolean; hover?: boolean }) {
+  const [bad, setBad] = useState(false);
+  const color = SLOT_COLORS[item?.slot ?? ""] ?? "#8b94a8";
+  const src = size >= 56 ? item?.imageLarge ?? item?.image : item?.image;
+  const box = (
+    <span className="relative block shrink-0 overflow-hidden rounded-lg" style={{ width: size, height: size, boxShadow: `0 0 0 1.5px ${color}aa`, background: `linear-gradient(145deg, ${color}44, #0c0f16)`, opacity: sold ? 0.45 : 1 }}>
+      {src && !bad ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={item?.name ?? ""} loading="lazy" onError={() => setBad(true)} className="h-full w-full object-contain p-0.5" />
+      ) : (
+        <span className="display absolute inset-0 flex items-center justify-center font-bold text-white/70" style={{ fontSize: Math.max(10, size * 0.32) }}>{item ? item.name.slice(0, 2) : "?"}</span>
+      )}
+      {item && item.tier > 0 && size >= 28 && <span className="display absolute bottom-0 right-0 rounded-tl bg-black/70 px-1 text-[9px] font-bold" style={{ color }}>{ROMAN[item.tier] ?? item.tier}</span>}
+      {sold && <span className="absolute inset-0 flex items-center justify-center text-loss"><Icon name="x" size={size * 0.6} /></span>}
+    </span>
+  );
+  if (!hover) return box;
+  return (
+    <HoverCard width={260} content={
+      <div className="space-y-1">
+        <div className="flex items-center gap-2"><span className="display text-sm font-bold">{item?.name ?? `Item #${id}`}</span>{sold && <span className="chip !py-0 text-[10px] text-loss">verkauft</span>}</div>
+        {item && <div className="flex items-center gap-2 text-[11px] text-muted"><span style={{ color }}>{SLOT_LABELS[item.slot] ?? item.slot}{item.tier > 0 ? ` · Stufe ${ROMAN[item.tier] ?? item.tier}` : ""}</span>{item.cost ? <span className="num">{item.cost.toLocaleString("de-DE")} Souls</span> : null}</div>}
+        {item?.desc && <p className="text-xs leading-snug text-white/80">{item.desc}</p>}
+      </div>
+    }>
+      {box}
+    </HoverCard>
+  );
 }

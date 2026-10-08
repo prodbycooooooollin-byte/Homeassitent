@@ -1,7 +1,7 @@
 import { fetchPerformanceCurve } from "./api";
 import type { ReferencePoint, TrainingMatch } from "./training";
 import { analyze, METRICS } from "./training";
-import { ratePlayer } from "./rating";
+import { classifyRoles, ratePlayer } from "./rating";
 import { cachedHeroRole } from "./hero-roles-server";
 import { getStore } from "./store";
 import { lobbyBadge } from "./view";
@@ -40,7 +40,8 @@ export function trainingMatches(accountId: number, n: number, heroId: number | n
       const r = ratePlayer(d, p.accountId, cachedHeroRole);
       if (r) scores.set(p.accountId, r.score);
     }
-    out.push({ details: d, me, scores, won: d.winningTeam !== null && d.winningTeam === me.team, start: d.startTime });
+    const roles = new Map([...classifyRoles(d, cachedHeroRole)].map(([id, r]) => [id, r.key as string]));
+    out.push({ details: d, me, scores, roles, won: d.winningTeam !== null && d.winningTeam === me.team, start: d.startTime });
   }
   return out.sort((a, b) => b.start - a.start).slice(0, n).map(({ start: _s, ...m }) => m);
 }

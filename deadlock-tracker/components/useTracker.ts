@@ -10,19 +10,20 @@ export interface TrackedPlayerDto {
   lastError?: string;
 }
 
-/** localStorage ist optional – nie darauf verlassen. */
-export function useSelectedAccount(): [number | null, (id: number | null) => void] {
+/** Gespeicherter „Ich"-Account (localStorage ist optional – nie darauf verlassen). */
+export function useStoredPrimary(): [number | null, (id: number | null) => void] {
   const [id, setId] = useState<number | null>(null);
   useEffect(() => {
     try {
-      const v = Number(localStorage.getItem("dl.account"));
+      const v = Number(localStorage.getItem("dl.primary") ?? localStorage.getItem("dl.account"));
       if (v) setId(v);
     } catch {}
   }, []);
   const set = useCallback((v: number | null) => {
     setId(v);
     try {
-      v ? localStorage.setItem("dl.account", String(v)) : localStorage.removeItem("dl.account");
+      v ? localStorage.setItem("dl.primary", String(v)) : localStorage.removeItem("dl.primary");
+      localStorage.removeItem("dl.account");
     } catch {}
   }, []);
   return [id, set];

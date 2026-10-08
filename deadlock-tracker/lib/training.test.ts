@@ -39,3 +39,15 @@ describe("training", () => {
     expect(p.done).toBe(true);
   });
 });
+
+describe("Mustererkennung", () => {
+  it("findet Soul-Lücke und liefert Belege und Maßnahmen", () => {
+    const r = analyze(build(12), null);
+    expect(r.soulPlan).not.toBeNull();
+    const souls = r.focus.find((f) => f.id === "souls");
+    expect(souls).toBeDefined();
+    expect(souls!.evidence.length).toBeGreaterThan(1);
+    expect(souls!.fix.length).toBeGreaterThan(1);
+    expect(souls!.title).toContain("Neutrale");
+  });
+});

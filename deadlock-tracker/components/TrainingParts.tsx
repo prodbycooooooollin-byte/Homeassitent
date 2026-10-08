@@ -1,7 +1,6 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Icon } from "./Icon";
-import type { AimStats, CurveSeries } from "@/lib/training";
+import { useMemo, useState } from "react";
+import type { AimStats, CurveSeries, PhaseRate, SoulPlan } from "@/lib/training";
 
 const fmt = (v: number, key: string) => (key === "nw" || key === "dmg" ? (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${Math.round(v)}`) : v.toFixed(1));
 
@@ -95,119 +94,47 @@ export function AimPanel({ aim }: { aim: AimStats }) {
   );
 }
 
-const useBest = (key: string, higher: boolean) => {
-  const [best, setBest] = useState<number | null>(null);
-  useEffect(() => { try { const v = localStorage.getItem(key); if (v) setBest(Number(v)); } catch { /* egal */ } }, [key]);
-  const submit = (v: number) => {
-    if (best === null || (higher ? v > best : v < best)) { setBest(v); try { localStorage.setItem(key, String(v)); } catch { /* egal */ } }
-  };
-  return [best, submit] as const;
-};
-
-/** Last-Hit-Trainer: Creep erst treffen, wenn seine Leben unter deinen Schaden fallen. */
-export function LastHitTrainer() {
-  const ROUNDS = 15, DMG = 28;
-  const [state, setState] = useState<"idle" | "run" | "done">("idle");
-  const [round, setRound] = useState(0);
-  const [hp, setHp] = useState(100);
-  const [res, setRes] = useState({ hit: 0, early: 0, late: 0 });
-  const [flash, setFlash] = useState<string | null>(null);
-  const [best, submit] = useBest("dl-trainer-lasthit", true);
-  const hpRef = useRef(100);
-  const rate = useRef(0);
-  const settled = useRef(false);
-
-  const next = (r: number) => { hpRef.current = 100; rate.current = 8 + Math.random() * 14; settled.current = false; setHp(100); setRound(r); };
-  const finish = (partial: { hit: number; early: number; late: number }) => setRes(partial);
-
-  useEffect(() => {
-    if (state !== "run") return;
-    const id = setInterval(() => {
-      if (settled.current) return;
-      hpRef.current = Math.max(0, hpRef.current - rate.current * 0.05 * (0.8 + Math.random() * 0.5));
-      setHp(hpRef.current);
-      if (hpRef.current <= 0) settle("late");
-    }, 50);
-    return () => clearInterval(id);
-  });
-
-  function settle(kind: "hit" | "early" | "late") {
-    if (settled.current) return;
-    settled.current = true;
-    setFlash(kind === "hit" ? "Last Hit!" : kind === "early" ? "Zu früh" : "Verpasst – Gegner hat ihn");
-    setTimeout(() => setFlash(null), 600);
-    setRes((r) => {
-      const n = { ...r, [kind]: r[kind] + 1 };
-      if (round + 1 >= ROUNDS) { setState("done"); submit(n.hit); finish(n); } else setTimeout(() => next(round + 1), 450);
-      return n;
-    });
-  }
-  const start = () => { setRes({ hit: 0, early: 0, late: 0 }); setState("run"); next(0); };
-  const onHit = () => { if (state !== "run" || settled.current) return; settle(hpRef.current <= DMG ? "hit" : "early"); };
-
+/** Soul-Quellen: wo du gegen die Besten deiner Lobbys Souls liegen lässt – und was ein Ausgleich konkret bedeuten würde. */
+export function SoulPlanPanel({ plan, phases }: { plan: SoulPlan; phases: PhaseRate[] }) {
+  const max = Math.max(1, ...plan.rows.flatMap((r) => [r.mine, r.ref]));
+  const pmax = Math.max(1, ...phases.flatMap((p) => [p.mine, p.ref]));
   return (
-    <div className="flex h-full flex-col">
-      <p className="text-sm text-muted">Schlage zu, sobald die Leben unter die Markierung fallen. Zu früh und der Gegner holt sich die Souls, zu spät ebenso.</p>
-      <div className="relative mt-4 flex-1 select-none rounded-xl border border-white/[0.06] bg-black/25 p-4">
-        {state === "run" ? (
-          <>
-            <div className="mb-2 flex justify-between text-xs text-muted"><span>Creep {round + 1}/{ROUNDS}</span><span className="num">{res.hit} Last Hits</span></div>
-            <div className="relative h-5 overflow-hidden rounded-full bg-white/[0.07]">
-              <div className="h-full bg-gradient-to-r from-[#f0616d] to-[#f0b44c]" style={{ width: `${hp}%` }} />
-              <i className="absolute inset-y-0 w-[2px] bg-white" style={{ left: `${DMG}%` }} />
+    <section className="surface p-5">
+      <div className="mb-4 flex flex-wrap items-baseline gap-x-4">
+        <h3 className="label mr-auto">Woher deine Souls kommen</h3>
+        <span className="text-xs text-muted">Du {Math.round(plan.mineTotal)}/Min · Beste deiner Lobbys {Math.round(plan.refTotal)}/Min · {plan.basis} Matches</span>
+      </div>
+      <div className="grid gap-8 lg:grid-cols-2">
+        <div className="space-y-3">
+          {plan.rows.map((r) => (
+            <div key={r.key}>
+              <div className="mb-1 flex justify-between text-xs"><span>{r.label}</span><span className={`num font-semibold ${r.gap > 0.05 * plan.refTotal ? "text-[#f0616d]" : r.gap < 0 ? "text-[#3ecf8e]" : "text-muted"}`}>{Math.round(r.mine)} <span className="text-muted">/ {Math.round(r.ref)} pro Min</span></span></div>
+              <div className="relative h-2 rounded-full bg-white/[0.07]">
+                <div className="h-full rounded-full bg-[#4aa3ff]" style={{ width: `${(r.mine / max) * 100}%` }} />
+                <i className="absolute -top-1 h-4 w-[3px] rounded bg-[#f0b44c]" style={{ left: `${Math.min(99, (r.ref / max) * 100)}%` }} title={`Beste: ${Math.round(r.ref)}`} />
+              </div>
             </div>
-            <button onClick={onHit} className="btn mt-4 w-full justify-center py-3 text-base"><Icon name="sword" size={18} /> Zuschlagen</button>
-            <div className={`pointer-events-none mt-3 h-6 text-center text-sm font-semibold transition ${flash ? "opacity-100" : "opacity-0"} ${flash === "Last Hit!" ? "text-[#3ecf8e]" : "text-[#f0616d]"}`}>{flash ?? "."}</div>
-          </>
-        ) : (
-          <div className="py-3 text-center">
-            {state === "done" && <div className="mb-3"><div className="display num text-3xl font-bold text-[#3ecf8e]">{res.hit}/{ROUNDS}</div><div className="text-xs text-muted">Last Hits · {res.early}× zu früh · {res.late}× verpasst</div></div>}
-            <button onClick={start} className="btn justify-center px-6 py-2.5"><Icon name={state === "done" ? "refresh" : "bolt"} size={16} /> {state === "done" ? "Nochmal" : "Start"}</button>
+          ))}
+          <p className="text-[11px] text-muted">Blau: du · Gelb: Beste deiner Lobbys (gleiche Rolle)</p>
+        </div>
+        <div>
+          <div className="label mb-2 !text-[9px]">Souls pro Minute je Spielphase</div>
+          <div className="flex h-32 items-end gap-3">
+            {phases.map((p) => (
+              <div key={p.label} className="flex flex-1 flex-col items-center gap-1">
+                <div className="flex h-24 w-full items-end gap-1"><div className="w-1/2 rounded-t bg-[#4aa3ff]" style={{ height: `${(p.mine / pmax) * 100}%` }} /><div className="w-1/2 rounded-t bg-[#f0b44c]/80" style={{ height: `${(p.ref / pmax) * 100}%` }} /></div>
+                <span className="text-[10px] text-muted">{p.label}</span>
+                <span className={`num text-[11px] font-semibold ${p.mine >= p.ref ? "text-[#3ecf8e]" : "text-[#f0616d]"}`}>{p.mine >= p.ref ? "+" : "−"}{Math.round(Math.abs(1 - p.mine / p.ref) * 100)} %</span>
+              </div>
+            ))}
           </div>
-        )}
+          {(plan.perCreep || plan.perCamp) && (
+            <div className="mt-4 rounded-xl bg-white/[0.04] p-3 text-xs text-muted">
+              Umrechnung aus deinen Daten:{plan.perCreep ? <> ein Lane-Creep bringt dir ≈ <b className="text-white">{Math.round(plan.perCreep)}</b> Souls</> : null}{plan.perCamp ? <>, ein Camp ≈ <b className="text-white">{Math.round(plan.perCamp)}</b></> : null}. Ein zusätzliches Camp pro 5 Minuten wären ≈ {plan.perCamp ? Math.round((plan.perCamp / 5)) : "–"} Souls/Min.
+            </div>
+          )}
+        </div>
       </div>
-      {best !== null && <div className="mt-2 text-xs text-muted">Persönlicher Rekord: <b className="text-white">{best}/{ROUNDS}</b></div>}
-    </div>
-  );
-}
-
-/** Aim- und Reaktionstrainer: 30 Sekunden Ziele treffen. */
-export function AimTrainer() {
-  const [state, setState] = useState<"idle" | "run" | "done">("idle");
-  const [left, setLeft] = useState(30);
-  const [target, setTarget] = useState<{ x: number; y: number; at: number } | null>(null);
-  const [stats, setStats] = useState({ hits: 0, misses: 0, rt: [] as number[] });
-  const [best, submit] = useBest("dl-trainer-aim", true);
-  const area = useRef<HTMLDivElement>(null);
-  const spawn = () => setTarget({ x: 8 + Math.random() * 84, y: 10 + Math.random() * 80, at: performance.now() });
-  useEffect(() => {
-    if (state !== "run") return;
-    const id = setInterval(() => setLeft((l) => (l <= 1 ? 0 : l - 1)), 1000);
-    return () => clearInterval(id);
-  }, [state]);
-  useEffect(() => { if (state === "run" && left === 0) { setState("done"); setTarget(null); submit(stats.hits); } }, [left, state]); // eslint-disable-line react-hooks/exhaustive-deps
-  const start = () => { setStats({ hits: 0, misses: 0, rt: [] }); setLeft(30); setState("run"); spawn(); };
-  const avg = stats.rt.length ? Math.round(stats.rt.reduce((a, b) => a + b, 0) / stats.rt.length) : null;
-  return (
-    <div className="flex h-full flex-col">
-      <p className="text-sm text-muted">Triff so viele Ziele wie möglich in 30 Sekunden. Verfehlte Klicks zählen gegen deine Quote.</p>
-      <div ref={area} className="relative mt-4 min-h-[180px] flex-1 select-none overflow-hidden rounded-xl border border-white/[0.06] bg-black/25 cursor-crosshair"
-        onMouseDown={() => { if (state === "run") setStats((s) => ({ ...s, misses: s.misses + 1 })); }}>
-        {state === "run" && target && (
-          <button aria-label="Ziel" style={{ left: `${target.x}%`, top: `${target.y}%` }} className="absolute h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#f0616d] bg-[#f0616d]/25 shadow-[0_0_18px_#f0616d88] transition-transform active:scale-90"
-            onMouseDown={(e) => { e.stopPropagation(); const rt = performance.now() - target.at; setStats((s) => ({ ...s, hits: s.hits + 1, rt: [...s.rt, rt] })); spawn(); }}>
-            <span className="absolute inset-[9px] rounded-full bg-[#f0616d]" />
-          </button>
-        )}
-        {state === "run" && <div className="absolute left-3 top-2 text-xs text-muted"><span className="num font-semibold text-white">{left}s</span> · {stats.hits} Treffer</div>}
-        {state !== "run" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center">
-            {state === "done" && <div><div className="display num text-3xl font-bold text-[#3ecf8e]">{stats.hits}</div><div className="text-xs text-muted">Treffer · Quote {Math.round((stats.hits / Math.max(1, stats.hits + stats.misses)) * 100)} % · Reaktion Ø {avg ?? "–"} ms</div></div>}
-            <button onClick={start} className="btn justify-center px-6 py-2.5"><Icon name={state === "done" ? "refresh" : "target"} size={16} /> {state === "done" ? "Nochmal" : "Start"}</button>
-          </div>
-        )}
-      </div>
-      {best !== null && <div className="mt-2 text-xs text-muted">Persönlicher Rekord: <b className="text-white">{best} Treffer</b></div>}
-    </div>
+    </section>
   );
 }

@@ -205,3 +205,28 @@ export function gamePlan(players: ScoutPlayer[], myTeam: 0 | 1): GamePlan {
   if (weak && threatScore(weak) < 42) tips.push("Ein Mitspieler wirkt unsicher – spiele seine Lane mit und hilf beim Farmen.");
   return { target, threat, weak, power, tips: tips.slice(0, 4) };
 }
+
+/* ---- Duelle & Last-Verteilung (rein aus Stärke-Werten berechnet) ---- */
+
+export interface DuelPair { mine: ScoutPlayer | null; enemy: ScoutPlayer | null; mineT: number | null; enemyT: number | null; /** Stärke-Differenz aus deiner Sicht (null, wenn eine Seite fehlt oder keine Daten hat) */ diff: number | null }
+
+/** Beide Teams nach Stärke sortiert, Platz für Platz gepaart (1. gegen 1. usw.). */
+export function duelPairs(players: ScoutPlayer[], myTeam: 0 | 1): DuelPair[] {
+  const byT = (a: ScoutPlayer, b: ScoutPlayer) => threatScore(b) - threatScore(a);
+  const mine = players.filter((p) => p.team === myTeam).sort(byT);
+  const enemy = players.filter((p) => p.team !== myTeam).sort(byT);
+  return Array.from({ length: Math.max(mine.length, enemy.length) }, (_, i) => {
+    const a = mine[i] ?? null, b = enemy[i] ?? null;
+    const ok = !!a && !!b && a.games !== null && b.games !== null;
+    return { mine: a, enemy: b, mineT: a ? threatScore(a) : null, enemyT: b ? threatScore(b) : null, diff: ok ? threatScore(a!) - threatScore(b!) : null };
+  });
+}
+
+/** „Wer trägt wen“: Anteil des stärksten Spielers an der Gesamtstärke seines Teams (nur Spieler mit Daten). */
+export function carryShare(players: ScoutPlayer[], team: 0 | 1): { player: ScoutPlayer; share: number } | null {
+  const ps = players.filter((p) => p.team === team && p.games !== null);
+  if (ps.length < 2) return null;
+  const total = ps.reduce((a, p) => a + threatScore(p), 0);
+  const top = ps.reduce((a, p) => (threatScore(p) > threatScore(a) ? p : a));
+  return { player: top, share: threatScore(top) / total };
+}

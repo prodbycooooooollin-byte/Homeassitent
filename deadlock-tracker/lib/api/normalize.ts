@@ -1,6 +1,6 @@
 import { averageBadge } from "../ranks";
 import { modeLabel } from "../modes";
-import { DETAILS_VERSION, type HistoryEntry, type MatchDetails, type MatchPlayer, type PlayerDeath, type PlayerItem, type PlayerTimeline, type TeamId } from "../types";
+import { DETAILS_VERSION, type HistoryEntry, type MatchDetails, type MatchPlayer, type PlayerDeath, type PlayerItem, type PlayerTimeline, type SoulsBreakdown, type TeamId } from "../types";
 
 /* Alle Parser sind absichtlich tolerant: fehlende/umbenannte Felder führen zu 0/null statt zu Abstürzen. */
 
@@ -82,6 +82,21 @@ export function normalizeTimeline(stats: unknown, max = 40): PlayerTimeline | un
   };
 }
 
+/** Soul-Quellen aus den gold_*-Statistiken – nur wenn die API sie liefert. */
+export function soulsOf(st: Obj): SoulsBreakdown | undefined {
+  if (!Object.keys(st).some((k) => k.startsWith("gold_"))) return undefined;
+  const n = (...keys: string[]) => keys.reduce((a, k) => a + num(st[k]), 0);
+  return {
+    kills: n("gold_player", "gold_player_orbs"),
+    lane: n("gold_lane_creep", "gold_lane_creep_orbs"),
+    neutral: n("gold_neutral_creep", "gold_neutral_creep_orbs", "gold_neutral_creeps"),
+    boss: n("gold_boss", "gold_boss_orb"),
+    treasure: n("gold_treasure"),
+    denied: n("gold_denied"),
+    lost: n("gold_death_loss"),
+  };
+}
+
 export function normalizeMetadata(raw: unknown): MatchDetails | null {
   if (!isObj(raw)) return null;
   const info = (isObj(raw.match_info) ? raw.match_info : raw) as Obj;
@@ -122,6 +137,8 @@ export function normalizeMetadata(raw: unknown): MatchDetails | null {
       shotsMissed: "shots_missed" in st ? pick("shots_missed") : undefined,
       heroHits: "hero_bullets_hit" in st ? pick("hero_bullets_hit") : undefined,
       heroCrits: "hero_bullets_hit_crit" in st ? pick("hero_bullets_hit_crit") : undefined,
+      souls: soulsOf(st),
+      creeps: "creep_kills" in st || "neutral_kills" in st ? { lane: pick("creep_kills"), possible: pick("possible_creeps"), neutral: pick("neutral_kills") } : undefined,
       damageTaken: pick("damage_taken", "player_damage_taken"),
       badge: badgeRaw > 0 ? badgeRaw : null,
       abandoned: num(p.abandon_match_time_s) > 0,

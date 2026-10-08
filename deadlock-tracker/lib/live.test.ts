@@ -79,3 +79,27 @@ describe("Spielplan", () => {
     expect(plan.weak?.accountId).toBe(2);
   });
 });
+
+import { carryShare, duelPairs } from "./live";
+describe("Duelle", () => {
+  const mk = (id: number, team: 0 | 1, wr: number, badge: number, games: number | null = 100): import("./live").ScoutPlayer => ({ accountId: id, heroId: 1, team, badge, isMe: id === 1, games, wr: games === null ? null : wr, heroGames: 10, heroWr: 0.5, kda: 2.5, kpm: null, dpm: null, apm: null, recent: [], topHeroes: [], tags: [] });
+  it("paart nach Stärke und berechnet die Differenz aus deiner Sicht", () => {
+    const ps = [mk(1, 0, 0.6, 80), mk(2, 0, 0.4, 30), mk(3, 1, 0.5, 60), mk(4, 1, 0.3, 20)];
+    const d = duelPairs(ps, 0);
+    expect(d).toHaveLength(2);
+    expect(d[0].mine?.accountId).toBe(1); expect(d[0].enemy?.accountId).toBe(3);
+    expect(d[0].diff).toBe(d[0].mineT! - d[0].enemyT!);
+    expect(d[0].diff!).toBeGreaterThan(0);
+  });
+  it("Differenz ist null ohne Daten", () => {
+    const d = duelPairs([mk(1, 0, 0.5, 60), mk(3, 1, 0.5, 60, null)], 0);
+    expect(d[0].diff).toBeNull();
+  });
+  it("carryShare liefert den stärksten Spieler und seinen Anteil", () => {
+    const ps = [mk(1, 0, 0.7, 90), mk(2, 0, 0.4, 30), mk(3, 0, 0.4, 30)];
+    const c = carryShare(ps, 0)!;
+    expect(c.player.accountId).toBe(1);
+    expect(c.share).toBeGreaterThan(1 / 3);
+    expect(carryShare([mk(1, 0, 0.5, 50)], 0)).toBeNull();
+  });
+});

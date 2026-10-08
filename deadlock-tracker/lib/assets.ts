@@ -194,14 +194,43 @@ export async function getAssets(): Promise<AssetBundle> {
 }
 
 /* ---- Items (nur kaufbare Upgrades; große Antwort, daher getrennt und lange zwischengespeichert) ---- */
-export interface ItemAsset { id: number; name: string; image?: string; tier: number; slot: string; cost?: number; cls?: string; type?: string }
+export interface ItemAsset {
+  id: number; name: string;
+  /** Kleines Shop-Bild (Fallback: normales Item-Bild) */
+  image?: string;
+  /** Größeres Shop-Bild für große Darstellungen */
+  imageLarge?: string;
+  tier: number; slot: string; cost?: number; cls?: string; type?: string;
+  /** Kurzbeschreibung als Klartext */
+  desc?: string;
+}
+
+/** Beschreibung (String oder Objekt mit desc/active/passive) als kurzen Klartext ohne HTML/Platzhalter. */
+export function plainDesc(v: unknown): string | undefined {
+  const parts: string[] = [];
+  const walk = (x: unknown, depth: number) => {
+    if (typeof x === "string") parts.push(x);
+    else if (x && typeof x === "object" && depth < 2) for (const k of ["desc", "active", "passive"]) walk((x as Obj)[k], depth + 1);
+  };
+  walk(v, 0);
+  const t = parts.join(" ").replace(/<[^>]*>/g, " ").replace(/\{[^}]*\}/g, "").replace(/\s+/g, " ").trim();
+  if (!t) return undefined;
+  return t.length > 220 ? `${t.slice(0, 217).trimEnd()} …` : t;
+}
+
+/** Bevorzugt die echten Shop-Bilder; fällt sonst auf das normale Item-Bild zurück. */
+export function itemImages(it: Obj): { image?: string; imageLarge?: string } {
+  const small = firstStr(it, ["shop_image_small_webp", "shop_image_small", "shop_image_webp", "shop_image", "image_webp", "image"]);
+  const large = firstStr(it, ["shop_image_webp", "shop_image", "shop_image_small_webp", "shop_image_small", "image_webp", "image"]);
+  return { image: imgUrl(small), imageLarge: imgUrl(large) };
+}
 const gi = globalThis as unknown as { __dlItems?: { at: number; map: Record<number, ItemAsset> } };
-const itemsFile = () => path.join(dataDir(), "items-cache.json");
+const itemsFile = () => path.join(dataDir(), "items-cache-v2.json");
 
 export async function getItems(): Promise<Record<number, ItemAsset>> {
   if (isDemo()) {
     const map: Record<number, ItemAsset> = {};
-    DEMO_ITEMS.forEach((name, i) => { map[1000 + i] = { id: 1000 + i, name, tier: 1 + (i % 4), slot: ["weapon", "vitality", "spirit"][i % 3] }; });
+    DEMO_ITEMS.forEach((name, i) => { map[1000 + i] = { id: 1000 + i, name, tier: 1 + (i % 4), slot: ["weapon", "vitality", "spirit"][i % 3], cost: 500 * (1 + (i % 4)), desc: "Demo-Item: Beschreibung steht im Live-Modus zur Verfügung." }; });
     return map;
   }
   if (gi.__dlItems && Date.now() - gi.__dlItems.at < 24 * 3600_000) return gi.__dlItems.map;
@@ -214,7 +243,8 @@ export async function getItems(): Promise<Record<number, ItemAsset>> {
       map[id] = {
         id, name: String(it.name), tier: Number(it.item_tier) || 1, slot: str(it.item_slot_type) ?? "weapon", cls: str(it.class_name), type: String(it.type),
         cost: typeof it.cost === "number" ? it.cost : undefined,
-        image: imgUrl(firstStr(it, ["shop_image_small", "image", "shop_image"])),
+        ...itemImages(it),
+        desc: plainDesc(it.description),
       };
     }
     if (!Object.keys(map).length) throw new Error("keine Items");

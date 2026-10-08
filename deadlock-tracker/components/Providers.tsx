@@ -5,7 +5,8 @@ import { DEFAULT_SETTINGS, type AppSettings, type SteamLink } from "@/lib/types"
 import { AssetsProvider } from "./GameAssets";
 import type { HeroAgg, MateAgg, MatchListItem, Overview } from "@/lib/view";
 import type { ActiveMatchDto } from "@/lib/api";
-import { useInterval, useSelectedAccount, type TrackedPlayerDto } from "./useTracker";
+import { useInterval, useStoredPrimary, type TrackedPlayerDto } from "./useTracker";
+import { effectiveAccount, resolvePrimary } from "@/lib/primary";
 
 export interface Status {
   demo: boolean;
@@ -19,8 +20,15 @@ export interface Toast { id: number; matchId: number; account: number }
 
 interface TrackerCtx {
   status: Status | null;
+  /** Aktuell angezeigter Account (standardmäßig der primäre „Ich"-Account). */
   account: number | null;
+  /** Der eigene Account – wird beim Start immer gewählt und nie automatisch geändert. */
+  primary: number | null;
+  /** Wählt vorübergehend einen getrackten Zusatz-Account (nur bis zum Neuladen). */
   setAccount: (id: number | null) => void;
+  /** Markiert einen getrackten Account dauerhaft als „Ich". */
+  setPrimary: (id: number) => void;
+  /** Fügt einen Account zum Tracking hinzu – ändert die Auswahl nie. */
   addPlayer: (input: string) => Promise<string | null>;
   removePlayer: (id: number) => Promise<void>;
   syncNow: () => Promise<void>;
@@ -91,17 +99,24 @@ function DataProvider({ children }: { children: React.ReactNode }) {
 }
 
 function TrackerProvider({ children }: { children: React.ReactNode }) {
-  const [account, setAccount] = useSelectedAccount();
+  const [storedPrimary, setStoredPrimary] = useStoredPrimary();
+  const [picked, setPicked] = useState<number | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seen = useRef<Set<number> | null>(null);
   const router = useRouter();
-  const { settings } = useSettings();
+  const { settings, steam } = useSettings();
+  const primary = status ? resolvePrimary(status.players, storedPrimary, steam?.accountId) : storedPrimary;
+  const account = status ? effectiveAccount(status.players, primary, picked) : primary;
+  const setAccount = useCallback((id: number | null) => setPicked(id), []);
+  const setPrimary = useCallback((id: number) => { setStoredPrimary(id); setPicked(null); }, [setStoredPrimary]);
+  // Ersten bzw. Steam-Account als „Ich" festschreiben (ein später hinzugefügter Fremder ändert das nie).
+  useEffect(() => { if (primary && primary !== storedPrimary && status) setStoredPrimary(primary); }, [primary, storedPrimary, status, setStoredPrimary]);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const acc = Number(q.get("account"));
-    if (q.get("steam") === "ok" && acc) { setAccount(acc); history.replaceState(null, "", window.location.pathname); }
+    if (q.get("steam") === "ok" && acc) { setPrimary(acc); history.replaceState(null, "", window.location.pathname); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => window.desktop?.onNavigate((p) => router.push(p)), [router]);
@@ -110,7 +125,6 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
     try {
       const s: Status = await (await fetch("/api/status")).json();
       setStatus(s);
-      if (account === null && s.players[0]) setAccount(s.players[0].accountId);
       // Neue, live erkannte Matches -> Toast (erste Antwort initialisiert nur den Bestand)
       const ids = new Set(s.live.map((l) => l.matchId));
       if (seen.current) {
@@ -131,7 +145,7 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* nächster Tick */
     }
-  }, [account, setAccount, settings.notifyNewMatch]);
+  }, [account, settings.notifyNewMatch]);
 
   useInterval(loadStatus, 4000);
 
@@ -156,26 +170,25 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch("/api/players", { method: "POST", body: JSON.stringify({ input }) });
       const j = await res.json();
       if (!res.ok) return j.error ?? "Fehler";
-      setAccount(j.player.accountId);
       await loadStatus();
       return j.sync?.error ? `Hinzugefügt, aber Sync fehlgeschlagen (${j.sync.error}) – es wird automatisch erneut versucht.` : null;
     } catch (e) {
       return e instanceof Error ? e.message : String(e);
     }
-  }, [loadStatus, setAccount]);
+  }, [loadStatus]);
 
   const removePlayer = useCallback(async (id: number) => {
     await fetch(`/api/players?account=${id}`, { method: "DELETE" });
     const s: Status = await (await fetch("/api/status")).json();
     setStatus(s);
-    setAccount(s.players[0]?.accountId ?? null);
-  }, [setAccount]);
+    setPicked(null);
+  }, []);
 
   // Beim Wechsel des Accounts keine Alt-Toasts
   useEffect(() => setToasts([]), [account]);
 
   return (
-    <Ctx.Provider value={{ status, account, setAccount, addPlayer, removePlayer, syncNow, syncing, toasts, dismissToast: (id) => setToasts((c) => c.filter((t) => t.id !== id)) }}>
+    <Ctx.Provider value={{ status, account, primary, setAccount, setPrimary, addPlayer, removePlayer, syncNow, syncing, toasts, dismissToast: (id) => setToasts((c) => c.filter((t) => t.id !== id)) }}>
       {children}
     </Ctx.Provider>
   );

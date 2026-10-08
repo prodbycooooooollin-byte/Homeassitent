@@ -5,6 +5,8 @@ import type { Goal, MatchDetails, MatchPlayer } from "./types";
 export interface TrainingMatch {
   details: MatchDetails;
   me: MatchPlayer;
+  /** Erkannte Rolle je Spieler (für die Wahl der Vergleichsspieler) */
+  roles?: Map<number, string>;
   /** Gesamtnote (Score, 1.0 = Durchschnitt) je Spieler; zur Auswahl der Referenzspieler */
   scores: Map<number, number>;
   won: boolean;
@@ -60,13 +62,38 @@ export interface AimStats {
 
 export interface LaneStats { matches: number; avgDiff: number; winRate: number; worst: { matchId: number; diff: number } | null }
 
+/** Erkanntes Muster: Befund mit Belegen und konkreten Schritten, wie du es abstellst. */
 export interface Focus {
   id: string;
   severity: "high" | "mid" | "good";
   title: string;
-  detail: string;
-  drill?: "lasthit" | "aim";
+  /** Messwerte, auf denen der Befund beruht */
+  evidence: string[];
+  /** Konkrete Maßnahmen („So kommst du hin“) */
+  fix: string[];
+  /** Geschätzte Wirkung, z. B. „≈ +2,1k Souls pro Match“ */
+  impact?: string;
 }
+
+export type SoulKey = "kills" | "lane" | "neutral" | "boss" | "treasure" | "denied";
+export const SOUL_LABELS: Record<SoulKey, string> = { kills: "Kills", lane: "Lane-Creeps", neutral: "Neutrale Camps", boss: "Objectives/Boss", treasure: "Kisten", denied: "Denies" };
+export interface SoulRow { key: SoulKey; label: string; mine: number; ref: number; gap: number }
+export interface SoulPlan {
+  rows: SoulRow[];
+  /** Souls pro Minute insgesamt: du / Referenz */
+  mineTotal: number;
+  refTotal: number;
+  /** Souls durch Tode verloren, pro Match */
+  lostPerMatch: number;
+  /** Lane-Creeps: Anteil getroffen (du / Referenz) */
+  creepRate: [number, number] | null;
+  /** Souls pro Lane-Creep und pro Camp (aus deinen Daten) */
+  perCreep: number | null;
+  perCamp: number | null;
+  campsPerMatch: [number, number] | null;
+  basis: number;
+}
+export interface PhaseRate { label: string; from: number; to: number; mine: number; ref: number }
 
 export interface MetricValue { id: string; label: string; unit: string; lowerIsBetter: boolean; values: { matchId: number; value: number | null; at: number }[] }
 
@@ -79,6 +106,8 @@ export interface TrainingReport {
   lane: LaneStats | null;
   focus: Focus[];
   metrics: MetricValue[];
+  soulPlan: SoulPlan | null;
+  phaseRates: PhaseRate[];
 }
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
@@ -97,8 +126,11 @@ function averageCurves(curves: number[][]): number[] | null {
 
 /** Die besten (nach Note) Gegner-/Mitspieler eines Matches außer dir – Maßstab „so spielen die Besten deiner Lobby“. */
 function topPlayers(m: TrainingMatch, n = 2): MatchPlayer[] {
-  return m.details.players
-    .filter((p) => p.accountId !== m.me.accountId && !p.abandoned && m.scores.has(p.accountId))
+  const all = m.details.players.filter((p) => p.accountId !== m.me.accountId && !p.abandoned && m.scores.has(p.accountId));
+  // Vergleich bevorzugt mit Spielern gleicher Rolle (ein Support soll nicht an einem Carry gemessen werden)
+  const myRole = m.roles?.get(m.me.accountId);
+  const same = myRole ? all.filter((p) => m.roles?.get(p.accountId) === myRole) : [];
+  return (same.length >= 1 ? same : all)
     .sort((a, b) => (m.scores.get(b.accountId) ?? 0) - (m.scores.get(a.accountId) ?? 0))
     .slice(0, n);
 }
@@ -225,48 +257,214 @@ export function analyze(matches: TrainingMatch[], reference: ReferencePoint[] | 
     values: [...matches].sort((a, b) => a.details.startTime - b.details.startTime).map((m) => ({ matchId: m.details.matchId, value: mt.get(m), at: m.details.startTime })),
   }));
 
-  return { matches: usable.length, curves, phases, deaths, aim, lane, focus: coach({ phases, deaths, aim, lane, curves, n: usable.length }), metrics };
+  const soulPlan = buildSoulPlan(usable);
+  const phaseRates = buildPhaseRates(usable);
+  const solo = soloDeaths(usable);
+  return { matches: usable.length, curves, phases, deaths, aim, lane, focus: patterns({ usable, phases, deaths, aim, lane, soulPlan, phaseRates, solo, metrics }), metrics, soulPlan, phaseRates };
 }
 
-/** Regelbasierte Hinweise – sortiert nach Dringlichkeit. */
-export function coach(r: { phases: PhaseGap[]; deaths: DeathStats; aim: AimStats | null; lane: LaneStats | null; curves: CurveSeries[]; n: number }): Focus[] {
-  const out: Focus[] = [];
-  if (r.n < 3) return [{ id: "data", severity: "mid", title: "Noch zu wenig Daten", detail: "Spiele mindestens drei vollständige Matches mit geladenen Details, dann wird die Analyse belastbar." }];
+const SOUL_KEYS: SoulKey[] = ["kills", "lane", "neutral", "boss", "treasure", "denied"];
 
-  if (r.lane && r.lane.matches >= 3) {
-    if (r.lane.avgDiff < -250 || r.lane.winRate < 0.35) {
-      out.push({ id: "lane", severity: "high", title: "Du verlierst die Lane", detail: `Bei 8:00 liegst du im Schnitt ${Math.round(Math.abs(r.lane.avgDiff))} Souls hinter deinem Gegner (Lane in ${Math.round(r.lane.winRate * 100)} % der Matches gewonnen). Konzentriere dich auf saubere letzte Treffer und Denies.`, drill: "lasthit" });
-    } else if (r.lane.avgDiff > 250) {
-      out.push({ id: "lane", severity: "good", title: "Starke Lane", detail: `Du gewinnst die Lane im Schnitt mit ${Math.round(r.lane.avgDiff)} Souls Vorsprung – nutze das, um früher zu rotieren.` });
+/** Soul-Quellen pro Minute: du gegen die Besten gleicher Rolle in deinen Lobbys. */
+function buildSoulPlan(ms: TrainingMatch[]): SoulPlan | null {
+  const rows = ms.filter((m) => m.me.souls);
+  if (rows.length < 2) return null;
+  const mins = (m: TrainingMatch) => m.details.durationS / 60;
+  const perMin = (get: (p: MatchPlayer) => number | undefined, who: (m: TrainingMatch) => MatchPlayer[]) => {
+    const xs = rows.flatMap((m) => who(m).filter((p) => p.souls).map((p) => (get(p) ?? 0) / mins(m)));
+    return mean(xs);
+  };
+  const mine = (m: TrainingMatch) => [m.me];
+  const refP = (m: TrainingMatch) => topPlayers(m).filter((p) => p.souls);
+  const out: SoulRow[] = SOUL_KEYS.map((key) => {
+    const a = perMin((p) => p.souls?.[key], mine), b = perMin((p) => p.souls?.[key], refP);
+    return { key, label: SOUL_LABELS[key], mine: a, ref: b, gap: b - a };
+  });
+  const mineTotal = mean(rows.map((m) => m.me.netWorth / mins(m)));
+  const refTotal = mean(rows.flatMap((m) => refP(m).map((p) => p.netWorth / mins(m))));
+  const withCreeps = rows.filter((m) => m.me.creeps && m.me.creeps.possible > 0);
+  const rate = (ps: MatchPlayer[]) => { const c = ps.filter((p) => p.creeps && p.creeps.possible > 0); const poss = c.reduce((a, p) => a + (p.creeps?.possible ?? 0), 0); return poss ? c.reduce((a, p) => a + (p.creeps?.lane ?? 0), 0) / poss : null; };
+  const myRate = rate(withCreeps.map((m) => m.me)), refRate = rate(withCreeps.flatMap(refP));
+  const laneKills = rows.reduce((a, m) => a + (m.me.creeps?.lane ?? 0), 0), laneSouls = rows.reduce((a, m) => a + (m.me.souls?.lane ?? 0), 0);
+  const camps = rows.reduce((a, m) => a + (m.me.creeps?.neutral ?? 0), 0), campSouls = rows.reduce((a, m) => a + (m.me.souls?.neutral ?? 0), 0);
+  const campsRef = mean(rows.flatMap((m) => refP(m).map((p) => p.creeps?.neutral ?? 0)));
+  return {
+    rows: out, mineTotal, refTotal, basis: rows.length,
+    lostPerMatch: mean(rows.map((m) => m.me.souls?.lost ?? 0)),
+    creepRate: myRate !== null && refRate !== null ? [myRate, refRate] : null,
+    perCreep: laneKills > 0 ? laneSouls / laneKills : null,
+    perCamp: camps > 0 ? campSouls / camps : null,
+    campsPerMatch: camps > 0 || campsRef > 0 ? [camps / rows.length, campsRef] : null,
+  };
+}
+
+const PHASES: [string, number, number][] = [["0–8 Min", 0, 480], ["8–16 Min", 480, 960], ["16–24 Min", 960, 1440], ["ab 24 Min", 1440, 2400]];
+
+/** Souls pro Minute je Spielphase (absolute Zeit): du gegen die Besten gleicher Rolle. */
+function buildPhaseRates(ms: TrainingMatch[]): PhaseRate[] {
+  const rate = (p: MatchPlayer, d: MatchDetails, a: number, b: number) => {
+    if (!p.timeline) return null;
+    const end = Math.min(b, d.durationS);
+    if (end - a < 120) return null;
+    return (valueAt(p.timeline as never, "nw", end) - valueAt(p.timeline as never, "nw", a)) / ((end - a) / 60);
+  };
+  return PHASES.map(([label, from, to]) => {
+    const mine = ms.map((m) => rate(m.me, m.details, from, to)).filter((x): x is number => x !== null);
+    const ref = ms.flatMap((m) => topPlayers(m).map((p) => rate(p, m.details, from, to))).filter((x): x is number => x !== null);
+    return { label, from, to, mine: mean(mine), ref: mean(ref) };
+  }).filter((p) => p.mine > 0 && p.ref > 0);
+}
+
+interface SoloStats { deaths: number; solo: number; soloLate: number }
+
+/** Tode ohne sterbenden Mitspieler innerhalb von 25 s gelten als „allein gestorben“ (Pick-off), Tode mit Team als Teamfight. */
+function soloDeaths(ms: TrainingMatch[]): SoloStats {
+  let deaths = 0, solo = 0, soloLate = 0;
+  for (const m of ms) {
+    const mates = m.details.players.filter((p) => p.team === m.me.team && p.accountId !== m.me.accountId && p.deathLog);
+    if (!mates.length) continue;
+    for (const d of m.me.deathLog ?? []) {
+      deaths++;
+      const together = mates.some((p) => p.deathLog!.some((x) => Math.abs(x.t - d.t) <= 25));
+      if (!together) { solo++; if (d.t > 720) soloLate++; }
+    }
+  }
+  return { deaths, solo, soloLate };
+}
+
+const fmtS = (v: number) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1).replace(".", ",")}k` : String(Math.round(v)));
+const pc = (v: number) => `${Math.round(v * 100)} %`;
+
+const SOUL_FIX: Record<SoulKey, (r: SoulRow, p: SoulPlan) => string[]> = {
+  lane: (_, p) => [
+    "Bis Minute 8 nur Creeps und Orbs als Ziel: Schüsse auf den Gegner nur, wenn kein Creep kurz vor dem Tod steht.",
+    "Den Creep-Wellen-Takt beachten: Nach dem Letzten Treffer sofort den Orb einsammeln, statt direkt weiterzulaufen.",
+    ...(p.creepRate ? [`Ziel: von ${pc(p.creepRate[0])} auf mindestens ${pc(Math.min(0.95, p.creepRate[1]))} der möglichen Lane-Creeps.`] : []),
+  ],
+  neutral: (_, p) => [
+    "Nach jedem Respawn zuerst das nächste freie Camp auf dem Weg zur Lane mitnehmen, nicht direkt nach vorne laufen.",
+    "Im Midgame (ab etwa Minute 8) feste Camp-Runden zwischen Teamfights einplanen, solange das Team ohne dich nicht kämpft.",
+    ...(p.campsPerMatch ? [`Ziel: ${Math.ceil(p.campsPerMatch[1])} Camps pro Match statt ${Math.round(p.campsPerMatch[0])}.`] : []),
+  ],
+  kills: () => ["Mehr Teamfight-Teilnahme: ein Kill und seine Assist-Orbs bringen gemeinsam mehr als Einzelaktionen.", "Nach gewonnenen Kämpfen sofort Orbs einsammeln, bevor du zurückfällst."],
+  boss: () => ["Bei Guardian/Walker- und Boss-Pushes dabei sein: Objectives geben Souls für das ganze Team.", "Wenn dein Team Mid-Boss zieht, früh eintreffen statt erst nach dem Kampf."],
+  treasure: () => ["Kisten und Breakables beim Durchlaufen mitnehmen – kostet fast keine Zeit.", "Bei jeder Rotation die Route über sichtbare Kisten legen."],
+  denied: () => ["Gegnerische Orbs per Deny abgreifen, wenn die Lane ruhig ist."],
+};
+
+interface Ctx {
+  usable: TrainingMatch[];
+  phases: PhaseGap[];
+  deaths: DeathStats;
+  aim: AimStats | null;
+  lane: LaneStats | null;
+  soulPlan: SoulPlan | null;
+  phaseRates: PhaseRate[];
+  solo: SoloStats;
+  metrics: MetricValue[];
+}
+
+/** Mustererkennung: Aus den Matches konkrete, belegte Befunde mit Maßnahmen ableiten (nach Wirkung sortiert). */
+export function patterns(c: Ctx): Focus[] {
+  const out: Focus[] = [];
+  const n = c.usable.length;
+  if (n < 3) return [{ id: "data", severity: "mid", title: "Noch zu wenig Daten", evidence: ["Weniger als drei vollständige Matches mit Details."], fix: ["Spiele weiter – die Analyse wird ab drei Matches belastbar und ab etwa zehn genau."] }];
+  const avgMins = mean(c.usable.map((m) => m.details.durationS / 60)) || 25;
+
+  // 1) Soul-Lücke nach Quelle
+  const sp = c.soulPlan;
+  if (sp && sp.refTotal > 0) {
+    const total = sp.refTotal - sp.mineTotal;
+    const ranked = [...sp.rows].filter((r) => r.gap > 0).sort((a, b) => b.gap - a.gap);
+    if (total > sp.refTotal * 0.06 && ranked.length) {
+      const top = ranked[0];
+      const ev = [`Gesamt: ${Math.round(sp.mineTotal)} Souls/Min bei dir, ${Math.round(sp.refTotal)} bei den Besten deiner Lobbys (−${Math.round(total)}/Min ≈ ${fmtS(total * avgMins)} Souls pro Match).`];
+      for (const r of ranked.slice(0, 3)) ev.push(`${r.label}: ${Math.round(r.mine)}/Min statt ${Math.round(r.ref)}/Min (−${Math.round(r.gap)}).`);
+      if (top.key === "lane" && sp.creepRate) ev.push(`Du triffst ${pc(sp.creepRate[0])} der möglichen Lane-Creeps, die Besten ${pc(sp.creepRate[1])}.`);
+      if (top.key === "neutral" && sp.campsPerMatch && sp.perCamp) ev.push(`${sp.campsPerMatch[0].toFixed(1).replace(".", ",")} Camps pro Match (Beste ${sp.campsPerMatch[1].toFixed(1).replace(".", ",")}), je ca. ${Math.round(sp.perCamp)} Souls.`);
+      const fix = [...SOUL_FIX[top.key](top, sp)];
+      if (ranked[1] && ranked[1].gap > top.gap * 0.6) fix.push(`Zweite Baustelle: ${ranked[1].label} (−${Math.round(ranked[1].gap)}/Min).`);
+      out.push({ id: "souls", severity: total > sp.refTotal * 0.15 ? "high" : "mid", title: `Dir fehlen Souls – größte Lücke: ${top.label}`, evidence: ev, fix, impact: `≈ +${fmtS(top.gap * avgMins)} Souls pro Match allein durch ${top.label}` });
+    } else if (total < -sp.refTotal * 0.05) {
+      out.push({ id: "souls-good", severity: "good", title: "Souls über dem Vergleich", evidence: [`${Math.round(sp.mineTotal)} Souls/Min gegen ${Math.round(sp.refTotal)} bei den Besten deiner Lobbys.`], fix: ["Halte das Niveau – und setze die gewonnene Wirtschaft früher in Items um."] });
     }
   }
 
-  const early = r.phases.find((p) => p.phase === "Laning")?.gapPct;
-  const late = r.phases.find((p) => p.phase === "Lategame")?.gapPct;
-  if (early != null && early < -0.12) out.push({ id: "econ-early", severity: "high", title: "Souls: schwacher Start", detail: `Bei 30 % der Spielzeit hast du ${Math.round(-early * 100)} % weniger Souls als die Referenz. Prüfe Wegstrecken zwischen Camps und Lane sowie verpasste Creeps.`, drill: "lasthit" });
-  if (late != null && late < -0.12 && !(early != null && early < -0.12)) out.push({ id: "econ-late", severity: "mid", title: "Souls: Einbruch im Lategame", detail: `Du startest solide, fällst aber zum Ende ${Math.round(-late * 100)} % hinter die Referenz zurück. Mehr Camps/Boxen in ruhigen Phasen und weniger Tode im späten Spiel helfen.` });
-  if (early != null && late != null && early > 0.05 && late > 0.05) out.push({ id: "econ-good", severity: "good", title: "Wirtschaft über der Referenz", detail: "Deine Soul-Kurve liegt durchgehend über dem Vergleichswert – das ist eine echte Stärke." });
-
-  if (r.deaths.early >= 1.2) out.push({ id: "early-deaths", severity: "high", title: "Zu viele frühe Tode", detail: `Im Schnitt ${r.deaths.early.toFixed(1)} Tode in den ersten 4 Minuten. Spiele die ersten Minuten defensiver und achte auf Gegner-Cooldowns, bevor du pushst.` });
-  if (r.deaths.clustered >= 0.35) out.push({ id: "chain-deaths", severity: "mid", title: "Serien-Tode", detail: `${Math.round(r.deaths.clustered * 100)} % deiner Tode folgen innerhalb von 45 Sekunden auf den vorherigen. Nach einem Tod nicht sofort wieder in den Kampf rennen – Respawn abwarten und mit dem Team gehen.` });
-  const late5 = r.deaths.histogram.slice(4).reduce((a, b) => a + b, 0);
-  if (r.deaths.total >= 10 && late5 / r.deaths.total > 0.5) out.push({ id: "late-deaths", severity: "mid", title: "Späte Tode kosten viel", detail: "Mehr als die Hälfte deiner Tode fällt nach Minute 20 – dort dauern Respawns am längsten. Vermeide Alleingänge und Flanken ohne Absicherung." });
-  if (r.deaths.perMatch > 0 && r.deaths.killers[0] && r.deaths.killers[0].count / Math.max(1, r.deaths.total) >= 0.25) out.push({ id: "nemesis", severity: "mid", title: "Ein Held tötet dich besonders oft", detail: "Mehr als ein Viertel deiner Tode geht auf denselben Helden. Lerne dessen Fähigkeiten und halte Abstand, wenn sie bereit sind." });
-
-  if (r.aim) {
-    const ref = r.aim.topAccuracy ?? r.aim.lobbyAccuracy;
-    if (r.aim.accuracy !== null && ref && r.aim.accuracy < ref - 0.04) out.push({ id: "aim", severity: "high", title: "Trefferquote unter den Besten", detail: `Du triffst ${Math.round(r.aim.accuracy * 100)} % deiner Schüsse, die Besten deiner Lobbys ${Math.round(ref * 100)} %. Kurze Salven und Zielen auf Kopfhöhe verbessern das schnell.`, drill: "aim" });
-    const hh = r.aim.topHeroHit ?? r.aim.lobbyHeroHit;
-    if (r.aim.heroHit !== null && hh && r.aim.heroHit < hh - 0.05) out.push({ id: "hero-hit", severity: "mid", title: "Zu viele Schüsse gehen auf Creeps", detail: `Nur ${Math.round(r.aim.heroHit * 100)} % deiner Treffer landen auf Helden (Referenz ${Math.round(hh * 100)} %). Priorisiere Helden im Kampf.`, drill: "aim" });
-    const cr = r.aim.topCrit ?? r.aim.lobbyCrit;
-    if (r.aim.crit !== null && cr && r.aim.crit < cr - 0.03) out.push({ id: "crit", severity: "mid", title: "Wenige Kopftreffer", detail: `${Math.round(r.aim.crit * 100)} % Kopftreffer gegenüber ${Math.round(cr * 100)} % bei den Besten. Halte das Fadenkreuz auf Kopfhöhe, statt auf den Körper zu zielen.`, drill: "aim" });
+  // 2) Wo die Lücke entsteht
+  if (c.phaseRates.length >= 2) {
+    const worst = [...c.phaseRates].sort((a, b) => (a.mine / a.ref) - (b.mine / b.ref))[0];
+    const ratio = worst.mine / worst.ref;
+    if (ratio < 0.88) out.push({
+      id: "phase-gap", severity: ratio < 0.78 ? "high" : "mid", title: `Dein Einbruch liegt in der Phase ${worst.label}`,
+      evidence: c.phaseRates.map((p) => `${p.label}: ${Math.round(p.mine)} Souls/Min (Beste ${Math.round(p.ref)}) – ${p.mine >= p.ref ? "+" : "−"}${Math.round(Math.abs(1 - p.mine / p.ref) * 100)} %`),
+      fix: worst.from === 0
+        ? ["Lane sauberer spielen: Creep-Takt, Orbs sofort einsammeln, Denies nutzen.", "Wenn die Lane verloren geht: früh zum Jungle wechseln statt Souls zu verschenken."]
+        : worst.from < 1000
+          ? ["Nach der Lane keinen Leerlauf: nach Lane-Ende direkt Camps, Kisten und Objectives verbinden.", "Zwischen Teamfights Camp-Runden einplanen."]
+          : ["Im Lategame mehr Souls über Objectives, Mid-Boss und Teamfight-Teilnahme holen; Alleingänge vermeiden (lange Respawns).", "Ungenutzte Souls sofort in Items stecken."],
+    });
   }
 
+  // 3) Allein gestorben
+  if (c.solo.deaths >= 12) {
+    const share = c.solo.solo / c.solo.deaths;
+    if (share >= 0.45) out.push({
+      id: "solo-deaths", severity: share >= 0.6 ? "high" : "mid", title: "Du stirbst überwiegend allein",
+      evidence: [`${pc(share)} deiner Tode (${c.solo.solo} von ${c.solo.deaths}) passieren, ohne dass in 25 Sekunden ein Mitspieler fällt.`, ...(c.solo.soloLate > 0 ? [`${c.solo.soloLate} davon nach Minute 12 – dort dauern Respawns am längsten.`] : []), ...(c.deaths.avgRespawnS ? [`Ø Respawn ${Math.round(c.deaths.avgRespawnS)} s.`] : [])],
+      fix: ["Nach Minute 12 nur flankieren, wenn mindestens ein Mitspieler in Reichweite ist.", "Bei niedriger Lebensenergie zurückziehen statt „noch einen“ Kampf mitzunehmen.", "Auf die Minimap schauen: fehlt ein Gegner, rechne mit einer Flanke."],
+      impact: `≈ ${Math.round(c.solo.solo / n * 10) / 10} vermeidbare Tode pro Match`,
+    });
+    else if (share <= 0.25) out.push({ id: "fight-deaths", severity: "mid", title: "Deine Tode fallen fast nur in Teamfights", evidence: [`${pc(1 - share)} deiner Tode geschehen zusammen mit einem Mitspieler.`], fix: ["Im Kampf früher zurückziehen, wenn der erste Mitspieler fällt – Überleben nach verlorenem Fight sichert die nächste Objective.", "Fokus auf Positionierung hinter dem Frontliner."] });
+  }
+
+  // 4) Tote Zeit
+  const dead = c.usable.filter((m) => m.me.deadTimeS !== undefined);
+  if (dead.length >= 3) {
+    const share = mean(dead.map((m) => (m.me.deadTimeS ?? 0) / m.details.durationS));
+    if (share >= 0.14) {
+      const perMin = sp?.mineTotal ?? mean(dead.map((m) => m.me.netWorth / (m.details.durationS / 60)));
+      out.push({ id: "dead-time", severity: share >= 0.2 ? "high" : "mid", title: `Du bist ${pc(share)} des Matches tot`, evidence: [`Ø ${Math.round(mean(dead.map((m) => m.me.deadTimeS ?? 0)) / 60 * 10) / 10} Minuten pro Match im Respawn.`, `Das sind etwa ${fmtS(share * avgMins * perMin)} nicht gefarmte Souls pro Match${sp && sp.lostPerMatch > 0 ? `, dazu ${fmtS(sp.lostPerMatch)} Souls direkt durch Tode verloren` : ""}.`], fix: ["Jeder vermiedene Tod spart Respawn-Zeit und Souls – besonders spät im Match.", "Bei hoher Lebensenergie nicht ohne Mobilitäts-/Rettungs-Fähigkeit in 2-gegen-1 laufen."], impact: `≈ ${fmtS(share * avgMins * perMin)} Souls pro Match` });
+    }
+  }
+
+  // 5) Lane: vorne/hinten und Folgen
+  if (c.lane && c.lane.matches >= 4) {
+    const mt = c.metrics.find((x) => x.id === "lane8")!.values;
+    const ahead = c.usable.filter((m) => (mt.find((v) => v.matchId === m.details.matchId)?.value ?? 0) > 0), behind = c.usable.filter((m) => (mt.find((v) => v.matchId === m.details.matchId)?.value ?? 0) < 0);
+    const wr = (xs: TrainingMatch[]) => (xs.length ? xs.filter((m) => m.won).length / xs.length : null);
+    const wa = wr(ahead), wb = wr(behind);
+    if (wa !== null && wb !== null && ahead.length >= 2 && behind.length >= 2 && wa - wb >= 0.2) out.push({ id: "lane-snowball", severity: "mid", title: "Die Lane entscheidet deine Matches", evidence: [`Mit Lane-Vorsprung bei 8:00 gewinnst du ${pc(wa)} (${ahead.length} Matches), mit Rückstand nur ${pc(wb)} (${behind.length}).`, `Ø Lane-Differenz: ${c.lane.avgDiff >= 0 ? "+" : ""}${Math.round(c.lane.avgDiff)} Souls.`], fix: ["Vorsprung früh nutzen: Gegner nicht mehr farmen lassen, dann rotieren.", "Bei Rückstand: nicht in der Lane festhängen, früh Jungle und Teamfights suchen – die Lane einzeln aufzuholen ist selten der Weg."] });
+    else if (c.lane.avgDiff < -250) out.push({ id: "lane", severity: "high", title: "Du verlierst die Lane", evidence: [`Bei 8:00 liegst du im Schnitt ${Math.round(-c.lane.avgDiff)} Souls hinter deinem Gegner (nur ${pc(c.lane.winRate)} der Lanes gewonnen).`], fix: ["Creep-Takt und Orbs: in den ersten Minuten keine Schüsse auf den Gegner, wenn ein Creep letzte Treffer braucht.", "Gegner-Cooldowns merken, bevor du dich vorne positionierst."] });
+  }
+
+  // 6) Frühe Tode
+  if (c.deaths.early >= 1) out.push({ id: "early-deaths", severity: "high", title: "Zu viele frühe Tode", evidence: [`Ø ${c.deaths.early.toFixed(1).replace(".", ",")} Tode in den ersten 4 Minuten pro Match.`], fix: ["Die ersten Minuten defensiver spielen: kein Trade, wenn der Gegner mehr Leben hat.", "Respawn-Zeit ist früh kurz – aber der Souls-Rückstand bleibt."] });
+
+  // 7) Treffer
+  if (c.aim) {
+    const ref = c.aim.topAccuracy ?? c.aim.lobbyAccuracy;
+    const bits: string[] = [];
+    if (c.aim.accuracy !== null && ref && c.aim.accuracy < ref - 0.04) bits.push(`Trefferquote ${pc(c.aim.accuracy)} (Beste ${pc(ref)})`);
+    const hh = c.aim.topHeroHit ?? c.aim.lobbyHeroHit;
+    if (c.aim.heroHit !== null && hh && c.aim.heroHit < hh - 0.05) bits.push(`Treffer auf Helden ${pc(c.aim.heroHit)} (Beste ${pc(hh)})`);
+    const cr = c.aim.topCrit ?? c.aim.lobbyCrit;
+    if (c.aim.crit !== null && cr && c.aim.crit < cr - 0.03) bits.push(`Kopftreffer ${pc(c.aim.crit)} (Beste ${pc(cr)})`);
+    if (bits.length) out.push({ id: "aim", severity: bits.length >= 2 ? "high" : "mid", title: "Zielgenauigkeit unter den Besten", evidence: bits, fix: ["Kurze Salven statt Dauerfeuer, wenn die Waffe streut.", "Fadenkreuz in Kopfhöhe vorpositionieren, statt nach dem Zielen zu korrigieren.", "Im Kampf Helden priorisieren, Creeps nur ohne Gegner in Sicht."] });
+  }
+
+  // 8) Item-Tempo
+  const items = c.usable.filter((m) => m.me.items?.length);
+  if (items.length >= 3) {
+    const byMin = (p: MatchPlayer, t: number) => (p.items ?? []).filter((i) => i.t <= t).length;
+    const mine = mean(items.map((m) => byMin(m.me, 600))), ref = mean(items.flatMap((m) => topPlayers(m).filter((p) => p.items?.length).map((p) => byMin(p, 600))));
+    if (ref > 0 && mine < ref - 1) out.push({ id: "item-tempo", severity: "mid", title: "Items kommen zu spät", evidence: [`Bis Minute 10 kaufst du Ø ${mine.toFixed(1).replace(".", ",")} Items, die Besten ${ref.toFixed(1).replace(".", ",")}.`], fix: ["Souls nicht ansammeln: nach jedem Tod/Respawn im Shop kaufen.", "Kauf-Reihenfolge vor dem Match festlegen (günstige Early-Items zuerst)."] });
+  }
+
+  if (!out.some((f) => f.severity !== "good")) out.unshift({ id: "solid", severity: "good", title: "Keine großen Schwächen erkennbar", evidence: ["Deine Werte liegen nah an den Besten deiner Lobbys."], fix: ["Setze dir ein konkretes Ziel, um dich weiter zu steigern."] });
   const order = { high: 0, mid: 1, good: 2 } as const;
-  out.sort((a, b) => order[a.severity] - order[b.severity]);
-  if (!out.some((f) => f.severity !== "good")) out.unshift({ id: "solid", severity: "good", title: "Keine großen Schwächen erkennbar", detail: "Deine Werte liegen nah an der Referenz. Setze dir ein konkretes Ziel, um dich weiter zu steigern." });
-  return out;
+  return out.sort((a, b) => order[a.severity] - order[b.severity]);
 }
+
 
 /** Fortschritt eines Ziels: gezählt werden die letzten `window` Matches nach Erstellung. */
 export function goalProgress(goal: Goal, metrics: MetricValue[]): { hits: number; played: number; done: boolean; pctDone: number; unknown: boolean } {

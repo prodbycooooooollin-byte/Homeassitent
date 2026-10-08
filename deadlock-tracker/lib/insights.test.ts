@@ -65,3 +65,13 @@ describe("metadata -> timeline/items/objectives", () => {
     expect(d.midBoss).toEqual([{ team: 1, t: 600 }]);
   });
 });
+
+import { turningPoint } from "./insights";
+import { demoMatch as dm } from "./fixtures";
+describe("turningPoint", () => {
+  it("liefert ein Fenster mit Verschiebung", () => {
+    let found = false;
+    for (let i = 0; i < 10; i++) { const d = dm(70000000 + i, 1); const me = d.players[0]; const tp = turningPoint(d, me); if (tp) { found = true; expect(tp.to - tp.from).toBe(180); } }
+    expect(found).toBe(true);
+  });
+});

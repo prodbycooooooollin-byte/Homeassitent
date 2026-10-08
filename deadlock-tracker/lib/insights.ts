@@ -107,3 +107,39 @@ export function advantageSummary(d: MatchDetails, myTeam: TeamId) {
   const won = d.winningTeam === myTeam;
   return { max, min, comeback: won && min.diff < -4000, throwGame: !won && max.diff > 4000 };
 }
+
+export interface TurningPoint {
+  from: number; to: number;
+  /** Veränderung des Souls-Vorsprungs deines Teams im Fenster (negativ = verloren) */
+  swing: number;
+  /** Teamfight/Objective-Ereignisse im Fenster */
+  myDeaths: number; enemyDeaths: number;
+  myObjectivesLost: number; myObjectivesTaken: number;
+  /** Deine eigenen Tode im Fenster */
+  yourDeaths: number;
+  /** Souls-Vorsprung vor dem Fenster */
+  before: number;
+}
+
+/** Wendepunkt: das 3-Minuten-Fenster mit der größten Verschiebung des Souls-Vorsprungs (gegen dich bei Niederlage, für dich bei Sieg). */
+export function turningPoint(d: MatchDetails, me: MatchPlayer): TurningPoint | null {
+  const adv = teamAdvantage(d).map((x) => ({ t: x.t, diff: me.team === 0 ? x.diff : -x.diff }));
+  if (adv.length < 6) return null;
+  const won = d.winningTeam === me.team;
+  let best: { i: number; swing: number } | null = null;
+  for (let i = 0; i + 3 < adv.length; i++) {
+    const swing = adv[i + 3].diff - adv[i].diff;
+    if (!best || (won ? swing > best.swing : swing < best.swing)) best = { i, swing };
+  }
+  if (!best || Math.abs(best.swing) < 1500) return null;
+  const from = adv[best.i].t, to = adv[best.i + 3].t;
+  const inWin = (t: number) => t >= from && t <= to;
+  const deaths = (team: TeamId) => d.players.filter((p) => p.team === team).reduce((a, p) => a + (p.deathLog ?? []).filter((x) => inWin(x.t)).length, 0);
+  const objs = (d.objectives ?? []).filter((o) => inWin(o.t));
+  return {
+    from, to, swing: best.swing, before: adv[best.i].diff,
+    myDeaths: deaths(me.team), enemyDeaths: deaths(me.team === 0 ? 1 : 0),
+    myObjectivesLost: objs.filter((o) => o.team === me.team).length, myObjectivesTaken: objs.filter((o) => o.team !== me.team).length,
+    yourDeaths: (me.deathLog ?? []).filter((x) => inWin(x.t)).length,
+  };
+}

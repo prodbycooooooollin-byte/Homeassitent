@@ -1,10 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Empty, Gate, PageTitle } from "@/components/ui";
+import { Empty, Gate } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { ScoutBoard, ScoutCard, type LiveMatchMeta } from "@/components/ScoutBoard";
 import { useInterval } from "@/components/useTracker";
-import { fmtDuration } from "@/lib/format";
 import type { ScoutPlayer } from "@/lib/live";
 import type { ScoutResult } from "@/lib/scout";
 
@@ -44,13 +43,15 @@ function View({ account }: { account: number }) {
   const isLive = mode === "live" && res?.active;
 
   return (
-    <>
-      <PageTitle title="Live & Scouting" sub="Lerne deine Mitspieler und Gegner kennen – Rang, Erfahrung mit dem Helden, Spielstil und Form"
-        right={<div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="display text-lg font-extrabold tracking-tight">Live & Scouting</h1>
+        <div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
           {([["live", "Live-Match"], ["last", "Letztes Match"], ["player", "Spieler scouten"]] as const).map(([k, l]) => (
-            <button key={k} onClick={() => setMode(k)} className={`tab flex items-center gap-1.5 ${mode === k ? "tab-active" : ""}`}>{k === "live" && <span className={res?.kind === "live" && res.active ? "live-pulse !h-2 !w-2" : "h-2 w-2 rounded-full bg-white/20"} />}{l}</button>
+            <button key={k} onClick={() => setMode(k)} className={`tab flex items-center gap-1.5 !py-1 ${mode === k ? "tab-active" : ""}`}>{k === "live" && <span className={res?.kind === "live" && res.active ? "live-pulse !h-2 !w-2" : "h-2 w-2 rounded-full bg-white/20"} />}{l}</button>
           ))}
-        </div>} />
+        </div>
+      </div>
 
       {mode === "player" && (
         <section className="surface p-5">
@@ -71,25 +72,15 @@ function View({ account }: { account: number }) {
 
       {res?.players && (mode === "live" ? res.active : mode === "last" ? res.available : true) && (
         <>
-          {mode !== "player" && res.match && (
-            <section className={`surface relative overflow-hidden px-4 py-2.5 ${isLive ? "live-bar" : ""}`}>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                {isLive ? <div className="flex items-center gap-3"><span className="live-pulse" /><span className="display text-sm font-extrabold uppercase tracking-[0.25em] text-loss">Live</span></div> : <span className="chip">Letztes Match</span>}
-                <span className="text-sm text-muted">{res.match.mode ?? "Match"} · #{res.match.id}</span>
-                {res.match.durationS !== undefined && <span className="display num text-xl font-bold">{fmtDuration(res.match.durationS)}</span>}
-                <span className="ml-auto text-xs text-muted">{isLive ? "Aktualisiert sich automatisch." : "Lobby des zuletzt gespielten Matches – so wie sie war."}</span>
-              </div>
-            </section>
-          )}
           {mode === "player" ? (
             <div className="max-w-xl">{(res.players as ScoutPlayer[]).map((p) => <ScoutCard key={p.accountId} p={p} />)}</div>
           ) : (
-            <ScoutBoard r={res as ScoutResult} match={res.match} />
+            <ScoutBoard r={res as ScoutResult} match={res.match} live={!!isLive} />
           )}
         </>
       )}
       {mode === "player" && !target && <Empty icon="search" title="Spieler suchen" text="Gib einen Namen oder eine Steam-ID ein, um Rang, Erfahrung und Spielstil zu sehen." />}
-    </>
+    </div>
   );
 }
 

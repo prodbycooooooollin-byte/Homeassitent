@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Gate, PageTitle, Empty } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { HeroPortrait, useHeroName } from "@/components/GameAssets";
-import { AimPanel, AimTrainer, CurveChart, LastHitTrainer } from "@/components/TrainingParts";
+import { AimPanel, CurveChart, SoulPlanPanel } from "@/components/TrainingParts";
 import { goalProgress, type TrainingReport } from "@/lib/training";
 import type { Goal } from "@/lib/types";
 
@@ -46,15 +46,21 @@ function Training({ account }: { account: number }) {
         <span className="ml-auto text-xs text-muted">{rep.matches} Matches ausgewertet · {res?.hasReference ? "Rang-Referenz geladen" : "Vergleich mit den Besten deiner Lobbys"}</span>
       </div>
 
-      <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      <section className="grid gap-4 lg:grid-cols-2">
         {rep.focus.slice(0, 6).map((f) => (
-          <div key={f.id} className="surface p-4" style={{ borderColor: `${SEV[f.severity][0]}44` }}>
-            <div className="mb-1 flex items-center gap-2"><span style={{ color: SEV[f.severity][0] }}><Icon name={f.severity === "good" ? "check" : f.severity === "high" ? "alert" : "target"} size={16} /></span><span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: SEV[f.severity][0] }}>{SEV[f.severity][1]}</span></div>
-            <div className="font-semibold">{f.title}</div>
-            <p className="mt-1 text-sm text-muted">{f.detail}</p>
+          <div key={f.id} className="surface p-5" style={{ borderColor: `${SEV[f.severity][0]}44` }}>
+            <div className="mb-1 flex items-center gap-2"><span style={{ color: SEV[f.severity][0] }}><Icon name={f.severity === "good" ? "check" : f.severity === "high" ? "alert" : "target"} size={16} /></span><span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: SEV[f.severity][0] }}>{SEV[f.severity][1]}</span>{f.impact && <span className="ml-auto rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-muted">{f.impact}</span>}</div>
+            <div className="text-lg font-semibold leading-snug">{f.title}</div>
+            <ul className="mt-2 space-y-1 text-sm text-muted">{f.evidence.map((e, k) => <li key={k} className="flex gap-2"><span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-white/30" />{e}</li>)}</ul>
+            <div className="mt-3 rounded-xl bg-white/[0.04] p-3">
+              <div className="label mb-1.5 !text-[9px]">So kommst du hin</div>
+              <ol className="space-y-1.5 text-sm">{f.fix.map((e, k) => <li key={k} className="flex gap-2"><span className="num mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber/20 text-[10px] font-bold text-amber">{k + 1}</span>{e}</li>)}</ol>
+            </div>
           </div>
         ))}
       </section>
+
+      {rep.soulPlan && <SoulPlanPanel plan={rep.soulPlan} phases={rep.phaseRates} />}
 
       <section className="surface p-5">
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -130,10 +136,6 @@ function Training({ account }: { account: number }) {
         )}
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="surface p-5"><h3 className="label mb-3">Last-Hit-Trainer</h3><LastHitTrainer /></section>
-        <section className="surface p-5"><h3 className="label mb-3">Aim-Trainer</h3><AimTrainer /></section>
-      </div>
     </>
   );
 }

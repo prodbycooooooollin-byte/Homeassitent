@@ -1,7 +1,7 @@
 "use client";
-import { HeroPortrait, useHeroName } from "../GameAssets";
+import { HeroPortrait, ItemIcon, useHeroName } from "../GameAssets";
 import { useItems } from "../useItems";
-import { ItemIcon } from "./ItemIcon";
+
 import { TEAMS } from "./Scoreboard";
 import type { MatchDetails, MatchPlayer, TeamId } from "@/lib/types";
 
