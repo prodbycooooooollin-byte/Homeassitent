@@ -243,3 +243,5 @@ html.fx-reduced .grade-emblem .grade-shine, html.fx-reduced .grade-emblem .grade
 html.fx-off .grade-emblem .grade-shine, html.fx-off .grade-emblem .grade-spark, html.fx-off .grade-emblem-S, html.fx-off .grade-emblem-F svg { animation: none !important; }
 html.fx-reduced .grade-emblem .grade-spark, html.fx-off .grade-emblem .grade-spark { opacity: .9; }
 html.fx-reduced .grade-emblem .grade-shine, html.fx-off .grade-emblem .grade-shine { display: none; }
+
+html.fx-off .medal-shine, html.fx-reduced .medal-shine { display: none; }

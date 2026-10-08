@@ -17,6 +17,7 @@ function View({ items, ov }: { items: Parameters<typeof evaluate>[0]; ov: Parame
   const [only, setOnly] = useState<"all" | "open" | "done">("all");
   const shown = states.filter((s) => (cat === "Alle" || s.series.category === cat) && (only === "all" || (only === "done" ? s.tier > 0 : s.next !== null)))
     .sort((a, b) => (b.tier > 0 ? 1 : 0) - (a.tier > 0 ? 1 : 0) || b.progress - a.progress);
+  const showcase = useMemo(() => [...states].filter((s) => s.tier > 0).sort((a, b) => b.tier - a.tier || b.progress - a.progress).slice(0, 6), [states]);
   const R = 52, circ = 2 * Math.PI * R;
 
   return (
@@ -46,7 +47,7 @@ function View({ items, ov }: { items: Parameters<typeof evaluate>[0]; ov: Parame
               {sum.nextUp.length === 0 && <p className="text-sm text-muted">Spiele weiter – hier erscheinen deine nächsten Ziele.</p>}
               {sum.nextUp.map((s) => (
                 <div key={s.series.key} className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-2.5">
-                  <Medal icon={s.series.icon} tier={s.tier} progress={s.progress} size={52} maxTier={s.series.targets.length} />
+                  <Medal icon={s.series.icon} tier={s.tier} size={52} maxTier={s.series.targets.length} pips={false} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{s.series.title} <span className="text-xs font-normal text-muted">· {TIERS[s.tier].name}</span></div>
                     <div className="truncate text-xs text-muted">{s.series.desc(s.next as number)}</div>
@@ -60,12 +61,28 @@ function View({ items, ov }: { items: Parameters<typeof evaluate>[0]; ov: Parame
         </div>
       </section>
 
+      {showcase.length > 0 && (
+        <section className="surface relative overflow-hidden p-5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-amber/10 to-transparent" />
+          <h2 className="label relative mb-3">Vitrine <span className="normal-case tracking-normal">· deine höchsten Medaillen</span></h2>
+          <div className="relative flex flex-wrap justify-center gap-x-10 gap-y-4 sm:justify-between">
+            {showcase.map((s) => (
+              <div key={s.series.key} className="flex w-[104px] flex-col items-center text-center">
+                <Medal icon={s.series.icon} tier={s.tier} size={84} maxTier={s.series.targets.length} />
+                <div className="mt-2 text-sm font-bold leading-tight">{s.series.title}</div>
+                <div className="text-[11px] font-semibold" style={{ color: TIERS[s.tier - 1].color }}>{TIERS[s.tier - 1].name}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         {(["Alle", ...CATEGORIES] as const).map((c) => (
           <button key={c} onClick={() => setCat(c)} className={`tab ${cat === c ? "tab-active" : ""}`}>{c}{c !== "Alle" && <span className="ml-1.5 text-[10px] text-muted">{states.filter((s) => s.series.category === c && s.tier > 0).length}/{states.filter((s) => s.series.category === c).length}</span>}</button>
         ))}
         <div className="ml-auto flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
-          {([["all", "Alle"], ["done", "Begonnen"], ["open", "Offen"]] as const).map(([k, l]) => <button key={k} onClick={() => setOnly(k)} className={`tab ${only === k ? "tab-active" : ""}`}>{l}</button>)}
+          {([["all", "Alle"], ["done", "Freigeschaltet"], ["open", "Offen"]] as const).map(([k, l]) => <button key={k} onClick={() => setOnly(k)} className={`tab ${only === k ? "tab-active" : ""}`}>{l}</button>)}
         </div>
       </div>
 
@@ -100,12 +117,17 @@ function Card({ s, i }: { s: AchState; i: number }) {
         </div>
         <div className="border-t border-white/10 pt-2 text-xs text-muted">Aktueller Wert: <b className="num text-white">{fmt(s.value)}</b>{s.next !== null && <> · nächste Stufe bei <b className="num text-white">{fmt(s.next)}</b></>}</div>
       </div>}>
-      <div className="surface surface-hover fade-up w-full cursor-help p-4 text-center" style={{ animationDelay: `${Math.min(i, 14) * 40}ms`, boxShadow: s.tier > 0 ? `0 0 0 1px ${TIERS[s.tier - 1].color}44` : undefined, opacity: s.tier === 0 && s.progress === 0 ? 0.7 : 1 }}>
-        <div className="flex justify-center py-2"><Medal icon={s.series.icon} tier={s.tier} progress={s.progress} size={96} maxTier={s.series.targets.length} /></div>
-        <div className="mt-3 display font-bold">{s.series.title}</div>
-        <div className="mt-0.5 min-h-[2rem] text-xs text-muted">{done ? "Alle Stufen geschafft" : s.series.desc(s.next as number)}</div>
-        <div className="mt-2 h-1.5 rounded-full bg-white/10"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${s.progress * 100}%`, background: done ? "linear-gradient(90deg,#f0b44c,#fff1c9)" : `linear-gradient(90deg, ${TIERS[Math.min(s.tier, 4)].color}88, ${TIERS[Math.min(s.tier, 4)].color})` }} /></div>
-        <div className="num mt-1 text-[11px] text-muted">{fmt(s.value)}{s.next !== null && ` / ${fmt(s.next)}`}</div>
+      <div className="surface surface-hover fade-up relative flex w-full cursor-help flex-col items-center p-4 text-center" style={{ animationDelay: `${Math.min(i, 14) * 40}ms`, boxShadow: s.tier > 0 ? `0 0 0 1px ${TIERS[s.tier - 1].color}33` : undefined, opacity: s.tier === 0 && s.progress === 0 ? 0.75 : 1 }}>
+        {s.tier > 0 && <span className="absolute right-3 top-3 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: TIERS[s.tier - 1].color, background: `${TIERS[s.tier - 1].color}1f` }}>{TIERS[s.tier - 1].name}</span>}
+        <div className="pt-2"><Medal icon={s.series.icon} tier={s.tier} size={92} maxTier={s.series.targets.length} /></div>
+        <div className="display mt-3 font-bold">{s.series.title}</div>
+        <div className="mt-0.5 min-h-[2rem] text-xs leading-snug text-muted">{done ? "Alle Stufen geschafft" : s.series.desc(s.next as number)}</div>
+        {!done && (
+          <div className="mt-2 w-full">
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.max(s.progress > 0 ? 4 : 0, s.progress * 100)}%`, background: `linear-gradient(90deg, ${TIERS[Math.min(s.tier, 4)].color}88, ${TIERS[Math.min(s.tier, 4)].color})` }} /></div>
+            <div className="num mt-1 flex justify-between text-[11px] text-muted"><span>{fmt(s.value)}</span><span>{fmt(s.next as number)}</span></div>
+          </div>
+        )}
       </div>
     </HoverCard>
   );
