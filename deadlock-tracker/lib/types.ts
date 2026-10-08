@@ -233,7 +233,7 @@ export interface Goal {
 }
 
 /** Durchschnitt eines abgeschlossenen Ranked-Matches auf einem Rang-Niveau */
-export interface RefStats { k: number; d: number; a: number; nw: number; dmg: number }
+export interface RefStats { k: number; d: number; a: number; nw: number; dmg: number; /** true = Durchschnitt genau dieses Helden auf diesem Rang */ hero?: boolean }
 
 export interface StoreShape {
   version: 1;

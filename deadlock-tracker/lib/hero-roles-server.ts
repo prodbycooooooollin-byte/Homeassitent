@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { dataDir } from "./store";
-import { CURATED, roleFromText, type HeroRoleProvider } from "./hero-roles";
+import { heroRole, type HeroRoleProvider } from "./hero-roles";
 
 interface CachedHero { name?: string; info?: { role?: string; type?: string } }
 const g = globalThis as unknown as { __dlAssets?: { heroes: Record<number, CachedHero> }; __dlRoleCache?: Record<number, CachedHero> };
@@ -21,7 +21,5 @@ function heroes(): Record<number, CachedHero> {
 export const cachedHeroRole: HeroRoleProvider = (heroId) => {
   const h = heroes()[heroId];
   if (!h) return null;
-  const fromApi = roleFromText(h.info?.role);
-  if (fromApi) return fromApi;
-  return h.name && CURATED.has(h.name.toLowerCase()) ? "support" : null;
+  return heroRole(h.name, h.info?.type, h.info?.role);
 };

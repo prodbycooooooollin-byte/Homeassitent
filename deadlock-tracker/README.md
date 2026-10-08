@@ -91,7 +91,8 @@ Persistenz: `data/store.json` (atomar geschrieben). Der Poller braucht einen dau
 
 Die Note ist **rollenbewusst** und **vollständig erklärbar** (Match-Seite → „Warum diese Note?“, für jeden Spieler per Klick auf die Note).
 
-1. **Rolle aus dem Verhalten:** Support (viel Heilung/Schilde für Mitspieler), Frontline (viel erlittener/verhinderter Schaden bei wenig eigenem Schaden), Objective-Fokus, Carry (überdurchschnittlicher Schaden) oder Flex – nicht aus dem Helden.
+1. **Rolle aus dem Helden:** Die Rolle (Carry, Frontline, Support) gehört zum Helden (feste Liste in `lib/hero-roles.ts`) – wer als Damage-Dealer schlecht spielt, wird nicht zum Frontliner/Support umgedeutet. Nur bei unbekannten Helden entscheidet das Verhalten.
+1b. **Einordnung gegen das Rang-Niveau:** Zu 30 % (mit Held-Referenz 50 %) zählt der Vergleich mit dem Durchschnitt aller Ranked-Spieler deines Ranges auf genau diesem Helden (KDA, Tode, Souls, Schaden aus der API-Performance-Kurve) – so hilft eine schwache Lobby nicht über ein schlechtes Spiel hinweg.
 2. **Fairer Vergleich:** Jeder Baustein wird mit Spielern *gleicher Rolle* (beider Teams) und der restlichen Lobby verglichen. Ein Support ohne Kills wird bei Kills/Schaden mit anderen Supports verglichen, nicht mit Carries.
 3. **Rollen-Gewichte:** Support zählt vor allem Unterstützung, Beteiligung, Überleben; Carry Kampf, Wirtschaft, Überleben, Lane usw. (`ROLE_WEIGHTS` in `lib/rating.ts`). Nicht anwendbare Bausteine (z. B. fehlende Lane-Daten) fallen weg, die Gewichte werden neu verteilt.
 4. **Bausteine:** Kampf (Schaden/Min), Support/Frontline, Beteiligung ((K+A)/Team-Kills), Überleben (Tode/Min), Wirtschaft (Souls/Min), Objectives, Lane (Souls nach 8:00 gegen den Lane-Gegner).

@@ -47,9 +47,9 @@ export function listMatches(accountId: number): MatchListItem[] {
     const h: HistoryEntry | undefined = rec.history[String(accountId)];
     if (!h) continue;
     const d = rec.details;
-    const rating = d ? ratePlayer(d, accountId, cachedHeroRole, refFor(d)) : null;
-    // Mit Details ist das Ergebnis maßgeblich, sonst Historie.
     const me = d?.players.find((p) => p.accountId === accountId);
+    const rating = d ? ratePlayer(d, accountId, cachedHeroRole, refFor(d, me?.heroId)) : null;
+    // Mit Details ist das Ergebnis maßgeblich, sonst Historie.
     const won = d && d.winningTeam !== null && me ? d.winningTeam === me.team : h.won;
     const durationS = d?.durationS || h.durationS;
     const endMs = (h.startTime + durationS) * 1000;

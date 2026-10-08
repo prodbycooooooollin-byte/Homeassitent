@@ -39,7 +39,7 @@ export function trainingMatches(accountId: number, n: number, heroId: number | n
     if (heroId && me.heroId !== heroId) continue;
     const scores = new Map<number, number>();
     for (const p of d.players) {
-      const r = ratePlayer(d, p.accountId, cachedHeroRole, refFor(d));
+      const r = ratePlayer(d, p.accountId, cachedHeroRole, refFor(d, p.heroId));
       if (r) scores.set(p.accountId, r.score);
     }
     const roles = new Map([...classifyRoles(d, cachedHeroRole)].map(([id, r]) => [id, r.key as string]));

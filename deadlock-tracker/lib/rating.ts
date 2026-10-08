@@ -105,15 +105,21 @@ export function classifyRoles(d: MatchDetails, prior: HeroRoleProvider = noPrior
     const hero = prior(m.p.heroId);
     const supportBehaviour = m.utilExact && utilRel >= 1.8 && share >= 0.4 && m.util >= 150;
     let role: RoleInfo;
-    if (hero === "support" && !(m.utilExact && dmgRel >= 1.5 && utilRel < 1)) {
+    // Die Rolle gehört zum HELDEN (feste Liste), nicht zu deiner Spielweise: Wer als Damage-Dealer schlecht spielt, bleibt Damage-Dealer
+    // und wird nicht zum „Frontliner“ oder „Support“ umgedeutet. Nur ohne Heldenwissen entscheidet das Verhalten.
+    if (hero === "carry") {
+      role = { key: "carry", reason: "dieser Held ist ein Damage-Dealer" };
+    } else if (hero === "support" && !(m.utilExact && dmgRel >= 1.5 && utilRel < 1)) {
       role = { key: "support", reason: `dieser Held ist ein Support${supportBehaviour ? `; dazu ${utilRel.toFixed(1)}× so viel Unterstützung für Mitspieler wie der Lobby-Schnitt` : ""}` };
-    } else if (supportBehaviour && dmgRel < 1.1 && (hero === null || utilRel >= 3)) {
+    } else if (hero === "tank") {
+      role = dmgRel >= 1.35 ? { key: "carry", reason: `Frontline-Held, spielt aber mit ${dmgRel.toFixed(1)}× dem Lobby-Schaden wie ein Damage-Dealer` } : { key: "tank", reason: "Frontline-Held" };
+    } else if (hero === null && supportBehaviour && dmgRel < 1.1 && utilRel >= 3) {
       role = { key: "support", reason: `${utilRel.toFixed(1)}× so viel Heilung/Schilde für Mitspieler wie der Lobby-Schnitt (${Math.round(share * 100)}% der Team-Unterstützung) bei unterdurchschnittlichem Schaden` };
-    } else if (objRel >= 2.2 && dmgRel < 1.3) {
+    } else if (hero === null && objRel >= 2.2 && dmgRel < 1.3) {
       role = { key: "pusher", reason: `${objRel.toFixed(1)}× so viel Objective-Schaden wie der Lobby-Schnitt` };
-    } else if (hero === "tank" ? dmgRel < 1.35 : tankRel >= 1.35 && dmgRel <= 1.0) {
-      role = { key: "tank", reason: hero === "tank" ? "Frontline-Held mit Fokus auf Aufnehmen von Schaden" : `${tankRel.toFixed(1)}× so viel erlittener/verhinderter Schaden bei unterdurchschnittlichem eigenem Schaden` };
-    } else if (dmgRel >= 1.08 || (hero === "carry" && dmgRel >= 0.85)) {
+    } else if (hero === null && tankRel >= 1.6 && dmgRel <= 0.9) {
+      role = { key: "tank", reason: `${tankRel.toFixed(1)}× so viel erlittener/verhinderter Schaden bei unterdurchschnittlichem eigenem Schaden` };
+    } else if (dmgRel >= 1.08) {
       role = { key: "carry", reason: `${dmgRel.toFixed(1)}× so viel Heldenschaden wie der Lobby-Schnitt` };
     } else {
       role = { key: "flex", reason: "kein klarer Schwerpunkt (Schaden, Unterstützung und Frontline jeweils im Schnitt)" };
@@ -138,7 +144,8 @@ const LANE_AT_S = 480;
 /** Vollständige, erklärbare Bewertung eines Spielers. */
 /** Mittlere Matchlänge der Referenzdaten (Sekunden) – dient nur zur Umrechnung von Match-Summen auf deine Matchlänge. */
 export const REF_DURATION_S = 1700;
-const ABS_WEIGHT = 0.35;
+/** Gewicht der Einordnung gegen das Rang-Niveau: mit Held-Referenz höher (gleicher Held, gleicher Rang), ohne niedriger. */
+const absWeight = (ref: RefStats) => (ref.hero ? 0.5 : 0.3);
 
 /** Einordnung gegen das Niveau deines Ranges (nicht nur gegen diese Lobby): KDA, Tode, Souls und Schaden. */
 function absoluteAnchor(p: MatchPlayer, durationS: number, role: RoleKey, ref: RefStats) {
@@ -250,9 +257,10 @@ export function ratePlayer(match: MatchDetails, accountId: number, prior: HeroRo
   let absolute: Rating["absolute"];
   if (ref && ref.d > 0) {
     const a = absoluteAnchor(me.p, match.durationS, role.key, ref);
-    absolute = { score: Math.round(a.score * 100) / 100, weight: ABS_WEIGHT, rows: a.rows };
-    score = score * (1 - ABS_WEIGHT) + a.score * ABS_WEIGHT;
-    notes.push(`Einordnung gegen das Rang-Niveau (Durchschnitt aller Ranked-Spieler deines Ranges): zählt zu ${Math.round(ABS_WEIGHT * 100)} % in die Note – ${a.rows.map((r) => `${r.label} ${r.mine} (Ø ${r.ref})`).join(", ")}.`);
+    const w = absWeight(ref);
+    absolute = { score: Math.round(a.score * 100) / 100, weight: w, rows: a.rows };
+    score = score * (1 - w) + a.score * w;
+    notes.push(`Einordnung gegen das Rang-Niveau (Durchschnitt der Ranked-Spieler deines Ranges auf ${ref.hero ? "diesem Helden" : "allen Helden"}): zählt zu ${Math.round(w * 100)} % in die Note – ${a.rows.map((r) => `${r.label} ${r.mine} (Ø ${r.ref})`).join(", ")}.`);
   }
 
   // Kurze Matches sind weniger aussagekräftig: Note zum Durchschnitt hin dämpfen

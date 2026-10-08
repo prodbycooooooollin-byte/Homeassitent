@@ -251,3 +251,20 @@ describe("Einordnung gegen das Rang-Niveau", () => {
     expect(gradeLabel(0.4)).toBe("F−");
   });
 });
+
+describe("Wraith 6/9: schwaches Spiel als Damage-Dealer", () => {
+  const prior = (id: number) => (({ 1: "carry", 2: "support", 3: "tank" }) as Record<number, "carry" | "support" | "tank">)[id] ?? null;
+  const ref = { k: 7.5, d: 5.5, a: 10, nw: 38000, dmg: 24000, hero: true };
+  it("bleibt Carry (keine Umdeutung zu Support/Frontline) und bekommt höchstens C", () => {
+    for (const seed of [11, 12, 13, 14, 15, 16, 17, 18]) {
+      const { d } = lobby(seed);
+      const me = d.players[0];
+      Object.assign(me, { kills: 6, deaths: 9, assists: 6, heroDamage: Math.round(me.heroDamage * 0.7), netWorth: Math.round(me.netWorth * 0.85), objectiveDamage: Math.round(me.objectiveDamage * 0.5), damageTaken: Math.round(me.damageTaken * 1.5) });
+      d.winningTeam = me.team;
+      const r = ratePlayer(d, me.accountId, prior, ref)!;
+      expect(r.role.key).toBe("carry");
+      expect(r.components.find((c) => c.key === "utility")!.applicable).toBe(false);
+      expect(["C", "D", "F"], `seed ${seed}: ${r.label} ${r.score}`).toContain(r.grade);
+    }
+  });
+});

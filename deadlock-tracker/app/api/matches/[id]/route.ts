@@ -16,7 +16,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   // ?peek=1: nur vorhandene Daten liefern (Hover-Vorschau), keine Netzwerk-Abrufe auslösen
   if (!rec.details && !new URL(req.url).searchParams.has("peek")) await enrichMatch(matchId);
   const d = rec.details;
-  const ratings = d ? Object.fromEntries(d.players.map((p) => [p.accountId, ratePlayer(d, p.accountId, cachedHeroRole, refFor(d))])) : {};
+  const ratings = d ? Object.fromEntries(d.players.map((p) => [p.accountId, ratePlayer(d, p.accountId, cachedHeroRole, refFor(d, p.heroId))])) : {};
   return NextResponse.json({
     matchId,
     details: d ?? null,
