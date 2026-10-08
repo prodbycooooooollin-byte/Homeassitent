@@ -1,5 +1,5 @@
 export interface UpdaterState {
-  status: "idle" | "checking" | "available" | "downloading" | "ready" | "uptodate" | "error" | "unsupported";
+  status: "idle" | "checking" | "available" | "downloading" | "ready" | "installing" | "uptodate" | "error" | "unsupported";
   version: string; // Zielversion (bei ready/available) bzw. aktuelle
   current: string;
   percent: number;
@@ -25,6 +25,7 @@ export interface DesktopBridge {
   onIngestState(cb: (s: IngestState) => void): () => void;
   getMatchWatch(): Promise<{ dirs: string[]; last: { matchId: number; at: number } | null; error: string | null; watching: boolean }>;
   onMatchEnded(cb: (m: { matchId: number; at: number }) => void): () => void;
+  wasUpdated(): Promise<boolean>;
   notify(n: { title: string; body: string; path?: string }): Promise<boolean>;
   onNavigate(cb: (path: string) => void): () => void;
 }

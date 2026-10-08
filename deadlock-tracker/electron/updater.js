@@ -24,7 +24,10 @@ function setup(mainWindow) {
   ipcMain.handle("updater:info", () => state);
   ipcMain.handle("updater:check", () => check());
   ipcMain.handle("updater:install", () => {
-    if (state.status === "ready" && autoUpdater) autoUpdater.quitAndInstall(false, true);
+    if (state.status !== "ready" || !autoUpdater) return;
+    // Erst sichtbar anzeigen, dass jetzt installiert wird – dann beenden und das Installationsfenster öffnen
+    push({ status: "installing", message: "" });
+    setTimeout(() => autoUpdater.quitAndInstall(false, true), 3500);
   });
 
   if (!app.isPackaged) return push({ status: "unsupported", message: "Entwicklungsmodus – keine Updates." });

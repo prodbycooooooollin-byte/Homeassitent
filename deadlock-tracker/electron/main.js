@@ -124,6 +124,8 @@ async function createWindow() {
 }
 
 ipcMain.handle("desktop:get", () => settings);
+// Der Installer startet die App nach einem Update mit „--updated“
+ipcMain.handle("desktop:updated", () => process.argv.includes("--updated"));
 ipcMain.handle("matchwatch:info", () => matchwatch.info());
 ipcMain.handle("ingest:status", () => ingest.getStatus());
 ipcMain.handle("ingest:control", (_e, action) => ingest.control(String(action)));

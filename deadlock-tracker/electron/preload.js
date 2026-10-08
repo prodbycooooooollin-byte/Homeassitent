@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.on("match:ended", handler);
     return () => ipcRenderer.removeListener("match:ended", handler);
   },
+  wasUpdated: () => ipcRenderer.invoke("desktop:updated"),
   notify: (n) => ipcRenderer.invoke("desktop:notify", n),
   onNavigate: (cb) => {
     const handler = (_e, p) => cb(p);
