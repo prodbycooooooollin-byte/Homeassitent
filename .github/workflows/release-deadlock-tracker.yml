@@ -77,7 +77,7 @@ jobs:
         shell: bash
         run: npm pkg set version=${{ env.APP_VERSION }}
 
-      - name: EXE bauen (NSIS-Installer + portable)
+      - name: Installationspaket bauen (NSIS, nur für Installer und Auto-Update)
         run: npm run dist:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -118,18 +118,13 @@ jobs:
           name: Lockscope ${{ env.RELEASE_TAG }}
           prerelease: true
           body: |
-            Windows-Build von Lockscope.
-
-            - `Lockscope-Installer.exe`: **hier starten** – eigener Installer mit Fortschrittsanzeige (lädt immer die aktuelle Version)
-            - `Lockscope-Setup.exe`: Installationspaket (wird vom Installer und vom Auto-Update genutzt)
-            - `Lockscope-*-portable.exe`: ohne Installation lauffähig
+            **Zum Installieren nur diese eine Datei herunterladen: `Lockscope-Installer.exe`.**
+            Sie lädt immer die aktuelle Version, richtet sie ein und aktualisiert auch eine bestehende Installation.
 
             Hinweise: Die EXE ist nicht signiert (Windows SmartScreen kann warnen).
             Matches werden nur erkannt, solange die App läuft. Die Deadlock-API-Anbindung
             ist noch nicht gegen die Live-API verifiziert (siehe deadlock-tracker/README.md).
-          files: |
-            deadlock-tracker/release/*.exe
-            deadlock-tracker/release-installer/Lockscope-Installer.exe
+          files: deadlock-tracker/release-installer/Lockscope-Installer.exe
           overwrite_files: true
 
       # Rollendes Release: feste URL für den Auto-Updater (latest.yml + aktueller Installer)
@@ -141,12 +136,12 @@ jobs:
           name: Lockscope – aktuelle Version (Auto-Update-Quelle)
           prerelease: true
           body: |
-            Wird bei jedem Build überschrieben. Diese Dateien nutzt die installierte App für Auto-Updates –
-            zum manuellen Installieren bitte das versionierte Release `dt-v*` verwenden.
+            Technisches Release: Wird bei jedem Build überschrieben und dient dem Installer und dem Auto-Update der App.
+            **Zum Installieren: `Lockscope-Installer.exe` herunterladen** (die anderen Dateien hier nicht einzeln verwenden).
             Aktuell: ${{ env.APP_VERSION }}
           files: |
-            deadlock-tracker/release/Lockscope-Setup.exe
-            deadlock-tracker/release/Lockscope-Setup.exe.blockmap
+            deadlock-tracker/release/Lockscope-Update-Package.exe
+            deadlock-tracker/release/Lockscope-Update-Package.exe.blockmap
             deadlock-tracker/release-installer/Lockscope-Installer.exe
           overwrite_files: true
 
@@ -165,7 +160,7 @@ jobs:
           BASE="https://github.com/${{ github.repository }}/releases/download/dt-latest"
           EXPECT=$(node -e "const y=require('fs').readFileSync('release/latest.yml','utf8');console.log(y.match(/^sha512: (.+)$/m)[1])")
           for i in 1 2 3 4 5 6; do
-            curl -sSL -o remote.exe "$BASE/Lockscope-Setup.exe" || true
+            curl -sSL -o remote.exe "$BASE/Lockscope-Update-Package.exe" || true
             curl -sSL -o remote.yml "$BASE/latest.yml" || true
             GOT=$(node -e "const c=require('crypto'),f=require('fs');console.log(c.createHash('sha512').update(f.readFileSync('remote.exe')).digest('base64'))")
             VER=$(node -e "const y=require('fs').readFileSync('remote.yml','utf8');console.log((y.match(/^version: (.+)$/m)||[])[1]||'')")
@@ -174,3 +169,16 @@ jobs:
             sleep 20
           done
           echo "::error::Veröffentlichtes Update passt nicht zusammen (Prüfsumme/Version)"; exit 1
+
+      # Erst jetzt (nach dem neuen Manifest) alte Dateien aus dem Update-Release löschen, damit dort nur noch die aktuellen liegen
+      - name: Veraltete Dateien im Update-Release entfernen
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for a in $(gh release view dt-latest --repo "${{ github.repository }}" --json assets -q '.assets[].name' 2>/dev/null); do
+            case "$a" in
+              Lockscope-Installer.exe|Lockscope-Update-Package.exe|Lockscope-Update-Package.exe.blockmap|latest.yml) ;;
+              *) echo "Entferne $a"; gh release delete-asset dt-latest "$a" --repo "${{ github.repository }}" -y || true ;;
+            esac
+          done

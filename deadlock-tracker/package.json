@@ -59,13 +59,12 @@
     ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
+        "nsis"
       ],
       "icon": "app-icons/icon.ico"
     },
     "nsis": {
-      "artifactName": "Lockscope-Setup.${ext}",
+      "artifactName": "Lockscope-Update-Package.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "app-icons/icon.ico",
@@ -82,9 +81,6 @@
       "createStartMenuShortcut": true,
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false
-    },
-    "portable": {
-      "artifactName": "Lockscope-${version}-portable.${ext}"
     },
     "publish": [
       {

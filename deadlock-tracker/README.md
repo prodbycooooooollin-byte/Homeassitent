@@ -59,15 +59,16 @@ Eigene Titelleiste: Die System-Leiste entfällt, Minimieren/Maximieren/Schließe
 ## Auto-Update (Desktop)
 
 Die installierte App (NSIS-Installer) prüft beim Start und alle 30 Minuten auf Updates (electron-updater, Quelle:
-Release `dt-latest`), lädt sie im Hintergrund und zeigt „Neu starten & installieren“; ohne Klick wird beim Beenden
+Release `dt-latest`), lädt sie im Hintergrund und zeigt „Neu starten & installieren“; ohne Klick wird nichts
 installiert. Der Workflow zählt die Version pro Build hoch (`0.1.<Run-Nummer>`) und aktualisiert `dt-latest`.
-Die **portable EXE** kann sich nicht selbst aktualisieren. Voraussetzung: Das Repository bzw. die Releases müssen
+Installiert wird nur über **`Lockscope-Installer.exe`** (einzige Datei zum Herunterladen; sie holt immer die aktuelle Version). Voraussetzung: Das Repository bzw. die Releases müssen
 öffentlich erreichbar sein.
 
 ## Windows-EXE
 
-Der Workflow `.github/workflows/release-deadlock-tracker.yml` baut auf `windows-latest` einen Installer und eine
-portable EXE (Electron + eingebetteter Next-Server inkl. Poller) und legt sie als Pre-Release `dt-v<version>` ab.
+Der Workflow `.github/workflows/release-deadlock-tracker.yml` baut auf `windows-latest` den eigenen Installer
+(`Lockscope-Installer.exe`) sowie das Installationspaket für Installer und Auto-Update (Electron + eingebetteter Next-Server
+inkl. Poller) und legt den Installer als Pre-Release `dt-v<version>` ab.
 Start: Tag `dt-v*` pushen, Push auf `main`/`claude/**` (Änderungen in `deadlock-tracker/`) oder manuell über
 *Actions → Run workflow*. Lokal unter Windows: `npm run dist:win` (Ausgabe in `release/`), zum Ausprobieren `npm run desktop`.
 Daten liegen im Benutzerprofil (`%APPDATA%/Lockscope/store.json`). Die EXE ist nicht signiert.
