@@ -123,19 +123,20 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
       <div className="pointer-events-none fixed inset-0 overflow-hidden">{SPARKS.map((p, i) => <span key={i} className="debrief-spark" style={{ left: `${p.x}%`, width: p.s, height: p.s, animationDuration: `${p.d}s`, animationDelay: `${p.l}s` }} />)}</div>
       {celebrate && <div className="debrief-burst pointer-events-none fixed inset-0" />}
 
-      {/* Held rechts: Karte mit Heldenfarbe, Wide-Art als Hintergrundlicht, Parallax */}
-      <div className="debrief-stage debrief-hero pointer-events-none fixed inset-y-0 right-0 hidden w-[54%] lg:block">
-        <div className="absolute inset-0" style={{ background: `radial-gradient(55% 60% at 60% 48%, ${color}55, ${color}18 55%, transparent 78%)` }} />
-        {art.src && <div className="absolute inset-0 opacity-40" style={{ backgroundImage: `url(${art.src})`, backgroundSize: "cover", backgroundPosition: "center" }} />}
-        <div className="debrief-hero-img absolute inset-0 flex items-start justify-center pt-[96px]">
-          {me && (
-            <div className="debrief-card-hero relative aspect-[4/5] h-[min(50vh,480px)] overflow-hidden rounded-3xl" style={{ boxShadow: `0 0 0 2px ${color}88, 0 30px 90px -20px ${color}, 0 0 120px -10px ${color}66` }}>
-              <HeroPortrait id={me.heroId} fill ratio={0.8} className="!rounded-none" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-5"><div className="display text-3xl font-extrabold drop-shadow">{heroName(me.heroId)}</div></div>
-            </div>
-          )}
+      {/* Held rechts: Illustration über die ganze rechte Seite, ohne Rahmen, weich in den Hintergrund verlaufend */}
+      <div className="debrief-hero pointer-events-none fixed inset-y-0 right-0 hidden w-[58%] lg:block">
+        <div className="absolute inset-0" style={{ background: `radial-gradient(70% 75% at 70% 45%, ${color}77, ${color}22 55%, transparent 80%)` }} />
+        <div className="debrief-hero-img absolute inset-0">
+          {art.src ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={art.src} onError={art.onError} alt="" className="debrief-art-img absolute inset-0 h-full w-full object-cover" style={{ objectPosition: hero?.art ? "center" : "50% 20%" }} />
+          ) : me ? (
+            <div className="absolute inset-0 flex items-center justify-end pr-[8%]"><span className="display select-none text-[min(52vh,520px)] font-extrabold leading-none" style={{ color: `${color}40` }}>{heroName(me.heroId).slice(0, 1)}</span></div>
+          ) : null}
         </div>
+        <div className="absolute inset-0 bg-gradient-to-r from-[#05060a] via-[#05060a]/55 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-[#05060a] via-[#05060a]/60 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#05060a]/70 to-transparent" />
       </div>
 
       <div className="relative mx-auto flex min-h-full max-w-[1400px] flex-col px-6 pb-28 pt-8 sm:px-10 desktop-safe">
@@ -278,60 +279,83 @@ function Gauge({ rating, score }: { rating: Rating | null; score: number }) {
   );
 }
 
-/** Match-Puls: Souls-Vorsprung deines Teams über die Zeit, mit deinen Toden und Kills, den gefallenen Gebäuden und dem Wendepunkt. */
+/** Match-Puls: Souls-Vorsprung deines Teams über die Zeit; Tode, Kills und Gebäude liegen in eigenen Spuren darunter, der Wendepunkt ist hinterlegt. */
 function MatchPulse({ d, me, accent }: { d: MatchDetails; me: MatchDetails["players"][number]; accent: string }) {
   const adv = useMemo(() => teamAdvantage(d).map((x) => ({ t: x.t, v: me.team === 0 ? x.diff : -x.diff })), [d, me.team]);
   const tp = useMemo(() => turningPoint(d, me), [d, me]);
   const [hover, setHover] = useState<number | null>(null);
   if (adv.length < 4) return null;
-  const W = 760, H = 190, P = { l: 44, r: 12, t: 14, b: 24 };
+  const W = 760, CH = 150, LANE = 15, P = { l: 46, r: 14, t: 12 };
+  const H = P.t + CH + 12 + LANE * 3 + 22;
   const end = adv[adv.length - 1].t || 1;
-  const max = Math.max(1000, ...adv.map((a) => Math.abs(a.v))) * 1.1;
+  const lim = Math.max(1500, ...adv.map((a) => Math.abs(a.v)));
+  const nice = Math.ceil(lim / 1000) * 1000;
   const x = (t: number) => P.l + (t / end) * (W - P.l - P.r);
-  const y = (v: number) => P.t + (1 - (v + max) / (2 * max)) * (H - P.t - P.b);
+  const y = (v: number) => P.t + (1 - (v + nice) / (2 * nice)) * CH;
   const zero = y(0);
-  const line = adv.map((a, i) => `${i ? "L" : "M"}${x(a.t).toFixed(1)},${y(a.v).toFixed(1)}`).join("");
-  const area = `${line}L${x(end)},${zero}L${x(0)},${zero}Z`;
-  const at = (t: number) => { let b = adv[0]; for (const a of adv) if (Math.abs(a.t - t) < Math.abs(b.t - t)) b = a; return b.v; };
+  const pts = adv.map((a) => [x(a.t), y(a.v)] as const);
+  // weiche Kurve (Catmull-Rom → Bézier)
+  const path = pts.map((p, i) => {
+    if (i === 0) return `M${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+    const p0 = pts[i - 2] ?? pts[i - 1], p1 = pts[i - 1], p3 = pts[i + 1] ?? p;
+    const c1 = [p1[0] + (p[0] - p0[0]) / 6, p1[1] + (p[1] - p0[1]) / 6], c2 = [p[0] - (p3[0] - p1[0]) / 6, p[1] - (p3[1] - p1[1]) / 6];
+    return `C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+  }).join("");
+  const area = `${path}L${pts[pts.length - 1][0].toFixed(1)},${zero}L${pts[0][0].toFixed(1)},${zero}Z`;
   const kills: number[] = [];
-  if (me.timeline) for (let i = 1; i < me.timeline.t.length; i++) if (me.timeline.k[i] > me.timeline.k[i - 1]) kills.push((me.timeline.t[i] + me.timeline.t[i - 1]) / 2);
-  const deaths = (me.deathLog ?? []).map((x) => x.t);
+  if (me.timeline) for (let i = 1; i < me.timeline.t.length; i++) { const n = me.timeline.k[i] - me.timeline.k[i - 1]; for (let j = 0; j < n; j++) kills.push((me.timeline.t[i] + me.timeline.t[i - 1]) / 2); }
+  const deaths = (me.deathLog ?? []).map((q) => q.t);
   const objs = (d.objectives ?? []).map((o) => ({ t: o.t, mine: o.team !== me.team }));
-  const hv = hover !== null ? adv[hover] : null;
+  const mm = (t: number) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, "0")}`;
   const k = (v: number) => `${v >= 0 ? "+" : "−"}${(Math.abs(v) / 1000).toFixed(1)}k`;
+  const hv = hover !== null ? adv[hover] : null;
+  const near = (list: number[], t: number) => list.filter((q) => Math.abs(q - t) <= 45).length;
   const id = `pulse${me.accountId}`;
+  const laneY = (i: number) => P.t + CH + 14 + i * LANE;
+  const ticks = Array.from({ length: Math.floor(end / 300) + 1 }, (_, i) => i * 300);
   return (
     <div className="debrief-fade debrief-card rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur" style={{ ["--d" as string]: "3.2s" }}>
-      <div className="mb-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <div className="label flex items-center gap-1.5"><Icon name="trendUp" size={13} />Match-Puls <span className="normal-case tracking-normal text-muted">· Souls-Vorsprung deines Teams</span></div>
-        <div className="ml-auto flex flex-wrap items-center gap-x-3 text-[10px] text-muted">
-          <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#f0616d]" />Tod</span>
-          <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#3ecf8e]" />Kill</span>
-          <span className="flex items-center gap-1"><i className="h-2 w-2 rotate-45 bg-[#f0b44c]" />Gebäude</span>
-        </div>
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-3">
+        <div className="label flex items-center gap-1.5"><Icon name="trendUp" size={13} />Match-Puls</div>
+        <span className="text-[11px] text-muted">Souls-Vorsprung deines Teams im Verlauf</span>
+        {tp && <span className="ml-auto text-[11px] text-muted">Wendepunkt <b style={{ color: tp.swing < 0 ? "#f0616d" : "#3ecf8e" }}>{mm(tp.from)}–{mm(tp.to)} ({k(tp.swing)})</b></span>}
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" onMouseLeave={() => setHover(null)}
-        onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * W; setHover(Math.max(0, Math.min(adv.length - 1, Math.round(((px - P.l) / (W - P.l - P.r)) * (adv.length - 1))))); }}>
-        <defs>
-          <clipPath id={`${id}u`}><rect x={P.l} y={0} width={W} height={zero} /></clipPath>
-          <clipPath id={`${id}d`}><rect x={P.l} y={zero} width={W} height={H} /></clipPath>
-        </defs>
-        <g className="debrief-reveal">
-          <path d={area} fill="#3ecf8e" opacity=".22" clipPath={`url(#${id}u)`} />
-          <path d={area} fill="#f0616d" opacity=".22" clipPath={`url(#${id}d)`} />
-          <path d={line} fill="none" stroke={accent} strokeWidth="2.6" strokeLinejoin="round" strokeLinecap="round" />
-        </g>
-        <line x1={P.l} x2={W - P.r} y1={zero} y2={zero} stroke="rgba(255,255,255,.3)" strokeDasharray="4 4" />
-        {[-max / 1.1, 0, max / 1.1].map((v) => <text key={v} x={P.l - 6} y={y(v) + 3} textAnchor="end" className="fill-[#8b94a8] text-[9px]">{v === 0 ? "0" : k(v)}</text>)}
-        {Array.from({ length: Math.floor(end / 300) + 1 }, (_, i) => i * 300).map((t) => <text key={t} x={x(t)} y={H - 6} textAnchor="middle" className="fill-[#8b94a8] text-[9px]">{t / 60}′</text>)}
-        {tp && <g><rect x={x(tp.from)} y={P.t} width={x(tp.to) - x(tp.from)} height={H - P.t - P.b} fill={tp.swing < 0 ? "#f0616d" : "#3ecf8e"} opacity=".12" /><text x={(x(tp.from) + x(tp.to)) / 2} y={P.t + 9} textAnchor="middle" className="fill-white text-[9px] font-bold">Wendepunkt</text></g>}
-        {objs.map((o, i) => <rect key={"o" + i} x={x(o.t) - 3.5} y={zero - 3.5 + (o.mine ? -14 : 14)} width="7" height="7" transform={`rotate(45 ${x(o.t)} ${zero + (o.mine ? -14 : 14)})`} fill="#f0b44c" opacity=".9" className="debrief-dot" style={{ animationDelay: `${3.4 + i * 0.06}s` }}><title>{o.mine ? "Gegnerisches Gebäude gefallen" : "Eigenes Gebäude gefallen"}</title></rect>)}
-        {kills.map((t, i) => <circle key={"k" + i} cx={x(t)} cy={y(at(t))} r="4.5" fill="#3ecf8e" stroke="#0b0e15" strokeWidth="1.5" className="debrief-dot" style={{ animationDelay: `${3.6 + i * 0.07}s` }}><title>Kill bei {Math.floor(t / 60)}:{String(Math.round(t % 60)).padStart(2, "0")}</title></circle>)}
-        {deaths.map((t, i) => <circle key={"d" + i} cx={x(t)} cy={y(at(t))} r="5.5" fill="#f0616d" stroke="#0b0e15" strokeWidth="1.5" className="debrief-dot" style={{ animationDelay: `${3.8 + i * 0.09}s` }}><title>Tod bei {Math.floor(t / 60)}:{String(Math.round(t % 60)).padStart(2, "0")}</title></circle>)}
-        {hv && <g><line x1={x(hv.t)} x2={x(hv.t)} y1={P.t} y2={H - P.b} stroke="rgba(255,255,255,.35)" /><circle cx={x(hv.t)} cy={y(hv.v)} r="4" fill="#fff" /></g>}
-      </svg>
-      <div className="flex min-h-[18px] flex-wrap items-center gap-x-4 text-[11px] text-muted">
-        {hv ? <span><b className="text-white">{Math.floor(hv.t / 60)}:{String(hv.t % 60).padStart(2, "0")}</b> · Vorsprung <b style={{ color: hv.v >= 0 ? "#3ecf8e" : "#f0616d" }}>{k(hv.v)}</b></span> : tp ? <span>Größte Verschiebung: <b style={{ color: tp.swing < 0 ? "#f0616d" : "#3ecf8e" }}>{k(tp.swing)}</b> zwischen {Math.floor(tp.from / 60)}:{String(tp.from % 60).padStart(2, "0")} und {Math.floor(tp.to / 60)}:{String(tp.to % 60).padStart(2, "0")}</span> : <span>Fahre über die Kurve für Details.</span>}
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" onMouseLeave={() => setHover(null)}
+          onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * W; setHover(Math.max(0, Math.min(adv.length - 1, Math.round(((px - P.l) / (W - P.l - P.r)) * (adv.length - 1))))); }}>
+          <defs>
+            <linearGradient id={`${id}g`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#3ecf8e" stopOpacity=".42" /><stop offset="1" stopColor="#3ecf8e" stopOpacity="0" /></linearGradient>
+            <linearGradient id={`${id}r`} x1="0" x2="0" y1="1" y2="0"><stop offset="0" stopColor="#f0616d" stopOpacity=".42" /><stop offset="1" stopColor="#f0616d" stopOpacity="0" /></linearGradient>
+            <clipPath id={`${id}u`}><rect x={P.l} y={P.t} width={W} height={zero - P.t} /></clipPath>
+            <clipPath id={`${id}d`}><rect x={P.l} y={zero} width={W} height={CH + P.t - zero} /></clipPath>
+          </defs>
+          {[nice, nice / 2, 0, -nice / 2, -nice].map((v) => <g key={v}><line x1={P.l} x2={W - P.r} y1={y(v)} y2={y(v)} stroke={v === 0 ? "rgba(255,255,255,.35)" : "rgba(255,255,255,.07)"} strokeDasharray={v === 0 ? "5 4" : undefined} /><text x={P.l - 8} y={y(v) + 3} textAnchor="end" className="fill-[#8b94a8] text-[10px]">{v === 0 ? "0" : k(v)}</text></g>)}
+          {ticks.map((t) => <g key={t}><line x1={x(t)} x2={x(t)} y1={P.t} y2={P.t + CH} stroke="rgba(255,255,255,.04)" /><text x={x(t)} y={H - 6} textAnchor="middle" className="fill-[#8b94a8] text-[10px]">{t / 60}′</text></g>)}
+          {tp && <rect x={x(tp.from)} y={P.t} width={x(tp.to) - x(tp.from)} height={CH} rx="4" fill={tp.swing < 0 ? "#f0616d" : "#3ecf8e"} opacity=".1" />}
+          <g className="debrief-reveal">
+            <path d={area} fill={`url(#${id}g)`} clipPath={`url(#${id}u)`} />
+            <path d={area} fill={`url(#${id}r)`} clipPath={`url(#${id}d)`} />
+            <path d={path} fill="none" stroke={accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ filter: `drop-shadow(0 0 6px ${accent}88)` }} />
+          </g>
+          {/* Spuren: Tode, Kills, Gebäude */}
+          {["Tode", "Kills", "Gebäude"].map((l, i) => <g key={l}><line x1={P.l} x2={W - P.r} y1={laneY(i)} y2={laneY(i)} stroke="rgba(255,255,255,.05)" /><text x={P.l - 8} y={laneY(i) + 3} textAnchor="end" className="fill-[#8b94a8] text-[9px]">{l}</text></g>)}
+          {deaths.map((t, i) => <g key={"d" + i} className="debrief-dot" style={{ animationDelay: `${3.8 + i * 0.08}s` }}><line x1={x(t)} x2={x(t)} y1={laneY(0) - 6} y2={laneY(0) + 6} stroke="#f0616d" strokeWidth="3" strokeLinecap="round" /><title>Tod {mm(t)}</title></g>)}
+          {kills.map((t, i) => <g key={"k" + i} className="debrief-dot" style={{ animationDelay: `${3.6 + i * 0.06}s` }}><line x1={x(t)} x2={x(t)} y1={laneY(1) - 6} y2={laneY(1) + 6} stroke="#3ecf8e" strokeWidth="3" strokeLinecap="round" /><title>Kill ≈ {mm(t)}</title></g>)}
+          {objs.map((o, i) => <rect key={"o" + i} x={x(o.t) - 4} y={laneY(2) - 4} width="8" height="8" transform={`rotate(45 ${x(o.t)} ${laneY(2)})`} fill={o.mine ? "#3ecf8e" : "#f0616d"} opacity=".9" className="debrief-dot" style={{ animationDelay: `${3.4 + i * 0.06}s` }}><title>{o.mine ? "Gegnerisches" : "Eigenes"} Gebäude gefallen {mm(o.t)}</title></rect>)}
+          {hv && <g><line x1={x(hv.t)} x2={x(hv.t)} y1={P.t} y2={laneY(2) + 8} stroke="rgba(255,255,255,.4)" /><circle cx={x(hv.t)} cy={y(hv.v)} r="5" fill="#fff" stroke={accent} strokeWidth="2" /></g>}
+        </svg>
+        {hv && (
+          <div className="pointer-events-none absolute top-1 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/15 bg-[#0b0e15]/95 px-2.5 py-1.5 text-[11px] shadow-xl" style={{ left: `${Math.min(88, Math.max(12, (x(hv.t) / W) * 100))}%` }}>
+            <b className="text-white">{mm(hv.t)}</b> · Vorsprung <b style={{ color: hv.v >= 0 ? "#3ecf8e" : "#f0616d" }}>{k(hv.v)}</b>
+            {(near(deaths, hv.t) > 0 || near(kills, hv.t) > 0) && <span className="ml-2 text-muted">{near(kills, hv.t) > 0 && <>{near(kills, hv.t)}× Kill </>}{near(deaths, hv.t) > 0 && <>{near(deaths, hv.t)}× Tod</>}</span>}
+          </div>
+        )}
+      </div>
+      <div className="mt-1 flex flex-wrap gap-x-4 text-[10px] text-muted">
+        <span><i className="mr-1 inline-block h-2.5 w-[3px] rounded bg-[#f0616d] align-middle" />Tod</span>
+        <span><i className="mr-1 inline-block h-2.5 w-[3px] rounded bg-[#3ecf8e] align-middle" />Kill</span>
+        <span><i className="mr-1 inline-block h-2 w-2 rotate-45 bg-[#3ecf8e] align-middle" />gegnerisches Gebäude</span>
+        <span><i className="mr-1 inline-block h-2 w-2 rotate-45 bg-[#f0616d] align-middle" />eigenes Gebäude</span>
       </div>
     </div>
   );
