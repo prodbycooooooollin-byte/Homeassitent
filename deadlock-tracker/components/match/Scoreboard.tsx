@@ -29,7 +29,7 @@ export function Versus({ label, a, b, k }: { label: string; a: number; b: number
   );
 }
 
-export function TeamTable({ team, d, account, ratings, maxDmg }: { team: TeamId; d: MatchDetails; account: number; ratings: Record<number, Rating | null>; maxDmg: number }) {
+export function TeamTable({ team, d, account, ratings, maxDmg, selected, onSelect }: { team: TeamId; d: MatchDetails; account: number; ratings: Record<number, Rating | null>; maxDmg: number; selected?: number; onSelect?: (id: number) => void }) {
   const heroName = useHeroName();
   const players = d.players.filter((p) => p.team === team).sort((a, b) => b.netWorth - a.netWorth);
   const won = d.winningTeam === team;
@@ -66,7 +66,10 @@ export function TeamTable({ team, d, account, ratings, maxDmg }: { team: TeamId;
                       </div>
                     </div>
                   </td>
-                  <td><div className="flex justify-end"><GradeBadge grade={ratings[p.accountId]?.grade ?? null} size="sm" /></div></td>
+                  <td><div className="flex justify-end">
+                    <button onClick={() => onSelect?.(p.accountId)} title="Warum diese Note?" className={`rounded-lg transition hover:scale-110 ${selected === p.accountId ? "ring-2 ring-white/70" : ""}`}>
+                      <GradeBadge grade={ratings[p.accountId]?.grade ?? null} size="sm" title={`${ratings[p.accountId]?.role.label ?? ""} · klicken für Erklärung`} />
+                    </button></div></td>
                   <td><div className="flex justify-end"><RankEmblem badge={p.badge} size={30} /></div></td>
                   <td className="font-semibold">{p.kills}<span className="text-muted"> / </span><span className="text-loss">{p.deaths}</span><span className="text-muted"> / </span>{p.assists}</td>
                   <td>{((p.kills + p.assists) / Math.max(1, p.deaths)).toFixed(1)}</td>

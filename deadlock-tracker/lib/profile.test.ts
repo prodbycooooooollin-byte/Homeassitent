@@ -5,7 +5,7 @@ import type { MatchListItem } from "./view";
 let id = 0;
 const M = (o: Partial<MatchListItem> = {}): MatchListItem => ({
   matchId: ++id, startTime: 1_000_000, durationS: 1800, heroId: 1, won: true, kills: 5, deaths: 3, assists: 4, netWorth: 30000, grade: "B", score: 1.0,
-  lobbyBadge: 63, detailsReady: true, detectedAfterS: null, myBadge: 63, parts: [1, 1, 1, 1, 1], rankedDelta: null, team: 0, level: 20, ...o,
+  lobbyBadge: 63, detailsReady: true, detectedAfterS: null, myBadge: 63, parts: [1, 1, 1, 1, 1, 1, 1], rankedDelta: null, team: 0, level: 20, ...o,
 });
 
 describe("profile analytics", () => {
@@ -32,7 +32,7 @@ describe("profile analytics", () => {
     expect(ls[2].wins).toBe(0);
   });
   it("radar averages the rating parts", () => {
-    const r = radar([M({ parts: [1, 2, 1, 1, 1] }), M({ parts: [1, 0, 1, 1, 1] })])!;
+    const r = radar([M({ parts: [1, 2, 1, 1, 1, 1, 1] }), M({ parts: [1, 0, 1, 1, 1, 1, 1] })])!;
     expect(r.values[1]).toBe(1);
   });
   it("activity covers whole weeks ending today", () => {

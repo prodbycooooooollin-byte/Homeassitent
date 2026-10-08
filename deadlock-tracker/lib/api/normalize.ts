@@ -116,6 +116,8 @@ export function normalizeMetadata(raw: unknown): MatchDetails | null {
       heroDamage: pick("player_damage", "hero_damage"),
       objectiveDamage: pick("boss_damage", "objective_damage"),
       healing: pick("player_healing", "healing") + pick("self_healing"),
+      allyHealing: "teammate_healing" in st || "teammate_barriering" in st ? pick("teammate_healing") + pick("teammate_barriering") : undefined,
+      mitigated: "damage_mitigated" in st ? pick("damage_mitigated") : undefined,
       damageTaken: pick("damage_taken", "player_damage_taken"),
       badge: badgeRaw > 0 ? badgeRaw : null,
       abandoned: num(p.abandon_match_time_s) > 0,

@@ -74,13 +74,18 @@ Daten liegen im Benutzerprofil (`%APPDATA%/Deadlock Tracker/store.json`). Die EX
 Persistenz: `data/store.json` (atomar geschrieben). Der Poller braucht einen dauerhaft laufenden Node-Server
 (kein Serverless); sonst greift nur das Polling durch die offene Seite.
 
-## Rating
+## Rating (Noten S–F)
 
-Gewichteter Mittelwert relativ zum Lobby-Durchschnitt (1.00 = Schnitt): KDA 25 %, Kill-Beteiligung 15 %,
-Souls/Min 20 %, Schaden bzw. Heilung 30 % (Heiler werden nicht bestraft), Objective-Schaden 10 %, ±0.05 für
-Sieg/Niederlage. Noten: S ≥ 1.45, A ≥ 1.20, B ≥ 0.95, C ≥ 0.75, D ≥ 0.55, sonst F; Abbrecher = F.
-Das ist eine eigene Heuristik (`lib/rating.ts`), nicht der statlocker-Algorithmus.
-Ø Lobby-Rang = Mittel der Team-Badges (linear über Tier/Subtier gemittelt).
+Die Note ist **rollenbewusst** und **vollständig erklärbar** (Match-Seite → „Warum diese Note?“, für jeden Spieler per Klick auf die Note).
+
+1. **Rolle aus dem Verhalten:** Support (viel Heilung/Schilde für Mitspieler), Frontline (viel erlittener/verhinderter Schaden bei wenig eigenem Schaden), Objective-Fokus, Carry (überdurchschnittlicher Schaden) oder Flex – nicht aus dem Helden.
+2. **Fairer Vergleich:** Jeder Baustein wird mit Spielern *gleicher Rolle* (beider Teams) und der restlichen Lobby verglichen. Ein Support ohne Kills wird bei Kills/Schaden mit anderen Supports verglichen, nicht mit Carries.
+3. **Rollen-Gewichte:** Support zählt vor allem Unterstützung, Beteiligung, Überleben; Carry Kampf, Wirtschaft, Überleben, Lane usw. (`ROLE_WEIGHTS` in `lib/rating.ts`). Nicht anwendbare Bausteine (z. B. fehlende Lane-Daten) fallen weg, die Gewichte werden neu verteilt.
+4. **Bausteine:** Kampf (Schaden/Min), Support/Frontline, Beteiligung ((K+A)/Team-Kills), Überleben (Tode/Min), Wirtschaft (Souls/Min), Objectives, Lane (Souls nach 8:00 gegen den Lane-Gegner).
+5. **Skala:** logarithmisch (doppelt so gut = symmetrisch zu halb so gut), Sieg/Niederlage ±0.04, kurze Matches werden zum Durchschnitt hin gedämpft, Abbrecher = F.
+6. **Noten:** S ≥ 1.30 · A ≥ 1.14 · B ≥ 0.97 · C ≥ 0.83 · D ≥ 0.69 · sonst F.
+
+Abgesichert durch eine Balance-Simulation (`lib/rating.test.ts`): bei gleichem Können erreichen Carry, Support, Frontline und Flex im Schnitt denselben Score und gleich oft S bzw. F.
 
 ## Datenquelle & Stand der Verifikation
 

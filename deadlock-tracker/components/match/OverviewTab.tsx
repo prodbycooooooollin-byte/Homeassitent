@@ -1,5 +1,7 @@
 "use client";
 import { HeroPortrait, RankEmblem, useHeroName } from "../GameAssets";
+import { useState } from "react";
+import { RatingExplainer } from "./RatingExplainer";
 import { TeamTable, TEAMS, Versus, sum } from "./Scoreboard";
 import { awards, advantageSummary } from "@/lib/insights";
 import { formatBadge, tierOf } from "@/lib/ranks";
@@ -12,7 +14,9 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
   const maxDmg = Math.max(1, ...d.players.map((p) => p.heroDamage));
   const aw = awards(d);
   const adv = me ? advantageSummary(d, me.team) : null;
-  const rating = ratings[account];
+  const [selected, setSelected] = useState(account);
+  const shown = d.players.find((p) => p.accountId === selected) ?? me;
+  const rating = ratings[shown?.accountId ?? account];
   const ranks = d.players.map((p) => p.badge).filter((b): b is number => !!b);
   const tiers = Array.from({ length: 12 }, (_, t) => ({ t, n: ranks.filter((b) => tierOf(b) === t).length })).filter((x) => x.n > 0);
   const maxN = Math.max(1, ...tiers.map((x) => x.n));
@@ -37,7 +41,7 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
         </section>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-2">
         <section className="surface p-5">
           <h2 className="label mb-4">Teamvergleich</h2>
           <div className="space-y-3.5">
@@ -54,23 +58,6 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
             </div>
           )}
         </section>
-
-        {rating && (
-          <section className="surface p-5">
-            <h2 className="label mb-4">Deine Performance <span className="normal-case tracking-normal">· 1.00 = Lobby-Schnitt</span></h2>
-            <div className="space-y-3">
-              {rating.parts.map((p) => (
-                <div key={p.label}>
-                  <div className="mb-1 flex justify-between text-xs"><span>{p.label}</span><span className="num font-semibold" style={{ color: p.value >= 1 ? "#3ecf8e" : "#f0616d" }}>{p.value.toFixed(2)}×</span></div>
-                  <div className="relative h-2 rounded-full bg-white/[0.07]">
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (p.value / 2) * 100)}%`, background: p.value >= 1 ? "linear-gradient(90deg,#1d8a5c,#3ecf8e)" : "linear-gradient(90deg,#a02535,#f0616d)" }} />
-                    <span className="absolute -top-0.5 left-1/2 h-3 w-px bg-white/40" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
 
         <section className="surface p-5">
           <h2 className="label mb-4">Lobby-Ränge</h2>
@@ -97,7 +84,18 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
         </section>
       </div>
 
-      {([0, 1] as TeamId[]).map((t) => <TeamTable key={t} team={t} d={d} account={account} ratings={ratings} maxDmg={maxDmg} />)}
+      {rating && shown && (
+        <div id="rating-explain" className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+            <span>Note erklären für:</span>
+            {me && <button onClick={() => setSelected(account)} className={`chip ${selected === account ? "border-amber text-white" : ""}`}>Du</button>}
+            <span className="text-xs">oder auf eine Note in der Tabelle klicken</span>
+          </div>
+          <RatingExplainer rating={rating} title={shown.accountId === account ? "du" : `${shown.name ?? heroName(shown.heroId)}`} />
+        </div>
+      )}
+
+      {([0, 1] as TeamId[]).map((t) => <TeamTable key={t} team={t} d={d} account={account} ratings={ratings} maxDmg={maxDmg} selected={selected} onSelect={(id) => { setSelected(id); window.scrollTo({ top: document.getElementById("rating-explain")?.offsetTop ?? 0, behavior: "smooth" }); }} />)}
     </div>
   );
 }

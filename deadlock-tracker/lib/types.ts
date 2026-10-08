@@ -41,6 +41,10 @@ export interface PlayerItem { id: number; t: number; sold?: number }
 
 /** Ein Spieler in der vollständigen Match-Summary. */
 export interface MatchPlayer {
+  /** Heilung + Schilde, die an Mitspieler gingen (teammate_healing + teammate_barriering) – undefined bei älteren Daten */
+  allyHealing?: number;
+  /** Verhinderter Schaden (damage_mitigated) */
+  mitigated?: number;
   /** Lobby-Slot (für Zuordnung von Killern) */
   slot?: number;
   /** Zugewiesene Lane (Farbcode laut Valve: 1 Gelb, 3 Grün, 4 Blau, 6 Lila) */
@@ -92,11 +96,38 @@ export interface MatchDetails {
 
 export type Grade = "S" | "A" | "B" | "C" | "D" | "F";
 
+export type RoleKey = "carry" | "support" | "tank" | "pusher" | "flex";
+export type ComponentKey = "combat" | "utility" | "participation" | "survival" | "economy" | "objectives" | "lane";
+
+/** Ein Baustein der Note – mit Wert, Gewicht und verständlicher Erklärung. */
+export interface RatingComponent {
+  key: ComponentKey;
+  label: string;
+  /** Verhältnis zum Vergleichswert (1.0 = gleich) – null, wenn nicht anwendbar */
+  ratio: number | null;
+  /** Bewertung des Bausteins (0–1.9, 1.0 = durchschnittlich) */
+  score: number;
+  /** Effektives Gewicht nach Rollen-Gewichtung (Summe = 1) */
+  weight: number;
+  /** Beitrag zur Gesamtnote (score × weight) */
+  contribution: number;
+  applicable: boolean;
+  /** Konkreter Messwert, z. B. „7 Tode (Vergleich Ø 4.1)“ */
+  detail: string;
+}
+
 export interface Rating {
   grade: Grade;
-  /** 1.0 = Lobby-Durchschnitt */
+  /** 1.0 = durchschnittlich; > 1 besser als der Vergleich */
   score: number;
-  parts: { label: string; value: number; weight: number }[];
+  role: { key: RoleKey; label: string; reason: string };
+  components: RatingComponent[];
+  /** Sieg/Niederlage-Anpassung */
+  bonus: { label: string; value: number } | null;
+  /** Erläuterungen (z. B. gedämpft wegen kurzem Match, Rolle) */
+  notes: string[];
+  /** Baustein-Scores in fester Reihenfolge (COMPONENT_ORDER) – für das Radar; nicht anwendbar = 1.0 */
+  parts: number[];
 }
 
 /** Persistierter Match-Datensatz (ein Match kann von mehreren getrackten Accounts stammen). */

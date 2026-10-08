@@ -106,6 +106,7 @@ export function demoMatch(matchId: number, focusAccount: number, now = Date.now(
       team, heroId: 1 + Math.floor(r() * DEMO_HEROES.length), kills, deaths, assists, level: 18 + Math.floor(r() * 10),
       netWorth, lastHits: Math.round(skill * mins * (4 + r() * 3)), denies: Math.floor(r() * 15), heroDamage,
       objectiveDamage: Math.round(skill * mins * (60 + r() * 200)), healing, damageTaken,
+      allyHealing: healing ? Math.round(healing * 0.9) : Math.round(mins * r() * 60), mitigated: Math.round(damageTaken * (0.2 + r() * 0.5)),
       badge: 50 + Math.floor(r() * 3) * 10 + 1 + Math.floor(r() * 6), abandoned: false,
       slot, lane: [1, 4, 6][Math.floor((s % 6) / 2)], mvpRank: undefined,
       deadTimeS: deathTimes.reduce((a, t) => a + 10 + Math.round(t / 60) * 2, 0),

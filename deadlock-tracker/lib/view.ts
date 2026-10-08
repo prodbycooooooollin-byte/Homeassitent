@@ -21,7 +21,7 @@ export interface MatchListItem {
   detectedAfterS: number | null;
   matchMode?: string;
   myBadge: number | null;
-  /** Rating-Teilwerte (KDA, Kill-Beteiligung, Souls/Min, Schaden/Heilung, Objective) */
+  /** Baustein-Scores der Note in der Reihenfolge von COMPONENT_ORDER (Kampf, Support/Frontline, Beteiligung, Überleben, Wirtschaft, Objectives, Lane) */
   parts: number[] | null;
   rankedDelta: number | null;
   team: 0 | 1;
@@ -66,7 +66,7 @@ export function listMatches(accountId: number): MatchListItem[] {
       team: me?.team ?? h.team,
       level: me?.level ?? h.heroLevel,
       myBadge: h.badge ?? me?.badge ?? null,
-      parts: rating ? rating.parts.map((x) => Math.round(x.value * 100) / 100) : null,
+      parts: rating ? rating.parts : null,
       rankedDelta: h.rankedDelta ?? null,
     });
   }

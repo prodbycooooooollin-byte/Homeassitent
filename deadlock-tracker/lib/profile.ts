@@ -1,4 +1,4 @@
-import { gradeFor } from "./rating";
+import { COMPONENT_LABELS, COMPONENT_ORDER, gradeFor } from "./rating";
 import { badgeToLinear } from "./ranks";
 import type { MatchListItem } from "./view";
 
@@ -104,7 +104,7 @@ export function byLobbyStrength(items: MatchListItem[]): Bucket[] {
 export function radar(items: MatchListItem[], last = 20): { labels: string[]; values: number[] } | null {
   const rated = items.filter((m) => m.parts).slice(0, last);
   if (!rated.length) return null;
-  const labels = ["KDA", "Kill-Beteiligung", "Souls/Min", "Schaden/Heilung", "Objectives"];
+  const labels = COMPONENT_ORDER.map((k) => COMPONENT_LABELS[k]);
   return { labels, values: labels.map((_, i) => rated.reduce((a, m) => a + (m.parts as number[])[i], 0) / rated.length) };
 }
 
