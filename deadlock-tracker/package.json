@@ -65,7 +65,17 @@
       "installerIcon": "app-icons/icon.ico",
       "uninstallerIcon": "app-icons/icon.ico",
       "installerHeaderIcon": "app-icons/icon.ico",
-      "shortcutName": "Deadlock Tracker"
+      "shortcutName": "Deadlock Tracker",
+      "include": "installer-assets/installer.nsh",
+      "installerHeader": "installer-assets/header.bmp",
+      "installerSidebar": "installer-assets/sidebar.bmp",
+      "uninstallerSidebar": "installer-assets/sidebar.bmp",
+      "language": "1031",
+      "displayLanguageSelector": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     },
     "portable": {
       "artifactName": "Deadlock-Tracker-${version}-portable.${ext}"
