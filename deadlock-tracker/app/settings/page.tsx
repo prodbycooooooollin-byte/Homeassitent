@@ -6,6 +6,7 @@ import { Icon, type IconName } from "@/components/Icon";
 import { NavLink } from "@/components/NavLink";
 import { useSettings, useTracker } from "@/components/Providers";
 import { INGEST_COLOR, useIngest } from "@/components/useIngest";
+import { openDebrief } from "@/components/DebriefHost";
 import { useUpdater } from "@/components/useUpdater";
 import type { DesktopSettings } from "@/lib/desktop";
 
@@ -22,6 +23,13 @@ export default function SettingsPage() {
     if (q.get("steam") === "error") setSteamMsg(q.get("reason") ?? "Anmeldung fehlgeschlagen");
   }, []);
   const setD = async (patch: Partial<DesktopSettings>) => { if (window.desktop) setDesk(await window.desktop.setDesktopSettings(patch)); };
+  const testDebrief = async () => {
+    try {
+      const j = await (await fetch(`/api/matches?account=${account}`)).json();
+      const m = (j.matches ?? []).find((x: { detailsReady: boolean }) => x.detailsReady) ?? j.matches?.[0];
+      if (m) openDebrief({ matchId: m.matchId, account: account!, test: true });
+    } catch { /* nichts */ }
+  };
   const cov = status?.coverage;
   const pct = cov && cov.total ? Math.round((cov.withDetails / cov.total) * 100) : 100;
   const linked = steam ? status?.players.find((p) => p.accountId === steam.accountId) : null;
@@ -67,6 +75,9 @@ export default function SettingsPage() {
         </Row>
         <Row title="Historie im Hintergrund vervollständigen" desc="Lädt Details (beide Teams, Ränge, Lane, Items) auch für ältere Matches nach – nötig für genaue Mitspieler-Listen, Analysen und alle Match-Tabs.">
           <div className="flex items-center gap-4">{cov && <div className="w-40"><div className="num mb-1 text-right text-xs text-muted">{cov.withDetails} / {cov.total} ({pct}%)</div><div className="h-1.5 rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-amber to-[#fff1c9] transition-all duration-700" style={{ width: `${pct}%` }} /></div></div>}<Switch on={settings.backfill} onChange={(v) => update({ backfill: v })} /></div>
+        </Row>
+        <Row title="Match-Debrief nach dem Spiel" desc="Zeigt nach einem neu erkannten Match einen Vollbild-Rückblick mit Note, Platzierungen, stärkster und schwächster Seite und einer kurzen Analyse.">
+          <div className="flex items-center gap-3"><button onClick={testDebrief} className="btn btn-ghost px-3 py-1.5 text-xs">Debrief testen</button><Switch on={settings.debrief} onChange={(v) => update({ debrief: v })} /></div>
         </Row>
         <Row title="Live-Match anzeigen" desc="Zeigt auf der Übersicht ein Banner, solange du in einem Match bist."><Switch on={settings.showLive} onChange={(v) => update({ showLive: v })} /></Row>
         <Row title="Benachrichtigung bei neuem Match" desc="Meldet dir, sobald ein Match erkannt wurde."><Switch on={settings.notifyNewMatch} onChange={(v) => update({ notifyNewMatch: v })} /></Row>

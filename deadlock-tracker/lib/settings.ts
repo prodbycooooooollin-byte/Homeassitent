@@ -33,6 +33,7 @@ export function sanitize(s: Partial<AppSettings>): AppSettings {
     backfill: s.backfill === undefined ? d.backfill : !!s.backfill,
     notifyNewMatch: s.notifyNewMatch === undefined ? d.notifyNewMatch : !!s.notifyNewMatch,
     showLive: s.showLive === undefined ? d.showLive : !!s.showLive,
+    debrief: s.debrief === undefined ? d.debrief : !!s.debrief,
     effects: s.effects === "reduced" || s.effects === "off" ? s.effects : "full",
     density: s.density === "compact" ? "compact" : "comfortable",
     profile: sanitizeProfile(s.profile),

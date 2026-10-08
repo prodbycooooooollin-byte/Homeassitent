@@ -245,3 +245,19 @@ html.fx-reduced .grade-emblem .grade-spark, html.fx-off .grade-emblem .grade-spa
 html.fx-reduced .grade-emblem .grade-shine, html.fx-off .grade-emblem .grade-shine { display: none; }
 
 html.fx-off .medal-shine, html.fx-reduced .medal-shine { display: none; }
+
+/* Match-Debrief (Vollbild nach dem Match) */
+.debrief { animation: debrief-in .5s ease both; }
+.debrief-title { animation: debrief-title .9s cubic-bezier(.2,.9,.2,1) both; }
+.debrief-fade { opacity: 0; animation: debrief-up .7s ease forwards; animation-delay: var(--d, 0s); }
+.debrief-row { opacity: 0; transform: translateX(-24px); animation: debrief-row .6s cubic-bezier(.2,.9,.2,1) forwards; animation-delay: var(--d, 0s); }
+.debrief-ring { stroke-dashoffset: var(--c); animation: debrief-ring 1.6s cubic-bezier(.2,.9,.2,1) .6s forwards; }
+.debrief-grade { opacity: 0; transform: scale(.7); animation: debrief-grade .8s cubic-bezier(.2,1.3,.4,1) 1.1s forwards; }
+.debrief-art { animation: debrief-up 1.4s ease .2s both; }
+@keyframes debrief-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes debrief-title { from { opacity: 0; letter-spacing: .5em; transform: translateY(-8px); } to { opacity: 1; letter-spacing: .12em; transform: none; } }
+@keyframes debrief-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes debrief-row { to { opacity: 1; transform: none; } }
+@keyframes debrief-ring { to { stroke-dashoffset: var(--o); } }
+@keyframes debrief-grade { to { opacity: 1; transform: none; } }
+html.fx-off .debrief *, html.fx-reduced .debrief * { animation-duration: .01s !important; animation-delay: 0s !important; }

@@ -205,6 +205,8 @@ export interface AppSettings {
   notifyNewMatch: boolean;
   /** Live-Match-Banner anzeigen */
   showLive: boolean;
+  /** Nach einem neu erkannten Match den Vollbild-Debrief zeigen */
+  debrief: boolean;
   /** Visuelle Effekte: voll, reduziert (weniger Bewegung) oder aus */
   effects: "full" | "reduced" | "off";
   /** Kompakte Darstellung */
@@ -215,7 +217,7 @@ export interface AppSettings {
 /** Persönliche Banner-Einstellungen: Titel, Main-Held (null = automatisch), Kennzahlen, Abzeichen, Akzent ("auto" | "rank" | "hero" | #rrggbb). */
 export interface ProfileSettings { title: string; mainHero: number | null; stats: string[]; badges: string[]; accent: string }
 export const DEFAULT_PROFILE: ProfileSettings = { title: "", mainHero: null, stats: ["winrate", "kda", "score", "matches"], badges: [], accent: "auto" };
-export const DEFAULT_SETTINGS: AppSettings = { pollIntervalS: 20, backfill: true, notifyNewMatch: true, showLive: true, effects: "full", density: "comfortable", profile: DEFAULT_PROFILE };
+export const DEFAULT_SETTINGS: AppSettings = { pollIntervalS: 20, backfill: true, notifyNewMatch: true, showLive: true, debrief: true, effects: "full", density: "comfortable", profile: DEFAULT_PROFILE };
 
 /** Per Steam-OpenID verifizierte Verbindung */
 export interface SteamLink { steamId: string; accountId: number; verifiedAt: number }

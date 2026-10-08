@@ -4,6 +4,7 @@ import { Providers } from "@/components/Providers";
 import { TopBar } from "@/components/TopBar";
 import { Aurora, RouteProgress } from "@/components/RouteEffects";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { DebriefHost } from "@/components/DebriefHost";
 
 export const metadata: Metadata = {
   title: "Deadlock Tracker",
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <TopBar />
           <main className="mx-auto max-w-[1560px] px-5 pb-14 pt-5">{children}</main>
           <UpdateBanner />
+          <DebriefHost />
         </Providers>
       </body>
     </html>

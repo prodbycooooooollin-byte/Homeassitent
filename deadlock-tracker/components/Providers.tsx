@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useRouter } from "next/navigation";
 import { DEFAULT_SETTINGS, type AppSettings, type SteamLink } from "@/lib/types";
 import { AssetsProvider } from "./GameAssets";
+import { openDebrief } from "./DebriefHost";
 import type { HeroAgg, MateAgg, MatchListItem, Overview } from "@/lib/view";
 import type { ActiveMatchDto } from "@/lib/api";
 import { useInterval, useStoredPrimary, type TrackedPlayerDto } from "./useTracker";
@@ -133,6 +134,7 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
             const acc = l.accounts.includes(account ?? -1) ? account! : l.accounts[0];
             const t: Toast = { id: l.matchId, matchId: l.matchId, account: acc };
             setToasts((cur) => [t, ...cur].slice(0, 3));
+            if (settings.debrief && acc === account) openDebrief({ matchId: l.matchId, account: acc });
             if (settings.notifyNewMatch) {
               const n = { title: "Neues Match erkannt", body: `Match #${l.matchId} wurde angelegt.`, path: `/match/${l.matchId}?account=${acc}` };
               if (window.desktop) window.desktop.notify(n); else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(n.title, { body: n.body });
@@ -145,7 +147,7 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* nächster Tick */
     }
-  }, [account, settings.notifyNewMatch]);
+  }, [account, settings.notifyNewMatch, settings.debrief]);
 
   useInterval(loadStatus, 4000);
 
