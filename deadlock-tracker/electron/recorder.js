@@ -32,14 +32,21 @@ async function steamRoots() {
   for (const r of [...roots]) {
     try { for (const m of fs.readFileSync(path.join(r, "steamapps", "libraryfolders.vdf"), "utf8").matchAll(/"path"\s+"([^"]+)"/g)) roots.add(m[1].replace(/\\\\/g, "\\")); } catch { /* egal */ }
   }
-  return [...roots].filter((r) => { try { return fs.statSync(r).isDirectory(); } catch { return false; } });
+  const seen = new Set();
+  return [...roots].filter((r) => { const k = r.toLowerCase(); if (seen.has(k)) return false; seen.add(k); try { return fs.statSync(r).isDirectory(); } catch { return false; } });
 }
 
 const TEXTY = /\.(log|txt|vdf|cfg|json|ini|lst|yml|yaml|dat)$/i;
 function onFile(dir, name, label) {
   const f = path.join(dir, String(name));
   fs.stat(f, (e, st) => {
-    if (e || !st.isFile()) return;
+    if (e) { if (label !== "cache" && !/steam-logs/.test(label)) add("GELÖSCHT", `${label}: ${path.basename(f)}`); return; }
+    if (!st.isFile()) return;
+    // Kleine Dateien im Spielordner (z. B. reconnect.dat): Inhalt als Hex und Text festhalten – oft stehen dort Verbindungsdaten des laufenden Matches
+    if (/^spiel/.test(label) && st.size > 0 && st.size <= 256 && !TEXTY.test(f)) {
+      try { const b = fs.readFileSync(f); add("INHALT", `${label}: ${path.basename(f)} (${b.length} B) hex=${b.toString("hex")} text=${b.toString("latin1").replace(/[^\x20-\x7e]/g, ".")}`); } catch { /* egal */ }
+      return;
+    }
     if (/\.(vpk|bz2|dem|dll|exe|png|jpg|webp|bin)$/i.test(f) && st.size > 4096 && label !== "cache") { add("DATEI", `${label}: ${path.basename(f)} (${st.size} B)`); return; }
     if (label === "cache") {
       // Steam-Cache: Anfang der Datei (enthält die Adresse)
@@ -89,6 +96,26 @@ async function start() {
     watch(game, "spiel", false);
     for (const sub of ["cfg", "save", "replays", "logs"]) watch(path.join(game, sub), `spiel-${sub}`, true);
   }
+  // Schlüsseldateien zusätzlich per Abfrage beobachten (Überwachung meldet Änderungen laufender Logs oft verspätet oder gar nicht)
+  const keyFiles = [];
+  for (const r of roots) { const g = path.join(r, "steamapps", "common", "Deadlock", "game", "citadel"); for (const n of ["console.log", "reconnect.dat"]) keyFiles.push(path.join(g, n)); }
+  const poll = () => {
+    for (const f of keyFiles) {
+      let st = null; try { st = fs.statSync(f); } catch { /* fehlt */ }
+      const prev = rec.keyState.get(f);
+      if (!st) { if (prev) { rec.keyState.delete(f); add("GELÖSCHT", `${path.basename(f)}`); } continue; }
+      if (!prev) { rec.keyState.set(f, { size: st.size, mtime: st.mtimeMs }); add("DATEI", `${path.basename(f)} vorhanden (${st.size} B)`); if (/reconnect/.test(f)) logSmall(f); continue; }
+      if (st.size === prev.size && st.mtimeMs === prev.mtime) continue;
+      if (/console\.log$/.test(f) && st.size > prev.size) {
+        try { const fd = fs.openSync(f, "r"); const len = Math.min(st.size - prev.size, 128 * 1024); const b = Buffer.alloc(len); fs.readSync(fd, b, 0, len, prev.size); fs.closeSync(fd); for (const l of b.toString("utf8").split(/\r?\n/)) if (l.trim()) add("LOG", `console.log: ${l.trim()}`); } catch { /* egal */ }
+      } else if (/reconnect/.test(f)) { add("DATEI", `reconnect.dat geändert (${prev.size} → ${st.size} B)`); logSmall(f); }
+      rec.keyState.set(f, { size: st.size, mtime: st.mtimeMs });
+    }
+  };
+  const logSmall = (f) => { try { const b = fs.readFileSync(f); add("INHALT", `${path.basename(f)} (${b.length} B) hex=${b.toString("hex")} text=${b.toString("latin1").replace(/[^\x20-\x7e]/g, ".")}`); } catch { /* egal */ } };
+  rec.keyState = new Map();
+  poll();
+  rec.timers.push(setInterval(poll, 700));
   add("INFO", `Aufnahme gestartet. Beobachtet: ${rec.dirs.join(" | ") || "nichts gefunden"}`);
   const hasConsole = roots.some((r) => fs.existsSync(path.join(r, "steamapps", "common", "Deadlock", "game", "citadel", "console.log")));
   add("INFO", hasConsole ? "console.log des Spiels vorhanden" : "keine console.log des Spiels (Startoption -condebug nicht gesetzt?)");
