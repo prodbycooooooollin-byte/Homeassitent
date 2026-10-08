@@ -22,7 +22,7 @@ SILENCE_FLUSH = 0.9  # Sekunden Stille, bis ein Sprachabschnitt ausgewertet wird
 MAX_SEGMENT = 20  # Sekunden, danach wird in jedem Fall ausgewertet
 
 DEBUG_TEXT = os.getenv("DEBUG_TRANSCRIPTS", "") == "1"  # Konsole zeigt, was erkannt wurde (wird nicht gespeichert)
-stats = Counter()  # Diagnose-Zähler für die Konsole
+diag = Counter()  # Diagnose-Zähler für die Konsole
 
 store = Store(os.getenv("DB_PATH", "counter.db"))
 transcriber = Transcriber(os.getenv("WHISPER_MODEL", "small"), os.getenv("WHISPER_LANGUAGE", "de"))
@@ -41,20 +41,20 @@ def install_dave_decryption(vc: voice_recv.VoiceRecvClient) -> None:
 
     def decrypt_rtp(packet):
         data = transport_decrypt(packet)
-        stats["pakete"] += 1
+        diag["pakete"] += 1
         state = vc._connection
         session = getattr(state, "dave_session", None)
         if session is None or not state.dave_protocol_version or not session.ready:
             return data  # kein E2EE aktiv
         user_id = vc._ssrc_to_id.get(packet.ssrc)
         if user_id is None:
-            stats["unbekannter_sprecher"] += 1
+            diag["unbekannter_sprecher"] += 1
             return data
         try:
             data = session.decrypt(user_id, davey.MediaType.audio, data)
-            stats["dave_ok"] += 1
+            diag["dave_ok"] += 1
         except Exception:
-            stats["dave_fehler"] += 1  # z. B. unverschlüsselte Stille-Pakete
+            diag["dave_fehler"] += 1  # z. B. unverschlüsselte Stille-Pakete
         return data
 
     decryptor.decrypt_rtp = decrypt_rtp
@@ -97,7 +97,7 @@ class CountingSink(voice_recv.AudioSink):
         member = self.guild.get_member(user_id)
         who = member.display_name if member else str(user_id)
         secs = len(pcm) / BYTES_PER_SEC
-        stats["abschnitte"] += 1
+        diag["abschnitte"] += 1
         print(f"[Sprache] {who}: {secs:.1f}s, Treffer: {hits}" + (f", Text: {text.strip()!r}" if DEBUG_TEXT else ""))
         if hits:
             member = self.guild.get_member(user_id)
@@ -250,8 +250,8 @@ async def report_stats() -> None:
     last = None
     while True:
         await asyncio.sleep(15)
-        if stats and dict(stats) != last:
-            last = dict(stats)
+        if diag and dict(diag) != last:
+            last = dict(diag)
             print(f"[Diagnose] {last}")
 
 
