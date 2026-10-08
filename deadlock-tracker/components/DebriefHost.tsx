@@ -13,7 +13,7 @@ import { fmtDuration } from "@/lib/format";
 import { formatBadge } from "@/lib/ranks";
 import type { Grade, MatchDetails, Rating } from "@/lib/types";
 
-export interface DebriefRequest { matchId: number; account: number; test?: boolean; /** Beispiel-Match statt echter Daten */ sample?: SampleKind; n?: number }
+export interface DebriefRequest { matchId: number; account: number; test?: boolean; /** automatisch ausgelöst (Sofort-Erkennung): veraltete Matches werden nicht angezeigt */ auto?: boolean; /** Beispiel-Match statt echter Daten */ sample?: SampleKind; n?: number }
 export const DEBRIEF_BACK_KEY = "dl.debriefBack";
 export const DEBRIEF_EVENT = "dl-debrief";
 /** Öffnet den Debrief (aus beliebiger Stelle der App). */
@@ -110,6 +110,9 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
   }, [req.matchId, req.account, tries]);
 
   const d = res?.details ?? null;
+  // Automatisch geöffnete Debriefs nur für frische Matches (nicht für alte Einträge, die z. B. beim Öffnen der Historie auftauchen)
+  const stale = !!(req.auto && d && Date.now() / 1000 - (d.startTime + d.durationS) > 3 * 3600);
+  useEffect(() => { if (stale) onClose(); }, [stale]); // eslint-disable-line react-hooks/exhaustive-deps
   const me = d?.players.find((p) => p.accountId === req.account) ?? null;
   const rating = res?.ratings?.[req.account] ?? null;
   const db = useMemo(() => (d && me ? buildDebrief(d, me, rating) : null), [d, me, rating]);

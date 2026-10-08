@@ -7,6 +7,13 @@ const { execFile } = require("child_process");
 
 const RE = /1422450\/(\d{6,12})_(\d{5,})\.(?:meta|dem)/;
 const MAX_FILE = 4 * 1024 * 1024;
+// Nur wirklich neue Dateien zählen: Beim Start und beim Öffnen der Match-Historie im Spiel werden viele alte Einträge berührt –
+// die dürfen kein Debrief auslösen.
+const WARMUP_MS = 20_000;
+const MAX_AGE_MS = 90_000; // Datei muss in den letzten 90 s angelegt worden sein
+const MIN_GAP_MS = 120_000; // höchstens ein Sofort-Debrief alle 2 Minuten
+let startedAt = 0;
+let lastEmit = 0;
 
 let watchers = [];
 let seen = new Set();
@@ -33,6 +40,8 @@ function steamDirs() {
 function inspect(file) {
   fs.stat(file, (e, st) => {
     if (e || !st.isFile() || st.size === 0 || st.size > MAX_FILE) return;
+    const born = st.birthtimeMs || st.ctimeMs;
+    const fresh = Date.now() - born <= MAX_AGE_MS && born >= startedAt;
     fs.readFile(file, (e2, buf) => {
       if (e2) return;
       const m = RE.exec(buf.toString("latin1"));
@@ -40,6 +49,9 @@ function inspect(file) {
       const matchId = Number(m[1]);
       if (!matchId || seen.has(matchId)) return;
       seen.add(matchId);
+      // Während der Aufwärmphase, bei alten Dateien und bei zu dichter Folge nur merken, nicht melden
+      if (Date.now() - startedAt < WARMUP_MS || !fresh || Date.now() - lastEmit < MIN_GAP_MS) return;
+      lastEmit = Date.now();
       info.last = { matchId, at: Date.now() };
       if (cb) cb({ matchId, at: Date.now() });
     });
@@ -49,6 +61,8 @@ function inspect(file) {
 async function start(onMatch) {
   stop();
   cb = onMatch;
+  startedAt = Date.now();
+  seen = new Set();
   const dirs = await steamDirs();
   info.dirs = dirs;
   info.error = dirs.length ? null : "Steam-Ordner (httpcache) nicht gefunden";

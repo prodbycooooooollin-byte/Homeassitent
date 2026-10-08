@@ -127,10 +127,12 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => window.desktop?.onNavigate((p) => router.push(p)), [router]);
   // Sofort-Debrief: Die Desktop-Hülle meldet das Match-Ende, sobald Steam die Match-Daten von Valve abgelegt hat
   const debriefed = useRef(new Set<number>());
+  const lastAuto = useRef(0);
   useEffect(() => window.desktop?.onMatchEnded?.(({ matchId }) => {
-    if (!settings.debrief || !account || debriefed.current.has(matchId)) return;
+    if (!settings.debrief || !account || debriefed.current.has(matchId) || Date.now() - lastAuto.current < 120_000) return;
     debriefed.current.add(matchId);
-    openDebrief({ matchId, account });
+    lastAuto.current = Date.now();
+    openDebrief({ matchId, account, auto: true });
   }), [settings.debrief, account]);
 
   const loadStatus = useCallback(async () => {
