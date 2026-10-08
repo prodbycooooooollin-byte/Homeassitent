@@ -2,6 +2,7 @@ import asyncio
 import io
 import logging
 import os
+import threading
 import time
 from collections import Counter
 
@@ -30,7 +31,7 @@ DEBUG_TEXT = os.getenv("DEBUG_TRANSCRIPTS", "1") == "1"  # Konsole zeigt, was er
 diag = Counter()  # Diagnose-Zähler für die Konsole
 
 store = Store(os.getenv("DB_PATH", "counter.db"))
-transcriber = Transcriber(os.getenv("WHISPER_MODEL", "small"), os.getenv("WHISPER_LANGUAGE", "de"))
+transcriber = Transcriber(os.getenv("WHISPER_MODEL", "medium"), os.getenv("WHISPER_LANGUAGE", "de"))
 
 
 SILENCE_FRAME = b"\xf8\xff\xfe"  # gültiger Opus-Stille-Frame
@@ -109,8 +110,9 @@ class CountingSink(voice_recv.AudioSink):
     def __init__(self, guild: discord.Guild):
         super().__init__()
         self.guild = guild
-        self._buffers: dict[int, bytearray] = {}
-        self._last: dict[int, float] = {}
+        # Audio kommt aus dem Voice-Thread, ausgewertet wird im Event-Loop -> gemeinsamer Zugriff nur mit Lock
+        self._lock = threading.Lock()
+        self._segments: dict[int, list] = {}  # user_id -> [bytearray, letzter_zeitpunkt]
         self._task: asyncio.Task | None = None
         self._loop = asyncio.get_running_loop()
         self._task = self._loop.create_task(self._flusher())
@@ -119,22 +121,47 @@ class CountingSink(voice_recv.AudioSink):
         return False  # wir wollen dekodiertes PCM
 
     def write(self, user, data: voice_recv.VoiceData) -> None:
-        if user is None or user.bot or store.is_opted_out(self.guild.id, user.id):
-            return
-        self._buffers.setdefault(user.id, bytearray()).extend(data.pcm)
-        self._last[user.id] = time.monotonic()
+        try:
+            if user is None or user.bot or store.is_opted_out(self.guild.id, user.id):
+                return
+            with self._lock:
+                seg = self._segments.setdefault(user.id, [bytearray(), 0.0])
+                seg[0].extend(data.pcm)
+                seg[1] = time.monotonic()
+        except Exception as e:  # ein Fehler hier darf das Zuhören nie beenden
+            diag["write_fehler"] += 1
+            print(f"[Fehler] write: {e!r}")
+
+    def _take_ready(self) -> list[tuple[int, bytes]]:
+        now = time.monotonic()
+        ready = []
+        with self._lock:
+            for uid, (buf, last) in list(self._segments.items()):
+                if now - last > SILENCE_FLUSH or len(buf) > MAX_SEGMENT * BYTES_PER_SEC:
+                    ready.append((uid, bytes(buf)))
+                    del self._segments[uid]
+        return ready
 
     async def _flusher(self) -> None:
         while True:
-            await asyncio.sleep(0.5)
-            now = time.monotonic()
-            for uid in list(self._buffers):
-                buf = self._buffers[uid]
-                if now - self._last[uid] > SILENCE_FLUSH or len(buf) > MAX_SEGMENT * BYTES_PER_SEC:
-                    del self._buffers[uid], self._last[uid]
-                    self._loop.create_task(self._process(uid, bytes(buf)))
+            try:
+                await asyncio.sleep(0.5)
+                for uid, pcm in self._take_ready():
+                    self._loop.create_task(self._process(uid, pcm))
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # Schleife darf nie sterben
+                diag["flusher_fehler"] += 1
+                print(f"[Fehler] flusher: {e!r}")
 
     async def _process(self, user_id: int, pcm: bytes) -> None:
+        try:
+            await self._transcribe_and_count(user_id, pcm)
+        except Exception as e:
+            diag["auswertung_fehler"] += 1
+            print(f"[Fehler] Auswertung: {e!r}")
+
+    async def _transcribe_and_count(self, user_id: int, pcm: bytes) -> None:
         text = await self._loop.run_in_executor(None, transcriber.transcribe, pcm)
         hits = count_hits(text)
         member = self.guild.get_member(user_id)
@@ -150,7 +177,8 @@ class CountingSink(voice_recv.AudioSink):
     def cleanup(self) -> None:
         if self._task:
             self._task.cancel()
-        self._buffers.clear()
+        with self._lock:
+            self._segments.clear()
 
 
 intents = discord.Intents.default()
@@ -290,12 +318,22 @@ async def optin(interaction: discord.Interaction):
 
 
 async def report_stats() -> None:
+    """Gibt Diagnose-Zähler aus und startet das Zuhören neu, falls die Bibliothek es beendet hat."""
     last = None
     while True:
         await asyncio.sleep(15)
-        if diag and dict(diag) != last:
-            last = dict(diag)
-            print(f"[Diagnose] {last}")
+        try:
+            for vc in list(bot.voice_clients):
+                if isinstance(vc, voice_recv.VoiceRecvClient) and vc.is_connected() and not vc.is_listening():
+                    print("[Wächter] Zuhören war beendet, starte es neu.")
+                    diag["neustarts"] += 1
+                    vc.listen(CountingSink(vc.guild))
+                    install_dave_decryption(vc)
+            if diag and dict(diag) != last:
+                last = dict(diag)
+                print(f"[Diagnose] {last}")
+        except Exception as e:
+            print(f"[Fehler] Wächter: {e!r}")
 
 
 @bot.event
