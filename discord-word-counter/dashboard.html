@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Word Counter Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#0f1117; --card:#181b24; --line:#262b38; --text:#e8eaf0; --muted:#8b92a5; --accent:#ff5a5f; --accent2:#ffb347; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:20px 16px 8px; max-width:1200px; margin:0 auto; }
+  h1 { margin:0; font-size:22px; }
+  select { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  main { max-width:1200px; margin:0 auto; padding:8px 16px 40px; display:grid; gap:16px; grid-template-columns:repeat(12,1fr); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .kpi { grid-column:span 3; } .kpi .v { font-size:30px; font-weight:700; } .kpi .l { color:var(--muted); font-size:13px; }
+  .w6 { grid-column:span 6; } .w12 { grid-column:span 12; }
+  h2 { margin:0 0 12px; font-size:15px; color:var(--muted); font-weight:600; }
+  .chart { position:relative; height:260px; }
+  .row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); }
+  .row:last-child { border:0; } .rank { width:28px; text-align:center; } .nm { flex:1; }
+  .bar { height:6px; background:var(--line); border-radius:3px; margin-top:4px; } .bar i { display:block; height:100%; background:var(--accent); border-radius:3px; }
+  .muted { color:var(--muted); font-size:13px; }
+  @media (max-width:800px) { .kpi { grid-column:span 6; } .w6 { grid-column:span 12; } }
+</style>
+</head>
+<body>
+<header><h1>📊 Word Counter</h1><select id="guild"></select></header>
+<main>
+  <div class="card kpi"><div class="v" id="k-total">–</div><div class="l">Gesamt</div></div>
+  <div class="card kpi"><div class="v" id="k-today">–</div><div class="l">Heute</div></div>
+  <div class="card kpi"><div class="v" id="k-peak">–</div><div class="l">Stärkste Uhrzeit</div></div>
+  <div class="card kpi"><div class="v" id="k-top">–</div><div class="l">Spitzenreiter</div></div>
+  <div class="card kpi"><div class="v" id="k-7">–</div><div class="l">Letzte 7 Tage</div></div>
+  <div class="card kpi"><div class="v" id="k-streak">–</div><div class="l">Tage-Serie 🔥</div></div>
+  <div class="card kpi"><div class="v" id="k-best">–</div><div class="l" id="k-best-l">Rekordtag</div></div>
+  <div class="card kpi"><div class="v" id="k-users">–</div><div class="l">Personen in der Liste</div></div>
+
+  <div class="card w6"><h2>🏆 Rangliste</h2><div id="board"></div></div>
+  <div class="card w6"><h2>Anteil pro Person</h2><div class="chart"><canvas id="c-share"></canvas></div></div>
+  <div class="card w12"><h2>🕐 Tageszeit – wann fällt das Wort am häufigsten?</h2><div class="chart"><canvas id="c-hour"></canvas></div></div>
+  <div class="card w6"><h2>Wochentage</h2><div class="chart"><canvas id="c-week"></canvas></div></div>
+  <div class="card w6"><h2>Letzte 30 Tage</h2><div class="chart"><canvas id="c-day"></canvas></div></div>
+  <div class="card w12"><h2>Lieblings-Uhrzeit pro Person</h2><div id="peaks" class="muted"></div></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const COLORS = ['#ff5a5f','#ffb347','#4cc9f0','#80ed99','#b388ff','#f72585','#90be6d','#f9c74f','#577590','#adb5bd'];
+const charts = {};
+Chart.defaults.color = '#8b92a5'; Chart.defaults.borderColor = '#262b38';
+
+function draw(id, type, labels, values, opts = {}) {
+  charts[id]?.destroy();
+  charts[id] = new Chart($(id), {
+    type, data: { labels, datasets: [{ data: values, backgroundColor: opts.colors || '#ff5a5f', borderColor: '#ff5a5f', borderWidth: type === 'line' ? 2 : 0, fill: type === 'line', tension: .3, borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type === 'doughnut', position: 'right' } },
+      scales: type === 'doughnut' ? {} : { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } }
+  });
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function load() {
+  const g = $('guild').value;
+  const d = await (await fetch('/api/stats' + (g ? '?guild=' + g : ''))).json();
+  if (!$('guild').options.length) {
+    $('guild').innerHTML = d.guilds.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+    $('guild').value = d.guild;
+  }
+  const hh = h => h == null ? '–' : String(h).padStart(2, '0') + ':00';
+  $('k-total').textContent = d.total; $('k-today').textContent = d.today;
+  $('k-peak').textContent = hh(d.peak_hour); $('k-7').textContent = d.last7; $('k-streak').textContent = d.streak;
+  $('k-top').textContent = d.top_user ? d.top_user.name : '–';
+  $('k-best').textContent = d.best_day ? d.best_day.count : '–';
+  $('k-best-l').textContent = d.best_day ? 'Rekordtag (' + d.best_day.date.split('-').reverse().join('.') + ')' : 'Rekordtag';
+  $('k-users').textContent = d.leaderboard.length;
+
+  const max = d.leaderboard[0]?.count || 1;
+  const medals = ['🥇','🥈','🥉'];
+  $('board').innerHTML = d.leaderboard.map((u, i) => `<div class="row"><div class="rank">${medals[i] || i + 1}</div>
+    <div class="nm">${esc(u.name)}<div class="bar"><i style="width:${100 * u.count / max}%"></i></div></div><b>${u.count}</b></div>`).join('')
+    || '<div class="muted">Noch keine Daten.</div>';
+  draw('c-share', 'doughnut', d.leaderboard.map(u => u.name), d.leaderboard.map(u => u.count), { colors: COLORS });
+  draw('c-hour', 'bar', [...Array(24).keys()].map(h => hh(h)), d.by_hour);
+  draw('c-week', 'bar', d.by_weekday.labels, d.by_weekday.values);
+  draw('c-day', 'line', d.daily.labels, d.daily.values);
+  $('peaks').innerHTML = d.user_peak.map(u => `<span style="display:inline-block;margin:0 18px 6px 0"><b style="color:var(--text)">${esc(u.name)}</b> ${hh(u.hour)}</span>`).join('') || 'Noch keine Daten.';
+}
+$('guild').onchange = load;
+load(); setInterval(load, 30000);
+</script>
+</body>
+</html>

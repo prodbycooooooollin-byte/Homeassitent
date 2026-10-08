@@ -56,7 +56,9 @@ class CountingSink(voice_recv.AudioSink):
         text = await self._loop.run_in_executor(None, transcriber.transcribe, pcm)
         hits = count_hits(text)
         if hits:
-            store.add(self.guild.id, user_id, hits)  # Text selbst wird nicht gespeichert
+            member = self.guild.get_member(user_id)
+            # Text selbst wird nicht gespeichert, nur Anzahl, Zeitpunkt und Anzeigename
+            store.add(self.guild.id, user_id, hits, member.display_name if member else None, self.guild.name)
 
     def cleanup(self) -> None:
         if self._task:
