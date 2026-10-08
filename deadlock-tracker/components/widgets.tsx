@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import { HeroPortrait, useHeroName } from "./GameAssets";
 import { Icon, type IconName } from "./Icon";
+import { FormDots, Sparkline } from "./charts";
 import { NavLink } from "./NavLink";
 import { GradeBadge } from "./GradeBadge";
 import { activity, avgLobby, currentSession, insights, longestWinStreak, radar, records, streak, type Bucket } from "@/lib/profile";
@@ -9,11 +10,11 @@ import { linearToBadge, formatBadge } from "@/lib/ranks";
 import { fmtAgo } from "@/lib/format";
 import type { MatchListItem } from "@/lib/view";
 
-export function SessionCard({ items }: { items: MatchListItem[] }) {
+export function SessionCard({ items, className = "" }: { items: MatchListItem[]; className?: string }) {
   const s = useMemo(() => currentSession(items), [items]);
   const st = streak(items);
   return (
-    <section className="surface p-5">
+    <section className={`surface p-5 ${className}`}>
       <div className="flex items-center justify-between"><h3 className="label">Aktuelle Session</h3>{s && <span className="chip"><span className="live-dot" />aktiv</span>}</div>
       {s ? (
         <>
@@ -31,16 +32,16 @@ export function SessionCard({ items }: { items: MatchListItem[] }) {
   );
 }
 
-export function RadarCard({ items }: { items: MatchListItem[] }) {
+export function RadarCard({ items, className = "" }: { items: MatchListItem[]; className?: string }) {
   const r = useMemo(() => radar(items), [items]);
   if (!r) return null;
   const S = 220, c = S / 2, R = 78, n = r.values.length;
   const pt = (i: number, v: number) => { const a = (Math.PI * 2 * i) / n - Math.PI / 2; const k = (Math.min(v, 2) / 2) * R; return [c + Math.cos(a) * k, c + Math.sin(a) * k]; };
   const poly = r.values.map((v, i) => pt(i, v).join(",")).join(" ");
   return (
-    <section className="surface p-5">
+    <section className={`surface flex flex-col p-5 ${className}`}>
       <h3 className="label mb-1">Performance-Radar <span className="normal-case tracking-normal">· Ø letzte 20</span></h3>
-      <svg viewBox={`0 0 ${S} ${S}`} className="mx-auto w-full max-w-[250px]">
+      <svg viewBox={`0 0 ${S} ${S}`} className="mx-auto my-auto w-full max-w-[250px]">
         {[0.5, 1, 1.5, 2].map((g) => <polygon key={g} points={r.values.map((_, i) => pt(i, g).join(",")).join(" ")} fill="none" stroke={g === 1 ? "rgba(255,255,255,.35)" : "rgba(255,255,255,.08)"} strokeDasharray={g === 1 ? "3 3" : undefined} />)}
         {r.values.map((_, i) => <line key={i} x1={c} y1={c} x2={pt(i, 2)[0]} y2={pt(i, 2)[1]} stroke="rgba(255,255,255,.08)" />)}
         <polygon points={poly} fill="rgba(240,180,76,.28)" stroke="#f0b44c" strokeWidth="2" style={{ filter: "drop-shadow(0 0 6px #f0b44c88)" }} />
@@ -52,14 +53,14 @@ export function RadarCard({ items }: { items: MatchListItem[] }) {
   );
 }
 
-export function ActivityHeatmap({ items }: { items: MatchListItem[] }) {
+export function ActivityHeatmap({ items, className = "" }: { items: MatchListItem[]; className?: string }) {
   const days = useMemo(() => activity(items, 34), [items]);
   const max = Math.max(1, ...days.map((d) => d.n));
   const weeks: typeof days[] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
   const months = weeks.map((w, i) => (i === 0 || w[0].date.getMonth() !== weeks[i - 1][0].date.getMonth() ? w[0].date.toLocaleDateString("de-DE", { month: "short" }) : ""));
   return (
-    <section className="surface p-5">
+    <section className={`surface p-5 ${className}`}>
       <h3 className="label mb-3">Aktivität <span className="normal-case tracking-normal">· Matches pro Tag, Farbe = Winrate</span></h3>
       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))` }}>
         {weeks.map((w, i) => (
@@ -78,12 +79,12 @@ export function ActivityHeatmap({ items }: { items: MatchListItem[] }) {
   );
 }
 
-export function RecordsCard({ items }: { items: MatchListItem[] }) {
+export function RecordsCard({ items, className = "" }: { items: MatchListItem[]; className?: string }) {
   const recs = useMemo(() => records(items), [items]);
   const best = longestWinStreak(items);
   if (!recs.length) return null;
   return (
-    <section className="surface overflow-hidden">
+    <section className={`surface overflow-hidden ${className}`}>
       <h3 className="label px-5 pt-5">Persönliche Rekorde</h3>
       <div className="mt-2">
         {recs.map((r) => (
@@ -99,13 +100,13 @@ export function RecordsCard({ items }: { items: MatchListItem[] }) {
   );
 }
 
-export function InsightsCard({ items }: { items: MatchListItem[] }) {
+export function InsightsCard({ items, className = "" }: { items: MatchListItem[]; className?: string }) {
   const heroName = useHeroName();
   const list = useMemo(() => insights(items, heroName), [items, heroName]);
   if (!list.length) return null;
   const col = { good: "#3ecf8e", bad: "#f0616d", info: "#4aa3ff" };
   return (
-    <section className="surface p-5">
+    <section className={`surface p-5 ${className}`}>
       <h3 className="label mb-3">Erkenntnisse</h3>
       <div className="space-y-2.5">
         {list.map((i, k) => (
@@ -154,3 +155,16 @@ export function LobbyTile({ items, myBadge }: { items: MatchListItem[]; myBadge:
 }
 
 export { GradeBadge };
+
+
+/** Form (letzte Matches) und Leistungsverlauf in einer kompakten Karte. */
+export function FormTrendCard({ form, trend, className = "" }: { form: boolean[]; trend: number[]; className?: string }) {
+  return (
+    <section className={`surface p-5 ${className}`}>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div><h3 className="label mb-3">Form · letzte {form.length}</h3><FormDots form={form} /></div>
+        <div><h3 className="label mb-2">Leistungsverlauf</h3><Sparkline values={trend} height={56} /><div className="mt-1 flex justify-between text-[10px] text-muted"><span>älter</span><span>aktuell</span></div></div>
+      </div>
+    </section>
+  );
+}

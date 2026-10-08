@@ -125,6 +125,10 @@ export interface ActiveMatchDto {
   startTime: number;
   durationS: number;
   mode?: string;
+  /** Team-Souls (Hidden King, Archmother) laut Zuschauer-Daten */
+  netWorth: [number, number] | null;
+  /** Anzahl zerstörter Objectives je Team (Bit-Zählung der Objective-Maske) */
+  objectives: [number, number] | null;
   players: { accountId: number; heroId: number; team: 0 | 1 }[];
 }
 
@@ -142,6 +146,8 @@ export async function fetchActive(accountIds: number[]): Promise<ActiveMatchDto[
       startTime: Number(m.start_time) || 0,
       durationS: Number(m.duration_s) || 0,
       mode: modeLabel(m.match_mode, m.game_mode),
+      netWorth: typeof m.net_worth_team_0 === "number" && typeof m.net_worth_team_1 === "number" ? [m.net_worth_team_0, m.net_worth_team_1] : null,
+      objectives: typeof m.objectives_mask_team0 === "number" && typeof m.objectives_mask_team1 === "number" ? [popcount(m.objectives_mask_team0), popcount(m.objectives_mask_team1)] : null,
       players: players.flatMap((p) => (Number(p.account_id) || Number(p.hero_id) ? [{
         accountId: Number(p.account_id) || 0,
         heroId: Number(p.hero_id) || 0,
@@ -150,6 +156,8 @@ export async function fetchActive(accountIds: number[]): Promise<ActiveMatchDto[
     }];
   });
 }
+
+const popcount = (n: number) => { let c = 0; let v = Math.max(0, Math.floor(n)); while (v > 0) { c += v % 2; v = Math.floor(v / 2); } return c; };
 
 export interface HeroMeta { heroId: number; matches: number; wins: number }
 
@@ -255,4 +263,15 @@ export async function fetchSynergies(heroId: number): Promise<MatchupRow[]> {
     if (a !== heroId && b !== heroId) return [];
     return [{ heroId: a === heroId ? b : a, matches: Number(r.matches_played) || 0, wins: Number(r.wins) || 0 }];
   }) : [];
+}
+
+/** Aktuelle Rang-Badges mehrerer Spieler auf einmal (0 = unbekannt). */
+export async function fetchRanks(accountIds: number[]): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (!accountIds.length) return out;
+  try {
+    const raw = await getJson(`${BASE()}/v1/players/rank?account_ids=${accountIds.join(",")}`, { retries: 1, timeoutMs: 15000 });
+    if (Array.isArray(raw)) for (const r of raw as Record<string, unknown>[]) { const id = Number(r.account_id), b = Number(r.badge); if (id && b > 0) out.set(id, b); }
+  } catch { /* ohne Ränge weiter */ }
+  return out;
 }

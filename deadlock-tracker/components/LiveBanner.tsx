@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { HeroPortrait, useHeroName } from "./GameAssets";
+import { NavLink } from "./NavLink";
 import { fmtDuration } from "@/lib/format";
 import type { ActiveMatchDto } from "@/lib/api";
 
@@ -32,7 +33,7 @@ export function LiveBanner({ match, accountId }: { match: ActiveMatchDto; accoun
           ))}
         </div>
       </div>
-      <p className="mt-2 text-[11px] text-muted">Sobald das Match endet, prüft der Tracker die Historie im 5-Sekunden-Takt und legt es automatisch an.</p>
+      <div className="mt-2 flex flex-wrap items-center gap-3"><NavLink href="/live" className="btn btn-gold !py-1.5 text-xs">Lobby scouten</NavLink><p className="text-[11px] text-muted">Sobald das Match endet, prüft der Tracker die Historie im 5-Sekunden-Takt und legt es automatisch an.</p></div>
     </section>
   );
 }

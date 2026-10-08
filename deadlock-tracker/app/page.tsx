@@ -6,9 +6,9 @@ import { StatStrip } from "@/components/StatStrip";
 import { MatchRow } from "@/components/MatchRow";
 import { NavLink } from "@/components/NavLink";
 import { RankEmblem } from "@/components/GameAssets";
-import { ActivityHeatmap, InsightsCard, RadarCard, RecordsCard, SessionCard } from "@/components/widgets";
+import { ActivityHeatmap, FormTrendCard, InsightsCard, RadarCard, RecordsCard, SessionCard } from "@/components/widgets";
+import { Icon } from "@/components/Icon";
 import { HeroTile } from "@/components/HeroTile";
-import { FormDots, Sparkline } from "@/components/charts";
 import { useData, useSettings, useTracker } from "@/components/Providers";
 import { formatBadge } from "@/lib/ranks";
 
@@ -27,54 +27,48 @@ export default function OverviewPage() {
           )}
           {live && settings.showLive && <LiveBanner match={live} accountId={me.accountId} />}
           <StatStrip ov={data.overview} items={data.matches} />
-          <div className="grid items-start gap-6 xl:grid-cols-[300px_minmax(0,1fr)_320px]">
-            <aside className="order-2 space-y-6 xl:order-1">
+
+          {/* Zeile 1: Session & Erkenntnisse | Matches | Rang & Radar – alle Spalten gleich hoch */}
+          <div className="grid items-stretch gap-5 xl:grid-cols-[300px_minmax(0,1fr)_320px]">
+            <div className="order-2 flex flex-col gap-5 xl:order-1">
               <SessionCard items={data.matches} />
-              <InsightsCard items={data.matches} />
-              <RecordsCard items={data.matches} />
-            </aside>
-            <section className="surface order-1 overflow-hidden xl:order-2">
+              <InsightsCard items={data.matches} className="flex-1" />
+            </div>
+            <section className="surface order-1 flex flex-col overflow-hidden xl:order-2">
               <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
                 <h2 className="display text-lg font-bold">Letzte Matches</h2>
-                <NavLink href="/matches" className="text-sm text-amber hover:underline">Alle Matches →</NavLink>
+                <NavLink href="/matches" className="flex items-center gap-1 text-sm text-amber hover:underline">Alle Matches<Icon name="arrowRight" size={14} /></NavLink>
               </div>
               {data.matches.length === 0 && <div className="p-10 text-center text-muted">Noch keine Matches gefunden.</div>}
-              {data.matches.slice(0, 9).map((m, i) => <MatchRow key={m.matchId} m={m} account={me.accountId} delay={i * 50} />)}
+              <div className="flex-1">{data.matches.slice(0, 7).map((m, i) => <MatchRow key={m.matchId} m={m} account={me.accountId} delay={i * 50} />)}</div>
             </section>
-            <aside className="order-3 space-y-6">
+            <div className="order-3 flex flex-col gap-5">
               <NavLink href="/rank" className="surface surface-hover sheen block p-5">
                 <div className="label">Rang</div>
                 <div className="mt-3 flex items-center gap-4">
-                  <RankEmblem badge={data.overview.currentBadge} size={84} />
+                  <RankEmblem badge={data.overview.currentBadge} size={72} />
                   <div>
                     <div className="display text-2xl font-extrabold leading-tight">{data.overview.currentBadge ? formatBadge(data.overview.currentBadge) : "Kein Rang"}</div>
-                    {!data.overview.currentBadge && <div className="text-xs text-muted">Nur Ranked-Matches tragen einen Rang</div>}
+                    <div className="text-xs text-muted">{data.overview.currentBadge ? "Verlauf & Einordnung ansehen" : "Nur Ranked-Matches tragen einen Rang"}</div>
                   </div>
                 </div>
-                <div className="mt-3 text-xs text-muted">Rangverlauf & Einordnung →</div>
               </NavLink>
-              <RadarCard items={data.matches} />
-              <section className="surface p-5">
-                <h3 className="label mb-3">Leistungsverlauf</h3>
-                <Sparkline values={data.overview.trend} />
-                <div className="mt-1 flex justify-between text-[10px] text-muted"><span>älter</span><span>aktuell</span></div>
-              </section>
-              <section className="surface p-5">
-                <h3 className="label mb-3">Form · letzte {data.overview.form.length}</h3>
-                <FormDots form={data.overview.form} />
-              </section>
-            </aside>
+              <RadarCard items={data.matches} className="flex-1" />
+            </div>
           </div>
-          <ActivityHeatmap items={data.matches} />
-          {data.heroes.length > 0 && (
-            <section>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="display text-lg font-bold">Top-Helden</h2>
-                <NavLink href="/heroes" className="text-sm text-amber hover:underline">Alle Helden →</NavLink>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{data.heroes.slice(0, 4).map((h) => <HeroTile key={h.heroId} h={h} />)}</div>
+
+          {/* Zeile 2: gleiche Spaltenbreiten wie oben */}
+          <div className="grid items-stretch gap-5 xl:grid-cols-[300px_minmax(0,1fr)_320px]">
+            <RecordsCard items={data.matches} />
+            <div className="flex flex-col gap-5">
+              <ActivityHeatmap items={data.matches} />
+              <FormTrendCard form={data.overview.form} trend={data.overview.trend} className="flex-1" />
+            </div>
+            <section className="surface flex flex-col p-5">
+              <div className="mb-3 flex items-center justify-between"><h2 className="label">Top-Helden</h2><NavLink href="/heroes" className="flex items-center gap-1 text-xs text-amber hover:underline">Alle<Icon name="arrowRight" size={12} /></NavLink></div>
+              <div className="flex flex-1 flex-col justify-between gap-3">{data.heroes.slice(0, 3).map((h) => <HeroTile key={h.heroId} h={h} />)}</div>
             </section>
-          )}
+          </div>
         </>
       )}
     </Gate>

@@ -1,5 +1,5 @@
 import * as real from "./deadlock-api";
-import { demoActive, demoBuilds, demoHeroMeta, demoHistory, demoLeaderboard, demoMatch, demoMates, demoMatchups, demoProfiles, demoRank, demoSearch, demoTopItems } from "../fixtures";
+import { demoActive, demoBuilds, demoRanks, demoScoutHistory, demoHeroMeta, demoHistory, demoLeaderboard, demoMatch, demoMates, demoMatchups, demoProfiles, demoRank, demoSearch, demoTopItems } from "../fixtures";
 import type { HistoryEntry, MatchDetails } from "../types";
 
 export { ApiError } from "./deadlock-api";
@@ -25,3 +25,6 @@ export const fetchBuilds = (heroId: number) => (demo() ? Promise.resolve(demoBui
 export const fetchTopItems = (heroId: number) => (demo() ? Promise.resolve(demoTopItems(heroId)) : real.fetchTopItems(heroId));
 export const fetchCounters = (heroId: number) => (demo() ? Promise.resolve(demoMatchups(heroId)) : real.fetchCounters(heroId));
 export const fetchSynergies = (heroId: number) => (demo() ? Promise.resolve(demoMatchups(heroId + 1)) : real.fetchSynergies(heroId));
+export const fetchRanks = (ids: number[]) => (demo() ? Promise.resolve(demoRanks(ids)) : real.fetchRanks(ids));
+/** Historie für das Scouting fremder Spieler (im Demo-Modus mit unterschiedlichen Profilen). */
+export const fetchScoutHistory = (id: number): Promise<HistoryEntry[]> => (demo() ? Promise.resolve(demoScoutHistory(id)) : real.fetchHistory(id));

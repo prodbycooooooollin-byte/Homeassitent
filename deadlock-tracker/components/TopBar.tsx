@@ -3,24 +3,36 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "./Logo";
 import { Avatar } from "./GameAssets";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 import { NavLink } from "./NavLink";
-import { useTracker } from "./Providers";
+import { useData, useTracker } from "./Providers";
 import { fmtAgo } from "@/lib/format";
 import { parseAccountId } from "@/lib/steamid";
 
-const NAV = [
-  { href: "/", label: "Übersicht" },
-  { href: "/matches", label: "Matches" },
-  { href: "/heroes", label: "Helden" },
-  { href: "/rank", label: "Rang" },
-  { href: "/insights", label: "Analyse" },
-  { href: "/achievements", label: "Erfolge" },
-  { href: "/mates", label: "Mitspieler" },
-  { href: "/compare", label: "Vergleich" },
-  { href: "/meta", label: "Meta" },
-  { href: "/leaderboard", label: "Bestenliste" },
+interface NavItem { href: string; label: string; icon: IconName; desc: string }
+type NavEntry = ({ kind: "link"; key: string } & NavItem) | { kind: "menu"; key: string; label: string; items: NavItem[] };
+
+/** Hauptnavigation: wenige Einträge, Details in zwei Menüs. */
+const NAV: NavEntry[] = [
+  { kind: "link", key: "home", href: "/", label: "Übersicht", icon: "grid", desc: "" },
+  { kind: "link", key: "live", href: "/live", label: "Live", icon: "eye", desc: "" },
+  { kind: "link", key: "matches", href: "/matches", label: "Matches", icon: "list", desc: "" },
+  { kind: "menu", key: "player", label: "Spieler", items: [
+    { href: "/heroes", label: "Helden", icon: "sword", desc: "Deine Helden-Statistiken" },
+    { href: "/rank", label: "Rang", icon: "rocket", desc: "Verlauf, Peak und Einordnung" },
+    { href: "/achievements", label: "Erfolge", icon: "medal", desc: "Medaillen und Level" },
+    { href: "/mates", label: "Mitspieler", icon: "users", desc: "Partner, Premade und Gegner" },
+    { href: "/compare", label: "Vergleich", icon: "swap", desc: "Zwei Spieler im Duell" },
+  ] },
+  { kind: "menu", key: "trends", label: "Trends", items: [
+    { href: "/insights", label: "Analyse", icon: "trendUp", desc: "Wann und gegen wen du gewinnst" },
+    { href: "/meta", label: "Meta", icon: "layers", desc: "Helden-Tierliste, Builds, Matchups" },
+    { href: "/leaderboard", label: "Bestenliste", icon: "trophy", desc: "Die besten Spieler je Region" },
+  ] },
 ];
+const FLAT: NavItem[] = NAV.flatMap((n) => (n.kind === "link" ? [n] : n.items));
+const isActive = (href: string, path: string) => (href === "/" ? path === "/" || path.startsWith("/match/") : path.startsWith(href));
+const entryActive = (n: NavEntry, path: string) => (n.kind === "link" ? isActive(n.href, path) : n.items.some((i) => isActive(i.href, path)));
 
 export function TopBar() {
   const { status, account, setAccount, syncNow, syncing, toasts, dismissToast } = useTracker();
@@ -28,29 +40,55 @@ export function TopBar() {
   const path = usePathname();
   const me = status?.players.find((p) => p.accountId === account);
   const ok = me?.lastSyncOk !== false;
-  const activeHref = NAV.find((n) => (n.href === "/" ? path === "/" || path.startsWith("/match/") : path.startsWith(n.href)))?.href ?? "/";
+  const activeKey = NAV.find((n) => entryActive(n, path))?.key ?? "home";
+  const { live } = useData();
+  const [menu, setMenu] = useState<string | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => setMenu(null), [path]);
 
   // Gleitender Unterstrich unter dem aktiven Tab
   const navRef = useRef<HTMLElement>(null);
   const [ind, setInd] = useState({ left: 0, width: 0 });
   useLayoutEffect(() => {
-    const el = navRef.current?.querySelector<HTMLElement>(`[data-href="${activeHref}"]`);
+    const el = navRef.current?.querySelector<HTMLElement>(`[data-key="${activeKey}"]`);
     if (el) setInd({ left: el.offsetLeft, width: el.offsetWidth });
-  }, [activeHref, status]);
+  }, [activeKey, status, live]);
 
   return (
     <>
       <header className="topbar sticky top-0 z-30 border-b border-white/[0.06] bg-[#080a10]/70 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1560px] items-center gap-4 px-5">
           <NavLink href="/" aria-label="Deadlock Tracker" className="transition hover:scale-[1.03]"><Logo /></NavLink>
-          <nav ref={navRef} className="relative hidden h-full items-center gap-0 xl:flex">
-            {NAV.map((n) => (
-              <NavLink key={n.href} href={n.href} data-href={n.href}
-                className={`whitespace-nowrap rounded-lg px-2.5 py-2 text-sm font-medium transition ${activeHref === n.href ? "text-white" : "text-muted hover:text-white"}`}>
-                {n.label}
-              </NavLink>
-            ))}
-            <span className="nav-ind" style={{ left: ind.left + 6, width: Math.max(0, ind.width - 12) }} />
+          <nav ref={navRef} className="relative hidden h-full items-center gap-1 lg:flex">
+            {NAV.map((n) => {
+              const active = activeKey === n.key;
+              const cls = `flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition ${active ? "text-white" : "text-muted hover:text-white"}`;
+              if (n.kind === "link") {
+                return (
+                  <NavLink key={n.key} href={n.href} data-key={n.key} className={cls}>
+                    {n.key === "live" && <span className={live ? "live-pulse !h-2 !w-2" : "h-2 w-2 rounded-full bg-white/20"} />}{n.label}
+                  </NavLink>
+                );
+              }
+              return (
+                <div key={n.key} className="relative h-full" onMouseEnter={() => { clearTimeout(closeTimer.current); setMenu(n.key); }} onMouseLeave={() => { closeTimer.current = setTimeout(() => setMenu((m) => (m === n.key ? null : m)), 140); }}>
+                  <button data-key={n.key} onClick={() => setMenu((m) => (m === n.key ? null : n.key))} className={`${cls} h-full`} aria-expanded={menu === n.key}>
+                    {n.label}<Icon name="chevron" size={12} className={`transition-transform ${menu === n.key ? "-rotate-90" : "rotate-90"}`} />
+                  </button>
+                  {menu === n.key && (
+                    <div className="surface fade-up absolute left-0 top-[calc(100%-6px)] z-40 w-72 overflow-hidden p-1.5 shadow-2xl">
+                      {n.items.map((it) => (
+                        <NavLink key={it.href} href={it.href} className={`flex items-center gap-3 rounded-lg px-2.5 py-2 transition hover:bg-white/[0.07] ${isActive(it.href, path) ? "bg-white/[0.06]" : ""}`}>
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-amber"><Icon name={it.icon} size={16} /></span>
+                          <span className="min-w-0"><span className="block text-sm font-semibold">{it.label}</span><span className="block truncate text-[11px] text-muted">{it.desc}</span></span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <span className="nav-ind" style={{ left: ind.left + 8, width: Math.max(0, ind.width - 16) }} />
           </nav>
           <div className="ml-auto flex items-center gap-3">
             <SearchBox />
@@ -89,9 +127,9 @@ export function TopBar() {
           </div>
         </div>
         {/* Mobile Navigation */}
-        <nav className="flex gap-1 overflow-x-auto border-t border-white/[0.04] px-3 py-1.5 xl:hidden">
-          {NAV.map((n) => (
-            <NavLink key={n.href} href={n.href} className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm ${activeHref === n.href ? "bg-white/[0.08] text-white" : "text-muted"}`}>{n.label}</NavLink>
+        <nav className="flex gap-1 overflow-x-auto border-t border-white/[0.04] px-3 py-1.5 lg:hidden">
+          {FLAT.map((n) => (
+            <NavLink key={n.href} href={n.href} className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm ${isActive(n.href, path) ? "bg-white/[0.08] text-white" : "text-muted"}`}>{n.label}</NavLink>
           ))}
         </nav>
       </header>

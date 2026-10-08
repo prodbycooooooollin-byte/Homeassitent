@@ -33,13 +33,14 @@ export function demoSearch(q: string): SteamProfile[] {
 export const demoRank = 75;
 
 export function demoActive(accountId: number, now = Date.now()): ActiveMatchDto | null {
-  // Alle 20 Minuten läuft für 6 Minuten ein Demo-Match (zeigt die Live-Anzeige).
-  const phase = Math.floor(now / 60000) % 20;
+  // Alle 20 Minuten läuft für 6 Minuten ein Demo-Match (DEADLOCK_DEMO_LIVE=1: dauerhaft).
+  const phase = process.env.DEADLOCK_DEMO_LIVE === "1" ? 3 : Math.floor(now / 60000) % 20;
   if (phase >= 6) return null;
   const r = rng(Math.floor(now / 1200000));
   return {
     matchId: 79999999, startTime: Math.floor(now / 1000) - (phase * 60 + 840), durationS: phase * 60 + 840, mode: "Ranked",
-    players: Array.from({ length: 12 }, (_, i) => ({ accountId: i === 0 ? accountId : 0, heroId: 1 + Math.floor(r() * DEMO_HEROES.length), team: (i < 6 ? 0 : 1) as 0 | 1 })),
+    netWorth: [118400, 104200], objectives: [1, 2],
+    players: Array.from({ length: 12 }, (_, i) => ({ accountId: i === 0 ? accountId : 810000 + i, heroId: 1 + Math.floor(r() * DEMO_HEROES.length), team: (i < 6 ? 0 : 1) as 0 | 1 })),
   };
 }
 
@@ -161,3 +162,18 @@ export function demoMatch(matchId: number, focusAccount: number, now = Date.now(
     avgBadge: [avg(0), avg(1)], players, objectives, midBoss: [{ team: winningTeam, t: Math.round(durationS * 0.4) }],
   };
 }
+
+/** Demo-Historien mit unterschiedlichem Profil je Spieler (Neuling, aggressiv, Smurf, Veteran …). */
+export function demoScoutHistory(accountId: number): HistoryEntry[] {
+  const base = demoHistory(accountId);
+  const v = accountId % 12;
+  const r = rng(accountId * 31);
+  const count = [0, 4, 30, 30, 22, 30, 30, 18, 30, 30, 12, 30][v];
+  const aggr = [1, 1, 1.7, 0.6, 1, 1.2, 0.8, 1, 1.9, 1, 1, 0.7][v];
+  const winBias = [0.5, 0.5, 0.5, 0.4, 0.78, 0.5, 0.35, 0.5, 0.5, 0.6, 0.5, 0.5][v];
+  return base.slice(0, count).map((m, i) => ({
+    ...m, accountId, heroId: v === 5 && i % 3 === 0 ? 3 : m.heroId, won: r() < winBias,
+    kills: Math.round(m.kills * aggr), deaths: Math.max(0, Math.round(m.deaths * (v === 3 ? 0.5 : aggr))), assists: Math.round(m.assists * (v === 11 ? 1.8 : 1)),
+  }));
+}
+export const demoRanks = (ids: number[]) => new Map(ids.map((id) => [id, 40 + ((id * 7) % 5) * 10 + 1 + (id % 6)] as const));

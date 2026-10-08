@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Providers } from "@/components/Providers";
 import { TopBar } from "@/components/TopBar";
-import { Aurora, PointerGlow, RouteProgress } from "@/components/RouteEffects";
+import { Aurora, RouteProgress } from "@/components/RouteEffects";
 import { UpdateBanner } from "@/components/UpdateBanner";
 
 export const metadata: Metadata = {
@@ -17,7 +17,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <Aurora />
           <RouteProgress />
-          <PointerGlow />
           <TopBar />
           <main className="mx-auto max-w-[1560px] px-5 pb-14 pt-5">{children}</main>
           <UpdateBanner />

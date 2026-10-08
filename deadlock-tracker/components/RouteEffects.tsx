@@ -5,26 +5,6 @@ import { TIER_COLORS, useHero } from "./GameAssets";
 import { tierOf } from "@/lib/ranks";
 import { useData } from "./Providers";
 
-/** Lichtschein, der dem Mauszeiger über Karten folgt (setzt --gx/--gy auf der Karte unter dem Zeiger). */
-export function PointerGlow() {
-  useEffect(() => {
-    let raf = 0;
-    const move = (e: MouseEvent) => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const el = (e.target as HTMLElement | null)?.closest?.(".surface") as HTMLElement | null;
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        el.style.setProperty("--gx", `${e.clientX - r.left}px`);
-        el.style.setProperty("--gy", `${e.clientY - r.top}px`);
-      });
-    };
-    window.addEventListener("mousemove", move, { passive: true });
-    return () => { window.removeEventListener("mousemove", move); cancelAnimationFrame(raf); };
-  }, []);
-  return null;
-}
-
 /** Fortschrittsbalken oben + Entfernen der Exit-Klasse nach Navigation. */
 export function RouteProgress() {
   const path = usePathname();
