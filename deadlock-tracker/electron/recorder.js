@@ -19,6 +19,8 @@ const add = (kind, text) => {
 
 // Dauerrauschen der console.log (Tausende Zeilen pro Sekunde) – nicht aufzeichnen
 const NOISE = /OnPostPredictionError|\[Particles\]|\[Localization System\]|\[ResourceSystem\]|Dynamic prop|Camera Pose|without yielding|Job .* has spent/i;
+// Zeilen, die Phasenwechsel oder Match-Kennungen verraten – werden zusätzlich als PHASE markiert und oben im Bericht als Zeitleiste zusammengefasst
+const KEY = /ChangeGameState|Loaded hero|Post ?Game|\[Networking\]|SDR server|match[_ ]?id|matchid|salt|matchmak|queue|party|lobby|connect(ing|ed) to|disconnect|map load|loadmap|server @/i;
 function run(cmd, args, timeout = 8000) {
   return new Promise((resolve) => execFile(cmd, args, { windowsHide: true, timeout, maxBuffer: 16 * 1024 * 1024 }, (e, out) => resolve(e ? "" : String(out))));
 }
@@ -109,7 +111,7 @@ async function start() {
       if (!prev) { rec.keyState.set(f, { size: st.size, mtime: st.mtimeMs }); add("DATEI", `${path.basename(f)} vorhanden (${st.size} B)`); if (/reconnect/.test(f)) logSmall(f); continue; }
       if (st.size === prev.size && st.mtimeMs === prev.mtime) continue;
       if (/console\.log$/.test(f) && st.size > prev.size) {
-        try { const fd = fs.openSync(f, "r"); const len = Math.min(st.size - prev.size, 128 * 1024); const b = Buffer.alloc(len); fs.readSync(fd, b, 0, len, prev.size); fs.closeSync(fd); for (const l of b.toString("utf8").split(/\r?\n/)) if (l.trim() && !NOISE.test(l)) add("LOG", `console.log: ${l.trim()}`); } catch { /* egal */ }
+        try { const fd = fs.openSync(f, "r"); const len = Math.min(st.size - prev.size, 128 * 1024); const b = Buffer.alloc(len); fs.readSync(fd, b, 0, len, prev.size); fs.closeSync(fd); for (const l of b.toString("utf8").split(/\r?\n/)) if (l.trim() && !NOISE.test(l)) { add("LOG", `console.log: ${l.trim()}`); if (KEY.test(l)) add("PHASE", l.trim().slice(0, 300)); } } catch { /* egal */ }
       } else if (/reconnect/.test(f)) { add("DATEI", `reconnect.dat geändert (${prev.size} → ${st.size} B)`); logSmall(f); }
       rec.keyState.set(f, { size: st.size, mtime: st.mtimeMs });
     }
@@ -159,8 +161,9 @@ function stop() {
 
 function reset() { if (rec && !rec.stopped) stop(); rec = null; return status(); }
 
+function dedupe(lines) { const out = []; let prev = ""; for (const l of lines) { const k = l.replace(/^\S+\s+/, ""); if (k !== prev) out.push(l); prev = k; } return out; }
 function status() {
-  return rec ? { running: !rec.stopped, startedAt: rec.t0, count: rec.lines.length, text: rec.lines.slice(-20000).join("\n") } : { running: false, startedAt: null, count: 0, text: "" };
+  return rec ? { running: !rec.stopped, startedAt: rec.t0, count: rec.lines.length, text: ["=== ZEITLEISTE (Phasen & Kennungen) ===", ...dedupe(rec.lines.filter((l) => / PHASE /.test(l))).slice(-300), "=== ALLES ===", ...rec.lines.slice(-20000)].join("\n") } : { running: false, startedAt: null, count: 0, text: "" };
 }
 
 module.exports = { start, stop, reset, status };
