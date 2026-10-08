@@ -3,6 +3,7 @@ import base64
 import hmac
 import json
 import os
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -16,7 +17,8 @@ load_dotenv()
 store = Store(os.getenv("DB_PATH", "counter.db"))
 TZ = os.getenv("TIMEZONE", "Europe/Berlin")
 PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
-HTML = (Path(__file__).parent / "dashboard.html").read_bytes()
+BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))  # _MEIPASS: Ordner in der PyInstaller-EXE
+HTML = (BASE / "dashboard.html").read_bytes()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -64,7 +66,11 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-if __name__ == "__main__":
+def serve() -> None:
     host, port = os.getenv("DASHBOARD_HOST", "127.0.0.1"), int(os.getenv("DASHBOARD_PORT", "8080"))
     print(f"Dashboard läuft auf http://{host}:{port}")
     ThreadingHTTPServer((host, port), Handler).serve_forever()
+
+
+if __name__ == "__main__":
+    serve()
