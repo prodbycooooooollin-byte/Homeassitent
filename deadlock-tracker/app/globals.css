@@ -297,3 +297,4 @@ html.fx-off .debrief-spark, html.fx-reduced .debrief-spark, html.fx-off .debrief
 .debrief-dot { animation: debrief-pop .4s cubic-bezier(.2,1.6,.4,1) backwards; }
 .debrief-figure-img { transform: translate(calc(var(--px) * -26px), calc(var(--py) * -12px)); transition: transform .25s ease-out; animation: debrief-figure 1.4s cubic-bezier(.2,.9,.2,1) .4s backwards; }
 @keyframes debrief-figure { from { opacity: 0; transform: translateX(140px) scale(.94); } }
+.debrief-hero { -webkit-mask-image: radial-gradient(ellipse 85% 95% at 72% 50%, #000 40%, transparent 100%); mask-image: radial-gradient(ellipse 85% 95% at 72% 50%, #000 40%, transparent 100%); }

@@ -70,7 +70,7 @@ function useCountUp(target: number, delayMs = 0, ms = 1100): number {
   return v;
 }
 
-const STAGE_W = 1360, STAGE_H = 720;
+const STAGE_W = 1360, STAGE_H = 770, CONTENT_W = 860;
 /** Feste Bühne, die so skaliert wird, dass der Debrief ohne Scrollen genau in das Fenster passt (oben Titelleiste, unten Aktionsleiste). */
 function useStage() {
   const calc = () => {
@@ -139,9 +139,9 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
       {celebrate && <div className="debrief-burst pointer-events-none fixed inset-0" />}
 
       {/* Held rechts: Illustration über die ganze rechte Seite, ohne Rahmen, weich in den Hintergrund verlaufend */}
-      <div className="debrief-hero pointer-events-none fixed inset-y-0 right-0 hidden w-[58%] lg:block">
+      <div className="debrief-hero pointer-events-none fixed inset-y-0 right-0 hidden w-[62%] lg:block">
         <div className="absolute inset-0" style={{ background: `radial-gradient(70% 75% at 70% 45%, ${color}77, ${color}22 55%, transparent 80%)` }} />
-        <div className="debrief-hero-img absolute inset-0">
+        <div className="debrief-hero-img absolute -inset-[6%]">
           {art.src ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={art.src} onError={art.onError} alt="" className="debrief-art-img absolute inset-0 h-full w-full object-cover" style={{ objectPosition: hero?.art ? "center" : "50% 20%" }} />
@@ -149,9 +149,6 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
             <div className="absolute inset-0 flex items-center justify-end pr-[8%]"><span className="display select-none text-[min(52vh,520px)] font-extrabold leading-none" style={{ color: `${color}40` }}>{heroName(me.heroId).slice(0, 1)}</span></div>
           ) : null}
         </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-[#05060a] via-[#05060a]/55 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-[#05060a] via-[#05060a]/60 to-transparent" />
-        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#05060a]/70 to-transparent" />
       </div>
 
       {/* Held als Figur: freigestellt, rechts unten, folgt der Maus */}
@@ -163,7 +160,7 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
       )}
 
       <div className="absolute left-1/2 z-10" style={{ top: stage.top + stage.h / 2, width: STAGE_W, height: STAGE_H, transform: `translate(-50%, -50%) scale(${stage.k})` }}>
-        <div className="flex h-full flex-col">
+        <div className="flex h-full flex-col" style={{ width: CONTENT_W }}>
           <div className="flex h-[78px] shrink-0 items-start justify-between gap-6">
             <div className="min-w-0">
               <h1 className="debrief-title display text-5xl font-extrabold uppercase leading-none" style={{ color: accent }}>
@@ -172,7 +169,7 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
               <div className="debrief-line mt-2 h-[3px] w-48 rounded-full" style={{ background: `linear-gradient(90deg, ${accent}, transparent)` }} />
               {d && me && <div className="debrief-fade mt-2 flex flex-wrap items-center gap-x-3 text-xs uppercase tracking-widest text-muted" style={{ ["--d" as string]: "0.6s" }}><b className="text-white">{heroName(me.heroId)}</b><span>/ {fmtDuration(d.durationS)}</span>{d.matchMode && <span>/ {d.matchMode}</span>}{req.test && <span className="rounded bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber">{req.sample ? "Beispiel" : "Testansicht"}</span>}{noFx && <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] normal-case tracking-normal">Effekte aus</span>}</div>}
             </div>
-            {d && me?.badge && <div className="debrief-fade mr-[150px] flex items-center gap-3 rounded-full border border-white/10 bg-black/40 py-1.5 pl-2 pr-5 backdrop-blur" style={{ ["--d" as string]: "0.9s" }}><RankEmblem badge={me.badge} size={34} /><span className="text-xs text-muted">Rang im Match<br /><b className="text-sm text-white">{formatBadge(me.badge)}</b>{res?.lobbyBadge ? <span> · Lobby-Ø <b className="text-white">{formatBadge(res.lobbyBadge)}</b></span> : null}</span></div>}
+            {d && me?.badge && <div className="debrief-fade flex shrink-0 items-center gap-3 rounded-full border border-white/10 bg-black/40 py-1.5 pl-2 pr-5 backdrop-blur" style={{ ["--d" as string]: "0.9s" }}><RankEmblem badge={me.badge} size={34} /><span className="text-xs text-muted">Rang im Match<br /><b className="text-sm text-white">{formatBadge(me.badge)}</b>{res?.lobbyBadge ? <span> · Lobby-Ø <b className="text-white">{formatBadge(res.lobbyBadge)}</b></span> : null}</span></div>}
           </div>
 
           {d && !me ? (
@@ -188,28 +185,26 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
             </div>
           ) : (
             <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3.5">
-              <div className="grid h-[380px] shrink-0 grid-cols-[430px_minmax(0,1fr)_430px] gap-6">
+              <div className="grid h-[318px] shrink-0 grid-cols-[400px_minmax(0,1fr)] gap-6">
                 <div className="relative min-w-0">
                   <div className="debrief-fade mb-1.5 grid grid-cols-[1fr_52px_52px] px-1 text-[10px] font-semibold uppercase tracking-widest text-muted" style={{ ["--d" as string]: "0.7s" }}><span>Tippe eine Zeile an</span><span className="text-center">Team</span><span className="text-center">Lobby</span></div>
                   <div className="space-y-1">{db.rows.map((r, i) => <Row key={r.label} r={r} i={i} d={d} me={me} accent={accent} />)}</div>
                 </div>
-
                 <div className="flex min-w-0 flex-col items-center justify-center">
                   <Gauge rating={rating} score={score} />
-                  <p className="debrief-fade mt-1 max-w-[420px] text-center text-[15px] leading-snug text-white/90" style={{ ["--d" as string]: "2.2s" }}>{db.verdict}</p>
+                  <p className="debrief-fade mt-1 max-w-[400px] text-center text-[14px] leading-snug text-white/90" style={{ ["--d" as string]: "2.2s" }}>{db.verdict}</p>
                 </div>
-
-                <div className="flex min-w-0 flex-col gap-3">
-                  <Side title="Deine stärkste Seite" tone="#3ecf8e" icon="trendUp" item={db.best} delay={2.4} />
-                  <Side title="Deine schwächste Seite" tone="#f0616d" icon="trendDown" item={db.worst} delay={2.6} />
-                  <div className="debrief-fade debrief-card min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-3.5 backdrop-blur" style={{ ["--d" as string]: "2.8s" }}>
-                    <div className="label mb-1.5 flex items-center gap-1.5"><Icon name="eye" size={13} />Analyse</div>
-                    <ul className="space-y-1 text-[12.5px] leading-snug">
-                      {db.good.slice(0, 2).map((t, i) => <li key={"g" + i} className="debrief-item flex gap-2" style={{ ["--d" as string]: `${3 + i * 0.15}s` }}><Icon name="check" size={13} className="mt-0.5 shrink-0 text-[#3ecf8e]" /><span>{t}</span></li>)}
-                      {db.bad.slice(0, 2).map((t, i) => <li key={"b" + i} className="debrief-item flex gap-2" style={{ ["--d" as string]: `${3.4 + i * 0.15}s` }}><Icon name="x" size={13} className="mt-0.5 shrink-0 text-[#f0616d]" /><span>{t}</span></li>)}
-                      {!db.good.length && !db.bad.length && <li className="text-muted">Keine auffälligen Stärken oder Schwächen.</li>}
-                    </ul>
-                  </div>
+              </div>
+              <div className="grid h-[132px] shrink-0 grid-cols-3 gap-3">
+                <Side title="Stärkste Seite" tone="#3ecf8e" icon="trendUp" item={db.best} delay={2.4} />
+                <Side title="Schwächste Seite" tone="#f0616d" icon="trendDown" item={db.worst} delay={2.6} />
+                <div className="debrief-fade debrief-card min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-3 backdrop-blur" style={{ ["--d" as string]: "2.8s" }}>
+                  <div className="label mb-1 flex items-center gap-1.5"><Icon name="eye" size={13} />Analyse</div>
+                  <ul className="space-y-0.5 text-[11.5px] leading-snug">
+                    {db.good.slice(0, 1).map((t, i) => <li key={"g" + i} className="debrief-item flex gap-1.5" style={{ ["--d" as string]: `${3 + i * 0.15}s` }}><Icon name="check" size={12} className="mt-0.5 shrink-0 text-[#3ecf8e]" /><span className="line-clamp-2">{t}</span></li>)}
+                    {db.bad.slice(0, 2).map((t, i) => <li key={"b" + i} className="debrief-item flex gap-1.5" style={{ ["--d" as string]: `${3.4 + i * 0.15}s` }}><Icon name="x" size={12} className="mt-0.5 shrink-0 text-[#f0616d]" /><span className="line-clamp-2">{t}</span></li>)}
+                    {!db.good.length && !db.bad.length && <li className="text-muted">Keine auffälligen Stärken oder Schwächen.</li>}
+                  </ul>
                 </div>
               </div>
               <div className="min-h-0 flex-1"><MatchPulse d={d} me={me} accent={accent} /></div>
@@ -272,9 +267,9 @@ const DEFS: Record<string, (p: MatchDetails["players"][number]) => number> = {
 
 function Side({ title, tone, icon, item, delay }: { title: string; tone: string; icon: "trendUp" | "trendDown"; item: { label: string; score: number; detail: string } | null; delay: number }) {
   return (
-    <div className="debrief-fade debrief-card shrink-0 rounded-2xl border p-3.5 backdrop-blur" style={{ borderColor: `${tone}55`, background: `linear-gradient(160deg, ${tone}14, rgba(0,0,0,.45))`, ["--d" as string]: `${delay}s` }}>
+    <div className="debrief-fade debrief-card min-h-0 overflow-hidden rounded-2xl border p-3 backdrop-blur" style={{ borderColor: `${tone}55`, background: `linear-gradient(160deg, ${tone}14, rgba(0,0,0,.45))`, ["--d" as string]: `${delay}s` }}>
       <div className="label mb-1.5 flex items-center gap-1.5" style={{ color: tone }}><Icon name={icon} size={13} />{title}</div>
-      {item ? <><div className="flex items-baseline justify-between gap-2"><div className="display truncate text-xl font-extrabold">{item.label}</div><div className="num shrink-0 text-sm font-bold" style={{ color: tone }}>Score {item.score.toFixed(2)}</div></div><p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-muted">{item.detail}</p></> : <p className="text-sm text-muted">Nicht bewertbar.</p>}
+      {item ? <><div className="display truncate text-lg font-extrabold leading-tight">{item.label}</div><div className="num text-xs font-bold" style={{ color: tone }}>Score {item.score.toFixed(2)}</div><p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-muted">{item.detail}</p></> : <p className="text-sm text-muted">Nicht bewertbar.</p>}
     </div>
   );
 }
@@ -288,7 +283,7 @@ function Gauge({ rating, score }: { rating: Rating | null; score: number }) {
   const seg = C / GRADES.length;
   const col = grade ? GRADE_STYLE[grade].glow.replace(/,[^,]*\)$/, ",1)") : "#8b94a8";
   return (
-    <div className="relative h-[270px] w-[270px]"><div className="absolute left-0 top-0 h-[300px] w-[300px] origin-top-left scale-90">
+    <div className="relative h-[236px] w-[236px]"><div className="absolute left-0 top-0 h-[300px] w-[300px] origin-top-left scale-[.787]">
       <div className="debrief-shock absolute inset-6 rounded-full" style={{ borderColor: col }} />
       <svg viewBox="0 0 300 300" className="absolute inset-0 -rotate-90">
         {GRADES.map((g, i) => <circle key={g} cx="150" cy="150" r={R} fill="none" stroke={GRADE_STYLE[g].glow.replace(/,[^,]*\)$/, ",.22)")} strokeWidth="14" strokeDasharray={`${seg - 6} ${C - seg + 6}`} strokeDashoffset={-i * seg} />)}
@@ -310,7 +305,7 @@ function MatchPulse({ d, me, accent }: { d: MatchDetails; me: MatchDetails["play
   const tp = useMemo(() => turningPoint(d, me), [d, me]);
   const [hover, setHover] = useState<number | null>(null);
   if (adv.length < 4) return null;
-  const W = 1310, CH = 84, LANE = 13, P = { l: 56, r: 14, t: 8 };
+  const W = 840, CH = 70, LANE = 13, P = { l: 52, r: 12, t: 8 };
   const H = P.t + CH + 10 + LANE * 3 + 18;
   const end = adv[adv.length - 1].t || 1;
   const lim = Math.max(1500, ...adv.map((a) => Math.abs(a.v)));
