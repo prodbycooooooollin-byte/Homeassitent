@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.on("ingest:state", handler);
     return () => ipcRenderer.removeListener("ingest:state", handler);
   },
+  recorder: (action) => ipcRenderer.invoke("recorder:control", action),
   getMatchWatch: () => ipcRenderer.invoke("matchwatch:info"),
   onMatchEnded: (cb) => {
     const handler = (_e, m) => cb(m);

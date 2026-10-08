@@ -61,6 +61,7 @@ export default function StatusPage() {
         </section>
       )}
       <Detection />
+      <Recorder />
       <section className="surface p-5">
         <div className="label mb-1">Ein Match fehlt?</div>
         <p className="text-sm text-muted">
@@ -152,6 +153,34 @@ function Detection() {
         </div>
       )}
       <p className="mt-3 text-xs leading-relaxed text-muted">Die API bekommt Match-Daten erst, wenn das Spiel sie lädt: Das passiert nach Spielende und zuverlässig, wenn du im Spiel kurz den Match-Verlauf (Profil → Matches) öffnest. Der Helfer meldet die Daten dann sofort weiter, und das Match erscheint hier innerhalb von Sekunden bis wenigen Minuten. Echte Live-Daten gibt es nur für Matches, die die API im Zuschauer-Feed führt.</p>
+    </section>
+  );
+}
+
+/** Signal-Aufnahme: zeichnet während einer Runde lokal auf, welche Dateien/Prozesse/Verbindungen sich ändern – Grundlage, um die Lobby-Erkennung beim Ladebildschirm zu bauen. */
+function Recorder() {
+  const [st, setSt] = useState<{ running: boolean; startedAt: number | null; count: number; text: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!window.desktop?.recorder) return;
+    const load = () => window.desktop!.recorder("status").then(setSt).catch(() => null);
+    load(); const t = setInterval(load, 2000); return () => clearInterval(t);
+  }, []);
+  if (!st) return null;
+  const act = (a: "start" | "stop" | "reset") => window.desktop!.recorder(a).then(setSt);
+  const copy = () => { navigator.clipboard?.writeText(st.text.slice(-24000)); setCopied(true); setTimeout(() => setCopied(false), 2500); };
+  return (
+    <section className="surface p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <div><div className="label">Signal-Aufnahme (Entwickler-Hilfe)</div><p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">Zeichnet lokal auf, was beim Spielen auf diesem PC passiert (neue Dateien, Logzeilen, Prozesse, Verbindungen). Starte sie vor dem Match, spiel bis zum Ladebildschirm und etwas darüber hinaus, beende sie und kopiere den Bericht – so finden wir heraus, wo das Spiel die Lobby schon beim Laden verrät. Es wird nichts hochgeladen.</p></div>
+        <div className="ml-auto flex gap-2">
+          {!st.running ? <button onClick={() => act("start")} className="btn btn-gold text-sm">Aufnahme starten</button> : <button onClick={() => act("stop")} className="btn btn-gold text-sm">Aufnahme beenden</button>}
+          {st.count > 0 && <button onClick={copy} className="btn btn-ghost text-sm">{copied ? "Kopiert" : "Bericht kopieren"}</button>}
+          {st.count > 0 && !st.running && <button onClick={() => act("reset")} className="btn btn-ghost text-sm">Verwerfen</button>}
+        </div>
+      </div>
+      {st.running && <p className="mt-2 text-xs text-amber">● Aufnahme läuft · {st.count} Ereignisse</p>}
+      {st.count > 0 && <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-black/30 p-3 text-[11px] leading-relaxed text-muted">{st.text.split("\n").slice(-60).join("\n")}</pre>}
     </section>
   );
 }

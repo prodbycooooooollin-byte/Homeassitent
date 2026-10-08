@@ -36,7 +36,8 @@ function log(line, src = "app") {
   if (src !== "app" && MATCH_RE.test(text)) {
     state.matches++;
     if (Date.now() - startedAt > 30_000) {
-      for (const m of text.matchAll(/(?<![\d.])(\d{7,10})(?![\d.])/g)) { const id = Number(m[1]); if (id > 1e7 && !seenIds.has(id)) { seenIds.add(id); try { hintCb(id); } catch { /* egal */ } } }
+      // Der Helfer protokolliert „Ingested salts: Salts { match_id: 123, … }“ – nur die Match-ID zählt (die Salts sind ebenfalls lange Zahlen)
+      for (const m of text.matchAll(/match_?id\W{1,4}(\d{7,10})\b/gi)) { const id = Number(m[1]); if (id > 1e7 && !seenIds.has(id)) { seenIds.add(id); try { hintCb(id); } catch { /* egal */ } } }
     }
   }
   if (src === "stderr" ? ERR_RE.test(text) : src === "app" && /^(Fehler|Download fehlgeschlagen)/.test(text)) state.errors++;

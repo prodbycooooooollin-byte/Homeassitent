@@ -25,6 +25,7 @@ export interface DesktopBridge {
   getIngest(): Promise<IngestState>;
   controlIngest(action: IngestAction): Promise<IngestState>;
   onIngestState(cb: (s: IngestState) => void): () => void;
+  recorder(action: "start" | "stop" | "reset" | "status"): Promise<{ running: boolean; startedAt: number | null; count: number; text: string }>;
   getMatchWatch(): Promise<{ dirs: string[]; last: { matchId: number; at: number } | null; error: string | null; watching: boolean }>;
   onMatchEnded(cb: (m: { matchId: number; at: number }) => void): () => void;
   wasUpdated(): Promise<boolean>;
