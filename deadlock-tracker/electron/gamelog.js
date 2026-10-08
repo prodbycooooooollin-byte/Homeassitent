@@ -8,6 +8,7 @@ const { execFile } = require("child_process");
 const STATE_RE = /ChangeGameState:\s*(\w+)\s*\((\d+)\)/;
 const SERVER_RE = /\[Networking\]\s*server\s*@\s*([\d.]+:\d+)/i;
 const HERO_RE = /\b(hero_[a-z0-9_]+)\s+respawned/i;
+const LOADED_RE = /\[Server\]\s*Loaded hero\s+(\d+)\/(hero_[a-z0-9_]+)/i;
 const ENDED = new Set(["PostGame", "GameEnd", "End", "Ended", "Postgame"]);
 
 function run(cmd, args) {
@@ -26,7 +27,7 @@ async function steamRoots() {
   return [...roots];
 }
 
-const fresh = () => ({ available: false, file: null, state: null, stateN: null, stateAt: null, server: null, heroes: [], matchStartedAt: null, matchEndedAt: null, updatedAt: null });
+const fresh = () => ({ available: false, file: null, state: null, stateN: null, stateAt: null, server: null, heroes: [], heroIds: {}, matchStartedAt: null, matchEndedAt: null, updatedAt: null });
 let log = fresh();
 let timer = null, file = null, pos = 0;
 let listeners = [];
@@ -42,11 +43,15 @@ function handle(line, now) {
   }
   if ((m = STATE_RE.exec(line))) {
     const [, name, n] = m;
-    if (name === "HeroSelection") { log.heroes = []; log.matchStartedAt = null; log.matchEndedAt = null; }
+    if (name === "HeroSelection") { log.heroes = []; log.heroIds = {}; log.matchStartedAt = null; log.matchEndedAt = null; }
     log.state = name; log.stateN = Number(n); log.stateAt = now;
     if (name === "GameInProgress" && !log.matchStartedAt) log.matchStartedAt = now;
     if (ENDED.has(name)) { log.matchEndedAt = now; }
     emit({ type: "state", state: name });
+  } else if ((m = LOADED_RE.exec(line))) {
+    const h = m[2].toLowerCase();
+    if (!log.heroes.includes(h)) log.heroes.push(h);
+    log.heroIds[h] = Number(m[1]);
   } else if ((m = HERO_RE.exec(line))) {
     const h = m[1].toLowerCase();
     if (!log.heroes.includes(h)) log.heroes.push(h);

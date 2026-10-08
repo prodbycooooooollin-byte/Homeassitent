@@ -17,6 +17,8 @@ const add = (kind, text) => {
   while (rec.chars > MAX_CHARS && rec.lines.length > 10) rec.chars -= rec.lines.shift().length;
 };
 
+// Dauerrauschen der console.log (Tausende Zeilen pro Sekunde) – nicht aufzeichnen
+const NOISE = /OnPostPredictionError|\[Particles\]|\[Localization System\]|\[ResourceSystem\]|Dynamic prop|Camera Pose|without yielding|Job .* has spent/i;
 function run(cmd, args, timeout = 8000) {
   return new Promise((resolve) => execFile(cmd, args, { windowsHide: true, timeout, maxBuffer: 16 * 1024 * 1024 }, (e, out) => resolve(e ? "" : String(out))));
 }
@@ -107,7 +109,7 @@ async function start() {
       if (!prev) { rec.keyState.set(f, { size: st.size, mtime: st.mtimeMs }); add("DATEI", `${path.basename(f)} vorhanden (${st.size} B)`); if (/reconnect/.test(f)) logSmall(f); continue; }
       if (st.size === prev.size && st.mtimeMs === prev.mtime) continue;
       if (/console\.log$/.test(f) && st.size > prev.size) {
-        try { const fd = fs.openSync(f, "r"); const len = Math.min(st.size - prev.size, 128 * 1024); const b = Buffer.alloc(len); fs.readSync(fd, b, 0, len, prev.size); fs.closeSync(fd); for (const l of b.toString("utf8").split(/\r?\n/)) if (l.trim()) add("LOG", `console.log: ${l.trim()}`); } catch { /* egal */ }
+        try { const fd = fs.openSync(f, "r"); const len = Math.min(st.size - prev.size, 128 * 1024); const b = Buffer.alloc(len); fs.readSync(fd, b, 0, len, prev.size); fs.closeSync(fd); for (const l of b.toString("utf8").split(/\r?\n/)) if (l.trim() && !NOISE.test(l)) add("LOG", `console.log: ${l.trim()}`); } catch { /* egal */ }
       } else if (/reconnect/.test(f)) { add("DATEI", `reconnect.dat geändert (${prev.size} → ${st.size} B)`); logSmall(f); }
       rec.keyState.set(f, { size: st.size, mtime: st.mtimeMs });
     }
