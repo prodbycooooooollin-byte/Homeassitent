@@ -16,7 +16,7 @@ let quitting = false;
 let serverPort = 0;
 let settings = desktopSettings.DEFAULTS;
 
-const asset = (name) => path.join(__dirname, "..", "build", name);
+const asset = (name) => path.join(__dirname, "..", "app-icons", name);
 const standaloneDir = () => (app.isPackaged ? path.join(process.resourcesPath, "standalone") : path.join(__dirname, "..", ".next", "standalone"));
 
 function freePort() {

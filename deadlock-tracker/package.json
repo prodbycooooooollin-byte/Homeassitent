@@ -42,9 +42,7 @@
     },
     "files": [
       "electron/**",
-      "build/icon.png",
-      "build/icon.ico",
-      "build/tray.png",
+      "app-icons/**",
       "package.json"
     ],
     "extraResources": [
@@ -58,15 +56,15 @@
         "nsis",
         "portable"
       ],
-      "icon": "build/icon.ico"
+      "icon": "app-icons/icon.ico"
     },
     "nsis": {
       "artifactName": "Deadlock-Tracker-Setup.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico",
+      "installerIcon": "app-icons/icon.ico",
+      "uninstallerIcon": "app-icons/icon.ico",
+      "installerHeaderIcon": "app-icons/icon.ico",
       "shortcutName": "Deadlock Tracker"
     },
     "portable": {

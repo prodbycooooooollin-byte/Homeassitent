@@ -55,6 +55,10 @@ jobs:
       - name: Abhängigkeiten installieren
         run: npm ci
 
+      - name: Icons vorhanden?
+        shell: bash
+        run: test -f app-icons/icon.ico && test -f app-icons/tray.png
+
       - name: Typprüfung
         run: npm run typecheck
 
