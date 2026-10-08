@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Word Counter Dashboard</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root { --bg:#0f1117; --card:#181b24; --line:#262b38; --text:#e8eaf0; --muted:#8b92a5; --accent:#ff5a5f; --accent2:#ffb347; }
   * { box-sizing: border-box; }
@@ -18,16 +17,30 @@
   .w6 { grid-column:span 6; } .w12 { grid-column:span 12; }
   h2 { margin:0 0 12px; font-size:15px; color:var(--muted); font-weight:600; }
   .chart { position:relative; height:260px; }
+  code { background:var(--bg); padding:1px 5px; border-radius:4px; }
   .row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); }
   .row:last-child { border:0; } .rank { width:28px; text-align:center; } .nm { flex:1; }
   .bar { height:6px; background:var(--line); border-radius:3px; margin-top:4px; } .bar i { display:block; height:100%; background:var(--accent); border-radius:3px; }
+  .bars { display:flex; align-items:flex-end; gap:3px; height:100%; padding-top:18px; }
+  .col { flex:1; min-width:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; }
+  .col .b { width:100%; background:var(--accent); border-radius:4px 4px 0 0; min-height:2px; position:relative; transition:height .3s; }
+  .col .b.zero { background:var(--line); }
+  .col .n { font-size:11px; color:var(--text); margin-bottom:2px; }
+  .col .x { font-size:10px; color:var(--muted); margin-top:4px; white-space:nowrap; height:14px; }
+  .donut-wrap { display:flex; align-items:center; gap:24px; height:100%; flex-wrap:wrap; justify-content:center; }
+  .donut { width:170px; height:170px; border-radius:50%; flex:none; }
+  .legend div { display:flex; align-items:center; gap:8px; font-size:13px; padding:2px 0; }
+  .legend i { width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .empty { color:var(--muted); display:flex; align-items:center; justify-content:center; height:100%; }
   .muted { color:var(--muted); font-size:13px; }
   @media (max-width:800px) { .kpi { grid-column:span 6; } .w6 { grid-column:span 12; } }
 </style>
 </head>
 <body>
 <header><h1>📊 Word Counter</h1><select id="guild"></select></header>
+<div id="err" class="card" style="display:none;margin:8px auto;max-width:1168px;color:#ff8a8a"></div>
 <main>
+  <div id="hint" class="card w12" style="display:none">Noch keine Treffer erfasst. Sobald der Bot im Sprachkanal (<code>/join</code>) etwas erkennt, erscheinen hier die Statistiken.</div>
   <div class="card kpi"><div class="v" id="k-total">–</div><div class="l">Gesamt</div></div>
   <div class="card kpi"><div class="v" id="k-today">–</div><div class="l">Heute</div></div>
   <div class="card kpi"><div class="v" id="k-peak">–</div><div class="l">Stärkste Uhrzeit</div></div>
@@ -38,53 +51,86 @@
   <div class="card kpi"><div class="v" id="k-users">–</div><div class="l">Personen in der Liste</div></div>
 
   <div class="card w6"><h2>🏆 Rangliste</h2><div id="board"></div></div>
-  <div class="card w6"><h2>Anteil pro Person</h2><div class="chart"><canvas id="c-share"></canvas></div></div>
-  <div class="card w12"><h2>🕐 Tageszeit – wann fällt das Wort am häufigsten?</h2><div class="chart"><canvas id="c-hour"></canvas></div></div>
-  <div class="card w6"><h2>Wochentage</h2><div class="chart"><canvas id="c-week"></canvas></div></div>
-  <div class="card w6"><h2>Letzte 30 Tage</h2><div class="chart"><canvas id="c-day"></canvas></div></div>
+  <div class="card w6"><h2>Anteil pro Person</h2><div class="chart" id="c-share"></div></div>
+  <div class="card w12"><h2>🕐 Tageszeit – wann fällt das Wort am häufigsten?</h2><div class="chart" id="c-hour"></div></div>
+  <div class="card w6"><h2>Wochentage</h2><div class="chart" id="c-week"></div></div>
+  <div class="card w6"><h2>Letzte 30 Tage</h2><div class="chart" id="c-day"></div></div>
   <div class="card w12"><h2>Lieblings-Uhrzeit pro Person</h2><div id="peaks" class="muted"></div></div>
 </main>
 <script>
 const $ = id => document.getElementById(id);
 const COLORS = ['#ff5a5f','#ffb347','#4cc9f0','#80ed99','#b388ff','#f72585','#90be6d','#f9c74f','#577590','#adb5bd'];
-const charts = {};
-Chart.defaults.color = '#8b92a5'; Chart.defaults.borderColor = '#262b38';
-
-function draw(id, type, labels, values, opts = {}) {
-  charts[id]?.destroy();
-  charts[id] = new Chart($(id), {
-    type, data: { labels, datasets: [{ data: values, backgroundColor: opts.colors || '#ff5a5f', borderColor: '#ff5a5f', borderWidth: type === 'line' ? 2 : 0, fill: type === 'line', tension: .3, borderRadius: 4 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type === 'doughnut', position: 'right' } },
-      scales: type === 'doughnut' ? {} : { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } }
-  });
-}
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hh = h => h == null ? '–' : String(h).padStart(2, '0') + ':00';
+
+// Säulendiagramm (reines HTML/CSS, keine Bibliothek nötig)
+function bars(id, labels, values, every = 1) {
+  const max = Math.max(...values, 1);
+  $(id).innerHTML = '<div class="bars">' + values.map((v, i) =>
+    `<div class="col"><div class="n">${v || ''}</div>
+     <div class="b ${v ? '' : 'zero'}" style="height:${v ? Math.max(3, 80 * v / max) : 0}%" title="${esc(labels[i])}: ${v}"></div>
+     <div class="x">${i % every === 0 ? esc(labels[i]) : ''}</div></div>`).join('') + '</div>';
+}
+
+function donut(id, items) {
+  const total = items.reduce((s, x) => s + x.count, 0);
+  if (!total) { $(id).innerHTML = '<div class="empty">Noch keine Daten</div>'; return; }
+  let acc = 0;
+  const stops = items.map((x, i) => {
+    const from = acc; acc += 100 * x.count / total;
+    return `${COLORS[i % COLORS.length]} ${from}% ${acc}%`;
+  }).join(',');
+  $(id).innerHTML = `<div class="donut-wrap"><div class="donut" style="background:conic-gradient(${stops});
+    -webkit-mask:radial-gradient(circle 52px at center,transparent 98%,#000 100%);mask:radial-gradient(circle 52px at center,transparent 98%,#000 100%)"></div>
+    <div class="legend">${items.map((x, i) => `<div><i style="background:${COLORS[i % COLORS.length]}"></i>${esc(x.name)} <b>${x.count}</b> <span class="muted">(${x.share}%)</span></div>`).join('')}</div></div>`;
+}
+
+function line(id, labels, values) {
+  const W = 600, H = 220, P = 24, max = Math.max(...values, 1), n = values.length;
+  const x = i => P + (W - 2 * P) * i / Math.max(n - 1, 1), y = v => H - P - (H - 2 * P) * v / max;
+  const pts = values.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+  $(id).innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%">
+    <line x1="${P}" y1="${H - P}" x2="${W - P}" y2="${H - P}" stroke="#262b38"/>
+    <polygon points="${x(0)},${H - P} ${pts} ${x(n - 1)},${H - P}" fill="rgba(255,90,95,.18)"/>
+    <polyline points="${pts}" fill="none" stroke="#ff5a5f" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+    ${values.map((v, i) => v ? `<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="#ff5a5f"><title>${esc(labels[i])}: ${v}</title></circle>` : '').join('')}
+    <text x="${P}" y="${H - 6}" fill="#8b92a5" font-size="11">${esc(labels[0])}</text>
+    <text x="${W - P}" y="${H - 6}" fill="#8b92a5" font-size="11" text-anchor="end">${esc(labels[n - 1])}</text>
+    <text x="${P}" y="14" fill="#8b92a5" font-size="11">max ${max}</text></svg>`;
+}
 
 async function load() {
-  const g = $('guild').value;
-  const d = await (await fetch('/api/stats' + (g ? '?guild=' + g : ''))).json();
-  if (!$('guild').options.length) {
-    $('guild').innerHTML = d.guilds.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
-    $('guild').value = d.guild;
-  }
-  const hh = h => h == null ? '–' : String(h).padStart(2, '0') + ':00';
-  $('k-total').textContent = d.total; $('k-today').textContent = d.today;
-  $('k-peak').textContent = hh(d.peak_hour); $('k-7').textContent = d.last7; $('k-streak').textContent = d.streak;
-  $('k-top').textContent = d.top_user ? d.top_user.name : '–';
-  $('k-best').textContent = d.best_day ? d.best_day.count : '–';
-  $('k-best-l').textContent = d.best_day ? 'Rekordtag (' + d.best_day.date.split('-').reverse().join('.') + ')' : 'Rekordtag';
-  $('k-users').textContent = d.leaderboard.length;
+  try {
+    const g = $('guild').value;
+    const res = await fetch('/api/stats' + (g ? '?guild=' + g : ''));
+    if (!res.ok) throw new Error('Server antwortete mit ' + res.status);
+    const d = await res.json();
+    $('err').style.display = 'none';
+    if (d.guilds.length && $('guild').options.length !== d.guilds.length) {
+      $('guild').innerHTML = d.guilds.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+      $('guild').value = d.guild;
+    }
+    $('k-total').textContent = d.total; $('k-today').textContent = d.today;
+    $('k-peak').textContent = hh(d.peak_hour); $('k-7').textContent = d.last7; $('k-streak').textContent = d.streak;
+    $('k-top').textContent = d.top_user ? d.top_user.name : '–';
+    $('k-best').textContent = d.best_day ? d.best_day.count : '–';
+    $('k-best-l').textContent = d.best_day ? 'Rekordtag (' + d.best_day.date.split('-').reverse().join('.') + ')' : 'Rekordtag';
+    $('k-users').textContent = d.leaderboard.length;
+    $('hint').style.display = d.total ? 'none' : 'block';
 
-  const max = d.leaderboard[0]?.count || 1;
-  const medals = ['🥇','🥈','🥉'];
-  $('board').innerHTML = d.leaderboard.map((u, i) => `<div class="row"><div class="rank">${medals[i] || i + 1}</div>
-    <div class="nm">${esc(u.name)}<div class="bar"><i style="width:${100 * u.count / max}%"></i></div></div><b>${u.count}</b></div>`).join('')
-    || '<div class="muted">Noch keine Daten.</div>';
-  draw('c-share', 'doughnut', d.leaderboard.map(u => u.name), d.leaderboard.map(u => u.count), { colors: COLORS });
-  draw('c-hour', 'bar', [...Array(24).keys()].map(h => hh(h)), d.by_hour);
-  draw('c-week', 'bar', d.by_weekday.labels, d.by_weekday.values);
-  draw('c-day', 'line', d.daily.labels, d.daily.values);
-  $('peaks').innerHTML = d.user_peak.map(u => `<span style="display:inline-block;margin:0 18px 6px 0"><b style="color:var(--text)">${esc(u.name)}</b> ${hh(u.hour)}</span>`).join('') || 'Noch keine Daten.';
+    const max = d.leaderboard[0]?.count || 1, medals = ['🥇','🥈','🥉'];
+    $('board').innerHTML = d.leaderboard.map((u, i) => `<div class="row"><div class="rank">${medals[i] || i + 1}</div>
+      <div class="nm">${esc(u.name)}<div class="bar"><i style="width:${100 * u.count / max}%"></i></div></div><b>${u.count}</b></div>`).join('')
+      || '<div class="muted">Noch keine Daten.</div>';
+    donut('c-share', d.leaderboard);
+    bars('c-hour', [...Array(24).keys()].map(hh), d.by_hour, 1);
+    bars('c-week', d.by_weekday.labels, d.by_weekday.values);
+    line('c-day', d.daily.labels, d.daily.values);
+    $('peaks').innerHTML = d.user_peak.map(u => `<span style="display:inline-block;margin:0 18px 6px 0"><b style="color:var(--text)">${esc(u.name)}</b> ${hh(u.hour)}</span>`).join('') || 'Noch keine Daten.';
+  } catch (e) {
+    $('err').textContent = 'Daten konnten nicht geladen werden: ' + e.message + ' (läuft die EXE noch?)';
+    $('err').style.display = 'block';
+  }
 }
 $('guild').onchange = load;
 load(); setInterval(load, 30000);

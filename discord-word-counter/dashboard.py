@@ -60,6 +60,11 @@ class Handler(BaseHTTPRequestHandler):
             data["guilds"] = [{"id": str(g), "name": n} for g, n in guilds]
             data["guild"] = str(gid) if gid else None
             return self._send(200, json.dumps(data).encode(), "application/json")
+        if url.path == "/favicon.ico":
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         self._send(404, b"not found", "text/plain")
 
     def log_message(self, *args):
