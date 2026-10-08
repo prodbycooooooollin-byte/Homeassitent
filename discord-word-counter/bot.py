@@ -1,4 +1,5 @@
 import asyncio
+import io
 import os
 import time
 from collections import Counter
@@ -9,7 +10,9 @@ from discord.ext import voice_recv
 from dotenv import load_dotenv
 
 from db import Store
+from charts import render
 from matcher import count_hits
+from stats import compute
 from transcriber import Transcriber
 
 load_dotenv()
@@ -151,6 +154,75 @@ async def leaderboard(interaction: discord.Interaction):
     ]
     embed = discord.Embed(title="🏆 Rangliste", description="\n".join(lines), color=0xE74C3C)
     await interaction.response.send_message(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+
+
+TZ = os.getenv("TIMEZONE", "Europe/Berlin")
+RANGES = {"all": ("Gesamt", None), "30": ("Letzte 30 Tage", 30), "7": ("Letzte 7 Tage", 7), "1": ("Heute", 1)}
+
+
+def build_dashboard(guild: discord.Guild, rng: str) -> tuple[discord.Embed, discord.File]:
+    label, days = RANGES[rng]
+    events = store.events(guild.id)
+    if days:
+        # "Heute" = seit Mitternacht (Serverzeit), sonst die letzten N Tage
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        midnight = datetime.now(ZoneInfo(TZ)).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        cutoff = midnight - (days - 1) * 86400
+        events = [e for e in events if e[1] >= cutoff]
+    names = store.names(guild.id)
+    for uid, _, _ in events:  # Anzeigenamen aktuell halten
+        m = guild.get_member(uid)
+        if m:
+            names[uid] = m.display_name
+    d = compute(events, names, TZ)
+    png = render(d, f"{guild.name}  ·  {label}")
+    hour = f"{d['peak_hour']:02d}:00 Uhr" if d["peak_hour"] is not None else "–"
+    best = f"{d['best_day']['count']}× am {d['best_day']['date'][8:]}.{d['best_day']['date'][5:7]}." if d["best_day"] else "–"
+    top = f"{d['top_user']['name']} ({d['top_user']['count']})" if d["top_user"] else "–"
+    embed = discord.Embed(title=f"📊 Dashboard · {label}", color=0xFF5A5F)
+    embed.add_field(name="Gesamt", value=f"**{d['total']}**")
+    embed.add_field(name="Heute", value=f"**{d['today']}**")
+    embed.add_field(name="Letzte 7 Tage", value=f"**{d['last7']}**")
+    embed.add_field(name="🏆 Spitzenreiter", value=top)
+    embed.add_field(name="🕐 Stärkste Uhrzeit", value=hour)
+    embed.add_field(name="🔥 Serie / Rekordtag", value=f"{d['streak']} Tage / {best}")
+    embed.set_image(url="attachment://dashboard.png")
+    embed.set_footer(text="Nur Anzahl, Zeit und Name werden gespeichert – kein Audio, kein Text.")
+    return embed, discord.File(io.BytesIO(png), filename="dashboard.png")
+
+
+class DashboardView(discord.ui.View):
+    def __init__(self, guild: discord.Guild, rng: str):
+        super().__init__(timeout=900)
+        self.guild, self.rng = guild, rng
+        sel = discord.ui.Select(
+            placeholder="Zeitraum",
+            options=[discord.SelectOption(label=v[0], value=k, default=(k == rng)) for k, v in RANGES.items()],
+        )
+        sel.callback = self.on_select
+        self.add_item(sel)
+
+    async def _update(self, interaction: discord.Interaction, rng: str):
+        await interaction.response.defer()
+        embed, file = await asyncio.to_thread(build_dashboard, self.guild, rng)
+        await interaction.edit_original_response(embed=embed, attachments=[file], view=DashboardView(self.guild, rng))
+
+    async def on_select(self, interaction: discord.Interaction):
+        await self._update(interaction, interaction.data["values"][0])
+
+    @discord.ui.button(label="Aktualisieren", emoji="🔄", style=discord.ButtonStyle.secondary)
+    async def refresh(self, interaction: discord.Interaction, _button: discord.ui.Button):
+        await self._update(interaction, self.rng)
+
+
+@tree.command(name="dashboard", description="Dashboard mit Statistiken und Diagrammen")
+@app_commands.choices(zeitraum=[app_commands.Choice(name=v[0], value=k) for k, v in RANGES.items()])
+async def dashboard_cmd(interaction: discord.Interaction, zeitraum: app_commands.Choice[str] | None = None):
+    await interaction.response.defer()
+    rng = zeitraum.value if zeitraum else "all"
+    embed, file = await asyncio.to_thread(build_dashboard, interaction.guild, rng)
+    await interaction.followup.send(embed=embed, file=file, view=DashboardView(interaction.guild, rng))
 
 
 @tree.command(name="stats", description="Zähler für dich oder eine andere Person")

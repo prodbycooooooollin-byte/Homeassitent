@@ -52,9 +52,11 @@ def main() -> None:
     import discord
 
     import bot
-    import dashboard
 
-    threading.Thread(target=dashboard.serve, daemon=True).start()
+    if os.getenv("WEB_DASHBOARD") == "1":  # optional: zusätzlich Browser-Dashboard
+        import dashboard
+
+        threading.Thread(target=dashboard.serve, daemon=True).start()
     try:
         bot.bot.run(token)
     except discord.LoginFailure:

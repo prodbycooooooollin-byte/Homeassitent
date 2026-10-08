@@ -32,7 +32,7 @@ jobs:
           --collect-all discord --collect-all discord.ext.voice_recv
           --collect-all faster_whisper --collect-all ctranslate2
           --collect-all av --collect-all nacl --collect-all cffi --collect-all davey --hidden-import _cffi_backend --collect-all tzdata
-          --hidden-import bot --hidden-import dashboard
+          --hidden-import bot --hidden-import dashboard --hidden-import matplotlib.backends.backend_agg --exclude-module tkinter
           main.py
       - name: Beispiel-Konfiguration beilegen
         run: |
