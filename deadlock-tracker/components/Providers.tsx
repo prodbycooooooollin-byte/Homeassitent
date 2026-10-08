@@ -16,7 +16,7 @@ export interface Status {
   coverage?: { total: number; withDetails: number };
   players: TrackedPlayerDto[];
   live: { matchId: number; firstSeenAt: number; accounts: number[] }[];
-  detection?: { game: { running: boolean; since: number | null; endedAt: number | null }; gameLog?: { available: boolean; state: string | null; server: string | null; heroes: string[]; map?: string | null; inMatch?: boolean; matchEndedAt: number | null } | null; hints: { matchId: number; source: string; at: number; tries: number; last?: string; done?: string }[]; liveFeed: { checkedAt: number; ok: boolean; fast: boolean } };
+  detection?: { game: { running: boolean; since: number | null; endedAt: number | null }; gameLog?: { available: boolean; state: string | null; server: string | null; heroes: string[]; map?: string | null; inMatch?: boolean; matchId?: number | null; matchEndedAt: number | null } | null; hints: { matchId: number; source: string; at: number; tries: number; last?: string; done?: string }[]; liveFeed: { checkedAt: number; ok: boolean; fast: boolean } };
 }
 export interface Toast { id: number; matchId: number; account: number }
 

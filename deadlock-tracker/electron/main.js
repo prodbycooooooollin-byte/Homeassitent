@@ -153,6 +153,16 @@ async function createWindow() {
   if (settings.ingest) ingest.start();
   ingest.onHint((id) => postHint(id, "ingest"));
   startGameWatch();
+  // Match-ID aus dem Spiel-Log: sobald das Match vorbei ist (PostGame / Lobby zerstört / zurück ins Hideout), sofort laden
+  const hinted = new Set();
+  gamelog.onEvent((ev) => {
+    if (ev.type !== "matchOver" && ev.type !== "matchEnd") return;
+    const id = ev.matchId || (gamelog.get().matchId);
+    if (!id || hinted.has(id)) return;
+    hinted.add(id);
+    postHint(id, "log");
+    if (win && !win.isDestroyed()) win.webContents.send("match:ended", { matchId: id, source: "log" });
+  });
   gamelog.start().catch(() => { /* optional */ });
   matchwatch.start((m) => { postHint(m.matchId, "cache"); if (win && !win.isDestroyed()) win.webContents.send("match:ended", m); }).catch(() => { /* optional */ });
   await win.loadURL(`http://127.0.0.1:${serverPort}/`);
