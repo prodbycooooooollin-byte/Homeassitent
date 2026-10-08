@@ -35,6 +35,8 @@ Ohne Netzwerk: `DEADLOCK_DEMO=1` startet mit generierten Demo-Daten.
 | Einstellungen | **Steam-Anmeldung (OpenID)**, Abfrage-Takt, Historie im Hintergrund vervollständigen, Benachrichtigungen, Effekte, Dichte; Desktop: Tray, Autostart, Updates |
 | Diagnose | Testet alle API-Endpunkte, zeigt Status, Rate-Limits und Fehler |
 
+**Match-Daten-Helfer (Desktop):** Die Desktop-App startet im Hintergrund das Open-Source-Programm [deadlock-api-ingest](https://github.com/deadlock-api/deadlock-api-ingest) (MIT). Es liest Match-Salts aus dem Steam-Cache und meldet sie der Deadlock-API, damit eigene Matches dort schneller verfügbar sind. Die Programmdatei wird beim ersten Start aus dem offiziellen GitHub-Release nach `%APPDATA%/…/ingest` geladen (alle 7 Tage erneuert); Ein/Aus unter Einstellungen → Desktop-App, Status und Protokoll unter Diagnose. Läuft bereits eine eigene Installation, wird nichts doppelt gestartet.
+
 **Live-Erkennung:** `/v1/matches/active` zeigt laufende Matches. Endet eines, pollt der Server die Historie
 einige Minuten im 5-s-Takt (sonst 20 s). Details (beide Teams, Ränge, Zeitreihen) werden ohne Steam-Fallback
 geladen (Limit 3/h pro IP); frische Matches nutzen nach 3 Fehlversuchen höchstens 2 Steam-Abrufe pro Stunde.

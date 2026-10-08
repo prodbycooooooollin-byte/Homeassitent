@@ -5,6 +5,7 @@ import { Avatar } from "@/components/GameAssets";
 import { Icon, type IconName } from "@/components/Icon";
 import { NavLink } from "@/components/NavLink";
 import { useSettings, useTracker } from "@/components/Providers";
+import { INGEST_COLOR, useIngest } from "@/components/useIngest";
 import { useUpdater } from "@/components/useUpdater";
 import type { DesktopSettings } from "@/lib/desktop";
 
@@ -12,6 +13,7 @@ export default function SettingsPage() {
   const { settings, update, steam, disconnectSteam } = useSettings();
   const { status, removePlayer, setAccount, setPrimary, primary, account } = useTracker();
   const up = useUpdater();
+  const ing = useIngest();
   const [desk, setDesk] = useState<DesktopSettings | null>(null);
   const [steamMsg, setSteamMsg] = useState<string | null>(null);
   useEffect(() => { window.desktop?.getDesktopSettings().then(setDesk).catch(() => {}); }, []);
@@ -82,6 +84,12 @@ export default function SettingsPage() {
           <Row title="Im Hintergrund weiterlaufen" desc="Beim Schließen des Fensters bleibt der Tracker im Infobereich der Taskleiste aktiv und erkennt weiter neue Matches."><Switch on={desk.closeToTray} onChange={(v) => setD({ closeToTray: v })} /></Row>
           <Row title="Mit Windows starten" desc="Startet den Tracker automatisch bei der Anmeldung."><Switch on={desk.autoStart} onChange={(v) => setD({ autoStart: v })} /></Row>
           <Row title="Beim Autostart minimiert starten" desc="Nur im Infobereich starten, ohne das Fenster zu öffnen."><Switch on={desk.startMinimized} onChange={(v) => setD({ startMinimized: v })} disabled={!desk.autoStart} /></Row>
+          <Row title="Match-Daten-Helfer im Hintergrund" desc="Startet das Open-Source-Programm deadlock-api-ingest zusammen mit dem Tracker. Es liest Match-Salts aus dem Steam-Cache und meldet sie der Deadlock-API – so stehen deine Matches dort meist deutlich schneller bereit. Die Programmdatei wird einmalig aus dem offiziellen GitHub-Release geladen.">
+            <div className="flex items-center gap-3">
+              {ing && <span className="flex items-center gap-1.5 text-xs text-muted"><i className="h-2 w-2 rounded-full" style={{ background: INGEST_COLOR[ing.state] }} />{ing.message}</span>}
+              <Switch on={desk.ingest} onChange={(v) => setD({ ingest: v })} />
+            </div>
+          </Row>
           <Row title="Windows-Benachrichtigungen" desc="Zeigt neue Matches als Systembenachrichtigung."><Switch on={desk.desktopNotifications} onChange={(v) => setD({ desktopNotifications: v })} /></Row>
           {up && (
             <Row title={`Version ${up.current}`} desc={up.status === "unsupported" ? up.message : up.status === "ready" ? `Update ${up.version} ist bereit.` : up.status === "downloading" ? `Update ${up.version} wird geladen (${up.percent}%).` : up.status === "error" ? `Update-Prüfung fehlgeschlagen: ${up.message}` : up.status === "checking" ? "Suche nach Updates …" : "Die App prüft automatisch auf Updates."}>

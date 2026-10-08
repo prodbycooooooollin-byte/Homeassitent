@@ -19,6 +19,12 @@ contextBridge.exposeInMainWorld("desktop", {
   // Desktop-Einstellungen (Tray, Autostart, Benachrichtigungen)
   getDesktopSettings: () => ipcRenderer.invoke("desktop:get"),
   setDesktopSettings: (patch) => ipcRenderer.invoke("desktop:set", patch),
+  getIngest: () => ipcRenderer.invoke("ingest:status"),
+  onIngestState: (cb) => {
+    const handler = (_e, s) => cb(s);
+    ipcRenderer.on("ingest:state", handler);
+    return () => ipcRenderer.removeListener("ingest:state", handler);
+  },
   notify: (n) => ipcRenderer.invoke("desktop:notify", n),
   onNavigate: (cb) => {
     const handler = (_e, p) => cb(p);

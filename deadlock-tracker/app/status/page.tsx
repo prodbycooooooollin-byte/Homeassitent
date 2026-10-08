@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { PageTitle } from "@/components/ui";
 import { useTracker } from "@/components/Providers";
+import { INGEST_COLOR, useIngest } from "@/components/useIngest";
 import { useUpdater } from "@/components/useUpdater";
 
 interface Check { name: string; url: string; ok: boolean; status: number | string; ms: number; summary: string; limits?: string }
@@ -14,6 +15,7 @@ interface Diag {
 export default function StatusPage() {
   const { status } = useTracker();
   const up = useUpdater();
+  const ing = useIngest();
   const [d, setD] = useState<Diag | null>(null);
   const [busy, setBusy] = useState(false);
   const run = async () => {
@@ -45,6 +47,13 @@ export default function StatusPage() {
               : up.status !== "unsupported" && <button onClick={() => window.desktop?.checkForUpdates()} className="btn btn-ghost">Nach Updates suchen</button>}
             {up.status === "unsupported" && <a className="btn btn-ghost" href={up.releasesUrl} target="_blank" rel="noreferrer">Release-Seite</a>}
           </div>
+        </section>
+      )}
+      {ing && (
+        <section className="surface p-5">
+          <div className="flex items-center gap-3"><div className="label">Match-Daten-Helfer (deadlock-api-ingest)</div><span className="ml-auto flex items-center gap-1.5 text-sm"><i className="h-2.5 w-2.5 rounded-full" style={{ background: INGEST_COLOR[ing.state] }} />{ing.message}</span></div>
+          <p className="mt-1 text-sm text-muted">Läuft im Hintergrund der Desktop-App und meldet Match-Salts aus dem Steam-Cache an die Deadlock-API. Ein- und ausschalten unter Einstellungen → Desktop-App.</p>
+          {ing.lines.length > 0 && <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-black/30 p-3 text-[11px] leading-relaxed text-muted">{ing.lines.slice(-20).join("\n")}</pre>}
         </section>
       )}
       <section className="surface p-5">

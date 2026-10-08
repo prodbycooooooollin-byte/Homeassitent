@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { app } = require("electron");
 
-const DEFAULTS = { closeToTray: false, autoStart: false, startMinimized: false, desktopNotifications: true };
+const DEFAULTS = { closeToTray: false, autoStart: false, startMinimized: false, desktopNotifications: true, ingest: true };
 const file = () => path.join(app.getPath("userData"), "desktop-settings.json");
 
 function load() {

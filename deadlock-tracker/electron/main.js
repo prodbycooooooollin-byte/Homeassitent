@@ -6,6 +6,7 @@ const net = require("net");
 const http = require("http");
 const updater = require("./updater");
 const desktopSettings = require("./desktop-settings");
+const ingest = require("./ingest");
 
 app.setAppUserModelId("local.deadlock-tracker"); // gruppiert die Taskbar-Symbole und sorgt für korrekte Benachrichtigungen
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -110,15 +111,19 @@ async function createWindow() {
     if (!quitting && settings.closeToTray) { e.preventDefault(); win.hide(); buildTray(); }
   });
   updater.setup(win);
+  ingest.onChange((s) => { if (win && !win.isDestroyed()) win.webContents.send("ingest:state", s); });
+  if (settings.ingest) ingest.start();
   await win.loadURL(`http://127.0.0.1:${serverPort}/`);
   if (settings.closeToTray) buildTray();
 }
 
 ipcMain.handle("desktop:get", () => settings);
+ipcMain.handle("ingest:status", () => ingest.getStatus());
 ipcMain.handle("desktop:set", (_e, patch) => {
   settings = { ...settings, ...desktopSettings.sanitize(patch || {}) };
   desktopSettings.save(settings);
   applyLoginItem();
+  if (settings.ingest) ingest.start(); else ingest.stop();
   if (settings.closeToTray) buildTray();
   else if (tray) { tray.destroy(); tray = null; }
   return settings;
@@ -132,7 +137,7 @@ ipcMain.handle("desktop:notify", (_e, n) => {
 });
 
 app.on("second-instance", showWindow);
-app.on("before-quit", () => { quitting = true; });
+app.on("before-quit", () => { quitting = true; ingest.stop(); });
 
 app.whenReady().then(() => {
   settings = desktopSettings.load();
