@@ -8,3 +8,4 @@ next-env.d.ts
 release
 .next
 electron/replay-worker.bundle.mjs
+release-installer

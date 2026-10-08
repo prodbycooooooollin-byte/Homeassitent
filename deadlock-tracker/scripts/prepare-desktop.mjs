@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const run = (cmd, args) => {
@@ -11,8 +12,11 @@ const run = (cmd, args) => {
 };
 
 // Replay-Worker als einzelne Datei bündeln (läuft später als eigener Prozess, ohne node_modules daneben)
-run("npx", ["esbuild", "electron/replay-worker.mjs", "--bundle", "--platform=node", "--format=esm", "--target=node20",
-  "--banner:js=import { createRequire as __cr } from 'module'; const require = __cr(import.meta.url);", "--outfile=electron/replay-worker.bundle.mjs", "--log-level=warning"]);
+await build({
+  entryPoints: [join(root, "electron", "replay-worker.mjs")], bundle: true, platform: "node", format: "esm", target: "node20",
+  banner: { js: "import { createRequire as __cr } from 'module'; const require = __cr(import.meta.url);" },
+  outfile: join(root, "electron", "replay-worker.bundle.mjs"), logLevel: "warning",
+});
 
 rmSync(join(root, ".next"), { recursive: true, force: true });
 run("npx", ["next", "build"]);

@@ -82,6 +82,12 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+      # Eigener Installer (Oberfläche mit Fortschritt); lädt zur Laufzeit das Installationspaket aus dem Update-Release
+      - name: Eigenen Installer bauen
+        run: npm run dist:installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
       - name: Paketinhalt prüfen (eingebetteter Server vorhanden?)
         shell: bash
         run: |
@@ -91,6 +97,7 @@ jobs:
           test -f release/latest.yml
           grep -q "version: ${APP_VERSION}" release/latest.yml
           ls release/*.exe release/latest.yml
+          test -f release-installer/Deadlock-Tracker-Installer.exe
 
       - name: Artefakte hochladen
         uses: actions/upload-artifact@v4
@@ -100,6 +107,7 @@ jobs:
             deadlock-tracker/release/*.exe
             deadlock-tracker/release/*.blockmap
             deadlock-tracker/release/latest.yml
+            deadlock-tracker/release-installer/Deadlock-Tracker-Installer.exe
           if-no-files-found: error
 
       - name: GitHub-Release erstellen
@@ -112,13 +120,16 @@ jobs:
           body: |
             Windows-Build des Deadlock Trackers.
 
-            - `Deadlock-Tracker-Setup.exe`: Installer (aktualisiert sich danach automatisch)
+            - `Deadlock-Tracker-Installer.exe`: **hier starten** – eigener Installer mit Fortschrittsanzeige (lädt immer die aktuelle Version)
+            - `Deadlock-Tracker-Setup.exe`: Installationspaket (wird vom Installer und vom Auto-Update genutzt)
             - `Deadlock-Tracker-*-portable.exe`: ohne Installation lauffähig
 
             Hinweise: Die EXE ist nicht signiert (Windows SmartScreen kann warnen).
             Matches werden nur erkannt, solange die App läuft. Die Deadlock-API-Anbindung
             ist noch nicht gegen die Live-API verifiziert (siehe deadlock-tracker/README.md).
-          files: deadlock-tracker/release/*.exe
+          files: |
+            deadlock-tracker/release/*.exe
+            deadlock-tracker/release-installer/Deadlock-Tracker-Installer.exe
           overwrite_files: true
 
       # Rollendes Release: feste URL für den Auto-Updater (latest.yml + aktueller Installer)
@@ -136,6 +147,7 @@ jobs:
           files: |
             deadlock-tracker/release/Deadlock-Tracker-Setup.exe
             deadlock-tracker/release/Deadlock-Tracker-Setup.exe.blockmap
+            deadlock-tracker/release-installer/Deadlock-Tracker-Installer.exe
           overwrite_files: true
 
       # latest.yml ZULETZT hochladen: Sie verweist auf den Installer; ein Update-Check darf sie erst sehen,
