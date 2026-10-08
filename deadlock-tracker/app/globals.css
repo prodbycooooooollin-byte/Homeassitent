@@ -268,7 +268,7 @@ html.fx-off .medal-shine, html.fx-reduced .medal-shine { display: none; }
 .debrief-grade { animation: debrief-grade .7s cubic-bezier(.2,1.5,.4,1) 1.5s backwards; }
 .debrief-shock { border: 2px solid; opacity: 0; animation: debrief-shock 1.2s ease-out 1.55s; }
 .debrief-card { transition: transform .25s, box-shadow .25s; }
-.debrief-card:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -20px #000; }
+.debrief-card:hover { box-shadow: 0 18px 40px -20px #000; }
 .debrief-actions { animation: debrief-up .6s ease 1s backwards; }
 html.desktop .debrief, html.desktop .debrief * { -webkit-app-region: no-drag; }
 @keyframes debrief-in { from { opacity: 0; } }
