@@ -20,7 +20,7 @@ export default function OverviewPage() {
     <Gate>
       {({ me, data }) => (
         <>
-          <PlayerCard name={me.name} avatar={me.avatar} accountId={me.accountId} ov={data.overview}
+          <PlayerCard name={me.name} avatar={me.avatar} accountId={me.accountId} ov={data.overview} items={data.matches}
             onRemove={() => confirm(`${me.name} nicht mehr tracken?`) && removePlayer(me.accountId)} />
           {me.lastSyncOk === false && (
             <div className="surface border-loss/40 p-3 text-sm text-loss">Sync-Fehler: {me.lastError}. Der Tracker versucht es automatisch erneut – erkannte Matches bleiben erhalten.</div>
