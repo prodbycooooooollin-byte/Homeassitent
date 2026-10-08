@@ -153,10 +153,10 @@ jobs:
           BASE="https://github.com/${{ github.repository }}/releases/download/dt-latest"
           EXPECT=$(node -e "const y=require('fs').readFileSync('release/latest.yml','utf8');console.log(y.match(/^sha512: (.+)$/m)[1])")
           for i in 1 2 3 4 5 6; do
-            curl -sSL -o /tmp/remote.exe "$BASE/Deadlock-Tracker-Setup.exe" || true
-            curl -sSL -o /tmp/remote.yml "$BASE/latest.yml" || true
-            GOT=$(node -e "const c=require('crypto'),f=require('fs');console.log(c.createHash('sha512').update(f.readFileSync('/tmp/remote.exe')).digest('base64'))")
-            VER=$(node -e "const y=require('fs').readFileSync('/tmp/remote.yml','utf8');console.log((y.match(/^version: (.+)$/m)||[])[1]||'')")
+            curl -sSL -o remote.exe "$BASE/Deadlock-Tracker-Setup.exe" || true
+            curl -sSL -o remote.yml "$BASE/latest.yml" || true
+            GOT=$(node -e "const c=require('crypto'),f=require('fs');console.log(c.createHash('sha512').update(f.readFileSync('remote.exe')).digest('base64'))")
+            VER=$(node -e "const y=require('fs').readFileSync('remote.yml','utf8');console.log((y.match(/^version: (.+)$/m)||[])[1]||'')")
             echo "Versuch $i: Manifest-Version=$VER erwartet=$APP_VERSION"
             if [ "$GOT" = "$EXPECT" ] && [ "$VER" = "$APP_VERSION" ]; then echo "Prüfsumme und Version stimmen überein"; exit 0; fi
             sleep 20
