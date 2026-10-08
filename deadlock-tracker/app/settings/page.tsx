@@ -80,6 +80,10 @@ export default function SettingsPage() {
         <Row title="Match-Debrief nach dem Spiel" desc="Zeigt nach einem neu erkannten Match einen Vollbild-Rückblick mit Note, Platzierungen, stärkster und schwächster Seite und einer kurzen Analyse.">
           <div className="flex items-center gap-3"><button onClick={testDebrief} className="btn btn-ghost px-3 py-1.5 text-xs" title="Mit deinem letzten Match">Debrief testen</button><button onClick={() => account && openDebrief({ matchId: 0, account, test: true, sample: "win" })} className="btn btn-ghost px-3 py-1.5 text-xs">Sieg-Beispiel</button><button onClick={() => account && openDebrief({ matchId: 0, account, test: true, sample: "loss" })} className="btn btn-ghost px-3 py-1.5 text-xs">Niederlage-Beispiel</button><Switch on={settings.debrief} onChange={(v) => update({ debrief: v })} /></div>
         </Row>
+        <Row title="Held im Debrief" desc="„Bild“ zeigt die Heldengrafik (hochgerechnet und nachgeschärft). „3D-Modell“ zeigt den Helden in 3D, der dem Mauszeiger folgt – dafür werden die Modelle einmalig aus deiner Deadlock-Installation exportiert und auf diesem PC gespeichert.">
+          <Seg value={settings.hero3d} onChange={(v) => update({ hero3d: v })} options={[["image", "Bild"], ["model", "3D-Modell"]]} />
+        </Row>
+        {settings.hero3d === "model" && <Hero3dPanel />}
         <Row title="Live-Match anzeigen" desc="Zeigt auf der Übersicht ein Banner, solange du in einem Match bist."><Switch on={settings.showLive} onChange={(v) => update({ showLive: v })} /></Row>
         <Row title="Benachrichtigung bei neuem Match" desc="Meldet dir, sobald ein Match erkannt wurde."><Switch on={settings.notifyNewMatch} onChange={(v) => update({ notifyNewMatch: v })} /></Row>
       </Card>
@@ -125,6 +129,37 @@ function Card({ icon, title, children }: { icon: IconName; title: string; childr
 }
 function Row({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return <div className="flex flex-wrap items-center gap-4 py-3.5 first:pt-0 last:pb-0"><div className="min-w-[260px] flex-1"><div className="font-semibold">{title}</div><div className="mt-0.5 text-xs leading-snug text-muted">{desc}</div></div>{children}</div>;
+}
+function Hero3dPanel() {
+  interface St { running: boolean; total: number; done: number; current: string; errors: { heroId: number; name: string; message: string }[]; models: number; gameFound: boolean; summary: { heroId: number; materials: number; tied: number }[]; worst: unknown }
+  const [st, setSt] = useState<St | null>(null);
+  const [copied, setCopied] = useState(false);
+  const load = async () => { try { setSt(await (await fetch("/api/hero3d/all")).json()); } catch { /* egal */ } };
+  useEffect(() => { load(); const t = setInterval(load, 2500); return () => clearInterval(t); }, []);
+  const start = (force: boolean) => fetch("/api/hero3d/all", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ force }) }).then(load);
+  if (!st) return null;
+  const mats = st.summary.reduce((a, x) => a + x.materials, 0), tied = st.summary.reduce((a, x) => a + x.tied, 0);
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm">
+      {!st.gameFound && <p className="mb-2 text-loss">Deadlock wurde auf diesem PC nicht gefunden – ohne die Spieldateien kann kein 3D-Modell erstellt werden.</p>}
+      <div className="flex flex-wrap items-center gap-3">
+        <span><b className="num">{st.models}</b> Modelle auf diesem PC vorbereitet</span>
+        <button onClick={() => start(false)} disabled={st.running || !st.gameFound} className="btn btn-gold !py-1.5 text-xs">{st.running ? "Läuft …" : "Alle Helden vorbereiten"}</button>
+        <button onClick={() => start(true)} disabled={st.running || !st.gameFound} className="btn btn-ghost !py-1.5 text-xs">Alle neu exportieren</button>
+      </div>
+      {st.running && (
+        <div className="mt-3">
+          <div className="mb-1 flex justify-between text-xs text-muted"><span className="truncate">{st.current}</span><span className="num">{st.done} / {st.total}</span></div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-amber to-[#fff1c9] transition-all" style={{ width: `${Math.max(3, (st.done / Math.max(1, st.total)) * 100)}%` }} /></div>
+        </div>
+      )}
+      {st.errors.length > 0 && <details className="mt-3 text-xs text-muted"><summary className="cursor-pointer text-loss">{st.errors.length} Helden konnten nicht exportiert werden</summary><ul className="mt-1 space-y-0.5">{st.errors.slice(0, 20).map((e) => <li key={e.heroId}><b className="text-white">{e.name}</b>: {e.message}</li>)}</ul></details>}
+      {mats > 0 && (
+        <p className="mt-3 text-xs text-muted">Texturen im Export: {tied} von {mats} Materialien mit Farbtextur. Fehlende Texturen ergänzt die Anzeige aus den Material-Angaben.
+          {" "}<button className="text-amber underline" onClick={() => { navigator.clipboard?.writeText(JSON.stringify(st.worst, null, 1)); setCopied(true); setTimeout(() => setCopied(false), 2500); }}>{copied ? "Kopiert" : "Diagnose kopieren"}</button></p>
+      )}
+    </div>
+  );
 }
 function Switch({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (

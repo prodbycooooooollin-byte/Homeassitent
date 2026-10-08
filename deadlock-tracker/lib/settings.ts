@@ -34,6 +34,7 @@ export function sanitize(s: Partial<AppSettings>): AppSettings {
     notifyNewMatch: s.notifyNewMatch === undefined ? d.notifyNewMatch : !!s.notifyNewMatch,
     showLive: s.showLive === undefined ? d.showLive : !!s.showLive,
     debrief: s.debrief === undefined ? d.debrief : !!s.debrief,
+    hero3d: s.hero3d === "model" ? "model" : "image",
     effects: s.effects === "reduced" || s.effects === "off" ? s.effects : "full",
     density: s.density === "compact" ? "compact" : "comfortable",
     profile: sanitizeProfile(s.profile),

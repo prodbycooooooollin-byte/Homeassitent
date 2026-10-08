@@ -9,7 +9,7 @@ import { buildDebrief, type DebriefRow } from "@/lib/debrief";
 import { buildSample, type SampleKind } from "@/lib/debrief-sample";
 import { feed, objectiveLabel, teamAdvantage, turningPoint } from "@/lib/insights";
 import { subOf } from "@/lib/grade";
-import { Hero3D } from "./Hero3D";
+import { Hero3D, preloadHero3D } from "./Hero3D";
 import { sharpUpscale } from "@/lib/upscale";
 import { fmtDuration } from "@/lib/format";
 import { formatBadge } from "@/lib/ranks";
@@ -29,6 +29,16 @@ const GRADES: Grade[] = ["F", "D", "C", "B", "A", "S"];
 /** Vollbild-Debrief nach einem Match: Ergebnis, Note mit Skala, Platzierungen, stärkste/schwächste Seite und eine kurze Analyse. */
 export function DebriefHost() {
   const [req, setReq] = useState<DebriefRequest | null>(null);
+  // Im 3D-Modus den Haupthelden schon vorab laden und aufwärmen (leise im Hintergrund), damit das Debrief ohne Ruckeln startet
+  const { settings: st0 } = useSettings();
+  const mainHero = st0.profile.mainHero;
+  useEffect(() => {
+    if (st0.hero3d !== "model" || !mainHero) return;
+    const t = setTimeout(async () => {
+      try { const p = await (await fetch(`/api/hero3d/${mainHero}?probe=1`)).json(); if (p.ready) preloadHero3D(`/api/hero3d/${mainHero}`); } catch { /* optional */ }
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [st0.hero3d, mainHero]);
   useEffect(() => {
     const on = (e: Event) => setReq({ ...(e as CustomEvent<DebriefRequest>).detail, n: Date.now() });
     window.addEventListener(DEBRIEF_EVENT, on);
@@ -127,6 +137,8 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
   const art = useImg(hero?.art ?? hero?.portrait);
   const fig = useImg(hero?.figure);
   const stage = useStage();
+  const { settings: appSettings } = useSettings();
+  const model3d = appSettings.hero3d === "model";
   const [openRow, setOpenRow] = useState<string | null>(null);
   // Kleine Bilder werden vorab in Stufen hochgerechnet und nachgeschärft (statt vom Browser grob aufgezogen)
   const [artNat, setArtNat] = useState<{ w: number; h: number } | null>(null);
@@ -137,10 +149,10 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
   const [m3dMount, setM3dMount] = useState(false);
   const [m3dGone2d, setM3dGone2d] = useState(false); // 2D-Bild erst nach dem Überblenden ausblenden
   useEffect(() => { if (!m3dOn) return; const t = setTimeout(() => setM3dGone2d(true), 900); return () => clearTimeout(t); }, [m3dOn]);
-  useEffect(() => { if (m3d !== "ready") return; const t = setTimeout(() => setM3dMount(true), 2600); return () => clearTimeout(t); }, [m3d]);
+  useEffect(() => { if (m3d !== "ready") return; const t = setTimeout(() => setM3dMount(true), 1400); return () => clearTimeout(t); }, [m3d]);
   const heroKey = me?.heroId;
   useEffect(() => {
-    if (!heroKey || req.sample) return;
+    if (!heroKey || req.sample || !model3d) return;
     let alive = true;
     (async () => {
       try {
@@ -151,7 +163,7 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
       } catch { /* optional */ }
     })();
     return () => { alive = false; };
-  }, [heroKey, req.sample]);
+  }, [heroKey, req.sample, model3d]);
   const [artSharp, setArtSharp] = useState<string | null>(null);
   const [figSharp, setFigSharp] = useState<string | null>(null);
   const vw = typeof window !== "undefined" ? window.innerWidth : 1600, vh = typeof window !== "undefined" ? window.innerHeight : 900;
@@ -183,7 +195,7 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
     const box = { w: vw * 0.38, h: vh * 0.96 }, fit = Math.min(box.w / figNat.w, box.h / figNat.h), sc = Math.min(fit, 3);
     return { ...base, right: 0, bottom: 0, width: figNat.w * sc, height: figNat.h * sc };
   })();
-  const noFx = useSettings().settings.effects === "off";
+  const noFx = appSettings.effects === "off";
   const score = useCountUp(rating?.score ?? 0, 1100, 1300);
   const grade = rating?.grade ?? null;
   const celebrate = !!rating && (grade === "S" || grade === "A") && won;
