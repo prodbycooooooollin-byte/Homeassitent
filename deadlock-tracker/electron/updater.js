@@ -1,6 +1,6 @@
 // Automatische Updates über electron-updater (generic-Provider auf dem Release "dt-latest").
 // Ablauf: beim Start und danach alle 30 Min. prüfen -> im Hintergrund laden -> Nutzer sieht Banner
-// "Neu starten & installieren"; ohne Klick wird beim Beenden der App installiert.
+// "Neu starten & installieren"; ohne Klick wird nichts installiert.
 const { app, ipcMain } = require("electron");
 
 const CHECK_EVERY_MS = 30 * 60 * 1000;
@@ -24,7 +24,7 @@ function setup(mainWindow) {
   ipcMain.handle("updater:info", () => state);
   ipcMain.handle("updater:check", () => check());
   ipcMain.handle("updater:install", () => {
-    if (state.status === "ready" && autoUpdater) autoUpdater.quitAndInstall(true, true);
+    if (state.status === "ready" && autoUpdater) autoUpdater.quitAndInstall(false, true);
   });
 
   if (!app.isPackaged) return push({ status: "unsupported", message: "Entwicklungsmodus – keine Updates." });
@@ -36,7 +36,8 @@ function setup(mainWindow) {
     return push({ status: "unsupported", message: "Updater nicht verfügbar: " + e.message });
   }
   autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  // Nie ohne Zutun installieren: erst auf Klick („Neu starten & installieren“), dann mit sichtbarem Installationsfenster
+  autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowPrerelease = true;
   autoUpdater.logger = null;
 
