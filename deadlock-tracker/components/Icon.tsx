@@ -38,6 +38,8 @@ const P: Record<string, React.ReactNode> = {
   refresh: <><path d="M20 11a8 8 0 0 0-14.5-3.5M4 4v4h4" /><path d="M4 13a8 8 0 0 0 14.5 3.5M20 20v-4h-4" /></>,
   bell: <><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15z" /><path d="M10 21h4" /></>,
   chevron: <path d="M9 5l7 7-7 7" />,
+  play: <path d="M7 4.5v15l12-7.5z" />,
+  pause: <path d="M8 5v14M16 5v14" />,
   copy: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>,
   book: <><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" /><path d="M5 17a3 3 0 0 1 3-3h10" /></>,
   layers: <><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5" /></>,

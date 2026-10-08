@@ -292,3 +292,24 @@ export async function fetchPerformanceCurve(heroId: number | null, minBadge: num
     .filter((p) => Number.isFinite(p.pct))
     .sort((a, b) => a.pct - b.pct);
 }
+
+/** Download-Adresse des Valve-Replays (.dem.bz2) – braucht Cluster und Replay-Salt des Matches. Null, wenn die API keine Salts kennt. */
+export async function fetchReplayUrl(matchId: number): Promise<string | null> {
+  const find = (o: unknown, keys: string[]): unknown => {
+    if (!o || typeof o !== "object") return undefined;
+    for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
+      if (keys.includes(k) && (typeof v === "number" || typeof v === "string") && v !== 0 && v !== "") return v;
+      if (v && typeof v === "object") { const r = find(v, keys); if (r !== undefined) return r; }
+    }
+    return undefined;
+  };
+  for (const path of [`/v1/matches/${matchId}/salts`, `/v1/matches/${matchId}/metadata?disable_steam=true`]) {
+    try {
+      const raw = await getJson(`${BASE()}${path}`, { retries: 0, timeoutMs: 12000 });
+      const cluster = find(raw, ["cluster_id", "replay_cluster_id"]);
+      const salt = find(raw, ["replay_salt"]);
+      if (cluster !== undefined && salt !== undefined) return `http://replay${cluster}.valve.net/1422450/${matchId}_${salt}.dem.bz2`;
+    } catch { /* nächster Weg */ }
+  }
+  return null;
+}

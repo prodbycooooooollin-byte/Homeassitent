@@ -12,6 +12,7 @@ import { ItemsTab } from "./match/ItemsTab";
 import { LaneTab } from "./match/LaneTab";
 import { OverviewTab } from "./match/OverviewTab";
 import { DEBRIEF_BACK_KEY, openDebrief } from "./DebriefHost";
+import { ReplayTab } from "./match/ReplayTab";
 import { SummaryTab } from "./match/SummaryTab";
 import { RatingHint } from "./match/RatingExplainer";
 import { TEAMS } from "./match/Scoreboard";
@@ -37,6 +38,7 @@ const TABS = [
   { key: "graphs", label: "Verlauf" },
   { key: "items", label: "Items" },
   { key: "feed", label: "Ereignisse" },
+  { key: "replay", label: "2D-Replay" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -160,6 +162,7 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
         {tab === "graphs" && <GraphTab d={d} account={account} />}
         {tab === "items" && <ItemsTab d={d} account={account} />}
         {tab === "feed" && <FeedTab d={d} account={account} />}
+        {tab === "replay" && <ReplayTab matchId={d.matchId} account={account} />}
       </div>
     </>
   );

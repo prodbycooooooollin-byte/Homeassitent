@@ -1,6 +1,7 @@
 // Electron-Hülle: startet den eingebetteten Next.js-Standalone-Server (inkl. Hintergrund-Poller)
 // und zeigt die Oberfläche in einem Fenster. Daten liegen im Benutzerprofil (userData).
 const { app, BrowserWindow, Menu, Notification, Tray, dialog, ipcMain, nativeImage, shell } = require("electron");
+const fs = require("fs");
 const path = require("path");
 const net = require("net");
 const http = require("http");
@@ -51,6 +52,9 @@ async function startServer() {
   process.env.HOSTNAME = "127.0.0.1";
   process.env.NODE_ENV = "production";
   process.env.TRACKER_DATA_FILE = path.join(app.getPath("userData"), "store.json");
+  // Replay-Auswertung läuft als eigener Prozess; die gebündelte Datei liegt (bei installierter App) außerhalb des asar-Archivs
+  const worker = path.join(__dirname, "replay-worker.bundle.mjs").replace("app.asar", "app.asar.unpacked");
+  if (fs.existsSync(worker)) process.env.DL_REPLAY_WORKER = worker;
   require(path.join(standaloneDir(), "server.js"));
   await waitForServer(port);
   return port;

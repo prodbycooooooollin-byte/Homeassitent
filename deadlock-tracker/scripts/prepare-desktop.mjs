@@ -10,6 +10,10 @@ const run = (cmd, args) => {
   if (r.status !== 0) process.exit(r.status ?? 1);
 };
 
+// Replay-Worker als einzelne Datei bündeln (läuft später als eigener Prozess, ohne node_modules daneben)
+run("npx", ["esbuild", "electron/replay-worker.mjs", "--bundle", "--platform=node", "--format=esm", "--target=node20",
+  "--banner:js=import { createRequire as __cr } from 'module'; const require = __cr(import.meta.url);", "--outfile=electron/replay-worker.bundle.mjs", "--log-level=warning"]);
+
 rmSync(join(root, ".next"), { recursive: true, force: true });
 run("npx", ["next", "build"]);
 
