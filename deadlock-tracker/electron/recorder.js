@@ -101,9 +101,9 @@ async function start() {
       const m = /^"([^"]+)","(\d+)"/.exec(l);
       if (!m) continue;
       if (!rec.procs.has(m[1])) { rec.procs.add(m[1]); if (rec.t0 + 6000 < Date.now()) add("PROZESS", `neu: ${m[1]}`); }
-      if (/^project8\.exe$/i.test(m[1])) gamePid = m[2];
+      if (/^(deadlock|project8)\.exe$/i.test(m[1])) gamePid = m[2];
     }
-    if (gamePid && !rec.gamePid) add("PROZESS", `Spiel läuft (project8.exe, PID ${gamePid})`);
+    if (gamePid && !rec.gamePid) add("PROZESS", `Spiel läuft (deadlock.exe, PID ${gamePid})`);
     if (!gamePid && rec.gamePid) add("PROZESS", "Spiel beendet");
     rec.gamePid = gamePid;
     if (gamePid) {

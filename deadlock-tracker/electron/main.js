@@ -38,13 +38,13 @@ function postHint(matchId, source) {
   } catch { /* optional */ }
 }
 
-/** Erkennt, ob Deadlock läuft (Prozess project8.exe): Der Server fragt dann schneller ab, nach Spielende noch eine Weile besonders schnell. */
+/** Erkennt, ob Deadlock läuft (Prozess deadlock.exe): Der Server fragt dann schneller ab, nach Spielende noch eine Weile besonders schnell. */
 function startGameWatch() {
   if (process.platform !== "win32") return;
   globalThis.__dlGame = { running: false, since: null, endedAt: null };
-  const check = () => execFile("tasklist", ["/FI", "IMAGENAME eq project8.exe", "/NH", "/FO", "CSV"], { windowsHide: true, timeout: 8000 }, (err, out) => {
+  const check = () => execFile("tasklist", ["/NH", "/FO", "CSV"], { windowsHide: true, timeout: 8000 }, (err, out) => {
     if (err) return;
-    const running = /project8\.exe/i.test(String(out));
+    const running = /"(deadlock|project8)\.exe"/i.test(String(out));
     const g = globalThis.__dlGame;
     if (running && !g.running) globalThis.__dlGame = { running: true, since: Date.now(), endedAt: null };
     else if (!running && g.running) globalThis.__dlGame = { running: false, since: g.since, endedAt: Date.now() };

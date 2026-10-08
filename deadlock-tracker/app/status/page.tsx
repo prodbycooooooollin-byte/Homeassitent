@@ -140,7 +140,7 @@ function Detection() {
     <section className="surface p-5">
       <div className="label mb-2">Match-Erkennung</div>
       <ul className="space-y-1.5 text-sm">
-        <li>{dot(det ? det.game.running : null)}<b>Spiel:</b> {!isDesktop ? "wird nur in der Desktop-App erkannt" : det?.game.running ? `Deadlock läuft seit ${det.game.since ? new Date(det.game.since).toLocaleTimeString("de-DE") : "?"} – Abfrage im schnellen Takt` : det?.game.endedAt ? `Deadlock beendet ${ago(det.game.endedAt)} – Abfrage bleibt 25 Minuten schnell` : "Deadlock läuft gerade nicht (Prozess project8.exe nicht gefunden)"}</li>
+        <li>{dot(det ? det.game.running : null)}<b>Spiel:</b> {!isDesktop ? "wird nur in der Desktop-App erkannt" : det?.game.running ? `Deadlock läuft seit ${det.game.since ? new Date(det.game.since).toLocaleTimeString("de-DE") : "?"} – Abfrage im schnellen Takt` : det?.game.endedAt ? `Deadlock beendet ${ago(det.game.endedAt)} – Abfrage bleibt 25 Minuten schnell` : "Deadlock läuft gerade nicht (Prozess deadlock.exe nicht gefunden)"}</li>
         <li>{dot(mw ? mw.watching : null)}<b>Steam-Cache:</b> {mw ? (mw.watching ? `beobachtet ${mw.dirs.length} Ordner${mw.last ? ` · zuletzt Match #${mw.last.matchId} (${ago(mw.last.at)})` : " · noch kein Match erkannt"}` : `nicht aktiv${mw.error ? ` (${mw.error})` : ""}`) : "nur in der Desktop-App"}</li>
         <li>{dot(ing ? ing.state === "running" || ing.state === "external" : null)}<b>Match-Daten-Helfer:</b> {ing ? `${ing.message} · ${ing.matches} Salt-Meldungen, ${ing.errors} Fehler` : "nur in der Desktop-App"}</li>
         <li>{dot(me ? me.lastSyncOk !== false : null)}<b>Historie:</b> {me ? `zuletzt abgefragt ${ago(me.lastSyncAt)}${me.lastError ? ` · Fehler: ${me.lastError}` : ""}` : "kein Account"}</li>
