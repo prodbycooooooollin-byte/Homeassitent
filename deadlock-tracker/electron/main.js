@@ -10,6 +10,7 @@ const desktopSettings = require("./desktop-settings");
 const ingest = require("./ingest");
 const matchwatch = require("./matchwatch");
 const recorder = require("./recorder");
+const gamelog = require("./gamelog");
 const { execFile } = require("child_process");
 
 // Umbenennung: Daten aus dem früheren Ordner „Deadlock Tracker“ einmalig übernehmen (Spieler, Matches, Einstellungen)
@@ -152,6 +153,7 @@ async function createWindow() {
   if (settings.ingest) ingest.start();
   ingest.onHint((id) => postHint(id, "ingest"));
   startGameWatch();
+  gamelog.start().catch(() => { /* optional */ });
   matchwatch.start((m) => { postHint(m.matchId, "cache"); if (win && !win.isDestroyed()) win.webContents.send("match:ended", m); }).catch(() => { /* optional */ });
   await win.loadURL(`http://127.0.0.1:${serverPort}/`);
   if (settings.closeToTray) buildTray();

@@ -245,6 +245,8 @@ export async function refreshLive(now = Date.now()): Promise<void> {
 interface Hint { matchId: number; source: string; at: number; tries: number; nextAt: number; last?: string; done?: "ok" | "fremd" | "aufgegeben" }
 const gh = globalThis as unknown as { __dlHints?: Map<number, Hint>; __dlGame?: { running: boolean; since: number | null; endedAt: number | null } };
 const hints = () => (gh.__dlHints ??= new Map());
+export interface GameLog { available: boolean; file: string | null; state: string | null; stateN: number | null; stateAt: number | null; server: string | null; heroes: string[]; matchStartedAt: number | null; matchEndedAt: number | null; updatedAt: number | null }
+export const gameLog = (): GameLog | null => (globalThis as unknown as { __dlLog?: GameLog }).__dlLog ?? null;
 export const gameState = () => gh.__dlGame ?? { running: false, since: null, endedAt: null };
 export const hintStatus = () => [...hints().values()].sort((a, b) => b.at - a.at).slice(0, 8);
 
@@ -291,7 +293,8 @@ export function runCycle(force = false): Promise<SyncResult[]> {
     await processHints(now).catch(() => null);
     // Schnell abfragen: nach Spielende, bei laufendem Spiel (Desktop-App erkennt den Spielprozess) und nach Match-Hinweisen
     const game = gameState();
-    const hot = now < live().fastUntil || (game.endedAt !== null && now - game.endedAt < 25 * 60_000);
+    const gl = gameLog();
+    const hot = now < live().fastUntil || (gl?.matchEndedAt != null && now - gl.matchEndedAt < 25 * 60_000) || (game.endedAt !== null && now - game.endedAt < 25 * 60_000);
     const everyMs = hot ? 6000 : game.running ? Math.min(baseMs, 12_000) : baseMs;
     for (const p of Object.values(getStore().players)) {
       if (!force && p.lastSyncAt && now - p.lastSyncAt < (p.guest ? 10 * 60_000 : everyMs - 500)) continue;
