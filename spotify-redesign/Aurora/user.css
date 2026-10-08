@@ -1,0 +1,176 @@
+/* Aurora – modernes, rundes Spotify-Theme (Spicetify) */
+:root {
+  --r-lg: 22px;
+  --r-md: 16px;
+  --r-sm: 10px;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --accent-glow: rgba(167, 139, 250, .35);
+}
+
+* { scrollbar-width: thin; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.32); }
+
+body, .Root { background: var(--spice-main) !important; }
+.Root__top-container { gap: 10px; padding: 10px; }
+
+/* Panels als schwebende, runde Karten */
+.Root__nav-bar .main-yourLibraryX-libraryContainer,
+.Root__nav-bar nav,
+.main-yourLibraryX-libraryContainer,
+.main-navBar-navBar > div,
+.Root__main-view,
+.Root__right-sidebar > aside,
+.Root__right-sidebar .main-nowPlayingView-nowPlayingView {
+  border-radius: var(--r-lg) !important;
+  overflow: hidden;
+}
+.Root__main-view {
+  background: linear-gradient(180deg, #14141d 0%, var(--spice-main) 60%) !important;
+  box-shadow: 0 10px 40px rgba(0,0,0,.45);
+}
+.main-view-container__scroll-node-child-spacer { background: transparent !important; }
+
+/* Playbar */
+.Root__now-playing-bar { padding: 0 10px 10px; }
+.main-nowPlayingBar-container {
+  background: rgba(21,21,29,.85) !important;
+  backdrop-filter: blur(24px) saturate(160%);
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(255,255,255,.06);
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+  padding: 0 18px;
+}
+.main-nowPlayingWidget-nowPlaying img,
+.main-coverSlotCollapsed-container img { border-radius: var(--r-sm) !important; }
+
+/* Fortschrittsbalken */
+.playback-bar [data-testid="playback-progressbar"] > div > div,
+.progress-bar { border-radius: 99px !important; }
+.progress-bar__slider { transition: transform .2s var(--ease); }
+.playback-progressbar:hover .progress-bar__slider { transform: scale(1.3); }
+
+/* Buttons */
+.main-playButton-PlayButton,
+.main-playPauseButton-button,
+[data-testid="control-button-playpause"] {
+  border-radius: 50% !important;
+  transition: transform .25s var(--ease), box-shadow .25s var(--ease) !important;
+}
+[data-testid="control-button-playpause"]:hover,
+.main-playButton-PlayButton:hover {
+  transform: scale(1.1) !important;
+  box-shadow: 0 0 28px var(--accent-glow);
+}
+button:active { transform: scale(.94); }
+.main-buttonSecondary-button, .main-buttonPrimary-button,
+.encore-text-body-medium-bold[role="button"] { border-radius: 99px !important; }
+
+/* Karten & Cover */
+.main-card-card, .main-cardImage-imageWrapper, .main-card-imageContainer img,
+.main-image-image, .main-entityHeader-image {
+  border-radius: var(--r-md) !important;
+}
+.main-card-card {
+  background: var(--spice-card) !important;
+  transition: transform .35s var(--ease), background .35s var(--ease), box-shadow .35s var(--ease);
+}
+.main-card-card:hover {
+  transform: translateY(-6px);
+  background: var(--spice-highlight) !important;
+  box-shadow: 0 18px 40px rgba(0,0,0,.5);
+}
+.main-card-PlayButtonContainer { transition: all .35s var(--ease) !important; }
+
+/* Tracklisten */
+.main-trackList-trackListRow {
+  border-radius: var(--r-sm) !important;
+  transition: background .2s var(--ease), transform .2s var(--ease);
+}
+.main-trackList-trackListRow:hover { background: rgba(255,255,255,.07) !important; }
+.main-trackList-selected { background: rgba(167,139,250,.18) !important; }
+
+/* Suche, Chips, Menüs */
+.main-topBar-container, .main-topBar-background { background: transparent !important; }
+input[data-testid="search-input"], .x-searchInput-searchInputInput {
+  border-radius: 99px !important;
+  background: var(--spice-highlight) !important;
+  transition: box-shadow .25s var(--ease);
+}
+input[data-testid="search-input"]:focus { box-shadow: 0 0 0 2px var(--spice-button); }
+[data-encore-id="chip"], .x-filterBox-filterInput { border-radius: 99px !important; }
+.main-contextMenu-menu, [role="menu"], .main-contextMenu-menuItem { border-radius: var(--r-md) !important; }
+.main-contextMenu-menu { box-shadow: 0 20px 50px rgba(0,0,0,.6); animation: pop .22s var(--ease); }
+.main-yourLibraryX-listItem a, .main-yourLibraryX-listItem > div { border-radius: var(--r-sm) !important; }
+
+/* Seitenwechsel-Animation */
+.main-view-container__scroll-node-child > section,
+.main-view-container__scroll-node-child > div { animation: pageIn .45s var(--ease); }
+@keyframes pageIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+
+/* ---------- Eigene Lyrics-Seite ---------- */
+#aurora-lyrics {
+  position: fixed; inset: 10px; z-index: 9999;
+  border-radius: 28px; overflow: hidden;
+  background: #0b0b10;
+  opacity: 0; pointer-events: none;
+  transform: scale(.97) translateY(20px);
+  transition: opacity .5s var(--ease), transform .6s var(--ease);
+}
+#aurora-lyrics.open { opacity: 1; pointer-events: auto; transform: none; }
+#aurora-lyrics .bg {
+  position: absolute; inset: -60px; background-size: cover; background-position: center;
+  filter: blur(70px) saturate(180%) brightness(.55); transform: scale(1.2);
+  transition: background-image .8s ease; animation: drift 24s ease-in-out infinite alternate;
+}
+@keyframes drift { to { transform: scale(1.35) translate(2%, -2%) rotate(3deg); } }
+#aurora-lyrics .shade { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,.45)); }
+#aurora-lyrics .content {
+  position: relative; height: 100%; display: grid;
+  grid-template-columns: minmax(300px, 38%) 1fr; gap: 56px; padding: 56px 64px;
+}
+#aurora-lyrics .left { display: flex; flex-direction: column; justify-content: center; gap: 22px; }
+#aurora-lyrics .cover {
+  width: 100%; max-width: 420px; aspect-ratio: 1; border-radius: 28px;
+  background-size: cover; background-position: center;
+  box-shadow: 0 30px 80px rgba(0,0,0,.6);
+  transition: transform .6s var(--ease);
+}
+#aurora-lyrics.paused .cover { transform: scale(.9); }
+#aurora-lyrics .title { font-size: 28px; font-weight: 800; color: #fff; }
+#aurora-lyrics .artist { font-size: 17px; color: rgba(255,255,255,.65); margin-top: -14px; }
+#aurora-lyrics .bar { height: 6px; max-width: 420px; background: rgba(255,255,255,.18); border-radius: 99px; overflow: hidden; }
+#aurora-lyrics .bar i { display: block; height: 100%; width: 0; background: #fff; border-radius: 99px; }
+#aurora-lyrics .ctrls { display: flex; gap: 14px; align-items: center; }
+#aurora-lyrics .ctrls button {
+  width: 52px; height: 52px; border-radius: 50%; border: 0; cursor: pointer; font-size: 18px;
+  color: #fff; background: rgba(255,255,255,.12); backdrop-filter: blur(10px);
+  transition: transform .25s var(--ease), background .25s;
+}
+#aurora-lyrics .ctrls button:hover { transform: scale(1.12); background: rgba(255,255,255,.22); }
+#aurora-lyrics .ctrls .play { width: 64px; height: 64px; background: #fff; color: #000; font-size: 22px; }
+#aurora-lyrics .lines {
+  overflow-y: auto; scroll-behavior: smooth; padding: 38vh 0; scrollbar-width: none;
+  mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
+}
+#aurora-lyrics .lines::-webkit-scrollbar { display: none; }
+#aurora-lyrics .line {
+  font-size: clamp(30px, 3.6vw, 54px); font-weight: 800; line-height: 1.2; letter-spacing: -.02em;
+  color: rgba(255,255,255,.28); padding: 10px 0; cursor: pointer;
+  filter: blur(2.5px); transform-origin: left center; transform: scale(.88);
+  transition: color .5s var(--ease), filter .5s var(--ease), transform .6s var(--ease), opacity .5s;
+}
+#aurora-lyrics .line:hover { filter: blur(0); color: rgba(255,255,255,.6); }
+#aurora-lyrics .line.near { filter: blur(1px); color: rgba(255,255,255,.45); transform: scale(.94); }
+#aurora-lyrics .line.active { color: #fff; filter: none; transform: scale(1); text-shadow: 0 0 40px rgba(255,255,255,.25); }
+#aurora-lyrics .empty { color: rgba(255,255,255,.5); font-size: 28px; font-weight: 700; padding-top: 4vh; }
+#aurora-lyrics .close {
+  position: absolute; top: 22px; right: 26px; width: 46px; height: 46px; border-radius: 50%;
+  border: 0; color: #fff; background: rgba(255,255,255,.12); cursor: pointer; font-size: 18px;
+  backdrop-filter: blur(10px); transition: transform .3s var(--ease), background .3s;
+}
+#aurora-lyrics .close:hover { transform: rotate(90deg) scale(1.1); background: rgba(255,255,255,.25); }
+#aurora-lyrics-btn { border-radius: 50% !important; }
+@media (max-width: 900px) { #aurora-lyrics .content { grid-template-columns: 1fr; } #aurora-lyrics .left { display: none; } }
