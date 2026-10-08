@@ -376,15 +376,15 @@ export function patterns(c: Ctx): Focus[] {
   if (sp && sp.refTotal > 0) {
     const total = sp.refTotal - sp.mineTotal;
     const ranked = [...sp.rows].filter((r) => r.gap > 0).sort((a, b) => b.gap - a.gap);
-    if (total > sp.refTotal * 0.06 && ranked.length) {
+    if ((total > sp.refTotal * 0.06 || (ranked[0] && ranked[0].gap > sp.refTotal * 0.1)) && ranked.length) {
       const top = ranked[0];
-      const ev = [`Gesamt: ${Math.round(sp.mineTotal)} Souls/Min bei dir, ${Math.round(sp.refTotal)} bei den Besten deiner Lobbys (−${Math.round(total)}/Min ≈ ${fmtS(total * avgMins)} Souls pro Match).`];
+      const ev = [total > 0 ? `Gesamt: ${Math.round(sp.mineTotal)} Souls/Min bei dir, ${Math.round(sp.refTotal)} bei den Besten deiner Lobbys (−${Math.round(total)}/Min ≈ ${fmtS(total * avgMins)} Souls pro Match).` : `Gesamt liegst du bei ${Math.round(sp.mineTotal)} Souls/Min (Beste ${Math.round(sp.refTotal)}), aber eine Quelle bricht deutlich ein:`];
       for (const r of ranked.slice(0, 3)) ev.push(`${r.label}: ${Math.round(r.mine)}/Min statt ${Math.round(r.ref)}/Min (−${Math.round(r.gap)}).`);
       if (top.key === "lane" && sp.creepRate) ev.push(`Du triffst ${pc(sp.creepRate[0])} der möglichen Lane-Creeps, die Besten ${pc(sp.creepRate[1])}.`);
       if (top.key === "neutral" && sp.campsPerMatch && sp.perCamp) ev.push(`${sp.campsPerMatch[0].toFixed(1).replace(".", ",")} Camps pro Match (Beste ${sp.campsPerMatch[1].toFixed(1).replace(".", ",")}), je ca. ${Math.round(sp.perCamp)} Souls.`);
       const fix = [...SOUL_FIX[top.key](top, sp)];
       if (ranked[1] && ranked[1].gap > top.gap * 0.6) fix.push(`Zweite Baustelle: ${ranked[1].label} (−${Math.round(ranked[1].gap)}/Min).`);
-      out.push({ id: "souls", severity: total > sp.refTotal * 0.15 ? "high" : "mid", title: `Dir fehlen Souls – größte Lücke: ${top.label}`, evidence: ev, fix, impact: `≈ +${fmtS(top.gap * avgMins)} Souls pro Match allein durch ${top.label}` });
+      out.push({ id: "souls", severity: total > sp.refTotal * 0.15 || top.gap > sp.refTotal * 0.15 ? "high" : "mid", title: `Dir fehlen Souls – größte Lücke: ${top.label}`, evidence: ev, fix, impact: `≈ +${fmtS(top.gap * avgMins)} Souls pro Match allein durch ${top.label}` });
     } else if (total < -sp.refTotal * 0.05) {
       out.push({ id: "souls-good", severity: "good", title: "Souls über dem Vergleich", evidence: [`${Math.round(sp.mineTotal)} Souls/Min gegen ${Math.round(sp.refTotal)} bei den Besten deiner Lobbys.`], fix: ["Halte das Niveau – und setze die gewonnene Wirtschaft früher in Items um."] });
     }

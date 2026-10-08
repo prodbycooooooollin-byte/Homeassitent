@@ -16,13 +16,15 @@ export default function LivePage() {
 }
 
 function View({ account }: { account: number }) {
-  const [mode, setMode] = useState<Mode>("live");
+  const initial = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const initId = Number(initial?.get("id")) || null;
+  const [mode, setMode] = useState<Mode>(initial?.get("mode") === "player" && initId ? "player" : "live");
   const [res, setRes] = useState<Res | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoPicked, setAutoPicked] = useState(false);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
-  const [target, setTarget] = useState<number | null>(null);
+  const [target, setTarget] = useState<number | null>(initial?.get("mode") === "player" ? initId : null);
 
   const load = useCallback(async () => {
     const url = mode === "player" ? (target ? `/api/scout?mode=player&id=${target}` : null) : `/api/scout?mode=${mode}&account=${account}`;
