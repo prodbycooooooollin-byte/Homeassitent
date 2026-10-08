@@ -41,7 +41,7 @@ export function useHero(id: number | undefined) {
 
 /** URLs, die nicht ladbar waren – nicht bei jedem Render erneut anfragen. */
 const BAD = new Set<string>();
-function useImg(src?: string) {
+export function useImg(src?: string) {
   const [, force] = useState(0);
   return { src: src && !BAD.has(src) ? src : undefined, onError: () => { if (src) { BAD.add(src); force((n) => n + 1); } } };
 }
