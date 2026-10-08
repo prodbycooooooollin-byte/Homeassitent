@@ -23,6 +23,8 @@ export interface DesktopBridge {
   getIngest(): Promise<IngestState>;
   controlIngest(action: IngestAction): Promise<IngestState>;
   onIngestState(cb: (s: IngestState) => void): () => void;
+  getMatchWatch(): Promise<{ dirs: string[]; last: { matchId: number; at: number } | null; error: string | null; watching: boolean }>;
+  onMatchEnded(cb: (m: { matchId: number; at: number }) => void): () => void;
   notify(n: { title: string; body: string; path?: string }): Promise<boolean>;
   onNavigate(cb: (path: string) => void): () => void;
 }

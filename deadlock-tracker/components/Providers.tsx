@@ -125,6 +125,13 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => window.desktop?.onNavigate((p) => router.push(p)), [router]);
+  // Sofort-Debrief: Die Desktop-Hülle meldet das Match-Ende, sobald Steam die Match-Daten von Valve abgelegt hat
+  const debriefed = useRef(new Set<number>());
+  useEffect(() => window.desktop?.onMatchEnded?.(({ matchId }) => {
+    if (!settings.debrief || !account || debriefed.current.has(matchId)) return;
+    debriefed.current.add(matchId);
+    openDebrief({ matchId, account });
+  }), [settings.debrief, account]);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -138,7 +145,7 @@ function TrackerProvider({ children }: { children: React.ReactNode }) {
             const acc = l.accounts.includes(account ?? -1) ? account! : l.accounts[0];
             const t: Toast = { id: l.matchId, matchId: l.matchId, account: acc };
             setToasts((cur) => [t, ...cur].slice(0, 3));
-            if (settings.debrief && acc === account) openDebrief({ matchId: l.matchId, account: acc });
+            if (settings.debrief && acc === account && !debriefed.current.has(l.matchId)) { debriefed.current.add(l.matchId); openDebrief({ matchId: l.matchId, account: acc }); }
             if (settings.notifyNewMatch) {
               const n = { title: "Neues Match erkannt", body: `Match #${l.matchId} wurde angelegt.`, path: `/match/${l.matchId}?account=${acc}` };
               if (window.desktop) window.desktop.notify(n); else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(n.title, { body: n.body });

@@ -94,7 +94,12 @@ function Overlay({ req, onClose, onLeave }: { req: DebriefRequest; onClose: () =
     if (req.sample) { setRes({ ...buildSample(req.sample, req.account), lobbyBadge: null }); return () => { alive = false; }; }
     const load = async () => {
       try {
-        const r = await (await fetch(`/api/matches/${req.matchId}?account=${req.account}`)).json();
+        let r = await (await fetch(`/api/matches/${req.matchId}?account=${req.account}`)).json();
+        // Match noch nicht im Bestand (z. B. Sofort-Debrief direkt nach Match-Ende): gezielt nachladen
+        if (r.error && !req.sample) {
+          await fetch("/api/matches/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input: String(req.matchId) }) }).catch(() => null);
+          r = await (await fetch(`/api/matches/${req.matchId}?account=${req.account}`)).json();
+        }
         if (!alive) return;
         setRes(r);
         if (!r.details && tries < 60) setTimeout(() => alive && setTries((t) => t + 1), 6000);

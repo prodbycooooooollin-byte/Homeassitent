@@ -26,6 +26,12 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.on("ingest:state", handler);
     return () => ipcRenderer.removeListener("ingest:state", handler);
   },
+  getMatchWatch: () => ipcRenderer.invoke("matchwatch:info"),
+  onMatchEnded: (cb) => {
+    const handler = (_e, m) => cb(m);
+    ipcRenderer.on("match:ended", handler);
+    return () => ipcRenderer.removeListener("match:ended", handler);
+  },
   notify: (n) => ipcRenderer.invoke("desktop:notify", n),
   onNavigate: (cb) => {
     const handler = (_e, p) => cb(p);
