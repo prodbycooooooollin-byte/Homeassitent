@@ -5,7 +5,9 @@ const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 
-const STATE_RE = /ChangeGameState:\s*(\w+)\s*\((\d+)\)/;
+const STATE_RE = /(?:ChangeGameState|OnGameStateChanged):\s*(\w+)\s*\((\d+)\)/;
+const PHYS_RE = /\[Client\] Created physics for (\w+)/;
+const RELAY_RE = /\[SteamNetSockets\] \[(\d+\.\d+\.\d+\.\d+:\d+)\]/;
 const SERVER_RE = /\[Networking\]\s*server\s*@\s*([\d.]+:\d+)/i;
 const HERO_RE = /\b(hero_[a-z0-9_]+)\s+respawned/i;
 const LOADED_RE = /\[Server\]\s*Loaded hero\s+(\d+)\/(hero_[a-z0-9_]+)/i;
@@ -55,13 +57,17 @@ function handle(line, now) {
       emit({ type: "matchLoading", map });
     }
     log.map = map; log.stateAt = now;
+  } else if ((m = PHYS_RE.exec(line))) {
+    if (m[1] !== HIDEOUT) { log.map = m[1]; if (!log.inMatch) { log.inMatch = true; log.matchStartedAt = log.matchStartedAt || now; log.matchEndedAt = null; emit({ type: "matchLoading", map: m[1] }); } }
+  } else if ((m = RELAY_RE.exec(line))) {
+    if (log.inMatch) log.server = m[1];
   } else if ((m = CONNECTED_RE.exec(line))) {
     if (!/loopback/i.test(m[1])) log.server = m[1];
   } else if ((m = PLAYERS_RE.exec(line))) {
     log.players = { total: Number(m[1]), bots: Number(m[2]), humans: Number(m[3]) };
   } else if ((m = STATE_RE.exec(line))) {
     const [, name, n] = m;
-    if (name === "HeroSelection") { log.heroes = []; log.heroIds = {}; log.matchStartedAt = null; log.matchEndedAt = null; }
+    if (name === "HeroSelection" || name === "WaitForMapToLoad") { if (name === "WaitForMapToLoad") log.inMatch = true; else { log.heroes = []; log.heroIds = {}; log.matchStartedAt = null; log.matchEndedAt = null; } }
     log.state = name; log.stateN = Number(n); log.stateAt = now;
     if (name === "GameInProgress" && !log.matchStartedAt) log.matchStartedAt = now;
     if (ENDED.has(name)) { log.matchEndedAt = now; }
