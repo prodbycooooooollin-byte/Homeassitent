@@ -268,3 +268,26 @@ describe("Wraith 6/9: schwaches Spiel als Damage-Dealer", () => {
     }
   });
 });
+
+describe("Keine Rolle schützt vor einer schlechten Note", () => {
+  const prior = (id: number) => (({ 1: "carry", 2: "support", 3: "tank" }) as Record<number, "carry" | "support" | "tank">)[id] ?? null;
+  it("Support und Frontline mit 1/8/3 bekommen höchstens D", () => {
+    for (const seed of [21, 22, 23, 24, 25, 26]) {
+      for (const idx of [3, 4]) { // Support bzw. Frontline in Team 0
+        const { d, archs } = lobby(seed);
+        const me = d.players.find((p, i) => i < 6 && archs[i] === (idx === 3 ? "support" : "tank"))!;
+        Object.assign(me, { kills: 1, deaths: 8, assists: 3 });
+        d.winningTeam = me.team === 0 ? 1 : 0;
+        const r = ratePlayer(d, me.accountId, prior)!;
+        expect(["D", "F"], `seed ${seed} ${archs[idx]}: ${r.label} ${r.score}`).toContain(r.grade);
+      }
+    }
+  });
+  it("ein guter Support wird nicht gedeckelt", () => {
+    const { d, archs } = lobby(30);
+    const me = d.players.find((p, i) => i < 6 && archs[i] === "support")!;
+    Object.assign(me, { kills: 1, deaths: 2, assists: 18 });
+    const r = ratePlayer(d, me.accountId, prior)!;
+    expect(r.notes.some((n) => n.startsWith("Gedeckelt"))).toBe(false);
+  });
+});

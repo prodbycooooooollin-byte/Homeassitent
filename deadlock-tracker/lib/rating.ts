@@ -263,6 +263,25 @@ export function ratePlayer(match: MatchDetails, accountId: number, prior: HeroRo
     notes.push(`Einordnung gegen das Rang-Niveau (Durchschnitt der Ranked-Spieler deines Ranges auf ${ref.hero ? "diesem Helden" : "allen Helden"}): zählt zu ${Math.round(w * 100)} % in die Note – ${a.rows.map((r) => `${r.label} ${r.mine} (Ø ${r.ref})`).join(", ")}.`);
   }
 
+  // Universelle Untergrenze: Deadlock hat keine festen Rollen – wer viel stirbt und kaum etwas beiträgt, darf nicht
+  // durch „bin Support/Frontline“ gerettet werden. Tode und KDA (gegen Lobby UND Rang-Niveau) deckeln die Note für jede Rolle.
+  {
+    const tot = all.reduce((a, m) => ({ k: a.k + m.p.kills, a: a.a + m.p.assists, d: a.d + m.p.deaths, dm: a.dm + m.deaths }), { k: 0, a: 0, d: 0, dm: 0 });
+    const lobbyKda = (tot.k + tot.a) / Math.max(1, tot.d);
+    const myKda = (me.p.kills + me.p.assists) / Math.max(1, me.p.deaths);
+    const us = [ratioScore((tot.dm / all.length + 0.02) / (me.deaths + 0.02)), ratioScore(myKda / Math.max(0.3, lobbyKda))];
+    if (ref && ref.d > 0) {
+      const f = clamp(match.durationS / REF_DURATION_S, 0.4, 2.2);
+      us.push(ratioScore((ref.d * f + 0.5) / (me.p.deaths + 0.5)), ratioScore(myKda / (((ref.k + ref.a) / Math.max(0.5, ref.d)) * 1.12)));
+    }
+    const U = us.reduce((a, b) => a + b, 0) / us.length;
+    const limit = 0.5 + 0.7 * U;
+    if (score > limit) {
+      notes.push(`Gedeckelt: ${me.p.kills}/${me.p.deaths}/${me.p.assists} (KDA ${myKda.toFixed(1)}, Lobby ${lobbyKda.toFixed(1)}) – zu viele Tode bei zu wenig Beitrag. Auch als ${ROLE_LABELS[role.key]} gilt: Wer stirbt, ohne etwas zu bewirken, kann keine gute Note bekommen.`);
+      score = limit;
+    }
+  }
+
   // Kurze Matches sind weniger aussagekräftig: Note zum Durchschnitt hin dämpfen
   const reliability = clamp((mins - 6) / 12, 0.25, 1);
   if (reliability < 1) {
