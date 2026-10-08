@@ -110,7 +110,7 @@ export default function SettingsPage() {
           <Row title="Windows-Benachrichtigungen" desc="Zeigt neue Matches als Systembenachrichtigung."><Switch on={desk.desktopNotifications} onChange={(v) => setD({ desktopNotifications: v })} /></Row>
           {up && (
             <Row title={`Version ${up.current}`} desc={up.status === "unsupported" ? up.message : up.status === "ready" ? `Update ${up.version} ist bereit.` : up.status === "downloading" ? `Update ${up.version} wird geladen (${up.percent}%).` : up.status === "error" ? `Update-Prüfung fehlgeschlagen: ${up.message}` : up.status === "checking" ? "Suche nach Updates …" : "Die App prüft automatisch auf Updates."}>
-              {up.status === "ready" ? <button onClick={() => window.desktop?.installUpdate()} className="btn btn-gold text-sm">Neu starten & installieren</button> : up.status !== "unsupported" && <button onClick={() => window.desktop?.checkForUpdates()} className="btn btn-ghost text-sm">Nach Updates suchen</button>}
+              {up.status === "ready" ? <button onClick={() => window.desktop?.installUpdate()} className="btn btn-gold text-sm">Neu starten & installieren</button> : up.portable ? <button onClick={() => window.desktop?.runInstaller()} className="btn btn-gold text-sm">Mit Installer installieren</button> : up.status !== "unsupported" && <button onClick={() => window.desktop?.checkForUpdates()} className="btn btn-ghost text-sm">Nach Updates suchen</button>}
             </Row>
           )}
         </Card>

@@ -47,7 +47,7 @@ export default function StatusPage() {
           </div>
           <div className="ml-auto flex gap-2">
             {up.status === "ready" ? <button onClick={() => window.desktop?.installUpdate()} className="btn btn-gold">Neu starten & installieren</button>
-              : up.status !== "unsupported" && <button onClick={() => window.desktop?.checkForUpdates()} className="btn btn-ghost">Nach Updates suchen</button>}
+              : up.portable ? <button onClick={() => window.desktop?.runInstaller()} className="btn btn-gold text-sm">Mit Installer installieren</button> : up.status !== "unsupported" && <button onClick={() => window.desktop?.checkForUpdates()} className="btn btn-ghost">Nach Updates suchen</button>}
             {up.status === "unsupported" && <a className="btn btn-ghost" href={up.releasesUrl} target="_blank" rel="noreferrer">Release-Seite</a>}
           </div>
         </section>

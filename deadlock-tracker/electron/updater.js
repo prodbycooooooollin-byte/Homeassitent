@@ -11,7 +11,7 @@ const BASE = "https://github.com/prodbycooooooollin-byte/Homeassitent/releases/d
 const RELEASES_URL = "https://github.com/prodbycooooooollin-byte/Homeassitent/releases";
 
 // status: idle | checking | available | downloading | ready | uptodate | error | unsupported
-let state = { status: "idle", version: app.getVersion(), current: app.getVersion(), percent: 0, message: "", releasesUrl: RELEASES_URL };
+let state = { portable: false, status: "idle", version: app.getVersion(), current: app.getVersion(), percent: 0, message: "", releasesUrl: RELEASES_URL };
 let win = null;
 let autoUpdater = null;
 let downloadedFile = null;
@@ -28,6 +28,15 @@ function setup(mainWindow) {
 
   ipcMain.handle("updater:info", () => state);
   ipcMain.handle("updater:check", () => check());
+  // Portable-Version kann sich nicht selbst ersetzen: eigenen Installer laden und starten (installiert Lockscope regulär, Daten bleiben erhalten)
+  ipcMain.handle("updater:runInstaller", async () => {
+    push({ status: "installing", message: "Installer wird geladen …", percent: 0 });
+    try {
+      const helper = await ensureHelper((pct) => push({ status: "installing", percent: pct }));
+      spawn(helper, [], { detached: true, stdio: "ignore" }).unref();
+      setTimeout(() => app.quit(), 700);
+    } catch (e) { push({ status: "unsupported", message: `Installer konnte nicht geladen werden: ${String(e && e.message || e).slice(0, 120)}. Bitte Lockscope-Installer.exe von der Release-Seite laden.` }); }
+  });
   ipcMain.handle("updater:install", async () => {
     if (state.status !== "ready" || !autoUpdater) return;
     // Sichtbarer Ablauf: eigene Installationsoberfläche (Lockscope-Installer) übernimmt – nur wenn sie sich laden lässt, sonst Standard-Installer
@@ -46,7 +55,7 @@ function setup(mainWindow) {
   });
 
   if (!app.isPackaged) return push({ status: "unsupported", message: "Entwicklungsmodus – keine Updates." });
-  if (portable) return push({ status: "unsupported", message: "Portable Version: bitte neue EXE manuell von der Release-Seite laden (oder den Installer nutzen)." });
+  if (portable) return push({ portable: true, status: "unsupported", message: "Portable Version: kann sich nicht selbst aktualisieren. Mit dem Installer wird Lockscope normal installiert und bleibt danach automatisch aktuell – deine Daten bleiben erhalten." });
 
   try {
     ({ autoUpdater } = require("electron-updater"));

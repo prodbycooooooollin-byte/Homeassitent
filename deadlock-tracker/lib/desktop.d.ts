@@ -1,4 +1,5 @@
 export interface UpdaterState {
+  portable?: boolean;
   status: "idle" | "checking" | "available" | "downloading" | "ready" | "installing" | "uptodate" | "error" | "unsupported";
   version: string; // Zielversion (bei ready/available) bzw. aktuelle
   current: string;
@@ -16,6 +17,7 @@ export interface DesktopBridge {
   getInfo(): Promise<UpdaterState>;
   checkForUpdates(): Promise<UpdaterState>;
   installUpdate(): Promise<void>;
+  runInstaller(): Promise<void>;
   onUpdateState(cb: (s: UpdaterState) => void): () => void;
   platform: string;
   getDesktopSettings(): Promise<DesktopSettings>;
