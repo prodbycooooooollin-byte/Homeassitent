@@ -55,8 +55,12 @@ export interface Scene {
   t: number;
   /** Replay-Zeit in Sekunden */
   rt: number;
-  /** Gegenspieler (Killer bzw. Opfer) als Index in `players` */
+  /** Gegenspieler (Killer bzw. Opfer) als Index in `players` (-1 ohne Replay) */
   other: number;
+  /** Held des Gegenspielers (immer gesetzt, wenn bekannt) */
+  otherHero?: number;
+  /** Analyse nur aus Match-Daten, ohne Replay (keine Positionen) */
+  basic?: boolean;
   helpers: number[];
   headline: string;
   /** Warum? – 1 bis 3 Sätze aus den Fakten dieser Szene */

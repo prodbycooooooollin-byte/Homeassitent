@@ -11,7 +11,7 @@ export const isDemo = demo;
 export const fetchHistory = (id: number): Promise<HistoryEntry[]> => (demo() ? Promise.resolve(demoHistory(id)) : real.fetchHistory(id));
 export const fetchMatchDetails = (matchId: number, focus = 1, allowSteam = false): Promise<MatchDetails | null> =>
   demo() ? Promise.resolve(demoMatch(matchId, focus)) : real.fetchMatchDetails(matchId, allowSteam);
-export const fetchReplayUrl = (matchId: number): Promise<string | null> => (demo() ? Promise.resolve(null) : real.fetchReplayUrl(matchId));
+export const fetchReplayUrl = (matchId: number): Promise<{ url: string } | { error: string }> => (demo() ? Promise.resolve({ error: "Demo-Modus" }) : real.fetchReplayUrl(matchId));
 export const fetchProfiles = (ids: number[]) => (demo() ? Promise.resolve(demoProfiles(ids)) : real.fetchProfiles(ids));
 export const searchProfiles = (q: string) => (demo() ? Promise.resolve(demoSearch(q)) : real.searchProfiles(q));
 export const fetchRank = (id: number) => (demo() ? Promise.resolve(demoRank) : real.fetchRank(id));

@@ -144,6 +144,7 @@ export function analyzeReplay(d: ReplayData, details: MatchDetails | null, focus
     const h = d.players[pi]?.heroId ?? details?.players.find((p) => p.accountId === d.players[pi]?.accountId)?.heroId;
     return h ? opt.heroName(h) : d.players[pi]?.name ?? "Gegner";
   };
+  const heroId = (pi: number) => d.players[pi]?.heroId ?? details?.players.find((p) => p.accountId === d.players[pi]?.accountId)?.heroId;
   const deathsOf = (pi: number) => d.kills.filter((k) => k.victim === pi).sort((a, b) => a.t - b.t);
   const myDeaths = deathsOf(me);
   const mpDetails = details?.players.find((p) => p.accountId === focusAccount);
@@ -217,7 +218,7 @@ export function analyzeReplay(d: ReplayData, details: MatchDetails | null, focus
     const n = ki + (s.aheadM ?? 0) + (s.nearestAllyM ?? 0);
     const text = explainDeath(main, { s, killer, attackers, helpers: helpers.map(heroOf), fightS, startHp, aliveS, killerHp, traded: !!traded, gotKill: !!gotKill, when, n, hp1: hpNow[hpNow.length - 2] ?? null });
     return {
-      id: `d${ki}`, kind: "death", t: clk(t), rt: t, other: a, helpers, headline: text.headline, why: text.why, advice: text.advice, facts, cause: main, x: k.x ?? v.pos(me, t - 0.5)[0], y: k.y ?? v.pos(me, t - 0.5)[1],
+      id: `d${ki}`, kind: "death", t: clk(t), rt: t, other: a, otherHero: a >= 0 ? heroId(a) : undefined, helpers, headline: text.headline, why: text.why, advice: text.advice, facts, cause: main, x: k.x ?? v.pos(me, t - 0.5)[0], y: k.y ?? v.pos(me, t - 0.5)[1],
     };
   }
 
@@ -271,7 +272,7 @@ export function analyzeReplay(d: ReplayData, details: MatchDetails | null, focus
       why = `Ein offenes Duell ${sm.enemiesNear <= 1 ? "1 gegen 1" : `mit ${sm.alliesNear + 1} gegen ${sm.enemiesNear}`}. ${myHp !== null ? `Du hattest dabei ${pct(myHp)} Leben` : ""}${vHpBefore !== null ? `, ${vName} ${pct(vHpBefore)} vor dem Ende` : ""}.`;
       advice = "Solche Duelle gewinnst du am sichersten mit Leben- und Positionsvorteil – hier hat beides gestimmt.";
     }
-    return { id: `${rr ? "k" : "a"}${ki}`, kind, t: clk(t), rt: t, other: victim, helpers, headline, why, advice, facts, cause: key, x: k.x, y: k.y };
+    return { id: `${rr ? "k" : "a"}${ki}`, kind, t: clk(t), rt: t, other: victim, otherHero: heroId(victim), helpers, headline, why, advice, facts, cause: key, x: k.x, y: k.y };
   }
 }
 

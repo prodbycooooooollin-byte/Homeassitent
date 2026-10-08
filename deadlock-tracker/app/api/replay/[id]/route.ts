@@ -4,6 +4,7 @@ import { isDemo } from "@/lib/api";
 import { getAssets } from "@/lib/assets";
 import { alignAccount } from "@/lib/align";
 import { analyzeReplay } from "@/lib/replay-analysis";
+import { analyzeBasic } from "@/lib/replay-basic";
 import { demoReplay } from "@/lib/replay-demo";
 import { hasReplay, jobStatus, loadReplay, mergeDetails, startReplay } from "@/lib/replay-server";
 
@@ -19,7 +20,10 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const replay = isDemo() ? (details ? demoReplay(details) : null) : hasReplay(matchId) ? loadReplay(matchId) : null;
   if (!replay) {
     const j = jobStatus(matchId);
-    return NextResponse.json({ status: j ? j.state : "none", job: j });
+    // Ohne Replay trotzdem eine Auswertung aus den Match-Daten liefern (ohne Karte)
+    const assets0 = details ? await getAssets().catch(() => null) : null;
+    const basic = details ? analyzeBasic(details, account, (id) => assets0?.heroes[id]?.name ?? `Held ${id}`) : null;
+    return NextResponse.json({ status: j ? j.state : "none", job: j, basic });
   }
   const merged = mergeDetails(replay, details);
   const assets = await getAssets().catch(() => null);

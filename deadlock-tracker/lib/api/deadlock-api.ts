@@ -293,8 +293,8 @@ export async function fetchPerformanceCurve(heroId: number | null, minBadge: num
     .sort((a, b) => a.pct - b.pct);
 }
 
-/** Download-Adresse des Valve-Replays (.dem.bz2) – braucht Cluster und Replay-Salt des Matches. Null, wenn die API keine Salts kennt. */
-export async function fetchReplayUrl(matchId: number): Promise<string | null> {
+/** Download-Adresse des Valve-Replays (.dem.bz2) – braucht Cluster und Replay-Salt des Matches. Liefert Adresse oder einen konkreten Grund. */
+export async function fetchReplayUrl(matchId: number): Promise<{ url: string } | { error: string }> {
   const find = (o: unknown, keys: string[]): unknown => {
     if (!o || typeof o !== "object") return undefined;
     for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
@@ -303,13 +303,24 @@ export async function fetchReplayUrl(matchId: number): Promise<string | null> {
     }
     return undefined;
   };
-  for (const path of [`/v1/matches/${matchId}/salts`, `/v1/matches/${matchId}/metadata?disable_steam=true`]) {
-    try {
-      const raw = await getJson(`${BASE()}${path}`, { retries: 0, timeoutMs: 12000 });
-      const cluster = find(raw, ["cluster_id", "replay_cluster_id"]);
-      const salt = find(raw, ["replay_salt"]);
-      if (cluster !== undefined && salt !== undefined) return `http://replay${cluster}.valve.net/1422450/${matchId}_${salt}.dem.bz2`;
-    } catch { /* nächster Weg */ }
+  const notes: string[] = [];
+  const paths = [`/v1/matches/${matchId}/salts`, `/v1/matches/salts?match_ids=${matchId}`, `/v1/matches/${matchId}/metadata`];
+  for (const path of paths) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const raw = await getJson(`${BASE()}${path}`, { retries: 0, timeoutMs: 30000 });
+        const cluster = find(raw, ["cluster_id", "replay_cluster_id", "cluster"]);
+        const salt = find(raw, ["replay_salt"]);
+        if (cluster !== undefined && salt !== undefined) return { url: `http://replay${cluster}.valve.net/1422450/${matchId}_${salt}.dem.bz2` };
+        notes.push(`${path.split("?")[0].replace(`/${matchId}`, "")}: ohne Replay-Salt`);
+        break;
+      } catch (e) {
+        const st = e instanceof ApiError ? e.status : undefined;
+        notes.push(`${path.split("?")[0].replace(`/${matchId}`, "")}: ${st ?? (e instanceof Error ? e.message : "Fehler")}`);
+        if (st === 429) { await new Promise((r) => setTimeout(r, 4000)); continue; }
+        break;
+      }
+    }
   }
-  return null;
+  return { error: `Die Deadlock-API liefert für dieses Match keine Replay-Salts (${notes.join("; ")}).` };
 }

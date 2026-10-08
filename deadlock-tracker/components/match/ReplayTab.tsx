@@ -5,7 +5,7 @@ import { Icon } from "../Icon";
 import { TEAMS } from "./Scoreboard";
 import type { ReplayAnalysis, ReplayData, Scene } from "@/lib/replay-types";
 
-interface Res { status: "none" | "running" | "error" | "done"; job?: { phase: string; pct: number; message?: string } | null; replay?: ReplayData; analysis?: ReplayAnalysis }
+interface Res { status: "none" | "running" | "error" | "done"; job?: { phase: string; pct: number; message?: string } | null; replay?: ReplayData; analysis?: ReplayAnalysis; basic?: ReplayAnalysis | null }
 
 const CAUSE: Record<string, string> = {
   overextended: "Zu weit vorne", isolated: "Allein gestellt", outnumbered: "Unterzahl", lowhp: "Mit wenig Leben", focus: "Fokussiert",
@@ -24,31 +24,70 @@ export function ReplayTab({ matchId, account }: { matchId: number; account: numb
   }, [matchId, account]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (res?.status !== "running") return; const t = setInterval(load, 1500); return () => clearInterval(t); }, [res?.status, load]);
-  const start = async () => { setRes({ status: "running", job: { phase: "Starte …", pct: 0 } }); await fetch(`/api/replay/${matchId}`, { method: "POST" }); load(); };
+  const start = useCallback(async () => { setRes((r) => ({ ...(r ?? { status: "running" }), status: "running", job: { phase: "Starte …", pct: 0 } } as Res)); await fetch(`/api/replay/${matchId}`, { method: "POST" }); load(); }, [matchId, load]);
+  // Die Auswertung startet von selbst – ohne Klick
+  const auto = useRef(false);
+  useEffect(() => { if (res?.status === "none" && !auto.current) { auto.current = true; start(); } }, [res?.status, start]);
 
   if (!res) return <div className="skeleton h-[520px]" />;
-  if (res.status !== "done" || !res.replay || !res.analysis) return <Start res={res} onStart={start} />;
+  if (res.status !== "done" || !res.replay || !res.analysis) return <Fallback res={res} onStart={start} account={account} />;
   return <Player replay={res.replay} analysis={res.analysis} account={account} />;
 }
 
-function Start({ res, onStart }: { res: Res; onStart: () => void }) {
-  const running = res.status === "running";
+/** Solange kein Replay vorliegt (läuft noch oder nicht verfügbar): Szenen-Analyse aus den Match-Daten plus Hinweis zum Replay. */
+function Fallback({ res, onStart }: { res: Res; onStart: () => void; account: number }) {
+  const running = res.status === "running" || res.status === "none";
+  const scenes = res.basic?.scenes ?? [];
+  const [sel, setSel] = useState<Scene | null>(null);
+  const cur = sel ?? scenes[0] ?? null;
+  const causes = Object.entries(res.basic?.causes ?? {}).sort((a, b) => b[1] - a[1]);
   return (
-    <section className="surface relative overflow-hidden p-8">
-      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-amber/15 blur-[90px]" />
-      <div className="relative mx-auto max-w-2xl text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]"><Icon name="eye" size={26} className="text-amber" /></div>
-        <h2 className="display text-2xl font-extrabold">2D-Replay &amp; Szenen-Analyse</h2>
-        <p className="mt-2 text-sm text-muted">Spiel das Match auf einer Karte nach – mit allen Positionen – und erfahre für jeden Tod, Kill und Assist, was in genau dieser Szene passiert ist: Abstand zum Team, Überzahl, Leben, Zeit seit Respawn. Das Replay wird einmal geladen und ausgewertet (je nach Rechner und Leitung 1–3 Minuten); gespeichert wird nur die kleine Auswertung, die letzten 10 Matches bleiben erhalten.</p>
-        {running ? (
-          <div className="mx-auto mt-6 max-w-md">
-            <div className="mb-1 flex justify-between text-xs text-muted"><span>{res.job?.phase ?? "Läuft …"}</span><span className="num">{res.job?.pct ?? 0} %</span></div>
-            <div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-amber to-[#fff1c9] transition-all" style={{ width: `${Math.max(4, res.job?.pct ?? 0)}%` }} /></div>
+    <div className="space-y-4">
+      <section className="surface flex flex-wrap items-center gap-4 p-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]"><Icon name="eye" size={20} className="text-amber" /></div>
+        <div className="min-w-0 flex-1">
+          {running ? (
+            <>
+              <div className="text-sm font-semibold">2D-Karte wird vorbereitet … <span className="num text-muted">{res.job?.pct ?? 0} %</span> <span className="text-xs font-normal text-muted">{res.job?.phase}</span></div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-amber to-[#fff1c9] transition-all" style={{ width: `${Math.max(4, res.job?.pct ?? 0)}%` }} /></div>
+            </>
+          ) : (
+            <>
+              <div className="text-sm font-semibold">Die 2D-Karte ist für dieses Match gerade nicht verfügbar</div>
+              <p className="mt-0.5 text-xs text-muted">Unten siehst du trotzdem die Szenen-Analyse aus den Match-Daten. {res.job?.message}</p>
+            </>
+          )}
+        </div>
+        {!running && <button onClick={onStart} className="btn btn-gold !py-1.5 text-sm"><Icon name="rocket" size={14} />Erneut versuchen</button>}
+      </section>
+      {scenes.length === 0 ? (
+        <div className="surface p-8 text-center text-sm text-muted">Für dieses Match liegen keine Todes- oder Kill-Daten vor.</div>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="space-y-4">
+            {causes.length > 0 && <section className="surface p-4"><div className="label mb-2">Deine Tode im Überblick</div><div className="flex flex-wrap gap-1.5">{causes.map(([k, c]) => <span key={k} className="chip"><b className="num mr-1">{c}×</b>{CAUSE[k] ?? k}</span>)}</div></section>}
+            {cur && <SceneCard s={cur} />}
           </div>
-        ) : (
-          <button onClick={onStart} className="btn btn-gold mx-auto mt-6"><Icon name="rocket" size={15} />{res.status === "error" ? "Erneut versuchen" : "Replay auswerten"}</button>
-        )}
-        {res.status === "error" && <p className="mx-auto mt-4 max-w-xl text-sm text-loss">{res.job?.message ?? "Fehlgeschlagen"}</p>}
+          <SceneList scenes={scenes} sel={cur} onPick={setSel} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SceneList({ scenes, sel, onPick }: { scenes: Scene[]; sel: Scene | null; onPick: (s: Scene) => void }) {
+  return (
+    <section className="surface overflow-hidden">
+      <div className="border-b border-white/[0.06] px-4 py-2.5"><span className="label">Szenen</span> <span className="chip ml-1">{scenes.length}</span></div>
+      <div className="max-h-[560px] overflow-y-auto">
+        {scenes.map((s) => (
+          <button key={s.id} onClick={() => onPick(s)} className={`flex w-full items-center gap-3 border-b border-white/[0.04] px-4 py-2 text-left text-sm transition hover:bg-white/[0.04] ${sel?.id === s.id ? "bg-white/[0.06]" : ""}`}>
+            <span className="num w-11 text-xs text-muted">{mmss(s.t)}</span>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: KIND[s.kind].c }} />
+            <span className="min-w-0 flex-1 truncate">{s.headline}</span>
+            <span className="text-[10px] uppercase tracking-wider" style={{ color: KIND[s.kind].c }}>{KIND[s.kind].l}</span>
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -199,19 +238,19 @@ function Player({ replay, analysis, account }: { replay: ReplayData; analysis: R
   );
 }
 
-function SceneCard({ s, replay, onReplay }: { s: Scene; replay: ReplayData; onReplay: () => void }) {
+function SceneCard({ s, replay, onReplay }: { s: Scene; replay?: ReplayData; onReplay?: () => void }) {
   const k = KIND[s.kind];
-  const other = replay.players[s.other];
+  const heroId = s.otherHero ?? replay?.players[s.other]?.heroId;
   return (
     <section className="surface relative overflow-hidden p-4" style={{ boxShadow: `inset 0 0 0 1px ${k.c}44` }}>
       <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full blur-3xl" style={{ background: `${k.c}33` }} />
       <div className="relative">
         <div className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest" style={{ color: k.c }}>
           <span>{k.l}</span><span className="num text-muted">{mmss(s.t)}</span><span className="text-muted">· {CAUSE[s.cause] ?? s.cause}</span>
-          <button onClick={onReplay} className="btn btn-ghost ml-auto !px-2 !py-1 text-[11px] normal-case tracking-normal"><Icon name="play" size={12} />Szene abspielen</button>
+          {onReplay && <button onClick={onReplay} className="btn btn-ghost ml-auto !px-2 !py-1 text-[11px] normal-case tracking-normal"><Icon name="play" size={12} />Szene abspielen</button>}
         </div>
         <div className="flex items-center gap-2">
-          {other?.heroId ? <HeroPortrait id={other.heroId} size={34} variant="small" ring={k.c} /> : null}
+          {heroId ? <HeroPortrait id={heroId} size={34} variant="small" ring={k.c} /> : null}
           <h3 className="display text-lg font-extrabold leading-tight">{s.headline}</h3>
         </div>
         <p className="mt-2 text-sm leading-relaxed text-white/90">{s.why}</p>

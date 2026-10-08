@@ -133,6 +133,7 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
               {rating && <span className="chip" style={{ borderColor: GRADE_STYLE[rating.grade].glow }}>{rating.label || rating.grade} · {GRADE_STYLE[rating.grade].label} · Score {rating.score.toFixed(2)}<RatingHint rating={rating} who="Du" /></span>}
               {me?.mvpRank === 1 && <span className="chip text-amber"><Icon name="star" size={13} />MVP</span>}
             </div>
+            {me && <button onClick={() => openDebrief({ matchId: d.matchId, account })} className="btn btn-gold mt-4 !py-2 text-sm"><Icon name="trophy" size={15} />Debrief ansehen</button>}
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/35 p-4 text-center backdrop-blur">
             <div className="label">Ø Lobby-Rang</div>
@@ -147,12 +148,17 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
       </section>
 
       <div className="relative flex gap-1 overflow-x-auto border-b border-white/[0.08]">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t.key !== "replay").map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`relative px-4 py-3 text-sm font-semibold transition ${tab === t.key ? "text-white" : "text-muted hover:text-white"}`}>
             {t.label}
             {tab === t.key && <span className="absolute inset-x-3 -bottom-px h-0.5 rounded bg-gradient-to-r from-amber to-[#fff1c9] shadow-[0_0_10px_#f0b44c]" />}
           </button>
         ))}
+        {/* 2D-Replay steht bewusst abgesetzt von den Daten-Tabs */}
+        <span className="ml-auto" />
+        <button onClick={() => setTab("replay")} className={`my-1.5 mr-1 flex shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-bold transition ${tab === "replay" ? "border-amber bg-amber/20 text-amber shadow-[0_0_18px_#f0b44c55]" : "border-amber/40 bg-amber/[0.07] text-amber hover:bg-amber/15"}`}>
+          <Icon name="play" size={13} />2D-Replay &amp; Szenen
+        </button>
       </div>
 
       <div key={tab} className="page-enter">

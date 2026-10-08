@@ -47,8 +47,9 @@ export async function startReplay(matchId: number): Promise<ReplayJob> {
   const job: ReplayJob & { child?: ChildProcess } = { state: "running", phase: "Replay-Adresse suchen", pct: 0, startedAt: Date.now() };
   jobs().set(matchId, job);
   const fail = (message: string) => { job.state = "error"; job.message = message; };
-  const url = await fetchReplayUrl(matchId).catch(() => null);
-  if (!url) { fail("Für dieses Match gibt es keine Replay-Adresse (Salts fehlen noch oder das Match ist zu alt)."); return jobStatus(matchId)!; }
+  const found = await fetchReplayUrl(matchId).catch((e) => ({ error: `Replay-Adresse nicht abrufbar: ${e instanceof Error ? e.message : e}` }));
+  if (!("url" in found)) { fail(found.error); return jobStatus(matchId)!; }
+  const url = found.url;
   const wp = workerPath();
   if (!fs.existsSync(wp)) { fail(`Replay-Worker nicht gefunden (${wp}).`); return jobStatus(matchId)!; }
   try {
