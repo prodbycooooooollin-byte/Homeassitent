@@ -6,6 +6,7 @@ import { Avatar } from "./GameAssets";
 import { Icon, type IconName } from "./Icon";
 import { NavLink } from "./NavLink";
 import { useData, useTracker } from "./Providers";
+import { INGEST_COLOR, useIngest } from "./useIngest";
 import { fmtAgo } from "@/lib/format";
 import { parseAccountId } from "@/lib/steamid";
 import { profileViewHref } from "@/lib/primary";
@@ -21,7 +22,8 @@ const NAV: NavEntry[] = [
   { kind: "link", key: "training", href: "/training", label: "Training", icon: "target", desc: "" },
   { kind: "menu", key: "player", label: "Spieler", items: [
     { href: "/heroes", label: "Helden", icon: "sword", desc: "Deine Helden-Statistiken" },
-    { href: "/rank", label: "Rang", icon: "rocket", desc: "Verlauf, Peak und Einordnung" },
+    { href: "/rank", label: "Rang", icon: "badge", desc: "Verlauf, Peak und Einordnung" },
+    { href: "/aufstieg", label: "Aufstieg", icon: "rocket", desc: "Prognose: wann der nächste Rang kommt" },
     { href: "/achievements", label: "Erfolge", icon: "medal", desc: "Medaillen und Level" },
     { href: "/mates", label: "Mitspieler", icon: "users", desc: "Partner, Premade und Gegner" },
     { href: "/compare", label: "Vergleich", icon: "swap", desc: "Zwei Spieler im Duell" },
@@ -44,6 +46,7 @@ export function TopBar() {
   const ok = me?.lastSyncOk !== false;
   const activeKey = NAV.find((n) => entryActive(n, path))?.key ?? "home";
   const { live } = useData();
+  const ing = useIngest();
   const [menu, setMenu] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => setMenu(null), [path]);
@@ -101,6 +104,12 @@ export function TopBar() {
                   {syncing ? "Synchronisiere …" : ok ? `Live · ${me.lastSyncAt ? fmtAgo(me.lastSyncAt / 1000) : "…"}` : "Sync-Fehler"}
                 </span>
               </button>
+            )}
+            {ing && ing.state !== "unsupported" && (
+              <NavLink href="/ingest" title={`Match-Daten-Helfer: ${ing.message}`} aria-label="Match-Daten-Helfer öffnen" className="chip whitespace-nowrap hover:border-white/25">
+                <i className={`h-2 w-2 rounded-full ${ing.state === "running" ? "animate-pulse" : ""}`} style={{ background: INGEST_COLOR[ing.state] }} />
+                <span className="hidden 2xl:inline">Helfer</span>
+              </NavLink>
             )}
             {status?.demo && <span className="chip border-amber/40 text-amber">DEMO</span>}
             <NavLink href="/settings" aria-label="Einstellungen" title="Einstellungen" className={`flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-muted transition hover:border-white/25 hover:text-white ${path.startsWith("/settings") ? "!border-amber/50 !text-amber" : ""}`}><Icon name="sliders" size={17} /></NavLink>

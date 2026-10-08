@@ -5,26 +5,33 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const { spawn, execFile } = require("child_process");
-const { app } = require("electron");
+const { app, shell } = require("electron");
 
 const URL_EXE = "https://github.com/deadlock-api/deadlock-api-ingest/releases/latest/download/deadlock-api-ingest-windows-latest.exe";
 const MAX_AGE_MS = 7 * 24 * 3600_000;
 const IMAGE = "deadlock-api-ingest.exe";
 
-const state = { state: "off", message: "Aus", pid: null, since: null, restarts: 0, lines: [], version: null };
-let child = null, stopping = false, timer = null, listener = () => {}, downloading = null, fails = 0;
+const MAX_LINES = 500;
+const MATCH_RE = /\b(match|salt)/i;
+const ERR_RE = /\b(error|fehler|panic|fatal|failed|fehlgeschlagen)\b/i;
+// lines: strukturierte Protokollzeilen { t: Zeitstempel (ms), src: "app" | "stdout" | "stderr", text }
+const state = { state: "off", message: "Aus", pid: null, since: null, restarts: 0, lines: [], version: null, matches: 0, errors: 0, dir: "" };
+let child = null, stopping = false, timer = null, listener = () => {}, downloading = null, fails = 0, exitWaiters = [];
 
 const dir = () => path.join(app.getPath("userData"), "ingest");
 const exe = () => path.join(dir(), IMAGE);
 const set = (patch) => { Object.assign(state, patch); try { listener(getStatus()); } catch { /* egal */ } };
-const getStatus = () => ({ ...state, lines: state.lines.slice(-30) });
+const getStatus = () => ({ ...state, dir: dir(), lines: state.lines.slice(-MAX_LINES) });
 const onChange = (cb) => { listener = cb; };
 
-function log(line) {
-  const t = String(line).trim();
+function log(line, src = "app") {
+  const t = String(line).replace(/\x1b\[[0-9;]*m/g, "").trim();
   if (!t) return;
-  state.lines.push(`${new Date().toLocaleTimeString("de-DE")} ${t.slice(0, 300)}`);
-  if (state.lines.length > 80) state.lines.splice(0, state.lines.length - 80);
+  const text = t.slice(0, 400);
+  state.lines.push({ t: Date.now(), src, text });
+  if (src !== "app" && MATCH_RE.test(text)) state.matches++;
+  if (src === "stderr" ? ERR_RE.test(text) : src === "app" && /^(Fehler|Download fehlgeschlagen)/.test(text)) state.errors++;
+  if (state.lines.length > MAX_LINES) state.lines.splice(0, state.lines.length - MAX_LINES);
 }
 
 function get(url, redirects = 5) {
@@ -98,14 +105,17 @@ function launch() {
   } catch (e) { set({ state: "error", message: `Start fehlgeschlagen: ${e.message}` }); return; }
   const startedAt = Date.now();
   set({ state: "running", message: "Läuft im Hintergrund", pid: child.pid, since: startedAt });
-  const onData = (b) => { String(b).split(/\r?\n/).forEach(log); try { listener(getStatus()); } catch { /* egal */ } };
-  child.stdout.on("data", onData);
-  child.stderr.on("data", onData);
+  const onData = (src) => (b) => { String(b).split(/\r?\n/).forEach((l) => log(l, src)); try { listener(getStatus()); } catch { /* egal */ } };
+  child.stdout.on("data", onData("stdout"));
+  child.stderr.on("data", onData("stderr"));
+  log(`Gestartet (PID ${child.pid})`);
   child.on("error", (e) => { log(`Fehler: ${e.message}`); });
   child.on("exit", (code, sig) => {
     child = null;
     log(`Beendet (Code ${code ?? sig})`);
-    if (stopping) { set({ state: "off", message: "Aus", pid: null }); return; }
+    const waiters = exitWaiters; exitWaiters = [];
+    if (stopping) { set({ state: "off", message: "Aus", pid: null }); waiters.forEach((w) => w()); return; }
+    waiters.forEach((w) => w());
     // Abstürze mit wachsender Wartezeit neu starten; bei Dauerschleife aufgeben
     fails = Date.now() - startedAt < 30_000 ? fails + 1 : 0;
     if (fails >= 6) { set({ state: "error", message: "Das Programm beendet sich immer wieder sofort – Autostart pausiert (Details im Protokoll).", pid: null }); return; }
@@ -115,10 +125,31 @@ function launch() {
   });
 }
 
+/** Stoppt den Helfer; die Zusage erfüllt sich, sobald der Prozess wirklich beendet ist. */
 function stop() {
   stopping = true;
   if (timer) { clearTimeout(timer); timer = null; }
-  if (child) { try { child.kill(); } catch { /* egal */ } } else set({ state: "off", message: "Aus", pid: null });
+  if (!child) { set({ state: "off", message: "Aus", pid: null }); return Promise.resolve(); }
+  return new Promise((resolve) => {
+    exitWaiters.push(resolve);
+    setTimeout(resolve, 5000);
+    try { child.kill(); } catch { /* egal */ }
+  });
 }
 
-module.exports = { start, stop, getStatus, onChange };
+/** Steuerung aus der Konsole: start | stop | restart | clear | openFolder – liefert den neuen Status. */
+async function control(action) {
+  switch (action) {
+    case "start": fails = 0; log("Start angefordert"); await start(); break;
+    case "stop": log("Stopp angefordert"); await stop(); break;
+    case "restart": fails = 0; log("Neustart angefordert"); await stop(); await start(); break;
+    case "clear": state.lines = []; state.matches = 0; state.errors = 0; break;
+    case "openFolder": fs.mkdirSync(dir(), { recursive: true }); await shell.openPath(dir()); break;
+    default: break;
+  }
+  const s = getStatus();
+  try { listener(s); } catch { /* egal */ }
+  return s;
+}
+
+module.exports = { start, stop, getStatus, onChange, control };

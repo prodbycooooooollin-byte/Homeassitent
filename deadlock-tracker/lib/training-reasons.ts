@@ -15,7 +15,7 @@ const r1 = (v: number) => (Math.round(v * 10) / 10).toString().replace(".", ",")
 
 /* ---------- Todesursachen ---------- */
 
-type CauseId = "chain" | "outnumbered" | "gank" | "laneduel" | "opener" | "pickoff" | "nodmg" | "outfarmed" | "fight";
+export type CauseId = "chain" | "outnumbered" | "gank" | "laneduel" | "opener" | "pickoff" | "nodmg" | "outfarmed" | "fight";
 interface Death { cause: CauseId; t: number; killerHero?: number; deficit: number; richer?: number }
 
 const deadAt = (p: MatchPlayer, t: number) => (p.deathLog ?? []).some((d) => d.t <= t && t < d.t + (d.durS ?? 0));
@@ -126,6 +126,52 @@ export function deathReasons(ms: TrainingMatch[]): Reason[] {
     if (n / ds.length >= 0.2) out.push({ title: "Ein Held tötet dich besonders oft", text: `${n} von ${ds.length} Toden (${pc(n / ds.length)}) gehen auf {hero:${killer}}.` });
   }
   return out;
+}
+
+
+/* ---------- Anteile der Todesursachen (für die kompakte Übersicht) ---------- */
+
+export interface CauseShare { id: CauseId; label: string; count: number; share: number; short: string; fix: string }
+
+const SENTENCE: Record<CauseId, (n: number, N: number) => string> = {
+  chain: (n, N) => `${n} von ${N} Toden folgen unter 45 s nach dem Respawn.`,
+  outnumbered: (n, N) => `${n} von ${N} Toden fallen, obwohl dein Team schon in Unterzahl ist.`,
+  gank: (n, N) => `${n} von ${N} Toden sind frühe Ganks von einer anderen Lane.`,
+  laneduel: (n, N) => `${n} von ${N} Toden fallen früh im Duell mit deinem Lane-Gegner.`,
+  opener: (n, N) => `Bei ${n} von ${N} Toden stirbst du als Erster deines Teams.`,
+  pickoff: (n, N) => `${n} von ${N} Toden passieren völlig allein, ohne Kampf um dich herum.`,
+  nodmg: (n, N) => `${n} von ${N} Toden folgen, ohne dass du zuvor Schaden machst.`,
+  outfarmed: (n, N) => `${n} von ${N} Toden gehen an Gegner mit deutlich mehr Souls.`,
+  fight: (n, N) => `${n} von ${N} Toden fallen in verlorenen Teamfights.`,
+};
+
+/** Reine Funktion: Anteil je Ursache aus bereits klassifizierten Toden, größte zuerst. */
+export function causeSharesOf(deaths: { cause: CauseId }[], fixOf: (id: CauseId) => string = () => ""): CauseShare[] {
+  const N = deaths.length;
+  if (!N) return [];
+  const count = new Map<CauseId, number>();
+  for (const d of deaths) count.set(d.cause, (count.get(d.cause) ?? 0) + 1);
+  return [...count].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, label: CAUSE[id].label, count: n, share: n / N, short: SENTENCE[id](n, N), fix: fixOf(id) }));
+}
+
+export function causeShares(ms: TrainingMatch[]): CauseShare[] {
+  const all = classifyDeaths(ms);
+  if (all.length < 8) return [];
+  return causeSharesOf(all, (id) => CAUSE[id].fix(all.filter((d) => d.cause === id)));
+}
+
+export interface SurvivalKpi { per10: number; ref10: number | null; soloShare: number | null; respawnS: number | null; deaths: number }
+
+/** Kennzahlen für die Überleben-Übersicht: Tode/10 Min (du vs. Beste), Anteil allein gestorben, Ø tote Zeit pro Tod. */
+export function survivalKpi(ms: TrainingMatch[]): SurvivalKpi | null {
+  const u = ms.filter((m) => m.details.durationS >= 600);
+  if (!u.length) return null;
+  const rate = (p: MatchPlayer, m: TrainingMatch) => (p.deaths / m.details.durationS) * 600;
+  const per10 = mean(u.map((m) => rate(m.me, m)));
+  const refs = u.flatMap((m) => topPlayers(m).map((p) => rate(p, m)));
+  const so = soloDeaths(u);
+  const durs = u.flatMap((m) => (m.me.deathLog ?? []).map((d) => d.durS).filter((x): x is number => nn(x) && x > 0));
+  return { per10, ref10: refs.length ? mean(refs) : null, soloShare: so.deaths >= 5 ? so.solo / so.deaths : null, respawnS: durs.length ? mean(durs) : null, deaths: u.reduce((a, m) => a + m.me.deaths, 0) };
 }
 
 /* ---------- Unterschiede nach Held, Lane und Sieg/Niederlage ---------- */

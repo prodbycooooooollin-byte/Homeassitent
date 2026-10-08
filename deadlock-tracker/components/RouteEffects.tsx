@@ -36,6 +36,7 @@ const THEMES: [RegExp, Theme][] = [
   [/^\/match\//, { pattern: "scan", scene: "scan", accent2: "#4aa3ff" }],
   [/^\/heroes\/\d+/, { pattern: "dots", scene: "embers", art: "route", accent2: "#f0616d" }],
   [/^\/heroes/, { pattern: "dots", scene: "embers", art: "main", accent2: "#f0616d" }],
+  [/^\/aufstieg/, { pattern: "rays", scene: "halo", accent: "tier", accent2: "#3ecf8e" }],
   [/^\/rank/, { pattern: "rays", scene: "halo", accent: "tier", accent2: "#a77be8" }],
   [/^\/training/, { pattern: "scan", scene: "targets", accent: "#f0616d", accent2: "#ff9a3c" }],
   [/^\/insights/, { pattern: "grid", scene: "chart", accent: "#3ecf8e", accent2: "#4aa3ff" }],

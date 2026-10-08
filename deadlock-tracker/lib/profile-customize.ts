@@ -1,5 +1,5 @@
 import { gradeFor } from "./rating";
-import { averageBadge, formatBadge } from "./ranks";
+import { averageBadge, badgeToLinear, formatBadge, linearToBadge } from "./ranks";
 import { longestWinStreak, streak } from "./profile";
 import { SERIES, evaluate } from "./achievements";
 import type { MatchListItem, Overview } from "./view";
@@ -124,4 +124,22 @@ export function resolveAccent(accent: string, ctx: { heroColor?: string; rankCol
   if (isHex(accent)) return accent.toLowerCase();
   const base = accent === "rank" ? ctx.rankColor ?? ctx.heroColor : ctx.heroColor ?? ctx.rankColor;
   return ensureVivid(base ?? FALLBACK_ACCENTS[0]);
+}
+
+/* ---------- Rang-Auftritt ---------- */
+
+export interface RankProgress { tier: number; sub: number; peak: number | null; /** Letzte Rangänderung in Stufen (Division), falls im Verlauf ablesbar */ trend: number | null }
+
+/** Leitet Stufe/Peak/Trend aus Badge und Rang-Verlauf ab; null ohne Rang. Division = 1..6 innerhalb des Tiers. */
+export function rankProgress(badge: number | null | undefined, history: { badge: number }[]): RankProgress | null {
+  const lin = badgeToLinear(badge);
+  if (!badge || lin === null) return null;
+  const peakLin = history.reduce((m, r) => Math.max(m, badgeToLinear(r.badge) ?? 0), lin);
+  const prev = [...history].reverse().map((r) => badgeToLinear(r.badge)).find((l) => l !== null && l !== lin) ?? null;
+  return { tier: Math.floor(badge / 10), sub: badge % 10, peak: peakLin ? linearToBadge(peakLin) : null, trend: prev === null ? null : lin - prev };
+}
+
+/** Streifen-Kennzahlen unter dem Banner: gewählte Banner-Kennzahlen werden nicht doppelt gezeigt. */
+export function stripKeys(chosen: string[], pool: string[]): string[] {
+  return pool.filter((k) => !chosen.includes(k));
 }

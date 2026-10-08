@@ -119,6 +119,7 @@ async function createWindow() {
 
 ipcMain.handle("desktop:get", () => settings);
 ipcMain.handle("ingest:status", () => ingest.getStatus());
+ipcMain.handle("ingest:control", (_e, action) => ingest.control(String(action)));
 ipcMain.handle("desktop:set", (_e, patch) => {
   settings = { ...settings, ...desktopSettings.sanitize(patch || {}) };
   desktopSettings.save(settings);

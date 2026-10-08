@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("desktop", {
   getDesktopSettings: () => ipcRenderer.invoke("desktop:get"),
   setDesktopSettings: (patch) => ipcRenderer.invoke("desktop:set", patch),
   getIngest: () => ipcRenderer.invoke("ingest:status"),
+  controlIngest: (action) => ipcRenderer.invoke("ingest:control", action),
   onIngestState: (cb) => {
     const handler = (_e, s) => cb(s);
     ipcRenderer.on("ingest:state", handler);

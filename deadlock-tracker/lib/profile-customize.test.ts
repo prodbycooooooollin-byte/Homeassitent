@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeStat, ensureVivid, luminance, resolveAccent, titleSuggestions, unlockedBadges, STAT_KEYS } from "./profile-customize";
+import { computeStat, rankProgress, stripKeys, ensureVivid, luminance, resolveAccent, titleSuggestions, unlockedBadges, STAT_KEYS } from "./profile-customize";
 import { overview, type MatchListItem } from "./view";
 
 let id = 0;
@@ -66,5 +66,17 @@ describe("badges and colors", () => {
     expect(resolveAccent("#ff8559", { heroColor: "#111111" })).toBe("#ff8559");
     expect(resolveAccent("rank", { heroColor: "#3ecf8e", rankColor: "#a77be8" })).toBe(ensureVivid("#a77be8"));
     expect(luminance(resolveAccent("auto", { heroColor: "#1a1f3a" }))).toBeGreaterThanOrEqual(0.3);
+  });
+});
+
+describe("rank progress", () => {
+  it("derives division, peak and trend", () => {
+    const h = [{ badge: 72 }, { badge: 83 }, { badge: 82 }];
+    const r = rankProgress(82, h)!;
+    expect(r.tier).toBe(8); expect(r.sub).toBe(2); expect(r.peak).toBe(83); expect(r.trend).toBe(-1);
+    expect(rankProgress(null, [])).toBeNull();
+  });
+  it("filters strip keys", () => {
+    expect(stripKeys(["kda"], ["kda", "spm"])).toEqual(["spm"]);
   });
 });

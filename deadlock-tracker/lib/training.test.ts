@@ -70,7 +70,7 @@ describe("Training-Ansicht", () => {
   });
 });
 
-import { classifyDeaths, reasonsFor } from "./training-reasons";
+import { causeShares, causeSharesOf, classifyDeaths, reasonsFor, survivalKpi } from "./training-reasons";
 describe("Spielerspezifische Gründe", () => {
   it("ordnet jedem Tod genau eine Ursache zu", () => {
     const ms = build(10);
@@ -81,5 +81,18 @@ describe("Spielerspezifische Gründe", () => {
     const r = reasonsFor("survival", build(14));
     expect(r.length).toBeGreaterThan(0);
     expect(r[0].text).toMatch(/\d/);
+  });
+  it("berechnet Ursachen-Anteile, die sich zu 100 % summieren", () => {
+    const sh = causeSharesOf([{ cause: "fight" }, { cause: "pickoff" }, { cause: "fight" }, { cause: "chain" }]);
+    expect(sh[0]).toMatchObject({ id: "fight", count: 2, share: 0.5 });
+    expect(sh.reduce((a, x) => a + x.share, 0)).toBeCloseTo(1);
+    expect(causeSharesOf([])).toEqual([]);
+    const real = causeShares(build(14));
+    if (real.length) expect(real.reduce((a, x) => a + x.share, 0)).toBeCloseTo(1);
+  });
+  it("liefert Überleben-Kennzahlen", () => {
+    const k = survivalKpi(build(8))!;
+    expect(k.per10).toBeGreaterThan(0);
+    expect(k.deaths).toBeGreaterThan(0);
   });
 });

@@ -1,89 +1,56 @@
 "use client";
 import { useState } from "react";
-import { Avatar, HeroBackdrop, HeroPortrait, RankEmblem, useHero, useHeroName, useTilt } from "./GameAssets";
-import { WinRing } from "./charts";
-import { BadgeRow, BannerEditor, StatTiles, useProfileAccent } from "./BannerEditor";
+import { Avatar, HeroBackdrop } from "./GameAssets";
+import { BadgeRow, BannerEditor, useProfileAccent } from "./BannerEditor";
+import { MainHeroCard } from "./header/MainHeroCard";
+import { RankStage } from "./header/RankStage";
+import { StatReadout } from "./header/StatReadout";
+import { TopHeroChips } from "./header/TopHeroChips";
 import { Icon } from "./Icon";
 import { useSettings } from "./Providers";
-import { formatBadge } from "@/lib/ranks";
 import type { MatchListItem, Overview } from "@/lib/view";
 
-/** Große Spielerkarte: Steam-Profil, Main-Held als neigbare Karte, Rang, Winrate – mit Parallax-Hintergrund. */
+/** Kopfbereich: links Main-Held, Mitte Identität und Kennzahlen, rechts großer Rang-Auftritt. */
 export function PlayerCard({ name, avatar, accountId, ov, items, onRemove }: { name: string; avatar?: string; accountId: number; ov: Overview; items: MatchListItem[]; onRemove?: () => void }) {
   const { settings } = useSettings();
   const p = settings.profile;
   const [editing, setEditing] = useState(false);
   const mainId = p.mainHero ?? ov.heroes[0]?.heroId;
-  const { color: heroColor } = useHero(mainId);
   const color = useProfileAccent(p.accent, mainId, ov.currentBadge);
-  const heroName = useHeroName();
-  const tilt = useTilt(9);
-  const peak = ov.rankHistory.reduce((m, r) => Math.max(m, r.badge), 0) || null;
 
   return (
-    <section
-      className="surface relative overflow-hidden"
-      style={{ boxShadow: `0 0 0 1px ${color}40, 0 40px 80px -40px ${color}77` }}
-      onMouseMove={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        e.currentTarget.style.setProperty("--px", String((e.clientX - r.left) / r.width - 0.5));
-        e.currentTarget.style.setProperty("--py", String((e.clientY - r.top) / r.height - 0.5));
-      }}
-    >
-      <button onClick={() => setEditing(true)} className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-[11px] text-muted opacity-70 backdrop-blur transition hover:border-white/30 hover:text-white hover:opacity-100" aria-label="Banner anpassen">
-        <Icon name="sliders" size={12} />Anpassen
+    <section className="surface relative overflow-hidden" style={{ boxShadow: `0 0 0 1px ${color}40, 0 40px 80px -48px ${color}77` }}>
+      <div className="absolute inset-0 opacity-60"><HeroBackdrop id={mainId} /></div>
+      <div className="pointer-events-none absolute inset-0" style={{ background: `linear-gradient(100deg, #07080cd9 0%, #07080c99 45%, transparent 100%), radial-gradient(520px 260px at 92% 40%, ${color}22, transparent 70%)` }} />
+      <button onClick={() => setEditing(true)} title="Banner anpassen" aria-label="Banner anpassen" className="group absolute right-3 top-3 z-10 flex h-8 items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-2.5 text-[11px] text-muted opacity-60 backdrop-blur transition hover:border-white/30 hover:text-white hover:opacity-100 focus-visible:opacity-100">
+        <Icon name="sliders" size={14} /><span className="hidden group-hover:inline group-focus-visible:inline">Anpassen</span>
       </button>
       {editing && <BannerEditor items={items} ov={ov} name={name} onClose={() => setEditing(false)} />}
-      <div className="absolute -inset-6 transition-transform duration-200 ease-out" style={{ transform: "translate3d(calc(var(--px,0) * -26px), calc(var(--py,0) * -14px), 0)" }}>
-        <HeroBackdrop id={mainId} />
-      </div>
-      <div className="absolute inset-0 bg-gradient-to-r from-[#07080c]/70 via-transparent to-transparent" />
-      <div className="relative grid items-center gap-6 p-5 md:grid-cols-[auto_1fr_auto] md:p-6">
-        <div {...tilt} className="tilt relative cursor-default rounded-2xl" style={{ width: 150 }}>
-          <div className="float">
-            {mainId ? <HeroPortrait id={mainId} size={150} h={192} ring={heroColor} className="!rounded-2xl" /> : <div className="skeleton h-[192px] w-[150px]" />}
-          </div>
-          <span className="shine" />
-          <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/20 bg-black/80 px-3.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] shadow-lg backdrop-blur">
-            <span className="text-gold-grad">Main</span> · {mainId ? heroName(mainId) : "…"}
-          </div>
+
+      <div className="relative grid gap-6 p-5 min-[1100px]:grid-cols-[230px_minmax(0,1fr)_290px] min-[1100px]:items-stretch min-[1100px]:gap-8 min-[1100px]:p-6">
+        <div className="mx-auto h-[300px] w-[230px] max-w-full min-[1100px]:mx-0 min-[1100px]:h-auto min-[1100px]:w-full">
+          <MainHeroCard heroId={mainId} accent={color} />
         </div>
 
-        <div className="min-w-0 pt-2 md:pt-0">
+        <div className="flex min-w-0 flex-col justify-center gap-5">
           <div className="flex items-center gap-4">
-            <Avatar src={avatar} name={name} size={72} ring={color} />
+            <Avatar src={avatar} name={name} size={68} ring={color} />
             <div className="min-w-0">
-              <h1 className="display truncate text-4xl font-extrabold tracking-tight">{name}</h1>
-              {p.title && <div className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color }}>{p.title}</div>}
+              <h1 className="display truncate pr-24 text-4xl font-extrabold leading-tight tracking-tight">{name}</h1>
+              {p.title && <div className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color }}>{p.title}</div>}
               <p className="text-xs text-muted">
                 Account {accountId}{onRemove && <> · <button onClick={onRemove} className="underline-offset-2 hover:text-loss hover:underline">nicht mehr tracken</button></>}
               </p>
             </div>
           </div>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <div className="sheen flex items-center gap-3 rounded-2xl border border-white/10 bg-black/40 py-2 pl-3 pr-5 backdrop-blur">
-              <RankEmblem badge={ov.currentBadge} size={56} />
-              <div>
-                <div className="label">Aktueller Rang</div>
-                <div className="display text-xl font-bold leading-tight">{ov.currentBadge ? formatBadge(ov.currentBadge) : "Noch ohne Rang"}</div>
-                {peak && <div className="text-[11px] text-muted">Peak: {formatBadge(peak)}</div>}
-              </div>
-            </div>
-            {ov.heroes.filter((h) => h.heroId !== mainId).slice(0, 3).map((h) => (
-              <div key={h.heroId} className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-black/40 p-2 pr-4 backdrop-blur transition hover:border-white/25">
-                <HeroPortrait id={h.heroId} size={44} variant="small" />
-                <div className="num text-xs"><div className="font-semibold">{heroName(h.heroId)}</div><div className="text-muted">{Math.round((h.wins / h.matches) * 100)}% · {h.matches} Spiele</div></div>
-              </div>
-            ))}
-          </div>
-          {(p.stats.length > 0 || p.badges.length > 0) && (
-            <div className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-3">
-              <StatTiles keys={p.stats} items={items} ov={ov} accent={color} />
-              <BadgeRow keys={p.badges} items={items} ov={ov} size={46} />
-            </div>
-          )}
+          {p.badges.length > 0 && <BadgeRow keys={p.badges} items={items} ov={ov} size={44} />}
+          <StatReadout keys={p.stats} items={items} ov={ov} accent={color} />
+          <TopHeroChips ov={ov} mainId={mainId} />
         </div>
-        <div className="justify-self-center"><WinRing value={ov.winrate} wins={ov.wins} losses={ov.matches - ov.wins} size={132} /></div>
+
+        <div className="flex items-center justify-center border-t border-white/10 pt-6 min-[1100px]:border-l min-[1100px]:border-t-0 min-[1100px]:pl-8 min-[1100px]:pt-0">
+          <RankStage ov={ov} showRing={!p.stats.includes("winrate")} />
+        </div>
       </div>
     </section>
   );

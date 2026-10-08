@@ -1,5 +1,5 @@
 import { laneDiff, aimRates, soloDeaths, topPlayers, type GoalSuggestion, type TrainingMatch, type TrainingReport } from "./training";
-import { reasonsFor, type Reason } from "./training-reasons";
+import { causeShares, reasonsFor, survivalKpi, type CauseShare, type Reason, type SurvivalKpi } from "./training-reasons";
 import type { MatchPlayer } from "./types";
 
 /* Aufbereitung der Trainingsanalyse für die Seite: Fähigkeiten-Scorecard, Hauptproblem, letztes Match. */
@@ -22,7 +22,7 @@ export interface Problem {
 }
 export interface MatchLine { tone: "good" | "bad"; text: string; w: number }
 export interface LastMatchView { matchId: number; heroId: number; won: boolean; lines: MatchLine[] }
-export interface TrainingView { skills: SkillView[]; problem: Problem | null; last: LastMatchView | null; reasons: Partial<Record<SkillId, Reason[]>> }
+export interface TrainingView { skills: SkillView[]; problem: Problem | null; last: LastMatchView | null; reasons: Partial<Record<SkillId, Reason[]>>; survival: { kpi: SurvivalKpi | null; causes: CauseShare[] } }
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const nn = (x: number | null | undefined): x is number => typeof x === "number" && Number.isFinite(x);
@@ -93,7 +93,7 @@ export function buildView(ms: TrainingMatch[], report: TrainingReport): Training
   });
   const reasons: Partial<Record<SkillId, Reason[]>> = {};
   for (const sk of skills) if (sk.pct !== null) reasons[sk.id] = reasonsFor(sk.id, usable);
-  return { skills, problem: problemOf(skills, usable, report), last: lastMatch(usable), reasons };
+  return { skills, problem: problemOf(skills, usable, report), last: lastMatch(usable), reasons, survival: { kpi: survivalKpi(usable), causes: causeShares(usable) } };
 }
 
 function problemOf(skills: SkillView[], ms: TrainingMatch[], r: TrainingReport): Problem | null {

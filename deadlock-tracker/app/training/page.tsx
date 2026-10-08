@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Gate, PageTitle, Empty } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { HeroPortrait, useHeroName } from "@/components/GameAssets";
-import { AimPanel, CurveChart, SoulPlanPanel } from "@/components/TrainingParts";
+import { AimPanel, CurveChart, SoulPlanPanel, SurvivalPanel } from "@/components/TrainingParts";
 import { goalProgress, type Focus, type GoalSuggestion, type TrainingReport } from "@/lib/training";
 import type { SkillId, SkillView, TrainingView } from "@/lib/training-view";
 import type { Goal } from "@/lib/types";
@@ -27,7 +27,6 @@ function Training({ account }: { account: number }) {
   const [curve, setCurve] = useState<"nw" | "k" | "d" | "dmg">("nw");
   const [showCurve, setShowCurve] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const heroName = useHeroName();
   const rich = useRich();
 
   useEffect(() => { setRes(null); setSel(null); fetch(`/api/training?account=${account}&n=${n}`).then((r) => r.json()).then(setRes).catch(() => setErr(true)); }, [account, n]);
@@ -45,7 +44,6 @@ function Training({ account }: { account: number }) {
   const skill = view.skills.find((s) => s.id === active) as SkillView;
   const details: Focus[] = rep.focus.filter((f) => skill.focusIds.includes(f.id));
   const series = rep.curves.find((c) => c.key === curve);
-  const maxH = Math.max(1, ...rep.deaths.histogram);
   const hasGoal = (g: GoalSuggestion) => goals.some((x) => x.metric === g.metric);
   const open = goals.slice(-3);
   const why: Reason[] = view.reasons[active as SkillId] ?? [];
@@ -112,6 +110,9 @@ function Training({ account }: { account: number }) {
       {/* 3. Detail zur gewählten Fähigkeit */}
       <section className="surface p-5">
         <div className="mb-3 flex items-center gap-2"><span style={{ color: col(skill.pct) }}><Icon name={ICON[skill.id] as never} size={18} /></span><h3 className="display text-xl font-bold">{skill.label}</h3><span className="text-sm text-muted">· {skill.line}</span></div>
+        {(active === "survival" || active === "teamplay") ? (
+          <SurvivalPanel survival={view.survival} deaths={rep.deaths} details={details} />
+        ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-4">
             {why.length > 0 && (
@@ -134,19 +135,6 @@ function Training({ account }: { account: number }) {
           </div>
           <div>
             {(active === "farming" || active === "jungle") && rep.soulPlan && <SoulPlanPanel plan={rep.soulPlan} phases={rep.phaseRates} compact />}
-            {(active === "survival" || active === "teamplay") && (
-              <div>
-                <div className="label mb-2 !text-[9px]">Wann du stirbst (je 5 Minuten)</div>
-                <div className="flex items-end gap-2">
-                  {rep.deaths.histogram.map((v, i) => (
-                    <div key={i} className="flex flex-1 flex-col items-center gap-1"><span className="num text-[10px] text-muted">{v}</span>
-                      <div className="flex h-24 w-full items-end"><div className="w-full rounded-t bg-gradient-to-t from-[#f0616d]/50 to-[#f0616d]" style={{ height: `${(v / maxH) * 100}%`, minHeight: 3 }} /></div>
-                      <span className="text-[10px] text-muted">{i * 5}′</span></div>
-                  ))}
-                </div>
-                {rep.deaths.killers.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2"><span className="text-xs text-muted">Tötet dich am häufigsten:</span>{rep.deaths.killers.map((k) => <span key={k.heroId} className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] py-1 pl-1 pr-2 text-xs"><HeroPortrait id={k.heroId} size={22} variant="small" className="!rounded-md" />{heroName(k.heroId)} <b className="num">{k.count}×</b></span>)}</div>}
-              </div>
-            )}
             {active === "aim" && rep.aim && <AimPanel aim={rep.aim} />}
             {active === "lane" && rep.lane && (
               <div className="grid grid-cols-3 gap-3 text-center">
@@ -157,6 +145,7 @@ function Training({ account }: { account: number }) {
             )}
           </div>
         </div>
+        )}
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">

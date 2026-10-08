@@ -99,6 +99,7 @@ export function demoHistory(accountId: number, now = Date.now()): HistoryEntry[]
       won: d.winningTeam === me.team, team: me.team, kills: me.kills, deaths: me.deaths, assists: me.assists,
       netWorth: me.netWorth, lastHits: me.lastHits, denies: me.denies, heroLevel: me.level, abandoned: false,
       matchMode: "Ranked", gameMode: "1", badge: linearToBadge(6 * 6 + 2 + Math.floor((DEMO_COUNT - i) / 4)),
+      rankedDelta: (d.winningTeam === me.team ? 1 : -1) * (d.winningTeam === me.team ? 190 + ((i * 37) % 70) : 150 + ((i * 53) % 60)),
     });
   }
   return out;

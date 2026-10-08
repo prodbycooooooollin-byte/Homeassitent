@@ -3,10 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 import { Medal } from "./Medal";
+import { StatReadout } from "./header/StatReadout";
 import { HoverCard } from "./Popover";
-import { HeroPortrait, TIER_COLORS, useAssets, useHero, useHeroName } from "./GameAssets";
+import { HeroPortrait, RankEmblem, TIER_COLORS, useAssets, useHero, useHeroName } from "./GameAssets";
 import { useSettings } from "./Providers";
-import { tierOf } from "@/lib/ranks";
+import { formatBadge, tierOf } from "@/lib/ranks";
 import { DEFAULT_PROFILE, type ProfileSettings } from "@/lib/types";
 import {
   ACCENT_SWATCHES, MAX_BADGES, MAX_STATS, MAX_TITLE, STAT_DEFS, computeStat, resolveAccent, titleSuggestions, unlockedBadges,
@@ -19,21 +20,9 @@ export function useProfileAccent(accent: string, heroId: number | undefined, bad
   return resolveAccent(accent, { heroColor: color === "#5b6478" ? undefined : color, rankColor: badge ? TIER_COLORS[tierOf(badge)] : undefined });
 }
 
-/** Gewählte Kennzahlen als kleine Kacheln. */
+/** Gewählte Kennzahlen (siehe header/StatReadout). */
 export function StatTiles({ keys, items, ov, accent }: { keys: string[]; items: MatchListItem[]; ov: Overview; accent: string }) {
-  const stats = keys.map((k) => ({ k, s: computeStat(k, items, ov) })).filter((x) => x.s);
-  if (!stats.length) return null;
-  return (
-    <div className="flex flex-wrap gap-2">
-      {stats.map(({ k, s }) => (
-        <div key={k} className="min-w-[84px] rounded-xl border border-white/10 bg-black/40 px-3 py-1.5 backdrop-blur" style={{ borderTopColor: `${accent}88` }}>
-          <div className="label !text-[10px]">{s!.label}</div>
-          <div className="display num text-lg font-bold leading-tight">{s!.value}</div>
-          {s!.sub && <div className="num text-[10px] text-muted">{s!.sub}</div>}
-        </div>
-      ))}
-    </div>
-  );
+  return <StatReadout keys={keys} items={items} ov={ov} accent={accent} size="sm" />;
 }
 
 /** Ausgewählte Abzeichen (nur noch freigeschaltete) als Medaillen. */
@@ -89,18 +78,22 @@ export function BannerEditor({ items, ov, name, onClose }: { items: MatchListIte
           <button onClick={onClose} className="btn btn-ghost !p-1.5" aria-label="Schließen"><Icon name="x" size={16} /></button>
         </div>
 
-        {/* Live-Vorschau */}
-        <div className="relative mb-5 overflow-hidden rounded-2xl border bg-black/30 p-4" style={{ borderColor: `${accent}66`, boxShadow: `0 0 0 1px ${accent}33, 0 24px 50px -30px ${accent}` }}>
+        {/* Live-Vorschau: gleiche 3-Zonen-Struktur wie der Banner */}
+        <div className="relative mb-5 overflow-hidden rounded-2xl border bg-black/30" style={{ borderColor: `${accent}66`, boxShadow: `0 0 0 1px ${accent}33, 0 24px 50px -30px ${accent}` }}>
           <div className="absolute inset-0 opacity-30" style={{ background: `radial-gradient(circle at 12% 20%, ${accent}, transparent 60%)` }} />
-          <div className="relative flex flex-wrap items-center gap-4">
-            {mainId && <HeroPortrait id={mainId} size={72} h={92} ring={accent} className="!rounded-xl" />}
-            <div className="min-w-0 flex-1 space-y-2.5">
+          <div className="relative grid items-center gap-4 p-4 sm:grid-cols-[88px_minmax(0,1fr)_auto]">
+            <div className="hidden sm:block">{mainId && <HeroPortrait id={mainId} size={88} h={112} ring={accent} className="!rounded-xl" />}</div>
+            <div className="min-w-0 space-y-3">
               <div>
                 <div className="display truncate text-2xl font-extrabold">{name}</div>
                 <div className="text-xs" style={{ color: accent }}>{d.title || "Kein Titel"}{mainId ? ` · Main: ${heroName(mainId)}` : ""}</div>
               </div>
+              <BadgeRow keys={d.badges} items={items} ov={ov} size={36} />
               <StatTiles keys={d.stats} items={items} ov={ov} accent={accent} />
-              <BadgeRow keys={d.badges} items={items} ov={ov} size={40} />
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <RankEmblem badge={ov.currentBadge} size={72} />
+              <div className="display mt-1 text-sm font-bold">{ov.currentBadge ? formatBadge(ov.currentBadge) : "Ohne Rang"}</div>
             </div>
           </div>
         </div>

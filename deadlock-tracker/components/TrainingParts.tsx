@@ -1,6 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
-import type { AimStats, CurveSeries, PhaseRate, SoulPlan } from "@/lib/training";
+import type { AimStats, CurveSeries, DeathStats, Focus, PhaseRate, SoulPlan } from "@/lib/training";
+import type { CauseId } from "@/lib/training-reasons";
+import type { TrainingView } from "@/lib/training-view";
+import { Icon, type IconName } from "./Icon";
+import { HeroPortrait, useHeroName } from "./GameAssets";
 
 const fmt = (v: number, key: string) => (key === "nw" || key === "dmg" ? (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${Math.round(v)}`) : v.toFixed(1));
 
@@ -136,5 +140,116 @@ export function SoulPlanPanel({ plan, phases, compact }: { plan: SoulPlan; phase
         </div>
       </div>
     </section>
+  );
+}
+
+/* ---------- Überleben / Teamplay: kompakte Übersicht ---------- */
+
+const CAUSE_STYLE: Record<CauseId, { color: string; icon: IconName }> = {
+  chain: { color: "#f0616d", icon: "refresh" },
+  outnumbered: { color: "#f08a4c", icon: "users" },
+  gank: { color: "#b58cff", icon: "eye" },
+  laneduel: { color: "#4aa3ff", icon: "swap" },
+  opener: { color: "#f0b44c", icon: "flag" },
+  pickoff: { color: "#8b94a8", icon: "ghost" },
+  nodmg: { color: "#3fc7d9", icon: "shield" },
+  outfarmed: { color: "#3ecf8e", icon: "gem" },
+  fight: { color: "#e06bb0", icon: "fist" },
+};
+
+function Kpi({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+      <div className="label !text-[10px]">{label}</div>
+      <div className="display num mt-1 text-3xl font-extrabold" style={tone ? { color: tone } : undefined}>{value}</div>
+      {sub && <div className="mt-0.5 text-xs text-muted">{sub}</div>}
+    </div>
+  );
+}
+
+export function SurvivalPanel({ survival, deaths, details }: { survival: TrainingView["survival"]; deaths: DeathStats; details: Focus[] }) {
+  const heroName = useHeroName();
+  const [hot, setHot] = useState<CauseId | null>(null);
+  const { kpi, causes } = survival;
+  const maxH = Math.max(1, ...deaths.histogram);
+  const top = causes.slice(0, 3);
+  const f1 = (v: number) => v.toFixed(1).replace(".", ",");
+  const worse = kpi && kpi.ref10 !== null ? kpi.per10 > kpi.ref10 * 1.1 : false;
+  return (
+    <div className="space-y-5">
+      {kpi && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Kpi label="Tode pro 10 Min" value={f1(kpi.per10)} tone={worse ? "#f0616d" : "#3ecf8e"} sub={kpi.ref10 !== null ? `Beste deiner Lobbys: ${f1(kpi.ref10)}` : `${kpi.deaths} Tode gesamt`} />
+          <Kpi label="Allein gestorben" value={kpi.soloShare !== null ? `${Math.round(kpi.soloShare * 100)} %` : "–"} tone={kpi.soloShare !== null && kpi.soloShare > 0.5 ? "#f0b44c" : undefined} sub="kein Mitspieler fällt in 25 s" />
+          <Kpi label="Ø Zeit tot pro Tod" value={kpi.respawnS !== null ? `${Math.round(kpi.respawnS)} s` : "–"} sub="Respawn-Wartezeit" />
+        </div>
+      )}
+
+      {causes.length > 0 && (
+        <div>
+          <div className="label mb-2 !text-[10px]">Todesursachen</div>
+          <div className="flex h-7 w-full gap-0.5 overflow-hidden rounded-lg" onMouseLeave={() => setHot(null)}>
+            {causes.map((c) => (
+              <button key={c.id} type="button" onMouseEnter={() => setHot(c.id)} onClick={() => setHot(hot === c.id ? null : c.id)} title={`${c.label}: ${c.count} (${Math.round(c.share * 100)} %)`}
+                className="num flex items-center justify-center text-[11px] font-bold text-black/75 transition-opacity" style={{ width: `${c.share * 100}%`, background: CAUSE_STYLE[c.id].color, opacity: hot && hot !== c.id ? 0.35 : 1 }}>
+                {c.share >= 0.08 ? `${Math.round(c.share * 100)}%` : ""}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            {causes.map((c) => (
+              <button key={c.id} type="button" onMouseEnter={() => setHot(c.id)} onMouseLeave={() => setHot(null)} className={`flex items-center gap-1.5 text-xs ${hot && hot !== c.id ? "opacity-50" : "text-muted"}`}>
+                <i className="h-2 w-2 rounded-sm" style={{ background: CAUSE_STYLE[c.id].color }} />{c.label} <b className="num text-white">{c.count}</b>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-5 lg:grid-cols-[1fr_220px]">
+        <div className="space-y-2.5">
+          {top.map((c) => {
+            const st = CAUSE_STYLE[c.id];
+            return (
+              <div key={c.id} onMouseEnter={() => setHot(c.id)} onMouseLeave={() => setHot(null)} className="flex gap-3 rounded-xl border bg-white/[0.02] p-3 transition" style={{ borderColor: hot === c.id ? st.color : "rgba(255,255,255,0.07)", boxShadow: hot === c.id ? `0 0 0 1px ${st.color}55` : undefined }}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: `${st.color}22`, color: st.color }}><Icon name={st.icon} size={18} /></span>
+                <div className="min-w-0 flex-1 text-sm">
+                  <div className="flex items-baseline gap-2"><span className="font-semibold">{c.label}</span><span className="num ml-auto shrink-0 text-xs text-muted">{c.count}× · {Math.round(c.share * 100)} %</span></div>
+                  <div className="text-muted">{c.short}</div>
+                  {c.fix && <div className="mt-1 flex gap-1.5 text-[13px]"><span className="mt-0.5 text-[#3ecf8e]"><Icon name="arrowRight" size={13} /></span><span>{c.fix}</span></div>}
+                </div>
+              </div>
+            );
+          })}
+          {top.length === 0 && <p className="text-sm text-muted">Für eine Ursachen-Auswertung fehlen noch Tode mit Verlaufsdaten (mindestens 8).</p>}
+        </div>
+        <div>
+          <div className="label mb-2 !text-[9px]">Wann du stirbst (je 5 Min)</div>
+          <div className="flex items-end gap-1">
+            {deaths.histogram.map((v, i) => (
+              <div key={i} className="flex flex-1 flex-col items-center gap-1"><span className="num text-[9px] text-muted">{v}</span>
+                <div className="flex h-16 w-full items-end"><div className="w-full rounded-t bg-gradient-to-t from-[#f0616d]/50 to-[#f0616d]" style={{ height: `${(v / maxH) * 100}%`, minHeight: 2 }} /></div>
+                <span className="text-[9px] text-muted">{i * 5}′</span></div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {deaths.killers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2"><span className="text-xs text-muted">Tötet dich am häufigsten</span>
+          {deaths.killers.map((k) => <span key={k.heroId} className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] py-1 pl-1 pr-2 text-xs"><HeroPortrait id={k.heroId} size={22} variant="small" className="!rounded-md" />{heroName(k.heroId)} <b className="num">{k.count}×</b></span>)}</div>
+      )}
+
+      {details.some((f) => f.evidence.length > 0) && (
+        <details className="group rounded-xl border border-white/[0.06] p-3 text-sm">
+          <summary className="cursor-pointer select-none text-xs text-muted">Weitere Belege und Maßnahmen</summary>
+          <div className="mt-3 space-y-3">{details.map((f) => (
+            <div key={f.id}><div className="font-semibold">{f.title}</div>
+              <ul className="mt-1 space-y-0.5 text-muted">{f.evidence.map((e, k) => <li key={k}>· {e}</li>)}</ul>
+            </div>
+          ))}</div>
+        </details>
+      )}
+    </div>
   );
 }

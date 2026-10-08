@@ -21,6 +21,7 @@ Ohne Netzwerk: `DEADLOCK_DEMO=1` startet mit generierten Demo-Daten.
 | --- | --- |
 | Training | Mustererkennung statt Standardtipps: Soul-Quellen (Lane, Camps, Kills, Objectives, Kisten) gegen die Besten deiner Lobbys, Einbruch-Phase, Alleingang-Tode, tote Zeit, Lane-Folgen, Item-Tempo, Trefferquote – jeweils mit Belegen, geschätzter Wirkung und „So kommst du hin“; Soll/Ist-Kurven, Ziele |
 | Live | Zweitmonitor-Ansicht ohne Scrollen (skaliert auf die Fenstergröße) mit Duell-Zeilen, Spielplan und **Live-Coach** (Empfehlungen aus Spielzeit, Souls-Vorsprung/-Trend und Gebäuden; Ereignisprotokoll) |
+| Aufstieg | Rang-Prognose: Monte-Carlo-Simulation aus deinen echten Rang-Punkten pro Sieg/Niederlage – Median, 80-%-Band, Aufstiegs-/Abstiegsrisiko, Gleichgewichts-Siegquote und „Was wäre wenn?“-Szenarien |
 | Übersicht | Player Card, **Live-Match-Banner**, Kennzahlen (mit Hover-Erklärungen), Session-Bilanz mit Tilt-Warnung, Erkenntnisse, Rekorde, letzte Matches, Rang, Performance-Radar, Aktivitäts-Heatmap |
 | Matches | Auswertung der Auswahl mit Gewinnkurve, sticky Filter (Suche, Ergebnis, Modus, Held, Noten), Listen-/Kachelansicht, Tagesgruppen mit Bilanz, **Hover-Vorschau** beider Teams, endloses Nachladen |
 | Match | Tabs: Übersicht (Auszeichnungen, Teamvergleich, Lobby-Ränge), Lane, Verlauf, Items, Ereignisse. Die Zusammensetzung der Note erscheint nur als Hover am Noten-Badge bzw. Info-Symbol |

@@ -87,6 +87,7 @@ export default function SettingsPage() {
           <Row title="Match-Daten-Helfer im Hintergrund" desc="Startet das Open-Source-Programm deadlock-api-ingest zusammen mit dem Tracker. Es liest Match-Salts aus dem Steam-Cache und meldet sie der Deadlock-API – so stehen deine Matches dort meist deutlich schneller bereit. Die Programmdatei wird einmalig aus dem offiziellen GitHub-Release geladen.">
             <div className="flex items-center gap-3">
               {ing && <span className="flex items-center gap-1.5 text-xs text-muted"><i className="h-2 w-2 rounded-full" style={{ background: INGEST_COLOR[ing.state] }} />{ing.message}</span>}
+              <NavLink href="/ingest" className="btn btn-ghost !px-3 !py-1.5 text-xs"><Icon name="window" size={14} />Konsole öffnen</NavLink>
               <Switch on={desk.ingest} onChange={(v) => setD({ ingest: v })} />
             </div>
           </Row>

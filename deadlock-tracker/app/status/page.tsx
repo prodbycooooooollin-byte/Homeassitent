@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { PageTitle } from "@/components/ui";
+import { Icon } from "@/components/Icon";
+import { NavLink } from "@/components/NavLink";
 import { useTracker } from "@/components/Providers";
 import { INGEST_COLOR, useIngest } from "@/components/useIngest";
 import { useUpdater } from "@/components/useUpdater";
@@ -53,7 +55,8 @@ export default function StatusPage() {
         <section className="surface p-5">
           <div className="flex items-center gap-3"><div className="label">Match-Daten-Helfer (deadlock-api-ingest)</div><span className="ml-auto flex items-center gap-1.5 text-sm"><i className="h-2.5 w-2.5 rounded-full" style={{ background: INGEST_COLOR[ing.state] }} />{ing.message}</span></div>
           <p className="mt-1 text-sm text-muted">Läuft im Hintergrund der Desktop-App und meldet Match-Salts aus dem Steam-Cache an die Deadlock-API. Ein- und ausschalten unter Einstellungen → Desktop-App.</p>
-          {ing.lines.length > 0 && <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-black/30 p-3 text-[11px] leading-relaxed text-muted">{ing.lines.slice(-20).join("\n")}</pre>}
+          <NavLink href="/ingest" className="btn btn-ghost mt-3 text-sm"><Icon name="window" size={15} />Konsole öffnen</NavLink>
+          {ing.lines.length > 0 && <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-black/30 p-3 text-[11px] leading-relaxed text-muted">{ing.lines.slice(-20).map((l) => `${new Date(l.t).toLocaleTimeString("de-DE")} ${l.text}`).join("\n")}</pre>}
         </section>
       )}
       <section className="surface p-5">
