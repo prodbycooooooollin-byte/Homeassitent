@@ -6,7 +6,7 @@ const fs = require("fs");
 const os = require("os");
 const https = require("https");
 const crypto = require("crypto");
-const { spawn } = require("child_process");
+const { spawn, execFile } = require("child_process");
 
 const BASE = "https://github.com/prodbycooooooollin-byte/Homeassitent/releases/download/dt-latest";
 const APP_EXE = "Lockscope.exe";
@@ -70,10 +70,20 @@ function dirSize(dir) {
   return n;
 }
 
+/** Beendet noch laufende Instanzen (auch die alte „Deadlock Tracker.exe“), sonst scheitert das Entfernen der alten Version mit Code 2. */
+async function stopApp() {
+  if (process.platform !== "win32") return;
+  for (const name of ["Lockscope.exe", "Deadlock Tracker.exe"]) {
+    await new Promise((r) => execFile("taskkill", ["/F", "/T", "/IM", name], { windowsHide: true }, () => r()));
+  }
+  await new Promise((r) => setTimeout(r, 1800));
+}
+
 async function install(dir) {
   if (installing) return;
   installing = true;
   let tmp = path.join(os.tmpdir(), `lockscope-setup-${Date.now()}.exe`);
+  let timer = null;
   try {
     let m;
     if (UPDATE_FILE) {
@@ -86,21 +96,26 @@ async function install(dir) {
       await download(`${BASE}/${encodeURIComponent(m.file)}`, tmp, m, (p) => emit({ type: "download", ...p, pct: p.total ? p.got / p.total : 0 }));
     }
 
+    emit({ type: "phase", phase: "install", text: "Beende laufende Instanz …", pct: 0 });
+    await stopApp();
     emit({ type: "phase", phase: "install", text: "Installiere Dateien", pct: 0 });
     const t0 = Date.now();
     const want = Math.max(m.size * 2.4, 200e6);
-    const timer = setInterval(() => {
+    timer = setInterval(() => {
       const t = (Date.now() - t0) / 1000;
       const byTime = 1 - Math.exp(-t / 14); // läuft immer weiter, nähert sich 100 % an
       const bySize = Math.min(0.97, dirSize(dir) / want);
       emit({ type: "install", pct: Math.min(0.97, Math.max(byTime * 0.92, bySize)) });
     }, 500);
-    const code = await new Promise((resolve, reject) => {
+    const runSetup = () => new Promise((resolve, reject) => {
       // „/D=“ muss das letzte Argument sein und darf nicht in Anführungszeichen stehen
       const child = spawn(tmp, ["/S", `/D=${dir}`], { windowsVerbatimArguments: true, stdio: "ignore" });
       child.on("error", reject);
       child.on("exit", (c) => resolve(c));
-    }).finally(() => clearInterval(timer));
+    });
+    let code = await runSetup();
+    if (code && !fs.existsSync(path.join(dir, APP_EXE))) { await stopApp(); await new Promise((r) => setTimeout(r, 2500)); code = await runSetup(); } // zweiter Versuch (z. B. alte Version war noch nicht ganz beendet)
+    clearInterval(timer);
     const exe = path.join(dir, APP_EXE);
     if (!fs.existsSync(exe)) throw new Error(code ? `Die Installation wurde mit Code ${code} beendet. Bitte schließe ein laufendes Lockscope und versuche es erneut.` : "Die Installation ist unvollständig geblieben.");
     emit({ type: "phase", phase: "finish", text: "Fertigstellen …", pct: 1 });
@@ -109,6 +124,7 @@ async function install(dir) {
   } catch (e) {
     emit({ type: "error", message: e instanceof Error ? e.message : String(e) });
   } finally {
+    if (timer) clearInterval(timer);
     installing = false;
     if (!UPDATE_FILE) fs.rm(tmp, { force: true }, () => {});
   }

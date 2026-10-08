@@ -80,7 +80,17 @@ autoUpdater.on("error", (e) => push({ status: "error", message: friendly(e), las
 async function ensureHelper(onProgress) {
   const dir = path.join(app.getPath("userData"), "installer");
   const file = path.join(dir, "Lockscope-Installer.exe");
-  try { const st = fs.statSync(file); if (st.size > 20e6 && Date.now() - st.mtimeMs < 45 * 86400e3) return file; } catch { /* nicht vorhanden */ }
+  // Zwischengespeicherte Fassung nur nutzen, wenn sie zur aktuellen im Release passt (gleiche Größe); sonst neu laden
+  try {
+    const st = fs.statSync(file);
+    if (st.size > 20e6) {
+      try {
+        const head = await fetch(`${BASE}/Lockscope-Installer.exe`, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(15000) });
+        const remote = Number(head.headers.get("content-length")) || 0;
+        if (!head.ok || !remote || remote === st.size) return file;
+      } catch { return file; } // offline: vorhandene Fassung verwenden
+    }
+  } catch { /* nicht vorhanden */ }
   fs.mkdirSync(dir, { recursive: true });
   const res = await fetch(`${BASE}/Lockscope-Installer.exe`, { redirect: "follow", signal: AbortSignal.timeout(300000) });
   if (!res.ok || !res.body) throw new Error(`Installer-Download fehlgeschlagen (HTTP ${res.status})`);
