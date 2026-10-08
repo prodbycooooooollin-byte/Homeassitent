@@ -1,5 +1,6 @@
 import asyncio
 import io
+import logging
 import os
 import time
 from collections import Counter
@@ -17,11 +18,15 @@ from transcriber import Transcriber
 
 load_dotenv()
 
+# Jitter-Buffer-Warnungen und RTCP-Infos der Bibliothek sind harmlos und füllen nur die Konsole
+for _name in ("discord.ext.voice_recv.opus", "discord.ext.voice_recv.reader", "discord.ext.voice_recv.gateway"):
+    logging.getLogger(_name).setLevel(logging.ERROR)
+
 BYTES_PER_SEC = 48000 * 2 * 2  # 48 kHz, stereo, int16
 SILENCE_FLUSH = 0.9  # Sekunden Stille, bis ein Sprachabschnitt ausgewertet wird
 MAX_SEGMENT = 20  # Sekunden, danach wird in jedem Fall ausgewertet
 
-DEBUG_TEXT = os.getenv("DEBUG_TRANSCRIPTS", "") == "1"  # Konsole zeigt, was erkannt wurde (wird nicht gespeichert)
+DEBUG_TEXT = os.getenv("DEBUG_TRANSCRIPTS", "1") == "1"  # Konsole zeigt, was erkannt wurde (wird nicht gespeichert)
 diag = Counter()  # Diagnose-Zähler für die Konsole
 
 store = Store(os.getenv("DB_PATH", "counter.db"))
@@ -86,6 +91,9 @@ def install_dave_decryption(vc: voice_recv.VoiceRecvClient) -> None:
             diag["dave_ok"] += 1
             return out
         except Exception as e:
+            if "UnencryptedWhenPassthroughDisabled" in str(e):
+                diag["unverschluesselt"] += 1
+                return data  # Paket war gar nicht DAVE-verschlüsselt (z. B. Sprecher ohne E2EE)
             diag["dave_fehler"] += 1
             if len(_first_errors) < 3:
                 _first_errors.append(repr(e))
