@@ -16,7 +16,9 @@ DEFAULT_PROMPT = (
 
 class Transcriber:
     def __init__(self, model: str = "medium", language: str | None = "de"):
-        self._model = WhisperModel(model, device="cpu", compute_type="int8")
+        # Zwei Kerne bleiben frei, damit Discord-Verbindung und Befehle flüssig bleiben
+        threads = int(os.getenv("WHISPER_THREADS", max(1, (os.cpu_count() or 4) - 2)))
+        self._model = WhisperModel(model, device="cpu", compute_type="int8", cpu_threads=threads)
         self._language = language or None
         self._prompt = os.getenv("WHISPER_PROMPT", DEFAULT_PROMPT) or None
 

@@ -5,6 +5,7 @@ import os
 import threading
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 
 import discord
 from discord import app_commands
@@ -29,6 +30,9 @@ MAX_SEGMENT = 20  # Sekunden, danach wird in jedem Fall ausgewertet
 
 DEBUG_TEXT = os.getenv("DEBUG_TRANSCRIPTS", "1") == "1"  # Konsole zeigt, was erkannt wurde (wird nicht gespeichert)
 diag = Counter()  # Diagnose-Zähler für die Konsole
+_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="whisper")
+MAX_PENDING = int(os.getenv("MAX_PENDING", "6"))  # so viele Abschnitte dürfen auf die Auswertung warten
+_pending = 0
 
 store = Store(os.getenv("DB_PATH", "counter.db"))
 transcriber = Transcriber(os.getenv("WHISPER_MODEL", "medium"), os.getenv("WHISPER_LANGUAGE", "de"))
@@ -162,7 +166,19 @@ class CountingSink(voice_recv.AudioSink):
             print(f"[Fehler] Auswertung: {e!r}")
 
     async def _transcribe_and_count(self, user_id: int, pcm: bytes) -> None:
-        text = await self._loop.run_in_executor(None, transcriber.transcribe, pcm)
+        # Nur eine Auswertung gleichzeitig; bei zu großem Rückstau werden neue Abschnitte verworfen,
+        # damit der Bot nicht dauerhaft hinterherhinkt und weiter auf Befehle antwortet.
+        global _pending
+        if _pending >= MAX_PENDING:
+            diag["verworfen"] += 1
+            print(f"[Hinweis] Auswertung hängt hinterher, Abschnitt verworfen (Rückstau: {_pending}). "
+                  "Tipp: kleineres Modell (WHISPER_MODEL=small) oder stärkerer Rechner.")
+            return
+        _pending += 1
+        try:
+            text = await self._loop.run_in_executor(_executor, transcriber.transcribe, pcm)
+        finally:
+            _pending -= 1
         hits = count_hits(text)
         member = self.guild.get_member(user_id)
         who = member.display_name if member else str(user_id)
@@ -194,10 +210,11 @@ async def join(interaction: discord.Interaction):
         return await interaction.response.send_message("Geh erst in einen Sprachkanal.", ephemeral=True)
     if interaction.guild.voice_client:
         return await interaction.response.send_message("Ich bin schon in einem Kanal.", ephemeral=True)
+    await interaction.response.defer()  # Verbinden kann länger als 3 Sekunden dauern
     vc = await member.voice.channel.connect(cls=voice_recv.VoiceRecvClient)
     vc.listen(CountingSink(interaction.guild))
     install_dave_decryption(vc)
-    await interaction.response.send_message(
+    await interaction.followup.send(
         "🎙️ **Hinweis:** Ich höre diesem Kanal zu und zähle ein bestimmtes Wort pro Person. "
         "Audio wird lokal in Text umgewandelt und sofort verworfen; gespeichert wird nur die Anzahl. "
         "Mit `/optout` wirst du nicht mehr erfasst und deine Daten werden gelöscht."
