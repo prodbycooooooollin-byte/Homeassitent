@@ -166,6 +166,9 @@ export function TopBar() {
 }
 
 interface Result { accountId: number; name: string; avatar?: string; matches30d?: number }
+const RECENT_KEY = "dl.recentSearch";
+const readRecent = (): Result[] => { try { const v = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); return Array.isArray(v) ? v.slice(0, 5) : []; } catch { return []; } };
+const writeRecent = (r: Result) => { try { const list = [r, ...readRecent().filter((x) => x.accountId !== r.accountId)].slice(0, 5); localStorage.setItem(RECENT_KEY, JSON.stringify(list)); return list; } catch { return [r]; } };
 
 /** Spielersuche per Name (Steam-Profile) oder ID – Treffer lassen sich direkt tracken. */
 function SearchBox() {
@@ -176,6 +179,8 @@ function SearchBox() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [focus, setFocus] = useState(false);
+  const [recent, setRecent] = useState<Result[]>([]);
+  useEffect(() => setRecent(readRecent()), []);
   const idFromInput = parseAccountId(q);
 
   useEffect(() => {
@@ -196,11 +201,11 @@ function SearchBox() {
 
   const close = () => { setQ(""); setFocus(false); };
   /** Fremde Spieler nur ansehen – ohne Tracking und ohne die Kontoauswahl zu ändern. */
-  const view = (id: number) => { close(); router.push(profileViewHref(id)); };
+  const view = (id: number, who?: Result) => { setRecent(writeRecent(who ?? res.find((r) => r.accountId === id) ?? recent.find((r) => r.accountId === id) ?? { accountId: id, name: `Spieler ${id}` })); close(); router.push(profileViewHref(id)); };
   const track = async (input: string) => {
     const e = await addPlayer(input);
     setErr(e);
-    if (!e) close();
+    if (!e) { const id = parseAccountId(input); const who = res.find((r) => r.accountId === id) ?? recent.find((r) => r.accountId === id); if (id) setRecent(writeRecent(who ?? { accountId: id, name: `Spieler ${id}` })); close(); }
   };
   const known = (id: number) => status?.players.some((p) => p.accountId === id);
 
@@ -209,6 +214,20 @@ function SearchBox() {
       <input value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setFocus(true)} onBlur={() => setTimeout(() => setFocus(false), 180)}
         placeholder="Spieler suchen …" className="input !w-44 !rounded-full !py-1.5 pl-9 text-[13px] transition-all focus:!w-64 xl:!w-56" />
       <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+      {focus && q.trim().length < 2 && recent.length > 0 && (
+        <div className="surface fade-up absolute right-0 mt-2 w-80 p-1.5">
+          <div className="label px-2 pb-1 pt-1 !text-[9px]">Zuletzt gesucht</div>
+          {recent.map((r) => (
+            <div key={r.accountId} className="flex items-center gap-1 rounded-lg hover:bg-white/[0.06]">
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => view(r.accountId, r)} className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left">
+                <Avatar src={r.avatar} name={r.name} size={28} ring="#ffffff22" />
+                <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{r.name}</span><span className="block text-[11px] text-muted">ID {r.accountId}</span></span>
+              </button>
+              {!known(r.accountId) && <button onMouseDown={(e) => e.preventDefault()} onClick={() => track(String(r.accountId))} className="btn btn-ghost !mr-1 !px-2 !py-1 text-xs" title="Zusätzlich tracken"><Icon name="plusSign" size={13} />Tracken</button>}
+            </div>
+          ))}
+        </div>
+      )}
       {focus && q.trim().length >= 2 && (
         <div className="surface fade-up absolute right-0 mt-2 max-h-96 w-80 overflow-y-auto p-1.5">
           {idFromInput && (
@@ -220,7 +239,7 @@ function SearchBox() {
           {busy && <div className="px-3 py-2 text-sm text-muted">Suche …</div>}
           {res.map((r) => (
             <div key={r.accountId} className="flex items-center gap-1 rounded-lg hover:bg-white/[0.06]">
-              <button onClick={() => view(r.accountId)} className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left">
+              <button onClick={() => view(r.accountId, r)} className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left">
                 <Avatar src={r.avatar} name={r.name} size={32} ring="#ffffff22" />
                 <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{r.name}</span>
                   <span className="block text-[11px] text-muted">{r.matches30d !== undefined ? `${r.matches30d} Matches (30 Tage)` : `ID ${r.accountId}`}</span></span>

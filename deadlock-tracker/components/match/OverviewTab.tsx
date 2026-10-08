@@ -56,6 +56,10 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
         </section>
       )}
 
+      <div className="space-y-6">
+        {([0, 1] as TeamId[]).map((t) => <TeamTable key={t} team={t} d={d} account={account} ratings={ratings} maxDmg={maxDmg} />)}
+      </div>
+
       {dths.length > 0 && (
         <section className="surface p-5">
           <h2 className="label mb-3">Warum du gestorben bist</h2>
@@ -126,7 +130,6 @@ export function OverviewTab({ d, account, ratings, lobbyBadge }: { d: MatchDetai
         </section>
       </div>
 
-      {([0, 1] as TeamId[]).map((t) => <TeamTable key={t} team={t} d={d} account={account} ratings={ratings} maxDmg={maxDmg} />)}
     </div>
   );
 }

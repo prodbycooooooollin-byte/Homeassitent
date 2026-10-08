@@ -2,6 +2,8 @@
 import { HeroPortrait, RankEmblem, useHeroName } from "../GameAssets";
 import { GradeWithBreakdown } from "./RatingExplainer";
 import { fmtK } from "@/lib/format";
+import { NavLink } from "../NavLink";
+import { profileViewHref } from "@/lib/primary";
 import type { MatchDetails, MatchPlayer, Rating, TeamId } from "@/lib/types";
 
 export const TEAMS = [
@@ -61,7 +63,7 @@ export function TeamTable({ team, d, account, ratings, maxDmg }: { team: TeamId;
                       {isMe && <span className="absolute inset-y-1 left-0 w-1 rounded-r bg-amber shadow-[0_0_12px_#f0b44c]" />}
                       <HeroPortrait id={p.heroId} size={42} />
                       <div className="min-w-0">
-                        <div className="truncate font-semibold">{isMe ? "Du" : p.name ?? `Spieler ${p.accountId}`}{p.abandoned && <span className="ml-1.5 text-xs font-normal text-loss">verlassen</span>}</div>
+                        <div className="truncate font-semibold">{isMe || !p.accountId ? (isMe ? "Du" : p.name ?? `Spieler ${p.accountId}`) : <NavLink href={profileViewHref(p.accountId)} className="hover:text-amber hover:underline" title="Profil ansehen">{p.name ?? `Spieler ${p.accountId}`}</NavLink>}{p.abandoned && <span className="ml-1.5 text-xs font-normal text-loss">verlassen</span>}</div>
                         <div className="truncate text-xs text-muted">{heroName(p.heroId)} · Lv {p.level}</div>
                       </div>
                     </div>

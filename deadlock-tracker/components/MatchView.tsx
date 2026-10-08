@@ -11,6 +11,7 @@ import { GraphTab } from "./match/GraphTab";
 import { ItemsTab } from "./match/ItemsTab";
 import { LaneTab } from "./match/LaneTab";
 import { OverviewTab } from "./match/OverviewTab";
+import { SummaryTab } from "./match/SummaryTab";
 import { RatingHint } from "./match/RatingExplainer";
 import { TEAMS } from "./match/Scoreboard";
 import { fmtDuration } from "@/lib/format";
@@ -30,6 +31,7 @@ interface Res {
 
 const TABS = [
   { key: "overview", label: "Übersicht" },
+  { key: "stats", label: "Match-Summary" },
   { key: "lane", label: "Lane" },
   { key: "graphs", label: "Verlauf" },
   { key: "items", label: "Items" },
@@ -89,7 +91,7 @@ function Pending({ res, account, back }: { res: Res; account: number; back: Reac
 
 function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account: number; back: React.ReactNode }) {
   const heroName = useHeroName();
-  const [tab, setTab] = useState<TabKey>("overview");
+  const [tab, setTab] = useState<TabKey>(() => { const t = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null; return (TABS.find((x) => x.key === t)?.key ?? "overview") as TabKey; });
   const me = d.players.find((p) => p.accountId === account);
   const rating = res.ratings[account] ?? null;
   const won = !!me && d.winningTeam === me.team;
@@ -148,6 +150,7 @@ function Summary({ res, d, account, back }: { res: Res; d: MatchDetails; account
 
       <div key={tab} className="page-enter">
         {tab === "overview" && <OverviewTab d={d} account={account} ratings={res.ratings} lobbyBadge={res.lobbyBadge} />}
+        {tab === "stats" && <SummaryTab d={d} account={account} />}
         {tab === "lane" && <LaneTab d={d} account={account} />}
         {tab === "graphs" && <GraphTab d={d} account={account} />}
         {tab === "items" && <ItemsTab d={d} account={account} />}

@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Empty, Gate } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { ScoutBoard, ScoutCard, type LiveMatchMeta } from "@/components/ScoutBoard";
@@ -28,13 +29,19 @@ function useFit() {
 }
 
 export default function LivePage() {
-  return <Gate>{({ me }) => <View account={me.accountId} />}</Gate>;
+  return <Gate>{({ me }) => <Suspense fallback={null}><View account={me.accountId} /></Suspense>}</Gate>;
 }
 
 function View({ account }: { account: number }) {
   const initial = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const initId = Number(initial?.get("id")) || null;
   const [mode, setMode] = useState<Mode>(initial?.get("mode") === "player" && initId ? "player" : "live");
+  // Die Seite bleibt beim Wechsel zwischen /live-URLs gemountet: Parameter (z. B. aus der Spielersuche) müssen reaktiv übernommen werden.
+  const sp = useSearchParams();
+  useEffect(() => {
+    const id = Number(sp.get("id")) || null;
+    if (sp.get("mode") === "player" && id) { setMode("player"); setTarget(id); setQ(""); setAutoPicked(true); }
+  }, [sp]);
   const [res, setRes] = useState<Res | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoPicked, setAutoPicked] = useState(false);
