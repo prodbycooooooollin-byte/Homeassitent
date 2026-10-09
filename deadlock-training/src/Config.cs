@@ -22,7 +22,7 @@ static class TrainerConfig {
 	public static Heroes? BotHero = null;
 	/// <summary>true = no bots, only text targets (emergency mode if bots do not work on this server).</summary>
 	/// <summary>Default: no game bots (the game's bot spawn crashes the client); targets are hero-model props measured by geometry. Opt in with !tbot on.</summary>
-	public static bool NoBots = true;
+	public static bool NoBots = false;
 	/// <summary>Write the bots' view direction into memory so their melee swings point at the player.</summary>
 	public static bool WriteViewAngles = true;
 	/// <summary>Always draw a visible aim marker ('O') on bots, even if their model is visible.</summary>

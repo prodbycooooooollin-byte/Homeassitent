@@ -253,7 +253,7 @@ sealed class Actor {
 			} catch { }
 			// The practice bot picked a random hero whose model the client may not have loaded (invisible, and loading it
 			// mid-game crashed the client). Switch it to our hero, whose resources are precached.
-			_heroAt = Clock.Ms + 400;
+			// (switching the bot's hero right after the spawn is disabled: the one run that worked did not do it)
 			return;
 		}
 
