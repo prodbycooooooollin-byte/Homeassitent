@@ -734,8 +734,9 @@ public class TrainerPlugin : DeadworksPluginBase {
 	/// Menue-Ort; bei direkt getippten Befehlen (!parry ...) erscheint das Menue dort, wo du gerade stehst.
 	/// </summary>
 	private void ScheduleReturn(CCitadelPlayerController c, int slot) {
-		bool teleportBack = _fromHub.Remove(slot);
-		if (!_hubs.ContainsKey(slot) || !_returning.Add(slot)) return;
+		_fromHub.Remove(slot);
+		bool teleportBack = _hubs.ContainsKey(slot); // always back to the menu spot (the base), never open the menu where you stand
+		if (!teleportBack || !_returning.Add(slot)) return;
 		Timer.Once(3.Seconds(), () => TryReturn(c, slot, teleportBack, 0));
 	}
 
@@ -753,7 +754,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			pawn.TeleportWithView(hub.Feet + new Vector3(0, 0, 8), new Vector3(0f, hub.Yaw, 0f));
 		Timer.Once(700.Milliseconds(), () => {
 			if (_drills.ContainsKey(slot)) return;
-			OpenMenu(c, placeHere: !teleportBack);
+			OpenMenu(c, placeHere: false);
 		});
 	}
 
@@ -822,10 +823,11 @@ public class TrainerPlugin : DeadworksPluginBase {
 	[Command("tstop", Description = "End the current exercise (back to the menu)")]
 	public void CmdStop(CCitadelPlayerController caller) {
 		int slot = caller.EntityIndex - 1;
-		bool wasExercise = _drills.TryGetValue(slot, out var d) && d is not MenuDrill;
+		bool hadDrill = _drills.ContainsKey(slot);
 		StopDrill(slot);
-		Chat.PrintToChat(caller, "[Training] Exercise ended.");
-		if (wasExercise) ScheduleReturn(caller, slot);
+		_recorders.Remove(slot); _attempts.Remove(slot);
+		Chat.PrintToChat(caller, "[Training] Stopped - back to the menu.");
+		if (hadDrill || _hubs.ContainsKey(slot)) ScheduleReturn(caller, slot);
 	}
 
 	[Command("tarena", Description = "Set your own arena where you stand: tarena | tarena long (for Long Range) | tarena reset | tarena reset long")]
