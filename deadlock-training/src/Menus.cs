@@ -32,12 +32,24 @@ static class MenuPages {
 		Btn("off", "CLOSE MENU", 10f, 14.5f, 6.5f, 170, 170, 170),
 	};
 
-	public static List<MenuItem> Scenarios() => new() {
-		Title("SCENARIOS"),
-		Btn("sc_fof", "Fight or Flight", 0f, -8f, 10f),
-		Btn("sc_duel", "Duel 1v1", 0f, -2f, 10f),
-		Btn("pg_main", "BACK", 0f, 16.5f, 6.5f, 170, 170, 170),
-	};
+	public static List<MenuItem> Scenarios() {
+		var l = new List<MenuItem> { Title("SCENARIOS - tick what you want to play") };
+		for (int i = 0; i < ScenarioSet.Names.Length; i++)
+			l.Add(Btn("tg_s" + i, ScenarioSet.Label(i), 0f, -14f + i * 4f, 7.5f, 255, 230, 160));
+		l.Add(Btn("sc_start", "START SCENARIOS", -14f, 11f, 9f, 120, 255, 140));
+		l.Add(Btn("sc_quiz", "SHOP / DECISION QUIZ", 14f, 11f, 8f, 120, 200, 255));
+		l.Add(Btn("pg_main", "BACK", 0f, 16.5f, 6.5f, 170, 170, 170));
+		return l;
+	}
+
+	public static List<MenuItem> Quiz(QuizQuestion q, int[] order) {
+		var l = new List<MenuItem> { Title("QUIZ") };
+		var lines = q.Text.Split('|');
+		for (int i = 0; i < lines.Length; i++) l.Add(new("q" + i, lines[i], 0f, -17f + i * 3.5f, 7.5f, false, 255, 255, 255));
+		for (int i = 0; i < order.Length; i++) l.Add(Btn("qz:" + order[i], q.Options[order[i]], 0f, -3f + i * 4.6f, 8f));
+		l.Add(Btn("sc_quiz_end", "END QUIZ", 0f, 16.5f, 6.5f, 170, 170, 170));
+		return l;
+	}
 
 	public static List<MenuItem> Routes(List<(string Name, string Info)> routes) {
 		var l = new List<MenuItem> { Title("ROUTES") };

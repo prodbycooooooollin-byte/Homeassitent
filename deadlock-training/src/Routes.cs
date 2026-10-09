@@ -129,6 +129,7 @@ sealed class RouteDrill : Drill {
 	private bool _go, _done;
 	private int _edges;
 	private CBaseEntity? _ghost;
+	private CPointWorldText? _ghostTag;
 	private CPointWorldText? _marker, _count;
 	private (string, byte, byte, byte)[]? _hudCache;
 	private double _hudAt;
@@ -217,7 +218,14 @@ sealed class RouteDrill : Drill {
 		}
 		double ms = _go ? nowMs - _goMs : 0;
 		var gp = GhostAt(ms, out var gyaw);
-		try { _ghost?.Teleport(position: gp, angles: new Vector3(0f, gyaw, 0f)); } catch { }
+		try {
+			if (_ghost == null || !_ghost.IsValid) { _ghost = Actor.MakeBody(gp); if (_ghost != null) _ghost.RenderColor = System.Drawing.Color.FromArgb(255, 120, 190, 255); }
+			_ghost?.Teleport(position: gp, angles: new Vector3(0f, gyaw, 0f));
+		} catch { }
+		// A label above the ghost: even while the client is still streaming the hero model in, you see where the ghost is.
+		var lp = gp + new Vector3(0, 0, 150f);
+		if (_ghostTag == null) _ghostTag = SpawnText("GHOST", lp, eye, 8f, 120, 190, 255);
+		if (_ghostTag != null) Face(_ghostTag, lp, eye);
 
 		if (_go) {
 			_run.Update(pawn.Position, nowMs);

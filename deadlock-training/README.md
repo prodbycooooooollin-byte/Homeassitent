@@ -135,9 +135,12 @@ Shoot an entry to select it. Main menu: PARRY, AIM (Flick / Switch / Long Range,
 
 Removed from the menu: Deny Souls and Last Hit (they used fake text orbs; real soul orbs are not supported yet).
 
-## Scenarios & Counterspell (menu)
-- **MORE > Scenarios > Fight or Flight**: bots fight back. Either kill the lone weakened enemy before the group arrives, or run to the safe zone behind you.
-- **MORE > Scenarios > Duel 1v1**: a real fighting bot; win within 45 s.
-- **PARRY > Counterspell**: an enemy hero casts an ability at you; counter it with your item (needs the Counterspell item; the plugin tries to give it).
-- Routes: during the countdown you are frozen; hold W and you run instantly at GO, in sync with the ghost.
-- Heavy melee is now ~65% of parry swings.
+## Scenarios, Counterspell, Quiz (menu)
+- **MORE > Scenarios**: a checklist. Tick the situations you want, then START. They are played in random order:
+  lone hurt enemy while you are ahead, an enemy missing from the minimap (an ambusher comes later), a group pushing you,
+  two enemies while you are behind, an even 1v1, and a low-health retreat. The briefing (souls, minimap, direction) is on the HUD.
+  Enemies come from a direction you could have seen, not out of thin air; they shoot back (shots are simulated, you cannot really die).
+- **MORE > Scenarios > SHOP / DECISION QUIZ**: shoot the right answer; the reason is printed in chat.
+- **PARRY > Counterspell**: a different hero appears each round, a cast bar fills above him, use your Counterspell item before it is full.
+  The casts are simulated and the list of abilities is my best knowledge, not verified in game.
+- Routes: during the countdown you are frozen; hold W and you run instantly at GO. The save menu after a recording stands at the hub.

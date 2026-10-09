@@ -607,6 +607,8 @@ sealed class Actor {
 
 	/// <summary>Teleport the bot to feet and turn it toward lookAt. Keeps its health full.</summary>
 	public double FirstPlaceAt;
+	/// <summary>Do not refill the bot's health on every Place (scenarios need real damage on the bot).</summary>
+	public bool KeepHealth;
 	private bool _placed;
 	private double _lastGroundCheck;
 	private float _groundZ = -1e9f;
@@ -644,7 +646,7 @@ sealed class Actor {
 				e.Teleport(angles: new Vector3(0f, yaw, 0f), velocity: new Vector3(v.X, v.Y, vz)); // body faces the target too
 			}
 			if (e.Is<CCitadelPlayerPawn>()) SetView(e.As<CCitadelPlayerPawn>()!, yaw);
-			if (e.Health < e.MaxHealth) e.Health = e.MaxHealth;
+			if (!KeepHealth && e.Health < e.MaxHealth) e.Health = e.MaxHealth;
 		} catch { /* being rebuilt */ }
 	}
 

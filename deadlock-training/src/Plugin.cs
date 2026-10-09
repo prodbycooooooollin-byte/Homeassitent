@@ -365,7 +365,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		}
 		int slot = c.EntityIndex - 1;
 		string map = Server.MapName;
-		bool popup = page is "attempt" or "spots";
+		bool popup = page is "spots";
 		if (!popup) {
 			WarmUpBody(pawn);
 			if (placeHere || !_hubs.ContainsKey(slot))
@@ -384,6 +384,12 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "routes": items = MenuPages.Routes(routes); status = "Shoot a route to practice it with the ghost"; break;
 			case "routes_del": items = MenuPages.RoutesDelete(routes); status = "Shoot the route you want to delete"; break;
 			case "scen": items = MenuPages.Scenarios(); status = "Scenarios - the bots fight back"; break;
+			case "quiz": {
+				if (!_quiz.TryGetValue(slot, out var qs)) { qs = new QuizState(); _quiz[slot] = qs; }
+				var q = QuizData.All[qs.Order[qs.Index]];
+				var shuffled = Enumerable.Range(0, q.Options.Length).OrderBy(_ => Random.Shared.Next()).ToArray();
+				items = MenuPages.Quiz(q, shuffled); status = $"Question {qs.Index + 1}/{qs.Order.Length}   right: {qs.Right}"; break;
+			}
 			case "settings": items = MenuPages.Settings(); status = "Settings"; break;
 			case "attempt": items = MenuPages.Attempt(_attempts.TryGetValue(slot, out var at) ? at.DurationMs / 1000.0 : 0); status = "Happy with this run?"; break;
 			case "spots": items = MenuPages.Spots(); status = "The spot is the place where you stand now"; break;
@@ -392,7 +398,32 @@ public class TrainerPlugin : DeadworksPluginBase {
 		Begin(c, input => new MenuDrill(c, input, LevelOf(slot), items, status, l => _levels[slot] = l, id => OnToggle(id), id => OnMenuSelect(c, slot, id), anchor, yaw));
 	}
 
+	private sealed class QuizState {
+		public int[] Order = Enumerable.Range(0, QuizData.All.Length).OrderBy(_ => Random.Shared.Next()).Take(6).ToArray();
+		public int Index, Right;
+	}
+	private readonly Dictionary<int, QuizState> _quiz = new();
+
+	private void AnswerQuiz(CCitadelPlayerController c, int slot, int option) {
+		if (!_quiz.TryGetValue(slot, out var qs)) { ReopenPage(c, slot, "scen"); return; }
+		var q = QuizData.All[qs.Order[qs.Index]];
+		bool ok = option == q.Correct;
+		if (ok) qs.Right++;
+		Chat.PrintToChat(c, $"[Quiz {qs.Index + 1}/{qs.Order.Length}] {(ok ? "RIGHT" : "WRONG - better: " + q.Options[q.Correct])}");
+		Chat.PrintToChat(c, "Why: " + q.Why);
+		qs.Index++;
+		if (qs.Index >= qs.Order.Length) {
+			Chat.PrintToChat(c, $"=== Quiz finished: {qs.Right}/{qs.Order.Length} right ===");
+			_quiz.Remove(slot);
+			ReopenPage(c, slot, "scen", false, 1200);
+		} else ReopenPage(c, slot, "quiz", false, 1200);
+	}
+
 	private string? OnToggle(string id) {
+		if (id.StartsWith("tg_s") && int.TryParse(id[4..], out var si) && si >= 0 && si < ScenarioSet.On.Length) {
+			ScenarioSet.On[si] = !ScenarioSet.On[si];
+			return ScenarioSet.Label(si);
+		}
 		switch (id) {
 			case "tg_head": TrainerConfig.FlickHeadOnly = !TrainerConfig.FlickHeadOnly; return MenuPages.HeadLabel();
 			case "tg_pool":
@@ -407,10 +438,11 @@ public class TrainerPlugin : DeadworksPluginBase {
 		Timer.Once(delayMs.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenPage(c, page, placeHere); });
 
 	private CBaseEntity? _warmBody;
+	private double _lastWarm = -1e9;
 
 	/// <summary>Spawn one stand-in body behind the player while the menu is open, so the client has streamed the model in by the time an exercise starts.</summary>
 	private void WarmUpBody(CCitadelPlayerPawn pawn, int attempt = 0) {
-		if (!TrainerConfig.NoBots || Actor.BodyReadyAt > 0) return;
+		if (Clock.Ms - _lastWarm < 90000) return;
 		string m = "";
 		try { m = pawn.ModelName ?? ""; } catch { }
 		if (string.IsNullOrEmpty(m)) {
@@ -419,6 +451,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			return;
 		}
 		Actor.PlayerModel = m;
+		_lastWarm = Clock.Ms;
 		_warmBody = Actor.MakeBody(pawn.Position - Aim.Forward(0f, pawn.EyeAngles.Y) * 350f);
 		Console.WriteLine($"[Trainer] Warm-up body created: model '{m}', entity {(_warmBody != null ? _warmBody.EntityIndex.ToString() : "none")}");
 		Timer.Once(60.Seconds(), () => { try { if (_warmBody != null && _warmBody.IsValid) _warmBody.Remove(); } catch { } _warmBody = null; });
@@ -564,9 +597,13 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "t_strafe": GoToArenaThen(c, slot, () => StartTrack(c, false, 0, lvl)); return;
 			case "t_random": GoToArenaThen(c, slot, () => StartTrack(c, true, 0, lvl)); return;
 			case "c_counter": GoToArenaThen(c, slot, () => Begin(c, input => new CounterspellDrill(c, input, lvl, 6))); return;
-			case "sc_fof": GoToArenaThen(c, slot, () => Begin(c, input => new ScenarioDrill(c, input, lvl, ScenarioMode.FightOrFlight, 6))); return;
-			case "sc_duel": GoToArenaThen(c, slot, () => Begin(c, input => new ScenarioDrill(c, input, lvl, ScenarioMode.Duel, 4))); return;
 			case "pg_scen": ReopenPage(c, slot, "scen"); return;
+			case "sc_start":
+				if (!ScenarioSet.Any()) { Chat.PrintToChat(c, "[Training] Tick at least one scenario first."); ReopenPage(c, slot, "scen"); return; }
+				GoToArenaThen(c, slot, () => Begin(c, input => new ScenarioDrill(c, input, lvl, 8)));
+				return;
+			case "sc_quiz": _quiz[slot] = new QuizState(); ReopenPage(c, slot, "quiz"); return;
+			case "sc_quiz_end": _quiz.Remove(slot); ReopenPage(c, slot, "scen"); return;
 			case "o_reaction": GoToArenaThen(c, slot, () => StartReaction(c, 0, lvl)); return;
 
 			case "pg_main": ReopenPage(c, slot, "main"); return;
@@ -595,6 +632,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "sp_arena": case "sp_long_me": case "sp_long_target": case "sp_reset": SetSpot(c, slot, id); return;
 			case "off_popup": ReturnToHubThen(c, slot, "main"); return;
 		}
+		if (id.StartsWith("qz:")) { AnswerQuiz(c, slot, int.Parse(id[3..])); return; }
 		if (id.StartsWith("rt:")) { StartRouteFromMenu(c, slot, id[3..]); return; }
 		if (id.StartsWith("del:")) {
 			RouteStore.Delete(map, id[4..]);
@@ -629,7 +667,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 				d.OnFinished = () => {
 					if (rec.Points.Count < 3) { Chat.PrintToChat(c, "[Training] That was too short - nothing recorded."); ReturnToHubThen(c, slot, "routes"); return; }
 					_attempts[slot] = rec;
-					Timer.Once(500.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenPage(c, "attempt"); });
+					ReturnToHubThen(c, slot, "attempt"); // the save menu always stands at the hub, never in a wall
 				};
 				return d;
 			});

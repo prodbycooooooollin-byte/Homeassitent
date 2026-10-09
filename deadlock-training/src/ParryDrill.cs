@@ -235,7 +235,7 @@ sealed class ParryDrill : Drill {
 			try { if (bot != null && !_heavy) rc = bot.ExecuteAbilityBySlot(EAbilitySlot.WeaponMelee); }
 			catch (Exception ex) { Console.WriteLine($"[Trainer] Bot melee failed: {ex.Message}"); }
 			Console.WriteLine($"[Trainer] Parry swing {_done + 1}: bot melee rc={rc}");
-			if (!_rcSaid) { _rcSaid = true; Say($"[Parry debug] bot swing call returned {rc} ({(bot == null ? "the target has no hero pawn" : bot.GetType().Name)}, model '{Actors[_cur].ModelName}')."); }
+			if (!_rcSaid) { _rcSaid = true; Console.WriteLine($"[Trainer] Parry: bot swing call returned {rc}."); }
 			// Light or heavy swing with the game's own bot-melee switch (1 = light, 2 = heavy; cheats are on for the whole drill).
 			try {
 				Server.ExecuteCommand(_heavy ? "citadel_bot_melee 2" : "citadel_bot_melee 1");
