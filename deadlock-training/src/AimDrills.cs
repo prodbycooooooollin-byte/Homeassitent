@@ -235,7 +235,7 @@ sealed class TrackDrill : Drill {
 	private Vector3 _center, _right, _fwd;
 	private float _groundZ;
 	private double _startMs, _lastMs, _labelAt;
-	private double _total, _onTarget, _firing, _firingOn;
+	private double _total, _onTarget, _firing, _firingOn, _onHead, _firingHead;
 	private double _damage;
 	private bool _wasOn;
 	private CPointWorldText? _label;
@@ -331,9 +331,14 @@ sealed class TrackDrill : Drill {
 		float dist = Vector3.Distance(eye, center);
 		bool on = Aim.AngleTo(eye, fwd, center) <= Aim.AngularRadius(Tuning.TrackRadius(Lvl), dist);
 
+		var headPos = feet + new Vector3(0, 0, TrainerConfig.HeadZ);
+		bool head = Aim.AngleTo(eye, fwd, headPos) <= Aim.AngularRadius(TrainerConfig.HeadRadius, Vector3.Distance(eye, headPos));
+		if (head) on = true; // the head is part of the target
+
 		_total += dt * 1000.0;
 		if (on) _onTarget += dt * 1000.0;
-		if (In.AttackHeld) { _firing += dt * 1000.0; if (on) _firingOn += dt * 1000.0; }
+		if (head) _onHead += dt * 1000.0;
+		if (In.AttackHeld) { _firing += dt * 1000.0; if (on) _firingOn += dt * 1000.0; if (head) _firingHead += dt * 1000.0; }
 
 		if (on != _wasOn) {
 			_wasOn = on;
@@ -345,7 +350,8 @@ sealed class TrackDrill : Drill {
 		if (nowMs >= _labelAt) {
 			_labelAt = nowMs + 400;
 			double shown = _firing > 800 ? 100.0 * _firingOn / _firing : 100.0 * _onTarget / Math.Max(_total, 1);
-			string text = $"{shown:0}%";
+			double headShown = _firing > 800 ? 100.0 * _firingHead / _firing : 100.0 * _onHead / Math.Max(_total, 1);
+			string text = $"{shown:0}%  head {headShown:0}%";
 			if (_label == null) _label = SpawnText(text, feet + new Vector3(0, 0, 160), eye, 16f, 255, 220, 0);
 			else _label.SetMessage(text);
 		}
@@ -360,8 +366,11 @@ sealed class TrackDrill : Drill {
 	private void Summarize() {
 		Say($"=== Tracking finished ({(_random ? "Random" : "Strafe")}, {LevelParse.Label(Lvl)}) ===");
 		Say($"On target: {Fmt.Pct(_onTarget, _total)} of the time | while firing: {Fmt.Pct(_firingOn, _firing)} | firing: {Fmt.Pct(_firing, _total)} of the time");
+		Say($"Head: {Fmt.Pct(_onHead, _total)} of the time on the head | while firing: {Fmt.Pct(_firingHead, _firing)}");
 		if (_damage > 0) Say($"Damage dealt to the bot: {_damage:0}");
-		double score = _firing > 2000 ? 100.0 * _firingOn / _firing : 100.0 * _onTarget / Math.Max(_total, 1);
+		double body = _firing > 2000 ? 100.0 * _firingOn / _firing : 100.0 * _onTarget / Math.Max(_total, 1);
+		double headPct = _firing > 2000 ? 100.0 * _firingHead / _firing : 100.0 * _onHead / Math.Max(_total, 1);
+		double score = body + headPct * 0.5; // body counts fully, head hits give a bonus
 		string key = $"track_{(_random ? "rand" : "strafe")}_{Lvl}";
 		bool best = Records.Submit(key, score);
 		Say(best ? $"New best: {score:0}%" : $"Best this session: {Records.Get(key):0}%");

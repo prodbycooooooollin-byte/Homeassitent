@@ -69,6 +69,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 	}
 
 	private bool _arenaCleaned;
+	private readonly HashSet<int> _infiniteAmmo = new();
 
 	/// <summary>Training server setup: stop new minion waves, neutrals and power-ups (existing NPCs are only removed on request via !tclean; removing them at once crashed the client).</summary>
 	private void CleanWorld() {
@@ -268,6 +269,13 @@ public class TrainerPlugin : DeadworksPluginBase {
 			bool parry = pawn?.ModifierProp?.HasModifierState(EModifierState.ParryActive) ?? false;
 			if (parry && !inp.ParryActive) inp.RegisterParryEdge(now);
 			inp.ParryActive = parry;
+
+			// Unlimited ammo during exercises (not in the menu).
+			try {
+				bool exercise = _drills.TryGetValue(slot, out var dr) && dr is not MenuDrill;
+				if (exercise) { pawn?.ModifierProp?.SetModifierState(EModifierState.InfiniteClip, true); _infiniteAmmo.Add(slot); }
+				else if (_infiniteAmmo.Remove(slot)) pawn?.ModifierProp?.SetModifierState(EModifierState.InfiniteClip, false);
+			} catch { }
 
 			if (!_drills.TryGetValue(slot, out var drill)) continue;
 

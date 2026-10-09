@@ -506,7 +506,12 @@ sealed class Actor {
 			var d = new Vector3(feet.X - cur.X, feet.Y - cur.Y, 0f);
 			float len = d.Length();
 			if (!_placed || len > 220f || MathF.Abs(feet.Z - cur.Z) > 160f) {
-				e.Teleport(position: feet + new Vector3(0f, 0f, 6f), angles: new Vector3(0f, yaw, 0f), velocity: Vector3.Zero);
+				float gz = feet.Z;
+				try {
+					var r = Trace.Ray(feet + new Vector3(0f, 0f, 120f), feet - new Vector3(0f, 0f, 300f), InteractionLayer.Solid, e);
+					if (r.DidHit) gz = feet.Z + 120f - r.Fraction * 420f; // ground height under the target spot
+				} catch { }
+				e.Teleport(position: new Vector3(feet.X, feet.Y, gz + 4f), angles: new Vector3(0f, yaw, 0f), velocity: Vector3.Zero);
 				_placed = true;
 			} else {
 				var v = len > 6f ? d / len * MathF.Min(len * 7f, 420f) : Vector3.Zero;

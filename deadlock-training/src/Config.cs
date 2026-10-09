@@ -32,6 +32,9 @@ static class TrainerConfig {
 	/// <summary>Always draw a visible aim marker ('O') on bots, even if their model is visible.</summary>
 	public static bool ShowMarkers = false;
 	/// <summary>Height of the "chest" above the ground (where the aim point is).</summary>
+	/// <summary>Height of the head centre above the feet, used to tell headshots from body shots.</summary>
+	public static float HeadZ = 68f;
+	public static float HeadRadius = 9f;
 	public static float CenterZ = 58f;
 
 	/// <summary>Heroes that are preloaded and can be chosen as bot hero.</summary>
