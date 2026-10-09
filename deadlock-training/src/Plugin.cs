@@ -70,21 +70,13 @@ public class TrainerPlugin : DeadworksPluginBase {
 
 	private bool _arenaCleaned;
 
-	/// <summary>Training server cleanup: no minion waves, no neutrals, and no guardians/walkers/bases that shoot or end the game.</summary>
+	/// <summary>Training server setup: stop new minion waves, neutrals and power-ups (existing NPCs are only removed on request via !tclean; removing them at once crashed the client).</summary>
 	private void CleanWorld() {
 		try {
 			foreach (var cmd in new[] { "sv_cheats 1", "citadel_npc_spawn_enabled 0", "citadel_trooper_spawn_enabled 0", "citadel_neutral_spawn_enabled 0", "citadel_powerup_spawn_enabled 0" })
 				Server.ExecuteCommand(cmd);
 			TrainerBots.CheatsOffAt = Clock.Ms + 1500;
-			int n = 0;
-			foreach (var e in Entities.All) {
-				string d;
-				try { d = e.DesignerName ?? ""; } catch { continue; }
-				if (d.StartsWith("npc_trooper") || d.StartsWith("npc_boss") || d.StartsWith("npc_barrack") || d.StartsWith("npc_base_defender") || d.StartsWith("npc_neutral") || d.StartsWith("npc_super_neutral")) {
-					try { e.Remove(); n++; } catch { }
-				}
-			}
-			Console.WriteLine($"[Trainer] World cleaned: removed {n} NPCs (troopers, guardians, walkers, defenders, neutrals).");
+			Console.WriteLine("[Trainer] World settings applied: no new minion waves / neutrals / power-ups.");
 		} catch (Exception ex) { Console.WriteLine($"[Trainer] CleanWorld failed: {ex.Message}"); }
 	}
 
@@ -609,6 +601,30 @@ public class TrainerPlugin : DeadworksPluginBase {
 			Chat.PrintToChat(caller, $"[Try {n}] spawned within 3 s: " + (seen.Any() ? string.Join(", ", seen) : "nothing"));
 			SpawnWatch.Log = false;
 		});
+	}
+
+	[Command("tclean", Description = "Remove NPCs: tclean troopers | neutrals | guardians | all (experimental - removing many at once crashed a client)")]
+	public void CmdClean(CCitadelPlayerController caller, string what = "") {
+		string[] prefixes = what.Trim().ToLowerInvariant() switch {
+			"troopers" => new[] { "npc_trooper" },
+			"neutrals" => new[] { "npc_neutral", "npc_super_neutral" },
+			"guardians" => new[] { "npc_boss", "npc_barrack", "npc_base_defender" },
+			"all" => new[] { "npc_trooper", "npc_neutral", "npc_super_neutral", "npc_boss", "npc_barrack", "npc_base_defender" },
+			_ => Array.Empty<string>(),
+		};
+		if (prefixes.Length == 0) { Chat.PrintToChat(caller, "[Training] Use: !tclean troopers | neutrals | guardians | all"); return; }
+		int n = 0;
+		foreach (var e in Entities.All) {
+			string d;
+			try { d = e.DesignerName ?? ""; } catch { continue; }
+			if (!prefixes.Any(d.StartsWith)) continue;
+			// Spread the removal over time: a big burst hitches the server.
+			int delay = 10 * (n / 5);
+			var ent = e;
+			Timer.Once(delay.Milliseconds(), () => { try { if (ent.IsValid) ent.Remove(); } catch { } });
+			n++;
+		}
+		Chat.PrintToChat(caller, $"[Training] Removing {n} NPCs ('{what}') in small steps.");
 	}
 
 	[Command("tcam", Description = "Show where your camera and crosshair ray start (diagnostic for aiming offsets)")]
