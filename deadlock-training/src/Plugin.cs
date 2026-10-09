@@ -37,6 +37,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 
 	public override void OnLoad(bool isReload) {
 		Arena.Load();
+		BotPool.GuardLoad();
 		Console.WriteLine(isReload ? "[Trainer] neu geladen" : "[Trainer] geladen - im Spiel !train tippen");
 	}
 
@@ -137,6 +138,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		int slot = c.EntityIndex - 1;
 		if (!IsHuman(slot, c)) return;
 		if (!_arenaCleaned) { _arenaCleaned = true; Timer.Once(3.Seconds(), CleanWorld); }
+		if (BotPool.GuardNotice != null) { var n = BotPool.GuardNotice; BotPool.GuardNotice = null; Timer.Once(6.Seconds(), () => { try { Chat.PrintToChat(c, "[Training] " + n); } catch { } }); }
 		if (_hubs.ContainsKey(slot) || _noAutoMenu.Contains(slot) || _drills.ContainsKey(slot)) return;
 
 		Timer.Once(2.Seconds(), () => {
@@ -630,6 +632,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "auto":
 				TrainerConfig.AutoSpawn = arg.Trim().ToLowerInvariant() is not ("off" or "0" or "aus");
 				TrainerConfig.UsePool = true;
+				if (TrainerConfig.AutoSpawn) BotPool.GuardClear();
 				Chat.PrintToChat(caller, $"[Training] Automatic bot spawn: {(TrainerConfig.AutoSpawn ? "ON (experimental - may crash your game; tell me what happens)" : "off (use your key)")}. Open the menu (!train) to start.");
 				return;
 			case "troopers":

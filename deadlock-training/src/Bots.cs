@@ -164,6 +164,35 @@ static class BotPool {
 	private static bool _autoWaiting;
 	private static Vector3 _park;
 
+	// ---- crash guard: if the game client crashed while bots were being spawned, automatic spawning stays off until re-enabled ----
+	private static string StatePath => Path.Combine(Environment.CurrentDirectory, "trainer_auto_state.txt");
+	private static double _guardArmedAt;
+	public static string? GuardNotice;
+
+	/// <summary>Called when the plugin loads.</summary>
+	public static void GuardLoad() {
+		try {
+			if (!File.Exists(StatePath)) return;
+			string st = File.ReadAllText(StatePath).Trim();
+			if (st == "spawning" || st == "disabled") {
+				File.WriteAllText(StatePath, "disabled");
+				TrainerConfig.AutoSpawn = false;
+				GuardNotice = st == "spawning"
+					? "Automatic bot spawning crashed the game last time, so it is switched off. Use your key, or try again with !tbot auto on."
+					: "Automatic bot spawning is switched off (it crashed before). Use your key, or try again with !tbot auto on.";
+				Console.WriteLine("[Trainer] " + GuardNotice);
+			}
+		} catch { }
+	}
+
+	public static void GuardClear() { try { if (File.Exists(StatePath)) File.Delete(StatePath); } catch { } }
+
+	private static void GuardArm(double nowMs) {
+		if (_guardArmedAt > 0) return;
+		_guardArmedAt = nowMs;
+		try { File.WriteAllText(StatePath, "spawning"); } catch { }
+	}
+
 	public static int Count => _all.Count;
 	public static int FreeCount => _free.Count;
 
@@ -197,6 +226,9 @@ static class BotPool {
 		var pawn = human.GetHeroPawn();
 		if (pawn == null || !pawn.IsAlive) return;
 		if (Active || _autoWaiting || _pendingCtl.Count > 0) _park = pawn.Position - Aim.Forward(0f, pawn.EyeAngles.Y) * 450f;
+
+		// Survived 25 s after the first spawn request: no crash, drop the marker.
+		if (_guardArmedAt > 0 && nowMs - _guardArmedAt > 25000) { _guardArmedAt = -1; GuardClear(); }
 
 		// Automatic mode (experimental): the server spawns practice bots and moves each one next to the player in the very frame
 		// it appears, before the client ever sees it at the world origin.
@@ -234,6 +266,7 @@ static class BotPool {
 				_autoWaiting = true;
 				_autoRequestAt = nowMs;
 				_autoNextAt = nowMs + 6000;
+				GuardArm(nowMs);
 				TrainerBots.RequestPractice(pawn.HeroID);
 			}
 		}
