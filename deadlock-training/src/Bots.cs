@@ -144,7 +144,7 @@ static class BotPool {
 
 	private static readonly List<uint> _all = new();
 	private static readonly List<uint> _free = new();
-	private static double _lastScanAt, _lastPromptAt;
+	private static double _lastScanAt, _lastPromptAt, _lastReviveAt;
 	private static Vector3 _park;
 
 	public static int Count => _all.Count;
@@ -156,7 +156,7 @@ static class BotPool {
 			uint h = _free[0];
 			_free.RemoveAt(0);
 			var e = CBaseEntity.FromHandle(h);
-			if (e == null || !e.IsValid || e.Health <= 0) { _all.Remove(h); continue; }
+			if (e == null || !e.IsValid) { _all.Remove(h); continue; }
 			handle = h;
 			return true;
 		}
@@ -180,6 +180,23 @@ static class BotPool {
 		var pawn = human.GetHeroPawn();
 		if (pawn == null || !pawn.IsAlive) return;
 		if (Active) _park = pawn.Position - Aim.Forward(0f, pawn.EyeAngles.Y) * 450f;
+
+		// Keep the pooled bots alive: base defenders shoot enemy-team units standing in the hub.
+		foreach (var h in _all.ToArray()) {
+			try {
+				var e = CBaseEntity.FromHandle(h);
+				if (e == null || !e.IsValid) { _all.Remove(h); _free.Remove(h); continue; }
+				if (e.Health <= 0 || !e.IsAlive) {
+					if (nowMs - _lastReviveAt > 1500) {
+						_lastReviveAt = nowMs;
+						e.As<CCitadelPlayerPawn>()?.ForceRespawn();
+						Console.WriteLine($"[Trainer] Pool bot {e.EntityIndex} was dead: respawning it.");
+					}
+				} else if (e.Health < e.MaxHealth) {
+					e.Health = e.MaxHealth;
+				}
+			} catch { }
+		}
 
 		// New units the player spawned: a hero pawn without a human controller, near the player.
 		foreach (var seen in SpawnWatch.Since(nowMs - 11000)) {
