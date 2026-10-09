@@ -1,0 +1,12 @@
+node_modules
+.next
+data/*.json
+data/*.tmp
+.env.local
+next-env.d.ts
+*.tsbuildinfo
+release
+.next
+electron/replay-worker.bundle.mjs
+electron/broadcast-worker.bundle.mjs
+release-installer

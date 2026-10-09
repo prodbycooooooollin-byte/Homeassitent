@@ -1,0 +1,133 @@
+// Automatische Updates über electron-updater (generic-Provider auf dem Release "dt-latest").
+// Ablauf: beim Start und danach alle 30 Min. prüfen -> im Hintergrund laden -> Nutzer sieht Banner
+// "Neu starten & installieren"; ohne Klick wird nichts installiert.
+const { app, ipcMain } = require("electron");
+const fs = require("fs");
+const path = require("path");
+const { spawn } = require("child_process");
+
+const CHECK_EVERY_MS = 30 * 60 * 1000;
+const BASE = "https://github.com/prodbycooooooollin-byte/Homeassitent/releases/download/dt-latest";
+const RELEASES_URL = "https://github.com/prodbycooooooollin-byte/Homeassitent/releases";
+
+// status: idle | checking | available | downloading | ready | uptodate | error | unsupported
+let state = { portable: false, status: "idle", version: app.getVersion(), current: app.getVersion(), percent: 0, message: "", releasesUrl: RELEASES_URL };
+let win = null;
+let autoUpdater = null;
+let downloadedFile = null;
+
+const portable = !!process.env.PORTABLE_EXECUTABLE_FILE; // portable EXE kann sich nicht selbst ersetzen
+
+function push(patch) {
+  state = { ...state, ...patch };
+  if (win && !win.isDestroyed()) win.webContents.send("updater:state", state);
+}
+
+function setup(mainWindow) {
+  win = mainWindow;
+
+  ipcMain.handle("updater:info", () => state);
+  ipcMain.handle("updater:check", () => check());
+  // Portable-Version kann sich nicht selbst ersetzen: eigenen Installer laden und starten (installiert Lockscope regulär, Daten bleiben erhalten)
+  ipcMain.handle("updater:runInstaller", async () => {
+    push({ status: "installing", message: "Installer wird geladen …", percent: 0 });
+    try {
+      const helper = await ensureHelper((pct) => push({ status: "installing", percent: pct }));
+      spawn(helper, [], { detached: true, stdio: "ignore" }).unref();
+      setTimeout(() => app.quit(), 700);
+    } catch (e) { push({ status: "unsupported", message: `Installer konnte nicht geladen werden: ${String(e && e.message || e).slice(0, 120)}. Bitte Lockscope-Installer.exe von der Release-Seite laden.` }); }
+  });
+  ipcMain.handle("updater:install", async () => {
+    if (state.status !== "ready" || !autoUpdater) return;
+    // Sichtbarer Ablauf: eigene Installationsoberfläche (Lockscope-Installer) übernimmt – nur wenn sie sich laden lässt, sonst Standard-Installer
+    push({ status: "installing", message: "Installationsoberfläche wird geladen …", percent: 0 });
+    try {
+      if (!downloadedFile || !fs.existsSync(downloadedFile)) throw new Error("Update-Datei nicht gefunden");
+      const helper = await ensureHelper((pct) => push({ status: "installing", percent: pct }));
+      const cur = path.dirname(process.execPath);
+      const dir = path.basename(cur) === "Lockscope" ? cur : path.join(path.dirname(cur), "Lockscope");
+      spawn(helper, [`--update=${downloadedFile}`, `--dir=${dir}`, `--version=${state.version}`], { detached: true, stdio: "ignore" }).unref();
+      setTimeout(() => app.quit(), 700);
+    } catch (e) {
+      push({ status: "installing", message: "Standard-Installer wird gestartet …" });
+      setTimeout(() => autoUpdater.quitAndInstall(false, true), 1500);
+    }
+  });
+
+  if (!app.isPackaged) return push({ status: "unsupported", message: "Entwicklungsmodus – keine Updates." });
+  if (portable) return push({ portable: true, status: "unsupported", message: "Portable Version: kann sich nicht selbst aktualisieren. Mit dem Installer wird Lockscope normal installiert und bleibt danach automatisch aktuell – deine Daten bleiben erhalten." });
+
+  try {
+    ({ autoUpdater } = require("electron-updater"));
+  } catch (e) {
+    return push({ status: "unsupported", message: "Updater nicht verfügbar: " + e.message });
+  }
+  autoUpdater.autoDownload = true;
+  // Nie ohne Zutun installieren: erst auf Klick („Neu starten & installieren“), dann mit sichtbarem Installationsfenster
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.allowPrerelease = true;
+  autoUpdater.logger = null;
+
+  autoUpdater.on("checking-for-update", () => push({ status: "checking", message: "" }));
+  autoUpdater.on("update-available", (i) => push({ status: "available", version: i.version, percent: 0 }));
+  autoUpdater.on("update-not-available", () => push({ status: "uptodate", message: "", lastCheck: Date.now() }));
+  autoUpdater.on("download-progress", (p) => push({ status: "downloading", percent: Math.round(p.percent) }));
+  autoUpdater.on("update-downloaded", (i) => { downloadedFile = i.downloadedFile || null; push({ status: "ready", version: i.version, percent: 100 }); });
+  const friendly = (e) => {
+  const m = String((e && e.message) || e);
+  // Prüfsummenfehler: Meist wird gerade ein neuer Build veröffentlicht (Manifest und Installer stammen aus unterschiedlichen Läufen).
+  if (/sha512|checksum/i.test(m)) return "Das Update wird gerade veröffentlicht (Prüfsumme passt noch nicht). Bitte in ein paar Minuten erneut suchen.";
+  return m.slice(0, 200);
+};
+autoUpdater.on("error", (e) => push({ status: "error", message: friendly(e), lastCheck: Date.now() }));
+
+  setTimeout(check, 8000);
+  setInterval(check, CHECK_EVERY_MS);
+}
+
+/** Holt (einmalig, danach aus dem Zwischenspeicher) den eigenen Installer, der die Update-Oberfläche zeigt. */
+async function ensureHelper(onProgress) {
+  const dir = path.join(app.getPath("userData"), "installer");
+  const file = path.join(dir, "Lockscope-Installer.exe");
+  // Zwischengespeicherte Fassung nur nutzen, wenn sie zur aktuellen im Release passt (gleiche Größe); sonst neu laden
+  try {
+    const st = fs.statSync(file);
+    if (st.size > 20e6) {
+      try {
+        const head = await fetch(`${BASE}/Lockscope-Installer.exe`, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(15000) });
+        const remote = Number(head.headers.get("content-length")) || 0;
+        if (!head.ok || !remote || remote === st.size) return file;
+      } catch { return file; } // offline: vorhandene Fassung verwenden
+    }
+  } catch { /* nicht vorhanden */ }
+  fs.mkdirSync(dir, { recursive: true });
+  const res = await fetch(`${BASE}/Lockscope-Installer.exe`, { redirect: "follow", signal: AbortSignal.timeout(300000) });
+  if (!res.ok || !res.body) throw new Error(`Installer-Download fehlgeschlagen (HTTP ${res.status})`);
+  const total = Number(res.headers.get("content-length")) || 0;
+  const tmp = file + ".part";
+  const out = fs.createWriteStream(tmp);
+  let got = 0;
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    got += value.length;
+    if (!out.write(Buffer.from(value))) await new Promise((r) => out.once("drain", r));
+    if (total) onProgress(Math.round((got / total) * 100));
+  }
+  await new Promise((r) => out.end(r));
+  fs.renameSync(tmp, file);
+  return file;
+}
+
+async function check() {
+  if (!autoUpdater || state.status === "downloading" || state.status === "ready") return state;
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (e) {
+    push({ status: "error", message: friendly(e), lastCheck: Date.now() });
+  }
+  return state;
+}
+
+module.exports = { setup };

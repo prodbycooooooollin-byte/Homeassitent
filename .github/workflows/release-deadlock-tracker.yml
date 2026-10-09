@@ -1,0 +1,184 @@
+name: Release Lockscope (Windows)
+
+# Baut die Windows-EXE (NSIS-Installer + portable) auf echtem Windows und veröffentlicht sie
+# als GitHub-Pre-Release "dt-v<version>" und aktualisiert zusätzlich das rollende Release "dt-latest",
+# aus dem sich installierte Apps automatisch aktualisieren (electron-updater, generic-Provider).
+# Die Version wird pro Build hochgezählt: <Basisversion aus package.json, Minor>.<Run-Nummer>, damit jeder Build
+# als Update erkannt wird. Die Version in package.json bleibt unverändert.
+# Die EXE bettet den Next.js-Server samt Hintergrund-Poller ein (Electron); Daten liegen im Benutzerprofil.
+
+on:
+  push:
+    tags:
+      - 'dt-v*'
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'deadlock-tracker/**'
+      - '.github/workflows/release-deadlock-tracker.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release-Tag (z. B. dt-v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+# Builds nacheinander ausführen: Zwei parallele Läufe würden sich im rollenden Release "dt-latest" gegenseitig
+# überschreiben (latest.yml des einen Laufs, Installer des anderen) – das führt zu "sha512 checksum mismatch" im Auto-Updater.
+concurrency:
+  group: deadlock-tracker-release
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: deadlock-tracker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version und Release-Tag bestimmen
+        shell: bash
+        run: |
+          BASE=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          VERSION="$BASE.${{ github.run_number }}"
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+          if [ -n "${{ github.event.inputs.tag }}" ]; then TAG="${{ github.event.inputs.tag }}";
+          else TAG="dt-v$VERSION"; fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "Version: $VERSION · Release-Tag: $TAG"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: deadlock-tracker/package-lock.json
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Icons vorhanden?
+        shell: bash
+        run: test -f app-icons/icon.ico && test -f app-icons/tray.png
+
+      - name: Typprüfung
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      # Version nur im CI-Checkout setzen (kein Commit). Über package.json statt CLI-Argument,
+      # weil npm unter Windows "-c.extraMetadata..." falsch zerlegt.
+      - name: App-Version setzen
+        shell: bash
+        run: npm pkg set version=${{ env.APP_VERSION }}
+
+      - name: Installationspaket bauen (NSIS, nur für Installer und Auto-Update)
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      # Eigener Installer (Oberfläche mit Fortschritt); lädt zur Laufzeit das Installationspaket aus dem Update-Release
+      - name: Eigenen Installer bauen
+        run: npm run dist:installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Paketinhalt prüfen (eingebetteter Server vorhanden?)
+        shell: bash
+        run: |
+          test -f release/win-unpacked/resources/standalone/server.js
+          test -d release/win-unpacked/resources/standalone/node_modules/next
+          test -d release/win-unpacked/resources/standalone/.next/static
+          test -f release/latest.yml
+          grep -q "version: ${APP_VERSION}" release/latest.yml
+          ls release/*.exe release/latest.yml
+          test -f release-installer/Lockscope-Installer.exe
+
+      - name: Artefakte hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadlock-tracker-windows
+          path: |
+            deadlock-tracker/release/*.exe
+            deadlock-tracker/release/*.blockmap
+            deadlock-tracker/release/latest.yml
+            deadlock-tracker/release-installer/Lockscope-Installer.exe
+          if-no-files-found: error
+
+      - name: GitHub-Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Lockscope ${{ env.RELEASE_TAG }}
+          prerelease: true
+          body: |
+            **Zum Installieren nur diese eine Datei herunterladen: `Lockscope-Installer.exe`.**
+            Sie lädt immer die aktuelle Version, richtet sie ein und aktualisiert auch eine bestehende Installation.
+
+            Hinweise: Die EXE ist nicht signiert (Windows SmartScreen kann warnen).
+            Matches werden nur erkannt, solange die App läuft. Die Deadlock-API-Anbindung
+            ist noch nicht gegen die Live-API verifiziert (siehe deadlock-tracker/README.md).
+          files: deadlock-tracker/release-installer/Lockscope-Installer.exe
+          overwrite_files: true
+
+      # Rollendes Release: feste URL für den Auto-Updater (latest.yml + aktueller Installer)
+      - name: Rollendes Update-Release "dt-latest" aktualisieren
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dt-latest
+          target_commitish: ${{ github.sha }}
+          name: Lockscope – aktuelle Version (Auto-Update-Quelle)
+          prerelease: true
+          body: |
+            Technisches Release: Wird bei jedem Build überschrieben und dient dem Installer und dem Auto-Update der App.
+            **Zum Installieren: `Lockscope-Installer.exe` herunterladen** (die anderen Dateien hier nicht einzeln verwenden).
+            Aktuell: ${{ env.APP_VERSION }}
+          files: |
+            deadlock-tracker/release/Lockscope-Update-Package.exe
+            deadlock-tracker/release/Lockscope-Update-Package.exe.blockmap
+            deadlock-tracker/release-installer/Lockscope-Installer.exe
+          overwrite_files: true
+
+      # latest.yml ZULETZT hochladen: Sie verweist auf den Installer; ein Update-Check darf sie erst sehen,
+      # wenn der passende Installer bereits liegt.
+      - name: Update-Manifest (latest.yml) veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dt-latest
+          files: deadlock-tracker/release/latest.yml
+          overwrite_files: true
+
+      - name: Veröffentlichte Update-Dateien prüfen (Prüfsumme)
+        shell: bash
+        run: |
+          BASE="https://github.com/${{ github.repository }}/releases/download/dt-latest"
+          EXPECT=$(node -e "const y=require('fs').readFileSync('release/latest.yml','utf8');console.log(y.match(/^sha512: (.+)$/m)[1])")
+          for i in 1 2 3 4 5 6; do
+            curl -sSL -o remote.exe "$BASE/Lockscope-Update-Package.exe" || true
+            curl -sSL -o remote.yml "$BASE/latest.yml" || true
+            GOT=$(node -e "const c=require('crypto'),f=require('fs');console.log(c.createHash('sha512').update(f.readFileSync('remote.exe')).digest('base64'))")
+            VER=$(node -e "const y=require('fs').readFileSync('remote.yml','utf8');console.log((y.match(/^version: (.+)$/m)||[])[1]||'')")
+            echo "Versuch $i: Manifest-Version=$VER erwartet=$APP_VERSION"
+            if [ "$GOT" = "$EXPECT" ] && [ "$VER" = "$APP_VERSION" ]; then echo "Prüfsumme und Version stimmen überein"; exit 0; fi
+            sleep 20
+          done
+          echo "::error::Veröffentlichtes Update passt nicht zusammen (Prüfsumme/Version)"; exit 1
+
+      # Erst jetzt (nach dem neuen Manifest) alte Dateien aus dem Update-Release löschen, damit dort nur noch die aktuellen liegen
+      - name: Veraltete Dateien im Update-Release entfernen
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for a in $(gh release view dt-latest --repo "${{ github.repository }}" --json assets -q '.assets[].name' 2>/dev/null); do
+            case "$a" in
+              Lockscope-Installer.exe|Lockscope-Update-Package.exe|Lockscope-Update-Package.exe.blockmap|latest.yml) ;;
+              *) echo "Entferne $a"; gh release delete-asset dt-latest "$a" --repo "${{ github.repository }}" -y || true ;;
+            esac
+          done
