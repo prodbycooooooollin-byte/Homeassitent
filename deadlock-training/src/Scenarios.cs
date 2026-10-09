@@ -72,6 +72,10 @@ sealed class ScenarioDrill : Drill {
 		public Vector3 Home, P0;
 		public int StartHp;
 		public CPointWorldText? Tag;
+		public float Floor, BaseRange;
+		public bool Flee;
+		public int StrafeDir;
+		public double NextStrafe;
 	}
 
 	private readonly int _rounds;
@@ -83,7 +87,7 @@ sealed class ScenarioDrill : Drill {
 	private double _phaseAt, _roundStart, _lastTick, _lastHit, _hudAt, _hiddenSince = -1;
 	private Vector3 _origin;
 	private float _yaw, _top = 300f, _dirA;
-	private bool _died, _killedVisible;
+	private bool _died, _killedVisible, _fleeRound;
 	private bool _aiOn, _aiDecided, _realAi, _realDamage, _simShots;
 	private double _aiStartAt;
 	private (string, byte, byte, byte)[]? _hud;
@@ -179,12 +183,30 @@ sealed class ScenarioDrill : Drill {
 		return Ground(p, _lane.At(s).Z);
 	}
 
+	/// <summary>Arc length along the current lane closest to p.</summary>
+	private float ArcOf(Vector3 p) {
+		if (_lane == null) return 0f;
+		float best = 0f, bd = float.MaxValue;
+		for (float s = 0; s <= _lane.Len; s += 100f) {
+			var q = _lane.At(s);
+			float d = Vector2.DistanceSquared(new Vector2(q.X, q.Y), new Vector2(p.X, p.Y));
+			if (d < bd) { bd = d; best = s; }
+		}
+		return best;
+	}
+
 	private bool HasLos(Foe f, CCitadelPlayerPawn pawn) {
 		try {
 			var e = f.A.Ent;
 			if (e == null) return false;
-			var r = Trace.Ray(e.Position + new Vector3(0, 0, 70f), pawn.Position + new Vector3(0, 0, 60f), InteractionLayer.Solid, e);
-			return !(r.DidHit && r.Fraction < 0.95f);
+			var from = e.Position + new Vector3(0, 0, 70f);
+			var to = pawn.Position + new Vector3(0, 0, 60f);
+			var d = to - from;
+			float len = d.Length();
+			if (len < 60f) return true;
+			var end = from + d / len * (len - 45f); // stop short of the player's own body
+			var r = Trace.Ray(from, end, InteractionLayer.Solid, e);
+			return !r.DidHit;
 		} catch { return true; }
 	}
 
@@ -294,7 +316,7 @@ sealed class ScenarioDrill : Drill {
 	}
 
 	private void Arm(Foe f, Vector3 pos, float hpFrac, bool aggro, float speed, float range) {
-		f.On = true; f.Aggro = aggro; f.Speed = speed; f.Range = range; f.Home = pos; f.Phase = (float)(Rng.NextDouble() * 6.28);
+		f.On = true; f.Aggro = aggro; f.Speed = speed; f.Range = range; f.BaseRange = range; f.Home = pos; f.Floor = pos.Z - 8f; f.Flee = false; f.NextStrafe = 0; f.Phase = (float)(Rng.NextDouble() * 6.28);
 		f.NextShot = double.MaxValue;
 		try {
 			var e = f.A.Ent;
@@ -306,6 +328,7 @@ sealed class ScenarioDrill : Drill {
 	}
 
 	private void StartRound(CCitadelPlayerPawn pawn, double nowMs) {
+		_fleeRound = Rng.NextDouble() < 0.7;
 		_ph = Ph.Read; _phaseAt = nowMs + 1200; _roundStart = nowMs; _died = false; _killedVisible = false; _lastHit = 0; _realDamage = false;
 		float k = Lvl == Level.Easy ? 0.62f : Lvl == Level.Hard ? 0.86f : 0.74f;
 		float spd = Math.Clamp(_top * k, 150f, 420f); // enemies are slower than you: running away can work
@@ -460,10 +483,13 @@ sealed class ScenarioDrill : Drill {
 		var to = new Vector3(pp.X - cur.X, pp.Y - cur.Y, 0f);
 		float dist = MathF.Max(1f, to.Length());
 		var dir = to / dist;
+		var side = new Vector3(-dir.Y, dir.X, 0f);
 
 		if (!f.Aggro && (dist < 650f || e.Health < f.StartHp - 5)) {
 			f.Aggro = true;
-			Say("[Scenario] He noticed you.");
+			// far behind and hurt, a smart enemy runs for his base instead of fighting
+			f.Flee = _kind is ScenKind.Lone or ScenKind.Unknown && f == _foes[0] && _fleeRound;
+			Say(f.Flee ? "[Scenario] He noticed you and runs for his base!" : "[Scenario] He noticed you.");
 			StartAi(nowMs);
 		}
 
@@ -474,17 +500,27 @@ sealed class ScenarioDrill : Drill {
 			var d = tgt - cur; d.Z = 0;
 			if (d.Length() > 10f) move = Vector3.Normalize(d) * 90f;
 			look = tgt;
+		} else if (f.Flee) {
+			Vector3 tgt = cur - dir * 600f;
+			if (_lane != null) tgt = _lane.At(Math.Min(_lane.Len, ArcOf(cur) + 600f));
+			var d = tgt - cur; d.Z = 0;
+			if (d.Length() > 30f) move = Vector3.Normalize(d) * f.Speed;
+			look = tgt;
 		} else {
-			if (dist > f.Range + 60f) move = dir * f.Speed;
-			else if (dist < f.Range - 160f) move = -dir * f.Speed * 0.6f;
-			else {
-				f.Phase += (float)dt * 1.7f;
-				move = new Vector3(-dir.Y, dir.X, 0f) * MathF.Sign(MathF.Sin(f.Phase)) * f.Speed * 0.7f;
+			if (nowMs >= f.NextStrafe) {
+				f.StrafeDir = Rng.Next(3) - 1;
+				f.NextStrafe = nowMs + 600 + Rng.Next(1300);
+				f.Range = f.BaseRange + Rng.Next(-120, 180);
 			}
+			var strafe = side * f.StrafeDir;
+			if (dist > f.Range + 60f) move = dir * f.Speed + strafe * f.Speed * 0.4f;
+			else if (dist < f.Range - 160f) move = -dir * f.Speed * 0.6f + strafe * f.Speed * 0.5f;
+			else move = strafe * f.Speed * 0.7f;
 			look = pp;
 		}
-		float floor = Ground(cur, pawn.Position.Z).Z - 8f;
-		f.A.Place(new Vector3(cur.X, cur.Y, floor) + move / 7f, look);
+		// the bot's own floor, never the player's height (it must not jump or float with you)
+		f.Floor = Ground(cur, f.Floor).Z - 8f;
+		f.A.Place(new Vector3(cur.X, cur.Y, f.Floor) + move / 7f, look);
 	}
 
 	private void Shoot(Foe f, CCitadelPlayerPawn pawn, double nowMs) {
@@ -495,11 +531,13 @@ sealed class ScenarioDrill : Drill {
 		if (e == null) return;
 		float dist = Vector3.Distance(e.Position, pawn.Position);
 		if (dist > 1700f || !HasLos(f, pawn)) return;
-		float acc = Lvl == Level.Easy ? 0.14f : Lvl == Level.Hard ? 0.34f : 0.22f;
+		float acc = Lvl == Level.Easy ? 0.25f : Lvl == Level.Hard ? 0.55f : 0.38f;
 		acc *= dist < 500f ? 1.3f : dist > 1100f ? 0.55f : 1f;
+		if (f.Flee) acc *= 0.4f;
 		if (Rng.NextDouble() > acc || _realDamage) return; // once real bullets hurt you, the simulated hits stop
-		pawn.Health = (int)(pawn.Health - pawn.MaxHealth * 0.032f);
+		pawn.Health = (int)(pawn.Health - pawn.MaxHealth * 0.035f);
 		_lastHit = nowMs;
+		try { pawn.EmitSound("Damage.Send.Crit", volume: 0.35f); } catch { }
 	}
 
 	private void CheckAmbusher(double nowMs) {
@@ -549,7 +587,7 @@ sealed class ScenarioDrill : Drill {
 
 	private void Evaluate(CCitadelPlayerPawn pawn, double nowMs) {
 		double t = (nowMs - _roundStart) / 1000.0;
-		double limit = _kind switch { ScenKind.Lone => 35, ScenKind.Unknown => 50, ScenKind.Duel => 50, _ => 45 };
+		double limit = _kind switch { ScenKind.Lone => 45, ScenKind.Unknown => 50, ScenKind.Duel => 50, _ => 45 };
 		int hp = Math.Max(0, pawn.Health * 100 / Math.Max(1, pawn.MaxHealth));
 		bool escaped = Escaped(pawn, nowMs, out float nearest, out bool seen);
 		_status = $"{t:0} / {limit:0} s     your health {hp}%     nearest enemy {(nearest > 9000 ? "-" : (int)(nearest / 39f) + " m")}{(seen ? "  (he sees you)" : "")}" +
@@ -561,7 +599,7 @@ sealed class ScenarioDrill : Drill {
 		switch (_kind) {
 			case ScenKind.Lone:
 				if (allDead) { _kills++; Conclude(true, $"Killed him in {t:0.0} s.", Why(true), nowMs); return; }
-				if (t > 6 && escaped) { Conclude(false, "You got away although this was a free kill.", Why(false), nowMs); return; }
+				if (t > 6 && escaped) { Conclude(false, _foes[0].Flee ? "He got away - when you are far ahead, run him down before he reaches his base." : "You walked away although this was a free kill.", Why(false), nowMs); return; }
 				break;
 			case ScenKind.Unknown: {
 				if (!_killedVisible && Dead(_foes[0].A)) { _killedVisible = true; _kills++; }
@@ -592,7 +630,7 @@ sealed class ScenarioDrill : Drill {
 	}
 
 	private string TimeoutText() => _kind switch {
-		ScenKind.Lone => "Too slow. A hurt, unaware enemy is a free kill - you wasted your lead.",
+		ScenKind.Lone => "Too slow. A hurt enemy far behind is a free kill - use your lead and speed to run him down.",
 		ScenKind.Unknown => "You did not finish the situation in time.",
 		ScenKind.Duel => "The duel was not decided in time.",
 		_ => "You stayed in danger instead of getting away.",
