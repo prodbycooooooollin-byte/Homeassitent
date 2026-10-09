@@ -114,3 +114,12 @@ Report what does not work, ideally with the chat text and the server window outp
 
 - Counterspell/ability exercises against bots, headshot scoring, a movement course, records that survive restarts.
 - A nicer UI than text in the world and chat.
+
+
+## Updating
+
+```powershell
+cd $HOME\DeadlockTrainerRepo\deadlock-training
+.\update.ps1            # git pull + build (the server hot-reloads the plugin)
+.\update.ps1 -Restart   # same, plus restarts deadworks.exe
+```
