@@ -78,13 +78,15 @@ abstract class Drill {
 			var bots = Actors.Where(a => a.Wants).ToList();
 			foreach (var b in bots) b.Poll(nowMs);
 			bots = Actors.Where(a => a.Wants).ToList();
+			// Move the bots into the arena right away: the client needs time to show them there (they were invisible for ~20 s).
+			foreach (var b in bots) if (b.BotReady) b.Place(b.Feet, pawn.Position);
 
 			bool allAlive = bots.All(a => a.BotReady);
 			bool allModels = bots.All(a => a.HasModel || nowMs - a.CreatedAtMs > 6500);
 			if (!(allAlive && allModels) && nowMs < _gateDeadline) return;
 			// The client streams the hero model in after the bot appears: it is invisible for a while (~12 s the first time).
-			double settle = bots.Count > 0 && bots.All(a => a.Method == BotMethod.Npc || a.Pooled) ? 5500 : (BotWarm ? 3500 : 6000);
-			double newest = bots.Count > 0 ? bots.Max(a => a.CreatedAtMs) : nowMs;
+			double settle = bots.Count > 0 && bots.All(a => a.Method == BotMethod.Npc) ? 4500 : bots.All(a => a.Pooled) ? (BotWarm ? 9000 : 18000) : (BotWarm ? 3500 : 6000);
+			double newest = bots.Count > 0 ? bots.Max(a => a.FirstPlaceAt > 0 ? a.FirstPlaceAt : nowMs) : nowMs;
 			if (allAlive && bots.Count > 0 && nowMs - newest < settle && nowMs < _gateDeadline + 12000) {
 				if (!_loadingSaid) { _loadingSaid = true; Say("[Training] Loading the bot model... the exercise starts in a moment."); }
 				return;

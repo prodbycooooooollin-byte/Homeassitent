@@ -490,8 +490,11 @@ sealed class Actor {
 	// ---- driving the bot -------------------------------------------------------------------------------------------
 
 	/// <summary>Teleport the bot to feet and turn it toward lookAt. Keeps its health full.</summary>
+	public double FirstPlaceAt;
+
 	public void Place(Vector3 feet, Vector3 lookAt) {
 		Feet = feet;
+		if (FirstPlaceAt <= 0) FirstPlaceAt = Clock.Ms;
 		var e = Ent;
 		if (e == null || !e.IsValid) return;
 		float yaw = Aim.YawTo(feet, lookAt);
