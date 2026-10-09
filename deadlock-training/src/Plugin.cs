@@ -208,6 +208,14 @@ public class TrainerPlugin : DeadworksPluginBase {
 	}
 
 	public override HookResult OnTakeDamage(TakeDamageEvent args) {
+		// Towers, walkers, guardians and troopers must not hurt the training bots: only human players may damage them.
+		try {
+			if (args.Entity != null && BotPool.Contains(args.Entity.EntityHandle)) {
+				var att = args.Info.Attacker;
+				bool human = att != null && Players.GetAll().Any(c => IsHuman(c.EntityIndex - 1, c) && c.GetHeroPawn()?.EntityHandle == att.EntityHandle);
+				if (!human) return HookResult.Stop;
+			}
+		} catch { }
 		if (_drills.Count == 0) return HookResult.Continue;
 		var result = HookResult.Continue;
 		foreach (var d in _drills.Values.ToArray()) {
@@ -369,6 +377,14 @@ public class TrainerPlugin : DeadworksPluginBase {
 			list[idx].SelectHero(hero);
 			Chat.PrintToChat(caller, $"[Training] Bot {idx + 1}/{list.Count} -> {hero}. Check the top bar and whether the bot changed. (experimental)");
 		} catch (Exception ex) { Chat.PrintToChat(caller, $"[Training] Could not change the hero: {ex.Message}"); }
+	}
+
+	[Command("tflick", Description = "Flick scoring: tflick head (only headshots count) | tflick body (any hit counts)")]
+	public void CmdFlick(CCitadelPlayerController caller, string mode = "") {
+		string m = mode.Trim().ToLowerInvariant();
+		if (m is "head" or "kopf") TrainerConfig.FlickHeadOnly = true;
+		else if (m is "body" or "koerper") TrainerConfig.FlickHeadOnly = false;
+		Chat.PrintToChat(caller, $"[Training] Flick: {(TrainerConfig.FlickHeadOnly ? "only HEADSHOTS count" : "any hit counts (headshots are shown)")}. Change with !tflick head | body");
 	}
 
 	[Command("tlong", Description = "Long Range spots: tlong me (where you stand) | tlong target (where the bots appear) | tlong reset | tlong show")]

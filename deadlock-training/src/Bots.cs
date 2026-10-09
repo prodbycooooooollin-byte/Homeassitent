@@ -212,6 +212,9 @@ static class BotPool {
 		return list;
 	}
 
+	public static bool Contains(uint handle) => _all.Contains(handle);
+	public static Vector3 ParkPos => _park;
+
 	public static int Count => _all.Count;
 	public static int FreeCount => _free.Count;
 

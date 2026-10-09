@@ -58,6 +58,8 @@ sealed class ParryDrill : Drill {
 	private int AttackerCount => _mode == ParryMode.Single ? 1 : 3;
 
 	protected override void Begin(CCitadelPlayerPawn pawn, double nowMs) {
+		// citadel_bot_melee is a cheat variable: cheats must already be on when it is set.
+		try { Server.ExecuteCommand("sv_cheats 1"); TrainerBots.CheatsOffAt = -1; _cheatsOn = true; } catch { }
 		_baseYaw = pawn.EyeAngles.Y;
 		_radius = _mode == ParryMode.Single ? 135f : 165f;
 		int n = AttackerCount;
@@ -228,12 +230,11 @@ sealed class ParryDrill : Drill {
 			catch (Exception ex) { Console.WriteLine($"[Trainer] Bot melee failed: {ex.Message}"); }
 			Console.WriteLine($"[Trainer] Parry swing {_done + 1}: bot melee rc={rc}");
 			if (rc != 0) {
-				// The ability call did not make the bot swing: use the game's own "bots melee" switch for a moment.
+				// The ability call did not make the bot swing: use the game's own "bots melee" switch for a moment
+				// (cheats are already on for the whole drill, see Begin).
 				try {
-					Server.ExecuteCommand("sv_cheats 1");
 					Server.ExecuteCommand("citadel_bot_melee 1");
 					TrainerBots.Schedule(170, "citadel_bot_melee 0");
-					TrainerBots.CheatsOffAt = Clock.Ms + 1500;
 				} catch { }
 			}
 			_deadline = nowMs + 1700;
@@ -381,7 +382,10 @@ sealed class ParryDrill : Drill {
 		Ctl.HudAnnounce("PARRY DONE", $"{_ok}/{_total} ({rate:0}%)");
 	}
 
+	private bool _cheatsOn;
+
 	public override void Stop() {
+		if (_cheatsOn) { _cheatsOn = false; try { Server.ExecuteCommand("citadel_bot_melee 0"); Server.ExecuteCommand("sv_cheats 0"); } catch { } }
 		ClearCue();
 		base.Stop();
 	}

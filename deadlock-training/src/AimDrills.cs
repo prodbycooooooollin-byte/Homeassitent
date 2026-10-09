@@ -19,6 +19,7 @@ sealed class FlickDrill : Drill {
 		public float Tol;
 		public double DmgAt = -1;
 		public float Dir = 1f;
+		public bool Head, Hidden;
 		public CPointWorldText? Label;
 	}
 
@@ -27,7 +28,7 @@ sealed class FlickDrill : Drill {
 	private readonly int _waves;
 	private readonly List<T> _ts = new();
 
-	private int _wavesStarted, _hits, _timeouts;
+	private int _wavesStarted, _hits, _timeouts, _headHits, _shotsInWaves;
 	private int _shotsAtStart;
 	private bool _waveActive;
 	private float _groundZ;
@@ -74,10 +75,22 @@ sealed class FlickDrill : Drill {
 	public override HookResult OnTakeDamage(TakeDamageEvent e) {
 		if (ActorOf(e.Entity) is { } bot && IsPlayer(e.Info.Attacker)) {
 			var t = _ts.FirstOrDefault(x => ReferenceEquals(x.A, bot));
-			if (t != null && t.Active && e.Info.Damage > 0) t.DmgAt = Clock.Ms;
+			if (t != null && t.Active && e.Info.Damage > 0) {
+				bool head = IsHeadshot(bot);
+				if (!TrainerConfig.FlickHeadOnly || head) { t.DmgAt = Clock.Ms; t.Head = head; }
+			}
 			if (bot.Ent is { } be && be.Health - e.Info.Damage <= 80) be.Health = be.MaxHealth;
 		}
 		return HookResult.Continue;
+	}
+
+	/// <summary>Was the player's crosshair on the bot's head (geometry: ray vs head sphere)?</summary>
+	private bool IsHeadshot(Actor bot) {
+		var p = PlayerPawn;
+		if (p == null || bot.Ent == null) return false;
+		var eye = Aim.Eye(p);
+		var head = bot.Ent.Position + new Vector3(0, 0, TrainerConfig.HeadZ);
+		return Aim.AngleTo(eye, Aim.Dir(p), head) <= Aim.AngularRadius(TrainerConfig.HeadRadius * 1.3f, Vector3.Distance(eye, head));
 	}
 
 	protected override void Tick(CCitadelPlayerPawn pawn, double nowMs) {
@@ -89,6 +102,7 @@ sealed class FlickDrill : Drill {
 		// Clicks count for hits only in simplified mode (with real bots only real damage counts).
 		while (In.Shots.Count > 0) {
 			var s = In.Shots.Dequeue();
+			if (_waveActive) _shotsInWaves++;
 			if (!_waveActive || RealBots) continue;
 			foreach (var t in _ts)
 				if (t.Active && s.TimeMs >= _waveStart && Aim.AngleTo(s.Eye, s.Forward, t.A.Center) <= t.Tol)
@@ -139,7 +153,7 @@ sealed class FlickDrill : Drill {
 				t.Feet += right * t.Dir * speed * (float)dt;
 				if (Rng.Next(100) < 2) t.Dir = -t.Dir;
 			}
-			PlaceActor(t.A, t.Feet, pawn.Position, eye, TrainerConfig.CenterZ);
+			if (!t.Hidden) PlaceActor(t.A, t.Feet, pawn.Position, eye, TrainerConfig.CenterZ);
 			if (t.Label != null) Face(t.Label, t.Label.Position, eye);
 		}
 	}
@@ -181,6 +195,7 @@ sealed class FlickDrill : Drill {
 			}
 			t.Tol = Aim.AngularRadius(30f, Vector3.Distance(origin, t.Feet));
 			t.A.Feet = t.Feet;
+			t.Hidden = false;
 			t.A.Place(t.Feet, origin);
 			t.A.Tint(255, 90, 90);
 			t.A.Marker?.SetColor(255, 60, 60);
@@ -202,10 +217,14 @@ sealed class FlickDrill : Drill {
 		_reactions.Add(react);
 		if (_lastHitAt > _waveStart) _switches.Add(atMs - _lastHitAt);
 		_lastHitAt = atMs;
+		if (t.Head) _headHits++;
 		t.A.Tint(80, 255, 110);
 		t.A.Marker?.SetColor(80, 255, 110);
 		Kill(t.Label);
-		t.Label = SpawnText($"{react:0} ms", t.A.Feet + new Vector3(0, 0, 150), eye, 16f, 80, 255, 110);
+		double acc = _shotsInWaves > 0 ? 100.0 * _hits / _shotsInWaves : 100.0;
+		t.Label = SpawnText($"{react:0} ms{(t.Head ? "  HEAD" : "")}  |  acc {acc:0}%", t.A.Feet + new Vector3(0, 0, 150), eye, 12f, 80, 255, 110);
+		// One shot, one kill: the bot disappears at once (it is parked and comes back with the next wave).
+		if (RealBots && t.A.Wants) { t.Hidden = true; try { t.A.Ent?.Teleport(position: BotPool.ParkPos, velocity: Vector3.Zero); } catch { } }
 	}
 
 	private void Summarize() {
@@ -213,6 +232,7 @@ sealed class FlickDrill : Drill {
 		int total = _waves * _k;
 		Say($"=== {Title()} finished ({LevelParse.Label(Lvl)}) ===");
 		Say($"Hits: {_hits}/{total} ({Fmt.Pct(_hits, total)}) | missed: {_timeouts} | shots fired: {shots}");
+		Say($"Accuracy: {(_shotsInWaves > 0 ? 100.0 * _hits / _shotsInWaves : 0):0}% ({_hits} hits / {_shotsInWaves} shots while a target was up) | headshots: {_headHits}/{_hits}{(TrainerConfig.FlickHeadOnly ? " (head-only mode)" : "")}");
 		if (_reactions.Count > 0) {
 			var sorted = _reactions.OrderBy(x => x).ToList();
 			double avg = _reactions.Average();

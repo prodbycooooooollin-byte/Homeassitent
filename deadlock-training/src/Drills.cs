@@ -347,7 +347,6 @@ sealed class MenuDrill : Drill {
 		yield return new("hdr_other", "OTHER", 33f, -13f, 12f, false, 255, 140, 40);
 		yield return new("o_reaction", "Reaction", 33f, -8f, 9f, true, 255, 255, 255);
 		yield return new("o_deny", "Deny Souls", 33f, -3.5f, 9f, true, 255, 255, 255);
-		yield return new("o_lasthit", "Last Hit", 33f, 1f, 9f, true, 255, 255, 255);
 
 		yield return new("lv_easy", "EASY", -12f, 9f, 9f, true, 255, 255, 255);
 		yield return new("lv_normal", "NORMAL", 0f, 9f, 9f, true, 255, 255, 255);

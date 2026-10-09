@@ -36,6 +36,8 @@ static class TrainerConfig {
 	/// <summary>Height of the "chest" above the ground (where the aim point is).</summary>
 	/// <summary>Height of the head centre above the feet, used to tell headshots from body shots.</summary>
 	public static float HeadZ = 68f;
+	/// <summary>Flick: only headshots count as hits (!tflick head), else any body hit.</summary>
+	public static bool FlickHeadOnly = false;
 	/// <summary>Lifts bots standing in the ground (tune with !tbotz).</summary>
 	public static float BotZOffset = 0f;
 	public static float HeadRadius = 9f;
