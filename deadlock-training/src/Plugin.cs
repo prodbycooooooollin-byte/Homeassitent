@@ -92,7 +92,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 	}
 
 	public override void OnPrecacheResources() {
-		foreach (var h in TrainerConfig.PrecachedHeroes.Concat(TrainerConfig.BotPoolHeroes))
+		foreach (var h in TrainerConfig.PrecachedHeroes)
 			Precache.AddHero(h);
 	}
 

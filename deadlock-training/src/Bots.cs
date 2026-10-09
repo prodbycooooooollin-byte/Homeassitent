@@ -245,6 +245,10 @@ sealed class Actor {
 				var pawn = c.GetHeroPawn();
 				if (pawn != null && pawn.TeamNum == _playerTeam) c.ChangeTeam(_enemyTeam);
 			} catch { }
+			// The practice bot picked a random hero whose model the client may not have loaded (invisible, and loading it
+			// mid-game crashed the client). Switch it to our hero, whose resources are precached.
+			var hero = Hero;
+			Timer.Once(400.Milliseconds(), () => { try { c.SelectHero(hero); Console.WriteLine($"[Trainer] Bot hero set to {hero}"); } catch (Exception ex) { Console.WriteLine($"[Trainer] Bot SelectHero failed: {ex.Message}"); } });
 			return;
 		}
 
