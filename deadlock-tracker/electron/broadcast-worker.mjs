@@ -50,4 +50,5 @@ async function main() {
   send({ type: "done" });
   process.exit(0);
 }
+process.on("unhandledRejection", (e) => { send({ type: "error", message: `Broadcast: ${String(e?.message ?? e).slice(0, 200)}` }); process.exit(1); });
 main().catch((e) => { send({ type: "error", message: String(e?.stack ?? e).slice(0, 300) }); process.exit(1); });
