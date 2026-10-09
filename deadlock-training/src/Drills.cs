@@ -353,6 +353,10 @@ sealed class MenuDrill : Drill {
 		yield return new("lv_normal", "NORMAL", 0f, 9f, 9f, true, 255, 255, 255);
 		yield return new("lv_hard", "HARD", 12f, 9f, 9f, true, 255, 255, 255);
 
+		yield return new("sp_arena", "SET SPOT HERE", -22f, 5f, 6f, true, 120, 200, 255);
+		yield return new("sp_long", "SET LONG-RANGE SPOT HERE", 0f, 5f, 6f, true, 120, 200, 255);
+		yield return new("sp_reset", "RESET SPOTS", 22f, 5f, 6f, true, 120, 200, 255);
+
 		yield return new("off", "CLOSE MENU", 0f, 14.5f, 6.5f, true, 170, 170, 170);
 	}
 

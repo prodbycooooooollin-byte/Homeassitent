@@ -462,8 +462,34 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "o_reaction": GoToArenaThen(c, slot, () => StartReaction(c, 0, lvl)); break;
 			case "o_deny": GoToArenaThen(c, slot, () => StartOrb(c, OrbMode.Deny, 0, lvl)); break;
 			case "o_lasthit": GoToArenaThen(c, slot, () => StartOrb(c, OrbMode.LastHit, 0, lvl)); break;
+			case "sp_arena":
+			case "sp_long":
+			case "sp_reset": SetSpot(c, slot, id); break;
 			default: CloseMenu(c); break;
 		}
+	}
+
+	/// <summary>Menu entries to choose training spots: the spot is where you stood when the menu was opened (!train opens it where you are).</summary>
+	private void SetSpot(CCitadelPlayerController c, int slot, string id) {
+		string map = Server.MapName;
+		if (!_hubs.TryGetValue(slot, out var hub)) { Timer.Once(500.Milliseconds(), () => OpenMenu(c, true)); return; }
+		var pos = hub.Feet + new Vector3(0, 0, 8);
+		switch (id) {
+			case "sp_arena":
+				Arena.SetWithYaw(map, pos, hub.Yaw);
+				Chat.PrintToChat(c, "[Training] Training spot saved: all exercises now start where this menu stands, looking the way you looked.");
+				break;
+			case "sp_long":
+				Arena.SetWithYaw(map + "#long", pos, hub.Yaw);
+				Chat.PrintToChat(c, "[Training] Long-range spot saved: Long Range now starts here and the targets appear in the direction you were looking.");
+				break;
+			default:
+				Arena.Reset(map); Arena.Reset(map + "#long"); Arena.Reset(map + "#auto"); Arena.Reset(map + "#autolong");
+				_autoArena.Remove(map); _scanned.Remove(map);
+				Chat.PrintToChat(c, "[Training] Spots reset.");
+				break;
+		}
+		Timer.Once(500.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenMenu(c, false); });
 	}
 
 	private bool StartParry(CCitadelPlayerController c, ParryMode mode, int rounds, Level lvl) =>
@@ -484,8 +510,8 @@ public class TrainerPlugin : DeadworksPluginBase {
 	/// <summary>Where to train: your own spot (!tarena), else the best spots found by scanning the map once (saved per map).</summary>
 	private (Vector3 Pos, float? Yaw)? ArenaFor(Hub hub, CCitadelPlayerPawn pawn, bool longRange = false) {
 		string map = Server.MapName;
-		if (longRange && Arena.TryGet(map + "#long", out var savedLong)) return (savedLong, null);
-		if (Arena.TryGet(map, out var saved)) return (saved, null);
+		if (longRange && Arena.TryGet(map + "#long", out var savedLong)) return (savedLong, Arena.TryGetYaw(map + "#long", out var ly) ? ly : null);
+		if (Arena.TryGet(map, out var saved)) return (saved, Arena.TryGetYaw(map, out var ny) ? ny : null);
 
 		if (!Arena.TryGet(map + "#auto", out _) && !Arena.TryGetAutoLong(map, out _, out _) && !_scanned.Contains(map)) {
 			_scanned.Add(map);
@@ -641,7 +667,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			return;
 		}
 		string k = a == "long" ? map + "#long" : map;
-		Arena.Set(k, pawn.Position + new Vector3(0, 0, 8));
+		Arena.SetWithYaw(k, pawn.Position + new Vector3(0, 0, 8), pawn.EyeAngles.Y);
 		Chat.PrintToChat(caller, a == "long" ? "[Training] Long Range arena set to your current position. Face along the direction you want the targets to appear." : $"[Training] Arena for {map} set to your current position.");
 	}
 

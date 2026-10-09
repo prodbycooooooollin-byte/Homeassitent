@@ -36,6 +36,19 @@ static class Arena {
 		Save();
 	}
 
+	/// <summary>Saves a spot together with the direction the targets should be in (yaw).</summary>
+	public static void SetWithYaw(string key, Vector3 p, float yaw) {
+		_saved[key] = [p.X, p.Y, p.Z, yaw];
+		Save();
+	}
+
+	/// <summary>The saved view direction of a spot, if it has one.</summary>
+	public static bool TryGetYaw(string key, out float yaw) {
+		if (_saved.TryGetValue(key, out var v) && v.Length >= 4) { yaw = v[3]; return true; }
+		yaw = 0;
+		return false;
+	}
+
 	public static bool Reset(string map) {
 		bool had = _saved.Remove(map);
 		if (had) Save();
