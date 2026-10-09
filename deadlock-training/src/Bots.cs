@@ -53,11 +53,15 @@ static class TrainerBots {
 	/// <summary>Ask the game to spawn a hero dummy in front of the player (needs cheats, switched on briefly).</summary>
 	public static void RequestUnit(int playerSlot, Heroes hero, string teamArg) {
 		SpawnWatch.Log = true;
-		string cmd = $"citadel_create_unit {hero.ToHeroName()} {teamArg}";
-		Console.WriteLine($"[Trainer] Requesting unit: {cmd}");
+		Console.WriteLine($"[Trainer] Requesting practice bot ({hero.ToHeroName()})");
 		try {
+			// The game's own practice-bot system (verified: creates a real hero bot with a brain).
 			Server.ExecuteCommand("sv_cheats 1");
-			Server.ExecuteCommand(cmd); // client path is rejected: 'missing required FCVAR flag'
+			Server.ExecuteCommand("citadel_bot_test_mode 1");
+			Server.ExecuteCommand("citadel_spawn_practice_bots 0");
+			Server.ExecuteCommand($"citadel_bot_practice_opponent {hero.ToHeroName()}");
+			Server.ExecuteCommand("citadel_spawn_practice_bots_count 1");
+			Server.ExecuteCommand("citadel_spawn_practice_bots 1");
 			CheatsOffAt = Clock.Ms + 1500;
 		} catch (Exception ex) {
 			LastError = ex.Message;
@@ -149,7 +153,7 @@ sealed class Actor {
 		if (TrainerConfig.NoBots) return a;
 		a.Wants = true;
 
-		if (TrainerConfig.BotMethod == BotMethod.Unit && TrainerBots.UnitCommandExists()) {
+		if (TrainerConfig.BotMethod == BotMethod.Unit) {
 			a.Method = BotMethod.Unit;
 			foreach (var c in Players.GetAllControllers()) a._known.Add(c.EntityIndex - 1);
 			a._requestAt = nowMs;
@@ -219,7 +223,7 @@ sealed class Actor {
 			TryAdoptUnit();
 			if (Slot < 0 && _raw == CBaseEntity.InvalidEntityHandle && nowMs - _requestAt > 3500 && !_fellBack) {
 				_fellBack = true;
-				Console.WriteLine("[Trainer] citadel_create_unit produced no unit within 3.5 s; falling back to a fake client.");
+				Console.WriteLine("[Trainer] practice bot produced no unit within 3.5 s; falling back to a fake client.");
 				var seen = SpawnWatch.Since(_requestAt - 50).Select(s => s.Designer).Where(d => d.Length > 0).Distinct().Take(15);
 				Console.WriteLine($"[Trainer] Entities spawned meanwhile: {string.Join(", ", seen)}");
 				StartFake();
