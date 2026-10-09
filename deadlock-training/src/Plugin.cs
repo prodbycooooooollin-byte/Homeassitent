@@ -538,10 +538,52 @@ public class TrainerPlugin : DeadworksPluginBase {
 				TrainerConfig.BotHero = h;
 				Chat.PrintToChat(caller, $"[Training] Bot hero: {h}");
 				return;
+			case "try":
+				TryBotVariant(caller, arg.Trim());
+				return;
+			case "kick":
+				try { Server.ExecuteCommand("bot_kick_all"); } catch { }
+				Chat.PrintToChat(caller, "[Training] bot_kick_all sent.");
+				return;
 			default:
 				Begin(caller, input => new BotTestDrill(caller, input));
 				return;
 		}
+	}
+
+	private static readonly string[][] BotVariants = {
+		new[] { "citadel_create_unit hero_wraith" },
+		new[] { "citadel_create_unit my_hero" },
+		new[] { "citadel_create_unit hero_wraith 2" },
+		new[] { "citadel_create_unit hero_wraith 3" },
+		new[] { "citadel_bot_practice_opponent hero_wraith", "citadel_spawn_practice_bots_count 1", "citadel_spawn_practice_bots 1" },
+		new[] { "citadel_spawn_all_heroes_in_a_line" },
+	};
+
+	/// <summary>Diagnostic: run one candidate bot-spawn command (with cheats), capture its output, report what spawned.</summary>
+	private void TryBotVariant(CCitadelPlayerController caller, string arg) {
+		if (!int.TryParse(arg, out int n) || n < 1 || n > BotVariants.Length) {
+			Chat.PrintToChat(caller, $"[Training] Use !tbot try 1..{BotVariants.Length}. Then see what appears; !tbot kick removes bots.");
+			return;
+		}
+		var cmds = BotVariants[n - 1];
+		double t0 = Clock.Ms;
+		SpawnWatch.Log = true;
+		Console.WriteLine($"[Trainer/Try] variant {n}: {string.Join(" ; ", cmds)}");
+		Server.ExecuteCommand("sv_cheats 1");
+		foreach (var c in cmds) {
+			string cmd = c;
+			Server.ExecuteCommand(cmd, o => {
+				Console.WriteLine($"[Trainer/Try] '{cmd}' output: {o}");
+				Chat.PrintToChat(caller, $"[Try {n}] {cmd} -> {(string.IsNullOrWhiteSpace(o) ? "(no output)" : o.Trim())}");
+			});
+		}
+		TrainerBots.CheatsOffAt = Clock.Ms + 4000;
+		Timer.Once(3.Seconds(), () => {
+			var seen = SpawnWatch.Since(t0 - 50).Select(x => x.Designer).Where(d => d.Length > 0).GroupBy(d => d).Select(g => $"{g.Key} x{g.Count()}").Take(12);
+			Chat.PrintToChat(caller, $"[Try {n}] spawned within 3 s: " + (seen.Any() ? string.Join(", ", seen) : "nothing"));
+			SpawnWatch.Log = false;
+		});
 	}
 
 	[Command("tcam", Description = "Show where your camera and crosshair ray start (diagnostic for aiming offsets)")]
