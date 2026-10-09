@@ -36,7 +36,7 @@ async function steamRoots() {
   return [...roots];
 }
 
-const fresh = () => ({ available: false, file: null, state: null, stateN: null, stateAt: null, server: null, heroes: [], heroIds: {}, matchId: null, lobbyId: null, queuedAt: null, map: null, inMatch: false, players: null, matchStartedAt: null, matchEndedAt: null, updatedAt: null });
+const fresh = () => ({ available: false, file: null, state: null, stateN: null, stateAt: null, server: null, heroes: [], heroIds: {}, matchId: null, lobbyId: null, queuedAt: null, versions: {}, map: null, inMatch: false, players: null, matchStartedAt: null, matchEndedAt: null, updatedAt: null });
 let log = fresh();
 let timer = null, file = null, pos = 0;
 let listeners = [];
@@ -50,8 +50,11 @@ function handle(line, now) {
   let m;
   if (/k_EMsgClientToGCStartMatchmaking\b/.test(line)) { log.queuedAt = now; log.matchId = null; log.lobbyId = null; send({ type: "queued" }); }
   if ((m = MATCHID_RE.exec(line)) && log.matchId !== Number(m[1])) { log.matchId = Number(m[1]); send({ type: "matchFound", matchId: log.matchId }); }
+  if ((m = /compatibility_version:\s*(\d+)/.exec(line)) || (m = /GC Connection established for server version\s+(\d+)/.exec(line))) log.versions.compat = Number(m[1]);
+  if ((m = /\[Client\] Build:\s*(\d+)/.exec(line))) log.versions.build = Number(m[1]);
   if ((m = LOBBY_RE.exec(line))) {
     log.lobbyId = m[1];
+    if (m[3] === "created") send({ type: "lobby", lobbyId: m[1], matchId: Number(m[2]) });
     if (log.matchId !== Number(m[2])) { log.matchId = Number(m[2]); send({ type: "matchFound", matchId: log.matchId }); }
     if (m[3] === "destroyed") send({ type: "matchOver", matchId: log.matchId });
   }

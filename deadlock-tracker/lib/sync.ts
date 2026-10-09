@@ -247,6 +247,7 @@ const gh = globalThis as unknown as { __dlHints?: Map<number, Hint>; __dlGame?: 
 const hints = () => (gh.__dlHints ??= new Map());
 export interface GameLog { available: boolean; file: string | null; state: string | null; stateN: number | null; stateAt: number | null; server: string | null; heroes: string[]; map?: string | null; inMatch?: boolean; matchId?: number | null; players?: { total: number; bots: number; humans: number } | null; matchStartedAt: number | null; matchEndedAt: number | null; updatedAt: number | null }
 export const gameLog = (): GameLog | null => (globalThis as unknown as { __dlGameLog?: GameLog }).__dlGameLog ?? null;
+export const liveInfo = (): (Record<string, unknown> & { players?: unknown[] }) | null => { const l = (globalThis as unknown as { __dlLive?: Record<string, unknown> }).__dlLive; return l ? { ...l, qr: null } : null; };
 export const gameState = () => gh.__dlGame ?? { running: false, since: null, endedAt: null };
 export const hintStatus = () => [...hints().values()].sort((a, b) => b.at - a.at).slice(0, 8);
 

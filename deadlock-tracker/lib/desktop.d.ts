@@ -25,6 +25,7 @@ export interface DesktopBridge {
   getIngest(): Promise<IngestState>;
   controlIngest(action: IngestAction): Promise<IngestState>;
   onIngestState(cb: (s: IngestState) => void): () => void;
+  live(action: "status" | "login" | "logout"): Promise<LiveInfo>;
   recorder(action: "start" | "stop" | "reset" | "status"): Promise<{ running: boolean; startedAt: number | null; count: number; text: string; file?: string | null }>;
   getMatchWatch(): Promise<{ dirs: string[]; last: { matchId: number; at: number } | null; error: string | null; watching: boolean }>;
   onMatchEnded(cb: (m: { matchId: number; at: number }) => void): () => void;
@@ -34,4 +35,9 @@ export interface DesktopBridge {
 }
 declare global {
   interface Window { desktop?: DesktopBridge }
+}
+
+export interface LiveInfo {
+  state: string; account: string | null; qr: string | null; error: string | null; matchId: number | null; lobbyId: string | null;
+  url: string | null; result: string | null; players: { accountId: number; name?: string; team: number; heroId?: number; stats?: Record<string, number> }[]; playersAt: number | null; log: string[];
 }

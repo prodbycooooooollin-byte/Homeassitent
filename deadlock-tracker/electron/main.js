@@ -11,6 +11,7 @@ const ingest = require("./ingest");
 const matchwatch = require("./matchwatch");
 const recorder = require("./recorder");
 const gamelog = require("./gamelog");
+const livegc = require("./livegc");
 const { execFile } = require("child_process");
 
 // Umbenennung: Daten aus dem früheren Ordner „Deadlock Tracker“ einmalig übernehmen (Spieler, Matches, Einstellungen)
@@ -155,7 +156,10 @@ async function createWindow() {
   startGameWatch();
   // Match-ID aus dem Spiel-Log: sobald das Match vorbei ist (PostGame / Lobby zerstört / zurück ins Hideout), sofort laden
   const hinted = new Set();
+  livegc.init({ dir: app.getPath("userData"), worker: path.join(__dirname, "broadcast-worker.bundle.mjs").replace("app.asar", "app.asar.unpacked"), gamelog, safeStorage: require("electron").safeStorage });
   gamelog.onEvent((ev) => {
+    if (ev.type === "lobby") livegc.onMatch({ matchId: ev.matchId, lobbyId: ev.lobbyId });
+    if (ev.type === "matchOver" || ev.type === "matchEnd") livegc.onMatchOver();
     if (ev.type !== "matchOver" && ev.type !== "matchEnd") return;
     const id = ev.matchId || (gamelog.get().matchId);
     if (!id || hinted.has(id)) return;
@@ -173,6 +177,7 @@ ipcMain.handle("desktop:get", () => settings);
 // Der Installer startet die App nach einem Update mit „--updated“
 ipcMain.handle("desktop:updated", () => process.argv.includes("--updated"));
 ipcMain.handle("recorder:control", (_e, a) => (a === "start" ? recorder.start() : a === "stop" ? recorder.stop() : a === "reset" ? recorder.reset() : recorder.status()));
+ipcMain.handle("live:control", (_e, a) => (a === "login" ? livegc.loginQR() : a === "logout" ? livegc.logout() : livegc.status()));
 ipcMain.handle("matchwatch:info", () => matchwatch.info());
 ipcMain.handle("ingest:status", () => ingest.getStatus());
 ipcMain.handle("ingest:control", (_e, action) => ingest.control(String(action)));

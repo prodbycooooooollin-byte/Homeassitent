@@ -18,6 +18,12 @@ await build({
   outfile: join(root, "electron", "replay-worker.bundle.mjs"), logLevel: "warning",
 });
 
+await build({
+  entryPoints: [join(root, "electron", "broadcast-worker.mjs")], bundle: true, platform: "node", format: "esm", target: "node20",
+  banner: { js: "import { createRequire as __cr } from 'module'; const require = __cr(import.meta.url);" },
+  outfile: join(root, "electron", "broadcast-worker.bundle.mjs"), logLevel: "warning",
+});
+
 rmSync(join(root, ".next"), { recursive: true, force: true });
 run("npx", ["next", "build"]);
 

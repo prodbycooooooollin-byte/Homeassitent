@@ -61,6 +61,7 @@ export default function StatusPage() {
         </section>
       )}
       <Detection />
+      <LiveLobby />
       <Recorder />
       <section className="surface p-5">
         <div className="label mb-1">Ein Match fehlt?</div>
@@ -120,6 +121,39 @@ export default function StatusPage() {
 }
 
 const ago = (t: number | null | undefined) => (t ? `vor ${Math.max(0, Math.round((Date.now() - t) / 1000))} s` : "–");
+
+/** Live-Lobby über ein Zweitkonto: QR-Anmeldung, dann Zuschauer-Adresse des laufenden Matches und Spielerliste. */
+function LiveLobby() {
+  const [d, setD] = useState<import("@/lib/desktop").LiveInfo | null>(null);
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => { setIsDesktop(!!window.desktop); }, []);
+  useEffect(() => {
+    if (!window.desktop) return;
+    const tick = () => window.desktop!.live("status").then(setD).catch(() => {});
+    tick(); const id = setInterval(tick, 2000); return () => clearInterval(id);
+  }, []);
+  if (!isDesktop) return null;
+  const act = (a: "login" | "logout") => window.desktop!.live(a).then(setD).catch(() => {});
+  return (
+    <section className="surface p-5">
+      <div className="label mb-2">Live-Lobby (Zweitkonto)</div>
+      <p className="mb-3 text-xs text-muted">Mit einem zweiten Steam-Konto, das mit deinem Hauptkonto befreundet ist und Deadlock besitzt, holt die App während deines Matches die Spielerliste über den Zuschauer-Modus. Dein Hauptkonto wird dafür nicht angemeldet.</p>
+      <p className="text-sm"><b>Status:</b> {d?.state ?? "–"}{d?.account ? ` · Konto ${d.account}` : ""}{d?.matchId ? ` · Match #${d.matchId}` : ""}{d?.result ? ` · Antwort: ${d.result}` : ""}</p>
+      {d?.error && <p className="mt-1 text-sm text-red-400">{d.error}</p>}
+      {d?.qr && (<div className="mt-3"><img src={d.qr} alt="QR-Code" className="rounded-lg bg-white p-2" width={240} height={240} /><p className="mt-2 text-xs text-muted">In der Steam-App des <b>Zweitkontos</b>: Steam Guard → „QR-Code scannen“.</p></div>)}
+      <div className="mt-3 flex gap-2">
+        {(!d || d.state === "aus" || d.state === "fehler") && <button onClick={() => act("login")} className="btn btn-ghost text-sm">Zweitkonto anmelden</button>}
+        {d && d.account && <button onClick={() => act("logout")} className="btn btn-ghost text-sm">Abmelden / entfernen</button>}
+      </div>
+      {d && d.players.length > 0 && (
+        <ul className="mt-3 space-y-1 text-sm">
+          {d.players.map((p, i) => (<li key={i}><span className="text-muted">{p.team === 0 ? "Team A" : "Team B"}</span> · {p.name ?? `#${p.accountId}`} · Held {p.heroId ?? "?"} · Konto {p.accountId}</li>))}
+        </ul>
+      )}
+      {d && d.log.length > 0 && <details className="mt-3"><summary className="cursor-pointer text-xs text-muted">Protokoll</summary><pre className="mt-1 max-h-40 overflow-auto rounded-lg bg-black/30 p-2 text-[11px] text-muted">{d.log.join("\n")}</pre></details>}
+    </section>
+  );
+}
 
 /** Zeigt, welche Wege der Match-Erkennung gerade arbeiten – damit klar ist, woran es hängt, wenn ein Match nicht erscheint. */
 function Detection() {
