@@ -37,6 +37,8 @@ sealed class ParryDrill : Drill {
 	private readonly List<double> _simEdges = new();
 	private int _edgeSeen;
 
+	private double _evCheck = -1;
+	private bool _activeAtCheck;
 	private bool _heavy;
 	private bool _realBroken;
 	private int _noAttackStreak;
@@ -123,6 +125,8 @@ sealed class ParryDrill : Drill {
 				Touch(now);
 				break;
 			case EModifierEvent.CheckForParry when botCaster || playerInvolved:
+				// The game checks right now whether your parry catches the swing: remember your state at exactly this moment.
+				if (_evCheck < 0) { _evCheck = now; _activeAtCheck = In.ParryActive; }
 				if (_evMelee < 0) _evMelee = now;
 				Touch(now);
 				break;
@@ -211,7 +215,8 @@ sealed class ParryDrill : Drill {
 		try { var pl = PlayerPawn; if (pl != null) pl.Health = pl.MaxHealth; } catch { }
 		_realRound = RealBots && !_realBroken && Actors[_cur].BotReady;
 		_roundStart = nowMs;
-		_evParry = _evHit = _evMelee = _evStart = _firstEv = _outcomeAt = -1;
+		_evParry = _evHit = _evMelee = _evStart = _firstEv = _outcomeAt = _evCheck = -1;
+		_activeAtCheck = false;
 		_simEdges.Clear();
 		_edgeSeen = In.ParryEdges;
 		_sampled = false;
@@ -279,11 +284,11 @@ sealed class ParryDrill : Drill {
 		_noAttackStreak = 0;
 
 		string head = $"[Parry {_done + 1}/{_total} {(_heavy ? "HEAVY" : "light")}]";
-		double tHit = _evParry >= 0 ? _evParry : _evHit >= 0 ? _evHit : _evMelee >= 0 ? _evMelee : _evStart + 300;
+		double tHit = _evParry >= 0 ? _evParry : _evHit >= 0 ? _evHit : _evCheck >= 0 ? _evCheck : _evMelee >= 0 ? _evMelee : _evStart + 300;
 		bool derived = _evParry < 0 && _evHit < 0;
 		// Neither a ParrySuccess nor a damage event arrived: judge by your own parry press near the swing (not "no hit = parried").
 		bool pressedNear = In.ParryEdgeTimes.Any(t => t >= tHit - 450 && t <= tHit + 40);
-		bool parried = _evParry >= 0 || (_evHit < 0 && pressedNear);
+		bool parried = _evParry >= 0 || (_evHit < 0 && (_activeAtCheck || pressedNear));
 
 		double? before = null, after = null;
 		foreach (var t in In.ParryEdgeTimes) {

@@ -62,7 +62,7 @@ static class FightAi {
 /// by themselves, the trainer drives them (walking at you, simulated shots) instead. You cannot die: a lethal hit ends the round as lost.
 /// </summary>
 sealed class ScenarioDrill : Drill {
-	private enum Ph { Setup, Wait, Brief, Active, Result }
+	private enum Ph { Setup, Wait, Read, Brief, Active, Result }
 
 	private sealed class Foe {
 		public Actor A = null!;
@@ -96,7 +96,6 @@ sealed class ScenarioDrill : Drill {
 
 	public override string Name => "Scenarios";
 	protected override float LeashRadius => 0f;
-	private bool Sim => _aiDecided && !_realAi && !_realDamage;
 
 	public ScenarioDrill(CCitadelPlayerController ctl, PlayerInput input, Level lvl, int rounds) : base(ctl, input, lvl) {
 		_rounds = Math.Clamp(rounds, 1, 30);
@@ -161,8 +160,8 @@ sealed class ScenarioDrill : Drill {
 
 	private Vector3 Ground(Vector3 p, float refZ) {
 		try {
-			var r = Trace.Ray(new Vector3(p.X, p.Y, refZ + 500f), new Vector3(p.X, p.Y, refZ - 700f), InteractionLayer.Solid);
-			if (r.DidHit && !r.Trace.StartInSolid) return r.HitPosition + new Vector3(0, 0, 8f);
+			var r = Trace.Ray(new Vector3(p.X, p.Y, refZ + 200f), new Vector3(p.X, p.Y, refZ - 500f), InteractionLayer.Solid);
+			if (r.DidHit && !r.Trace.StartInSolid && MathF.Abs(r.HitPosition.Z - refZ) <= 350f) return r.HitPosition + new Vector3(0, 0, 8f);
 		} catch { }
 		return new Vector3(p.X, p.Y, refZ + 8f);
 	}
@@ -214,9 +213,19 @@ sealed class ScenarioDrill : Drill {
 			case Ph.Wait:
 				if (nowMs >= _phaseAt) StartRound(pawn, nowMs);
 				break;
+			case Ph.Read:
+				foreach (var f in _foes) UpdateTag(f, pawn, nowMs);
+				_status = "Take your time. Shoot when you are ready.";
+				if (nowMs >= _phaseAt && In.Shots.Count > 0) {
+					while (In.Shots.Count > 0) In.Shots.Dequeue();
+					ClearBriefing();
+					try { pawn.SetMoveType(MoveType.Walk); } catch { }
+					_ph = Ph.Brief; _phaseAt = nowMs + 1500;
+				}
+				break;
 			case Ph.Brief:
 				foreach (var f in _foes) UpdateTag(f, pawn, nowMs);
-				_status = $"The enemies are not moving yet - decide!   {Math.Max(0, (_phaseAt - nowMs) / 1000):0} s";
+				_status = "Go!";
 				if (nowMs >= _phaseAt) BeginActive(nowMs);
 				break;
 			case Ph.Active:
@@ -297,7 +306,7 @@ sealed class ScenarioDrill : Drill {
 	}
 
 	private void StartRound(CCitadelPlayerPawn pawn, double nowMs) {
-		_ph = Ph.Brief; _phaseAt = nowMs + 4500; _roundStart = nowMs; _died = false; _killedVisible = false; _lastHit = 0; _realDamage = false;
+		_ph = Ph.Read; _phaseAt = nowMs + 1200; _roundStart = nowMs; _died = false; _killedVisible = false; _lastHit = 0; _realDamage = false;
 		float k = Lvl == Level.Easy ? 0.62f : Lvl == Level.Hard ? 0.86f : 0.74f;
 		float spd = Math.Clamp(_top * k, 150f, 420f); // enemies are slower than you: running away can work
 		Vector3 first;
@@ -351,8 +360,39 @@ sealed class ScenarioDrill : Drill {
 				break;
 		}
 		_dirA = Aim.YawTo(_origin, first);
+		ShowBriefing(pawn);
 		Say($"[Scenario {_round}/{_rounds}] {_b1} {_b2}");
 	}
+
+	private readonly List<CPointWorldText> _read = new();
+	private Vector3 _readBase;
+
+	/// <summary>The situation as big text in front of you. You are held still and can read as long as you like; one shot starts the round.</summary>
+	private void ShowBriefing(CCitadelPlayerPawn pawn) {
+		ClearBriefing();
+		while (In.Shots.Count > 0) In.Shots.Dequeue();
+		try { pawn.SetMoveType(MoveType.None); } catch { }
+		var eye = Aim.Eye(pawn);
+		float yaw = pawn.EyeAngles.Y;
+		_readBase = eye + Aim.Forward(0f, yaw) * 150f;
+		var lines = new List<(string, float, byte, byte, byte)> {
+			($"SCENARIO {_round}/{_rounds}", 7f, 255, 220, 60),
+			(_b1, 4.2f, 255, 255, 255),
+			(_b2, 4.2f, 150, 210, 255),
+			(FleeKind ? "Think: can you win this? If not, get away." : "Think: is this a fight you should take?", 4.2f, 255, 200, 120),
+			("FIGHT = kill them     RETREAT = far away + out of sight", 4.2f, 255, 200, 120),
+			(">>>  SHOOT TO START  <<<", 6f, 120, 255, 140),
+		};
+		float pitch = -12f;
+		foreach (var (text, size, r, g, b) in lines) {
+			var pos = eye + Aim.Forward(pitch, yaw) * 150f;
+			var t = SpawnText(text, pos, eye, size, r, g, b);
+			if (t != null) _read.Add(t);
+			pitch += size >= 6f ? 6.5f : 5.2f;
+		}
+	}
+
+	private void ClearBriefing() { foreach (var t in _read) Kill(t); _read.Clear(); }
 
 	private void BeginActive(double nowMs) {
 		_ph = Ph.Active;
@@ -361,31 +401,16 @@ sealed class ScenarioDrill : Drill {
 	}
 
 	private void StartAi(double nowMs) {
+		// The game's own bot AI shoots wherever it likes, not at you: the trainer aims, moves and fires the bots itself.
 		if (_aiOn) return;
-		_aiOn = true; _aiStartAt = nowMs; _aiDecided = false;
-		FightAi.On();
-		foreach (var f in _foes) { try { if (f.On && f.A.Ent != null) f.P0 = f.A.Ent.Position; } catch { } }
+		_aiOn = true; _aiStartAt = nowMs; _aiDecided = true; _realAi = false;
+		foreach (var f in _foes) f.NextShot = nowMs + 500;
 	}
 
 	private void ActiveTick(CCitadelPlayerPawn pawn, double nowMs, double dt) {
-		// Did the game's AI take over (bots move on their own or hit you)? If not, the trainer drives them.
-		if (_aiOn && !_aiDecided && nowMs >= _aiStartAt + 2500) {
-			_aiDecided = true;
-			bool moved = _foes.Any(f => { try { return f.On && f.Aggro && f.A.Ent != null && Vector2.Distance(new Vector2(f.A.Ent.Position.X, f.A.Ent.Position.Y), new Vector2(f.P0.X, f.P0.Y)) > 150f; } catch { return false; } });
-			_realAi = moved || _realDamage;
-			Console.WriteLine($"[Trainer] Scenario bots: game AI {(_realAi ? "is moving them" : "does not move them - trainer drives them")}.");
-			if (!_realAi) { FightAi.Idle(); foreach (var f in _foes) f.NextShot = nowMs + 400; }
-		}
-		// The game's AI may walk at you but shoot elsewhere: if it has not hurt you after a while, the trainer adds the hits.
-		if (_aiDecided && _realAi && !_realDamage && !_simShots && nowMs > _aiStartAt + 7000) {
-			_simShots = true;
-			foreach (var f in _foes) f.NextShot = nowMs + 400;
-			Console.WriteLine("[Trainer] Scenario bots: the game AI does not hit you - simulated hits added.");
-		}
 		foreach (var f in _foes) {
-			if (f.On && !f.Aggro) { /* unaware: wanders (trainer-driven) until it notices you */ }
-			if (Sim || (f.On && !f.Aggro)) MoveFoe(f, pawn, nowMs, dt);
-			if (Sim || _simShots) Shoot(f, pawn, nowMs);
+			MoveFoe(f, pawn, nowMs, dt);
+			Shoot(f, pawn, nowMs);
 			UpdateTag(f, pawn, nowMs);
 		}
 		CheckAmbusher(nowMs);
@@ -441,20 +466,21 @@ sealed class ScenarioDrill : Drill {
 			}
 			look = pp;
 		}
-		float floor = Ground(cur, cur.Z).Z - 8f;
+		float floor = Ground(cur, pawn.Position.Z).Z - 8f;
 		f.A.Place(new Vector3(cur.X, cur.Y, floor) + move / 7f, look);
 	}
 
 	private void Shoot(Foe f, CCitadelPlayerPawn pawn, double nowMs) {
 		if (!f.On || !f.Aggro || nowMs < f.NextShot || Dead(f.A)) return;
 		f.NextShot = nowMs + 230 + Rng.Next(120);
+		try { f.A.Pawn?.ExecuteAbilityBySlot(EAbilitySlot.WeaponPrimary); } catch { } // it faces you: real bullets if the game lets it
 		var e = f.A.Ent;
 		if (e == null) return;
 		float dist = Vector3.Distance(e.Position, pawn.Position);
 		if (dist > 1700f || !HasLos(f, pawn)) return;
 		float acc = Lvl == Level.Easy ? 0.14f : Lvl == Level.Hard ? 0.34f : 0.22f;
 		acc *= dist < 500f ? 1.3f : dist > 1100f ? 0.55f : 1f;
-		if (Rng.NextDouble() > acc) return;
+		if (Rng.NextDouble() > acc || _realDamage) return; // once real bullets hurt you, the simulated hits stop
 		pawn.Health = (int)(pawn.Health - pawn.MaxHealth * 0.032f);
 		_lastHit = nowMs;
 	}
@@ -586,6 +612,8 @@ sealed class ScenarioDrill : Drill {
 	}
 
 	public override void Stop() {
+		ClearBriefing();
+		try { PlayerPawn?.SetMoveType(MoveType.Walk); } catch { }
 		foreach (var f in _foes) { Kill(f.Tag); f.Tag = null; }
 		foreach (var a in Actors) {
 			try { var e = a.Ent; if (e != null) BotPool.Exempt.Remove(e.EntityHandle); } catch { }
@@ -606,17 +634,16 @@ sealed class ScenarioDrill : Drill {
 sealed class CounterspellDrill : Drill {
 	private enum Ph { Gap, Intro, Cast, Result }
 
+	// Only abilities that target or hit you directly and that Counterspell can answer. Heroes without an entry are never used.
 	private static readonly Dictionary<Heroes, (string Name, string Ability, int Slot)> Table = new() {
 		[Heroes.Inferno] = ("Infernus", "Concussive Combustion", 4),
 		[Heroes.Bebop] = ("Bebop", "Sticky Bomb", 2),
 		[Heroes.Haze] = ("Haze", "Sleep Dagger", 1),
 		[Heroes.Wraith] = ("Wraith", "Telekinesis", 3),
+		[Heroes.Astro] = ("Holliday", "Spirit Lasso", 4),
 		[Heroes.Hornet] = ("Vindicta", "Stake", 1),
-		[Heroes.Shiv] = ("Shiv", "Serrated Knives", 1),
-		[Heroes.Kelvin] = ("Kelvin", "Frost Grenade", 1),
-		[Heroes.Lash] = ("Lash", "Grapple", 1),
-		[Heroes.Gigawatt] = ("Seven", "Lightning Ball", 1),
 		[Heroes.Chrono] = ("Paradox", "Pulse Grenade", 1),
+		[Heroes.Gigawatt] = ("Seven", "Lightning Ball", 1),
 	};
 
 	private readonly int _total;
@@ -644,7 +671,7 @@ sealed class CounterspellDrill : Drill {
 			try { if (pawn.AddItem(n) != null) { _itemOk = true; Console.WriteLine($"[Trainer] Counterspell item granted as '{n}'."); break; } } catch { }
 		}
 		FightAi.Prepare();
-		try { Server.ExecuteCommand("citadel_bot_give_all_abilities"); } catch { }
+		try { Server.ExecuteCommand("citadel_bot_give_all_abilities"); } catch { } // unlocks the abilities; nothing is cast by it
 		int n2 = Math.Clamp(BotPool.FreeCount, 1, 12);
 		for (int i = 0; i < n2; i++) AddActor(pawn, pawn.Position + Aim.Forward(0f, pawn.EyeAngles.Y) * 700f, nowMs);
 		foreach (var a in Actors) if (a.Wants) { try { var e = a.Ent; if (e != null) BotPool.Exempt.Add(e.EntityHandle); } catch { } }
@@ -653,7 +680,7 @@ sealed class CounterspellDrill : Drill {
 	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) {
 		if (!RealBots) { Say("[Counterspell] This needs real bots."); Finished = true; return; }
 		_nextAt = nowMs + 2500;
-		var heroes = Actors.Select(HeroOf).Where(h => h.HasValue).Select(h => Table.TryGetValue(h!.Value, out var t) ? t.Name : h.ToString()).Distinct().ToList();
+		var heroes = Actors.Select(HeroOf).Where(h => h.HasValue && Table.ContainsKey(h!.Value)).Select(h => Table[h!.Value].Name).Distinct().ToList();
 		Say($"[Counterspell] {_total} rounds against real heroes: {string.Join(", ", heroes)}.");
 		Say("A hero steps up and casts at you for real. Press your Counterspell item (any item key) when you see it coming. Nothing hits you = countered.");
 		if (!_itemOk) Say("I could not add the item automatically: put Counterspell in an item slot (buy it in the shop).");
@@ -692,7 +719,11 @@ sealed class CounterspellDrill : Drill {
 				if (In.ItemPresses > _items0) { _early++; _done++; Say($"[Counterspell {_done}/{_total}] TOO EARLY: you used it before {_heroName} cast anything."); Finish(pawn, nowMs, "TOO EARLY"); break; }
 				if (nowMs >= _phaseAt) {
 					_ph = Ph.Cast; _castAt = nowMs; _gotDamage = false; _cast = true; _pressAt = 0; _items0 = In.ItemPresses;
-					try { Server.ExecuteCommand($"citadel_bot_use_ability {_slot}"); TrainerBots.Schedule(450, "citadel_bot_use_ability 0"); } catch { }
+					// Only THIS hero casts (per-bot call; the console command would make every bot cast). It faces you while it does.
+					try {
+						Actors[_cur].Place(_pos, pawn.Position);
+						Actors[_cur].Pawn?.ExecuteAbilityBySlot((EAbilitySlot)(_slot - 1));
+					} catch { }
 					_b1 = $"{_heroName}: {_ability}"; _b2 = "Counter it!";
 				}
 				break;
@@ -723,14 +754,14 @@ sealed class CounterspellDrill : Drill {
 
 	private void Spawn(CCitadelPlayerPawn pawn, double nowMs) {
 		var ok = new List<int>();
-		for (int i = 0; i < Actors.Count; i++) if (Actors[i].BotReady && i != _lastActor) ok.Add(i);
-		if (ok.Count == 0) for (int i = 0; i < Actors.Count; i++) if (Actors[i].BotReady) ok.Add(i);
-		if (ok.Count == 0) { Say("[Counterspell] No bot available."); Finished = true; return; }
+		for (int i = 0; i < Actors.Count; i++) if (Actors[i].BotReady && i != _lastActor && HeroOf(Actors[i]) is { } h1 && Table.ContainsKey(h1)) ok.Add(i);
+		if (ok.Count == 0) for (int i = 0; i < Actors.Count; i++) if (Actors[i].BotReady && HeroOf(Actors[i]) is { } h2 && Table.ContainsKey(h2)) ok.Add(i);
+		if (ok.Count == 0) { Say("[Counterspell] None of the heroes in the bot pool has a counterable ability on my list (Infernus, Bebop, Haze, Wraith, Holliday, Vindicta, Paradox, Seven). Settings > Enemy bots > more adds variety."); Finished = true; return; }
 		_cur = ok[Rng.Next(ok.Count)];
 		_lastActor = _cur;
 		var hero = HeroOf(Actors[_cur]);
 		if (hero.HasValue && Table.TryGetValue(hero.Value, out var t)) { _heroName = t.Name; _ability = t.Ability; _slot = t.Slot; }
-		else { _heroName = hero?.ToString() ?? "Enemy"; _ability = "ultimate"; _slot = 4; }
+		else { Finished = true; return; }
 
 		float yaw = pawn.EyeAngles.Y + (float)(Rng.NextDouble() * 60.0 - 30.0);
 		float dist = Math.Max(350f, Math.Min(450f + (float)Rng.NextDouble() * 250f, ClearDist(pawn, yaw, 700f)));

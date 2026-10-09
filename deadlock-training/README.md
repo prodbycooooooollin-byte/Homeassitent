@@ -153,3 +153,9 @@ Removed from the menu: Deny Souls and Last Hit (they used fake text orbs; real s
 About 15 s after you join, the trainer reads the guardians/walkers/patrons and jungle camps of the map (before it removes them) and stores them in `trainer_mapdata.json`.
 Scenarios place you on a lane and the enemies on the same lane or at a jungle camp. Without this data (first start with this version: restart the server once) random street spots are used.
 All fighting-bot switches are reset before Parry and Counterspell, so bots no longer shoot around by themselves there.
+
+## Notes (latest)
+- Scenarios: each round starts with the situation as big text in front of you; you are held still and can read as long as you like. One shot starts the round.
+  The bots are aimed, moved and fired by the trainer (the game's own bot AI shot at random places); simulated hits stop as soon as real bullets hurt you.
+- Counterspell: only heroes from a short list of counterable abilities are used, and only the hero in front of you casts (per-bot call, not the console command).
+- Parry: the verdict uses the game's own parry check moment (CheckForParry) and your parry state at that moment.
