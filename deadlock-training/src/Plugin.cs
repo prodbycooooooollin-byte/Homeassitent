@@ -72,12 +72,8 @@ public class TrainerPlugin : DeadworksPluginBase {
 
 	/// <summary>Training server setup: stop new minion waves, neutrals and power-ups (existing NPCs are only removed on request via !tclean; removing them at once crashed the client).</summary>
 	private void CleanWorld() {
-		try {
-			foreach (var cmd in new[] { "sv_cheats 1", "citadel_npc_spawn_enabled 0", "citadel_trooper_spawn_enabled 0", "citadel_neutral_spawn_enabled 0", "citadel_powerup_spawn_enabled 0" })
-				Server.ExecuteCommand(cmd);
-			TrainerBots.CheatsOffAt = Clock.Ms + 1500;
-			Console.WriteLine("[Trainer] World settings applied: no new minion waves / neutrals / power-ups.");
-		} catch (Exception ex) { Console.WriteLine($"[Trainer] CleanWorld failed: {ex.Message}"); }
+		// Intentionally empty. Switching off npc/trooper/neutral spawns with cvars coincided with every client crash after the
+		// bot spawn (the cvars replicate to the client); runs before that change worked. Use !tclean for single groups instead.
 	}
 
 	public override void OnStartupServer() {
