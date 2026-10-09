@@ -36,6 +36,7 @@ sealed class FlickDrill : Drill {
 	private readonly List<double> _switches = new();
 
 	public override string Name => "Flick";
+	protected override float LeashRadius => Tuning.LeashFlick(_mode == FlickMode.Long);
 
 	public FlickDrill(CCitadelPlayerController ctl, PlayerInput input, Level lvl, FlickMode mode, int count) : base(ctl, input, lvl) {
 		_mode = mode;
@@ -74,7 +75,7 @@ sealed class FlickDrill : Drill {
 		if (ActorOf(e.Entity) is { } bot && IsPlayer(e.Info.Attacker)) {
 			var t = _ts.FirstOrDefault(x => ReferenceEquals(x.A, bot));
 			if (t != null && t.Active && e.Info.Damage > 0) t.DmgAt = Clock.Ms;
-			if (bot.Pawn is { } bp && bp.Health - e.Info.Damage <= 80) bp.Health = bp.MaxHealth;
+			if (bot.Ent is { } be && be.Health - e.Info.Damage <= 80) be.Health = be.MaxHealth;
 		}
 		return HookResult.Continue;
 	}
@@ -247,6 +248,7 @@ sealed class TrackDrill : Drill {
 	private Vector2 _off;
 
 	public override string Name => "Tracking";
+	protected override float LeashRadius => Tuning.LeashTrack;
 
 	public TrackDrill(CCitadelPlayerController ctl, PlayerInput input, Level lvl, bool random, int seconds) : base(ctl, input, lvl) {
 		_random = random;
@@ -279,7 +281,7 @@ sealed class TrackDrill : Drill {
 		if (_a == null) return HookResult.Continue;
 		if (ActorOf(e.Entity) is { } bot && IsPlayer(e.Info.Attacker)) {
 			_damage += Math.Max(0, e.Info.Damage);
-			if (bot.Pawn is { } bp && bp.Health - e.Info.Damage <= 80) bp.Health = bp.MaxHealth;
+			if (bot.Ent is { } be && be.Health - e.Info.Damage <= 80) be.Health = be.MaxHealth;
 		}
 		return HookResult.Continue;
 	}
@@ -386,6 +388,7 @@ sealed class ReactionDrill : Drill {
 	private readonly List<double> _times = new();
 
 	public override string Name => "Reaction";
+	protected override float LeashRadius => Tuning.LeashOther;
 
 	public ReactionDrill(CCitadelPlayerController ctl, PlayerInput input, Level lvl, int rounds) : base(ctl, input, lvl) {
 		_rounds = rounds > 0 ? Math.Clamp(rounds, 1, 50) : Tuning.ReactionRounds(lvl);
@@ -483,21 +486,23 @@ sealed class BotTestDrill : Drill {
 		var feet = pawn.Position + Aim.Forward(0f, pawn.EyeAngles.Y) * 140f;
 		Say("[Bot test] Creating a bot (enemy team, same hero as you) ...");
 		_a = AddActor(pawn, feet, nowMs);
-		if (!_a.WantsBot) Say($"[Bot test] ERROR: no bot slot: {TrainerBots.LastError}");
+		if (!_a.Wants) Say($"[Bot test] ERROR: could not request a bot: {TrainerBots.LastError}");
 	}
 
 	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) {
-		if (!_a.WantsBot || !RealBots) {
+		if (!_a.Wants || !RealBots) {
 			Say($"[Bot test] No bot hero came into existence. Reason: {TrainerBots.LastError}. The server may have no free slots, or SelectHero does not work for fake clients.");
 			Say("[Bot test] Please send me the last lines of the server window. Until then the exercises run in simplified mode (text targets).");
 			Finished = true;
 			return;
 		}
-		var bp = _a.Pawn!;
+		var be = _a.Ent!;
+		var bp = _a.Pawn;
 		var render = "?";
-		try { var c = bp.RenderColor; render = $"rgba({c.R},{c.G},{c.B},{c.A})"; } catch { }
-		Say($"[Bot test] Bot is there: hero {bp.HeroID}, team {bp.TeamNum} (you: {pawn.TeamNum}), HP {bp.Health}/{bp.MaxHealth}.");
-		Say($"[Bot test] Model: '{_a.ModelName}'  render color: {render}  move type: {bp.MoveType}  flags: {bp.Flags}");
+		try { var c = be.RenderColor; render = $"rgba({c.R},{c.G},{c.B},{c.A})"; } catch { }
+		string heroTxt = bp != null ? bp.HeroID.ToString() : "(not a hero pawn)";
+		Say($"[Bot test] Bot is there (method {_a.Method}): entity '{be.DesignerName}', hero {heroTxt}, team {be.TeamNum} (you: {pawn.TeamNum}), HP {be.Health}/{be.MaxHealth}.");
+		Say($"[Bot test] Model: '{_a.ModelName}'  render color: {render}  move type: {be.MoveType}  flags: {be.Flags}");
 		Say(_a.HasModel
 			? "[Bot test] The bot has a model. Do you SEE it standing in front of you? (If not, tell me - it is then a client-side loading issue.)"
 			: "[Bot test] The bot has NO model - that is why it is invisible. Markers 'O' show where it is.");

@@ -46,6 +46,7 @@ sealed class ParryDrill : Drill {
 	private readonly List<double> _reactions = new();
 
 	public override string Name => "Parry";
+	protected override float LeashRadius => Tuning.LeashParry;
 
 	public ParryDrill(CCitadelPlayerController ctl, PlayerInput input, Level lvl, ParryMode mode, int rounds)
 		: base(ctl, input, lvl) {
@@ -136,8 +137,8 @@ sealed class ParryDrill : Drill {
 			return HookResult.Stop;
 		}
 		// Bots should not die.
-		if (ActorOf(e.Entity) is { } bot && bot.Pawn is { } bp && bp.Health - e.Info.Damage <= 50)
-			bp.Health = bp.MaxHealth;
+		if (ActorOf(e.Entity) is { } bot && bot.Ent is { } be && be.Health - e.Info.Damage <= 50)
+			be.Health = be.MaxHealth;
 		return HookResult.Continue;
 	}
 

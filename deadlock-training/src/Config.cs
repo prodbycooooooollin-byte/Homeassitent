@@ -12,6 +12,12 @@ static class TrainerConfig {
 	public static bool Dwell = false;
 	public const double DwellMs = 250;
 
+	/// <summary>How bots are created: Unit = the game's own "citadel_create_unit" cheat command (real hero dummy); Fake = plugin-made fake client.</summary>
+	public static BotMethod BotMethod = BotMethod.Unit;
+	/// <summary>Shift texts relative to their aim point (units, from the viewer's perspective). For calibration with !toffset.</summary>
+	public static float TextOffsetRight = 0f;
+	public static float TextOffsetUp = 0f;
+
 	/// <summary>Hero the training bots play. null = same hero as the player (its model is guaranteed to be loaded).</summary>
 	public static Heroes? BotHero = null;
 	/// <summary>true = no bots, only text targets (emergency mode if bots do not work on this server).</summary>
@@ -30,6 +36,8 @@ static class TrainerConfig {
 		Heroes.Gigawatt, Heroes.Dynamo,
 	];
 }
+
+enum BotMethod { Unit, Fake }
 
 enum Level { Easy, Normal, Hard }
 
@@ -72,4 +80,19 @@ static class Tuning {
 	// ---- Reaction ----
 	public static int ReactionRounds(Level l) => l switch { Level.Easy => 5, Level.Normal => 8, _ => 10 };
 	public static (double Min, double Max) ReactionDelayMs(Level l) => l switch { Level.Easy => (2000, 4000), Level.Normal => (1200, 3500), _ => (700, 3000) };
+
+	// ---- Orbs (Deny / Last Hit) ----
+	public static int OrbTotal(Level l) => l switch { Level.Easy => 10, Level.Normal => 16, _ => 24 };
+	public static int OrbPerWave(Level l) => l switch { Level.Easy => 1, Level.Normal => 2, _ => 3 };
+	public static double OrbStealMs(Level l, Random r) => (l switch { Level.Easy => 2600.0, Level.Normal => 1800.0, _ => 1200.0 }) * (0.8 + 0.4 * r.NextDouble());
+	public static float OrbRadius(Level l) => l switch { Level.Easy => 30f, Level.Normal => 22f, _ => 16f };
+	public static float LastHitDamage(Level l) => l switch { Level.Easy => 45f, Level.Normal => 34f, _ => 28f };
+	public static (float Min, float Max) LastHitAllyDps(Level l) => l switch { Level.Easy => (12f, 18f), Level.Normal => (16f, 26f), _ => (20f, 32f) };
+	public static int LastHitPerWave(Level l) => l == Level.Hard ? 2 : 1;
+
+	// ---- Exercise area ("invisible wall") ----
+	public static float LeashParry => 520f;
+	public static float LeashTrack => 520f;
+	public static float LeashFlick(bool longRange) => longRange ? 900f : 650f;
+	public static float LeashOther => 600f;
 }

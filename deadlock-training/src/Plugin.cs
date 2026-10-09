@@ -15,6 +15,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		public float Yaw;
 	}
 
+	private readonly HashSet<int> _humans = new();   // slots of real players (not bots)
 	private readonly Dictionary<int, PlayerInput> _inputs = new();
 	private readonly Dictionary<int, Drill> _drills = new();
 	private readonly Dictionary<int, Hub> _hubs = new();
@@ -44,7 +45,31 @@ public class TrainerPlugin : DeadworksPluginBase {
 		Console.WriteLine("[Trainer] entladen");
 	}
 
+	private bool _cvarsDumped;
+
+	/// <summary>Write all console variables/commands that contain any of the keywords to trainer_cvars_auto.txt (diagnostics).</summary>
+	private void DumpCvarsOnce() {
+		if (_cvarsDumped) return;
+		_cvarsDumped = true;
+		try {
+			string[] words = ["bot", "unit", "sandbox", "spawn", "create_", "hero_testing", "practice", "dummy"];
+			var lines = new List<string>();
+			foreach (var v in Server.EnumerateConVars())
+				if (words.Any(w => v.Name.Contains(w, StringComparison.OrdinalIgnoreCase)))
+					lines.Add($"cvar {v.Name} = {v.Value} | {v.Description}");
+			foreach (var c in Server.EnumerateConCommands())
+				if (words.Any(w => c.Name.Contains(w, StringComparison.OrdinalIgnoreCase)))
+					lines.Add($"cmd  {c.Name} | {c.Description}");
+			var path = Path.Combine(Path.GetDirectoryName(typeof(TrainerPlugin).Assembly.Location) ?? ".", "trainer_cvars_auto.txt");
+			File.WriteAllLines(path, lines);
+			Console.WriteLine($"[Trainer] {lines.Count} bot/spawn related console entries written to {path}");
+		} catch (Exception ex) {
+			Console.WriteLine($"[Trainer] cvar dump failed: {ex.Message}");
+		}
+	}
+
 	public override void OnStartupServer() {
+		DumpCvarsOnce();
 		StopAll(); // map change: old entities and bots are gone
 		TrainerBots.ClearAll();
 		_hubs.Clear();
@@ -64,12 +89,29 @@ public class TrainerPlugin : DeadworksPluginBase {
 			return;
 		}
 		StopDrill(args.Slot);
+		_humans.Remove(args.Slot);
 		_inputs.Remove(args.Slot);
 		_hubs.Remove(args.Slot);
 		_levels.Remove(args.Slot);
 		_fromHub.Remove(args.Slot);
 		_returning.Remove(args.Slot);
 		_noAutoMenu.Remove(args.Slot);
+	}
+
+	public override void OnEntitySpawned(EntitySpawnedEvent e) {
+		try { SpawnWatch.Record(e.Entity); } catch { /* entity vanished */ }
+	}
+
+	public override void OnClientPutInServer(ClientPutInServerEvent args) {
+		if (!args.IsBot && !TrainerBots.IsBotSlot(args.Slot)) _humans.Add(args.Slot);
+	}
+
+	/// <summary>A real player (not a bot we created or adopted).</summary>
+	private bool IsHuman(int slot, CBaseEntity? ctl = null) {
+		if (TrainerBots.IsBotSlot(slot)) return false;
+		if (_humans.Contains(slot)) return true;
+		// After a hot reload we may not have seen the connect event: accept anything that is not flagged as a bot.
+		return _humans.Count == 0 && !(ctl?.IsBot ?? false);
 	}
 
 	public override void OnClientFullConnect(ClientFullConnectEvent args) {
@@ -81,7 +123,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		var c = pawn.Controller;
 		if (c == null) return;
 		int slot = c.EntityIndex - 1;
-		if (TrainerBots.IsBotSlot(slot) || c.IsBot) return;
+		if (!IsHuman(slot, c)) return;
 		if (_hubs.ContainsKey(slot) || _noAutoMenu.Contains(slot) || _drills.ContainsKey(slot)) return;
 
 		Timer.Once(2.Seconds(), () => {
@@ -110,7 +152,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 
 	public override void OnAbilityAttempt(AbilityAttemptEvent e) {
 		var ctl = e.Controller;
-		if (ctl == null || TrainerBots.IsBotSlot(e.PlayerSlot)) return;
+		if (ctl == null || !IsHuman(e.PlayerSlot, ctl)) return;
 		var inp = Input(e.PlayerSlot);
 
 		bool attackHeld = (e.HeldButtons & InputButton.Attack) != 0;
@@ -158,7 +200,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			EModifierEvent.MeleeAttack or EModifierEvent.MeleeAttackStarted)) return;
 
 		foreach (var c in Players.GetAll()) {
-			if (TrainerBots.IsBotSlot(c.EntityIndex - 1) || c.IsBot) continue;
+			if (!IsHuman(c.EntityIndex - 1, c)) continue;
 			var pawn = c.GetHeroPawn();
 			if (pawn == null) continue;
 			bool involved = e.Caster?.EntityHandle == pawn.EntityHandle || e.Target?.EntityHandle == pawn.EntityHandle;
@@ -173,9 +215,16 @@ public class TrainerPlugin : DeadworksPluginBase {
 		if (!simulating) return;
 		double now = Clock.Ms;
 
+		// Switch cheats off again after a unit-spawn command.
+		if (TrainerBots.CheatsOffAt > 0 && now >= TrainerBots.CheatsOffAt) {
+			TrainerBots.CheatsOffAt = -1;
+			SpawnWatch.Log = false;
+			try { Server.ExecuteCommand("sv_cheats 0"); } catch { }
+		}
+
 		foreach (var c in Players.GetAll()) {
 			int slot = c.EntityIndex - 1;
-			if (TrainerBots.IsBotSlot(slot) || c.IsBot) continue;
+			if (!IsHuman(slot, c)) continue;
 			var pawn = c.GetHeroPawn();
 			var inp = Input(slot);
 
@@ -263,6 +312,8 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "t_strafe": GoToArenaThen(c, slot, () => StartTrack(c, false, 0, lvl)); break;
 			case "t_random": GoToArenaThen(c, slot, () => StartTrack(c, true, 0, lvl)); break;
 			case "o_reaction": GoToArenaThen(c, slot, () => StartReaction(c, 0, lvl)); break;
+			case "o_deny": GoToArenaThen(c, slot, () => StartOrb(c, OrbMode.Deny, 0, lvl)); break;
+			case "o_lasthit": GoToArenaThen(c, slot, () => StartOrb(c, OrbMode.LastHit, 0, lvl)); break;
 			default: CloseMenu(c); break;
 		}
 	}
@@ -278,6 +329,9 @@ public class TrainerPlugin : DeadworksPluginBase {
 
 	private bool StartReaction(CCitadelPlayerController c, int rounds, Level lvl) =>
 		Begin(c, input => new ReactionDrill(c, input, lvl, rounds));
+
+	private bool StartOrb(CCitadelPlayerController c, OrbMode mode, int count, Level lvl) =>
+		Begin(c, input => new OrbDrill(c, input, lvl, mode, count));
 
 	private Vector3? ArenaFor(Hub hub, CCitadelPlayerPawn pawn) {
 		string map = Server.MapName;
@@ -392,6 +446,14 @@ public class TrainerPlugin : DeadworksPluginBase {
 	public void CmdReaction(CCitadelPlayerController caller, int rounds = 0, string level = "") =>
 		StartReaction(caller, rounds, LevelParse.Parse(level, LevelOf(caller.EntityIndex - 1)));
 
+	[Command("deny", Description = "Deny soul orbs before a rival grabs them: deny [count] [easy|normal|hard]")]
+	public void CmdDeny(CCitadelPlayerController caller, int count = 0, string level = "") =>
+		StartOrb(caller, OrbMode.Deny, count, LevelParse.Parse(level, LevelOf(caller.EntityIndex - 1)));
+
+	[Command("lasthit", Description = "Last-hit trainer: land the killing blow on a minion: lasthit [count] [easy|normal|hard]")]
+	public void CmdLastHit(CCitadelPlayerController caller, int count = 0, string level = "") =>
+		StartOrb(caller, OrbMode.LastHit, count, LevelParse.Parse(level, LevelOf(caller.EntityIndex - 1)));
+
 	[Command("tstop", Description = "End the current exercise (back to the menu)")]
 	public void CmdStop(CCitadelPlayerController caller) {
 		int slot = caller.EntityIndex - 1;
@@ -428,7 +490,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 
 	// ---- Bots / diagnostics ---------------------------------------------------------------------------------------
 
-	[Command("tbot", Description = "Bots: tbot test | tbot hero <name|same> | tbot off | tbot on | tbot view on|off")]
+	[Command("tbot", Description = "Bots: tbot test | tbot method unit|fake | tbot hero <name|same> | tbot off | tbot on | tbot view on|off")]
 	public void CmdBot(CCitadelPlayerController caller, string sub = "test", string arg = "") {
 		switch (sub.Trim().ToLowerInvariant()) {
 			case "off":
@@ -438,6 +500,10 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "on":
 				TrainerConfig.NoBots = false;
 				Chat.PrintToChat(caller, "[Training] Bots on.");
+				return;
+			case "method":
+				TrainerConfig.BotMethod = arg.Trim().ToLowerInvariant() is "fake" or "client" ? BotMethod.Fake : BotMethod.Unit;
+				Chat.PrintToChat(caller, $"[Training] Bot method: {TrainerConfig.BotMethod} (unit = the game's citadel_create_unit, fake = plugin fake client). citadel_create_unit exists: {TrainerBots.UnitCommandExists()}");
 				return;
 			case "view":
 				TrainerConfig.WriteViewAngles = arg.Trim().ToLowerInvariant() is not ("off" or "aus" or "0");
@@ -525,6 +591,13 @@ public class TrainerPlugin : DeadworksPluginBase {
 		Chat.PrintToChat(caller, $"[Training] Text rotation: {d:0} degrees. Reopen the menu with !train to check.");
 	}
 
+	[Command("toffset", Description = "Shift all texts relative to their aim point (calibration): toffset <right> <up>  (units, 0 0 = none)")]
+	public void CmdOffset(CCitadelPlayerController caller, float right = 0f, float up = 0f) {
+		TrainerConfig.TextOffsetRight = right;
+		TrainerConfig.TextOffsetUp = up;
+		Chat.PrintToChat(caller, $"[Training] Text offset: right {right:0}, up {up:0}. Reopen the menu with !train to check.");
+	}
+
 	[Command("tfont", Description = "Font for texts: tfont <name> | tfont default")]
 	public void CmdFont(CCitadelPlayerController caller, string name = "") {
 		TrainerConfig.Font = string.IsNullOrWhiteSpace(name) || name.Equals("default", StringComparison.OrdinalIgnoreCase) ? null : name;
@@ -532,7 +605,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 	}
 
 	private static void PrintHelp(CCitadelPlayerController c) {
-		Chat.PrintToChat(c, "[Training] !train = menu (shoot an exercise) | !parry [single|multi|burst] | !flick [flick|switch|long] | !track [strafe|random] | !reaction | !tlevel easy|normal|hard | !tstop");
+		Chat.PrintToChat(c, "[Training] !train = menu (shoot an exercise) | !parry [single|multi|burst] | !flick [flick|switch|long] | !track [strafe|random] | !reaction | !deny | !lasthit | !tlevel easy|normal|hard | !tstop");
 		Chat.PrintToChat(c, "[Training] Problems: !tbot test (check bots), !tbot off, !tmarker off, !tface, !tfont, !tinput dwell, !tdebug, !tcvars bot");
 	}
 }

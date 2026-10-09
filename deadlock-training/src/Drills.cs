@@ -40,12 +40,12 @@ abstract class Drill {
 
 	public void Start(CCitadelPlayerPawn pawn, double nowMs) {
 		Begin(pawn, nowMs);
-		if (!TrainerConfig.NoBots && Actors.Any(a => !a.WantsBot)) {
+		if (!TrainerConfig.NoBots && Actors.Any(a => !a.Wants)) {
 			Say($"[Training] Could not create a bot ({TrainerBots.LastError}). Simplified mode with text targets. Run !tbot test to see why.");
 			Console.WriteLine($"[Trainer] Bot creation failed: {TrainerBots.LastError}");
 		}
-		_gated = Actors.Any(a => a.WantsBot);
-		_gateDeadline = nowMs + 10000;
+		_gated = Actors.Any(a => a.Wants);
+		_gateDeadline = nowMs + 14000;
 		if (!_gated) {
 			RealBots = false;
 			Ready(pawn, nowMs);
@@ -54,23 +54,24 @@ abstract class Drill {
 
 	public void Update(CCitadelPlayerPawn pawn, double nowMs) {
 		if (_gated) {
-			var bots = Actors.Where(a => a.WantsBot).ToList();
-			foreach (var b in bots) if (b.BotReady && !b.HasModel) b.Recover(nowMs);
+			var bots = Actors.Where(a => a.Wants).ToList();
+			foreach (var b in bots) b.Poll(nowMs);
+			bots = Actors.Where(a => a.Wants).ToList();
 
 			bool allAlive = bots.All(a => a.BotReady);
-			bool allModels = bots.All(a => a.HasModel || nowMs - a.CreatedAtMs > 5500);
+			bool allModels = bots.All(a => a.HasModel || nowMs - a.CreatedAtMs > 6500);
 			if (!(allAlive && allModels) && nowMs < _gateDeadline) return;
 
 			_gated = false;
 			var failed = bots.Where(a => !a.BotReady).ToList();
 			foreach (var a in failed) a.DropBot();
-			RealBots = failed.Count == 0;
+			RealBots = failed.Count == 0 && bots.Count > 0;
 			if (!RealBots) {
 				Say($"[Training] Bots are not available ({TrainerBots.LastError}). Simplified mode with text targets. Run !tbot test to see why.");
 				Console.WriteLine($"[Trainer] Bot creation failed: {TrainerBots.LastError}");
 			} else {
-				foreach (var a in bots.Where(x => x.WantsBot)) {
-					Console.WriteLine($"[Trainer] Bot slot {a.Slot} ready: hero {a.Hero}, model '{a.ModelName}'");
+				foreach (var a in bots) {
+					Console.WriteLine($"[Trainer] Bot ready ({a.Method}): hero {a.Hero}, model '{a.ModelName}'");
 					if (!a.HasModel) {
 						Say("[Training] The bot has no model (it may be invisible). Using aim markers 'O' - shoot those, hits still register on the bot.");
 						break;
@@ -80,6 +81,33 @@ abstract class Drill {
 			Ready(pawn, nowMs);
 		}
 		Tick(pawn, nowMs);
+		EnforceLeash(pawn, nowMs);
+	}
+
+	// ---- Exercise area ("invisible wall") --------------------------------------------------------------------------
+
+	/// <summary>Radius around the start position in which the player has to stay. 0 = no limit.</summary>
+	protected virtual float LeashRadius => 0f;
+	private Vector3? _leashCenter;
+	private double _leashMsgAt;
+
+	private void EnforceLeash(CCitadelPlayerPawn pawn, double nowMs) {
+		float r = LeashRadius;
+		if (r <= 0f) return;
+		var p = pawn.Position;
+		_leashCenter ??= p;
+		var c = _leashCenter.Value;
+		var d = new Vector3(p.X - c.X, p.Y - c.Y, 0f);
+		float len = d.Length();
+		if (len <= r) return;
+		var clamped = c + d / len * (r - 4f);
+		try {
+			pawn.Teleport(position: new Vector3(clamped.X, clamped.Y, p.Z), velocity: new Vector3(0f, 0f, pawn.AbsVelocity.Z));
+		} catch { }
+		if (nowMs - _leashMsgAt > 5000) {
+			_leashMsgAt = nowMs;
+			Say("[Training] You reached the edge of the exercise area. (!tstop leaves the exercise.)");
+		}
 	}
 
 	/// <summary>Remove all created entities and bots. Called on finish/abort/unload.</summary>
@@ -96,15 +124,10 @@ abstract class Drill {
 
 	// ---- Figures ---------------------------------------------------------------------------------------------------
 
-	/// <summary>New figure at feet. First tries to create a real bot on the enemy team, playing the same hero as the player.</summary>
+	/// <summary>New figure at feet. First tries to get a real bot on the enemy team, playing the same hero as the player.</summary>
 	protected Actor AddActor(CCitadelPlayerPawn player, Vector3 feet, double nowMs) {
 		var hero = TrainerConfig.BotHero ?? (Enum.IsDefined(player.HeroID) ? player.HeroID : Heroes.Inferno);
-		int slot = -1;
-		if (!TrainerConfig.NoBots) {
-			int enemy = player.TeamNum == 2 ? 3 : 2;
-			slot = TrainerBots.Create(enemy, hero, "Trainer");
-		}
-		var a = new Actor(slot, hero, feet, nowMs);
+		var a = Actor.Create(Ctl, player, hero, feet, nowMs);
 		Actors.Add(a);
 		return a;
 	}
@@ -112,14 +135,14 @@ abstract class Drill {
 	/// <summary>Create the aim marker 'O' on an actor if it is needed (no bot, no model, or markers enabled).</summary>
 	protected void EnsureMarker(Actor a, Vector3 eye, float radius, byte r, byte g, byte b, string text = "O") {
 		if (a.Marker != null) return;
-		bool need = TrainerConfig.ShowMarkers || !a.WantsBot || !a.HasModel;
+		bool need = TrainerConfig.ShowMarkers || !a.Wants || !a.HasModel;
 		if (!need) return;
 		a.Marker = SpawnText(text, a.Center, eye, radius, r, g, b);
 	}
 
 	protected void PlaceActor(Actor a, Vector3 feet, Vector3 lookAt, Vector3 eye, float markerHeight) {
 		a.Feet = feet;
-		if (a.WantsBot) a.Place(feet, lookAt);
+		if (a.Wants) a.Place(feet, lookAt);
 		if (a.Marker != null) Face(a.Marker, feet + new Vector3(0, 0, markerHeight), eye);
 	}
 
@@ -131,7 +154,7 @@ abstract class Drill {
 	protected Actor? ActorOf(CBaseEntity? e) {
 		if (e == null) return null;
 		foreach (var a in Actors) {
-			var p = a.Pawn;
+			var p = a.Ent;
 			if (p != null && p.EntityHandle == e.EntityHandle) return a;
 		}
 		return null;
@@ -154,11 +177,8 @@ abstract class Drill {
 
 	protected CPointWorldText? SpawnText(string msg, Vector3 pos, Vector3 eye, float radius, byte r, byte g, byte b) {
 		try {
-			var t = CPointWorldText.Create(msg, pos, fontSize: 100f, r: r, g: g, b: b, fontName: TrainerConfig.Font, reorientMode: 0);
+			var t = MakeText(msg, pos, radius, r, g, b);
 			if (t == null) return null;
-			t.WorldUnitsPerPx = radius / 35f;
-			t.JustifyHorizontal = HorizontalJustify.Center;
-			t.JustifyVertical = VerticalJustify.Center;
 			Face(t, pos, eye);
 			_texts.Add(t);
 			return t;
@@ -168,9 +188,44 @@ abstract class Drill {
 		}
 	}
 
+	/// <summary>
+	/// Creates a point_worldtext that is centered on its position. (CPointWorldText.Create always spawns it left/bottom
+	/// aligned, so the visible text would sit beside the aim point.)
+	/// </summary>
+	private static CPointWorldText? MakeText(string msg, Vector3 pos, float radius, byte r, byte g, byte b) {
+		var ent = CBaseEntity.CreateByName("point_worldtext");
+		if (ent == null) return null;
+		ent.Teleport(position: pos);
+		var kv = new CEntityKeyValues();
+		kv.SetString("message_text", msg);
+		kv.SetBool("enabled", true);
+		kv.SetInt("fullbright", 1);
+		kv.SetFloat("font_size", 100f);
+		kv.SetFloat("world_units_per_pixel", radius / 35f);
+		kv.SetColor("color", r, g, b, 255);
+		kv.SetInt("justify_horizontal", (int)HorizontalJustify.Center);
+		kv.SetInt("justify_vertical", (int)VerticalJustify.Center);
+		kv.SetInt("reorient_mode", 0);
+		if (TrainerConfig.Font != null) kv.SetString("font_name", TrainerConfig.Font);
+		ent.Spawn(kv);
+
+		var t = ent.As<CPointWorldText>();
+		if (t == null) { try { ent.Remove(); } catch { } return null; }
+		t.AcceptInput("SetMessage", value: msg);
+		t.AcceptInput("Enable");
+		try {
+			t.JustifyHorizontal = HorizontalJustify.Center;
+			t.JustifyVertical = VerticalJustify.Center;
+		} catch { }
+		return t;
+	}
+
 	protected static void Face(CPointWorldText t, Vector3 pos, Vector3 eye) {
 		try {
-			t.Teleport(position: pos, angles: new Vector3(180f, Aim.YawTo(pos, eye) + TrainerConfig.TextYawOffset, 270f));
+			var p = pos;
+			if (TrainerConfig.TextOffsetRight != 0f || TrainerConfig.TextOffsetUp != 0f)
+				p += Aim.Right(Aim.YawTo(eye, pos)) * TrainerConfig.TextOffsetRight + new Vector3(0, 0, TrainerConfig.TextOffsetUp);
+			t.Teleport(position: p, angles: new Vector3(180f, Aim.YawTo(pos, eye) + TrainerConfig.TextYawOffset, 270f));
 		} catch { /* entity just got removed */ }
 	}
 
@@ -232,6 +287,8 @@ sealed class MenuDrill : Drill {
 
 		yield return new("hdr_other", "OTHER", 33f, -13f, 12f, false, 255, 140, 40);
 		yield return new("o_reaction", "Reaction", 33f, -8f, 9f, true, 255, 255, 255);
+		yield return new("o_deny", "Deny Souls", 33f, -3.5f, 9f, true, 255, 255, 255);
+		yield return new("o_lasthit", "Last Hit", 33f, 1f, 9f, true, 255, 255, 255);
 
 		yield return new("lv_easy", "EASY", -12f, 9f, 9f, true, 255, 255, 255);
 		yield return new("lv_normal", "NORMAL", 0f, 9f, 9f, true, 255, 255, 255);
