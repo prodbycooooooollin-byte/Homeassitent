@@ -107,6 +107,7 @@ static class TrainerBots {
 
 	/// <summary>The engine already removed the slot; only clean up our bookkeeping.</summary>
 	public static void Forget(int slot) {
+		BotPool.Forget(slot);
 		_slots.Remove(slot);
 		_wanted.Remove(slot);
 		_configured.Remove(slot);
@@ -114,6 +115,85 @@ static class TrainerBots {
 
 	public static void ClearAll() {
 		foreach (var s in _slots.ToArray()) Remove(s);
+	}
+}
+
+
+/// <summary>
+/// Bots are created while the player stands still in the menu (spawning them during an exercise, right after the teleport,
+/// crashed the client) and are then lent to the exercises. After an exercise they are parked again.
+/// </summary>
+static class BotPool {
+	public static int Target = 4;
+	/// <summary>True while the menu is open (a calm moment to spawn).</summary>
+	public static bool Active;
+
+	private static readonly List<int> _all = new();
+	private static readonly List<int> _free = new();
+	private static readonly HashSet<int> _knownSlots = new();
+	private static int _pending;
+	private static double _requestAt, _nextSpawnAt;
+
+	public static int Count => _all.Count;
+	public static int FreeCount => _free.Count;
+
+	public static bool Take(out int slot) {
+		slot = -1;
+		while (_free.Count > 0) {
+			int s = _free[0];
+			_free.RemoveAt(0);
+			var ctl = Players.FromSlot(s);
+			if (ctl?.GetHeroPawn() == null) { Forget(s); continue; }
+			slot = s;
+			return true;
+		}
+		return false;
+	}
+
+	public static void Release(int slot) {
+		if (!_all.Contains(slot)) return;
+		try { Players.FromSlot(slot)?.GetHeroPawn()?.Teleport(position: Vector3.Zero); } catch { }
+		if (!_free.Contains(slot)) _free.Add(slot);
+	}
+
+	public static void Forget(int slot) {
+		_all.Remove(slot);
+		_free.Remove(slot);
+	}
+
+	public static void Clear() {
+		_all.Clear(); _free.Clear(); _pending = 0;
+	}
+
+	/// <summary>Called every frame with the human player's controller.</summary>
+	public static void Update(double nowMs, CCitadelPlayerController? human) {
+		if (human == null) return;
+		var pawn = human.GetHeroPawn();
+		if (pawn == null || !pawn.IsAlive) return;
+
+		if (_pending > 0) {
+			foreach (var c in Players.GetAllControllers()) {
+				int s = c.EntityIndex - 1;
+				if (_knownSlots.Contains(s) || _all.Contains(s)) continue;
+				_knownSlots.Add(s);
+				TrainerBots.Adopt(s);
+				_all.Add(s);
+				_free.Add(s);
+				_pending = Math.Max(0, _pending - 1);
+				try { if (c.GetHeroPawn() is { } bp && bp.TeamNum == pawn.TeamNum) c.ChangeTeam(pawn.TeamNum == 2 ? 3 : 2); } catch { }
+				Console.WriteLine($"[Trainer] Pool bot ready in slot {s} ({_all.Count}/{Target}).");
+			}
+			if (_pending > 0 && nowMs - _requestAt > 8000) { _pending = 0; Console.WriteLine("[Trainer] Pool: no bot appeared after a spawn request."); }
+		}
+
+		if (Active && _pending == 0 && _all.Count < Target && nowMs >= _nextSpawnAt && TrainerConfig.UsePool) {
+			_knownSlots.Clear();
+			foreach (var c in Players.GetAllControllers()) _knownSlots.Add(c.EntityIndex - 1);
+			_pending = 1;
+			_requestAt = nowMs;
+			_nextSpawnAt = nowMs + 7000;
+			TrainerBots.RequestUnit(human.EntityIndex - 1, pawn.HeroID, "");
+		}
 	}
 }
 
@@ -144,6 +224,8 @@ sealed class Actor {
 		CreatedAtMs = nowMs;
 	}
 
+	public bool Pooled { get; private set; }
+
 	public static Actor Create(CCitadelPlayerController playerCtl, CCitadelPlayerPawn player, Heroes hero, Vector3 feet, double nowMs) {
 		var a = new Actor(hero, feet, nowMs) {
 			_playerSlot = playerCtl.EntityIndex - 1,
@@ -151,6 +233,13 @@ sealed class Actor {
 			_enemyTeam = player.TeamNum == 2 ? 3 : 2,
 			_playerPawn = player.EntityHandle,
 		};
+		if (TrainerConfig.UsePool && BotPool.Take(out int pooled)) {
+			a.Slot = pooled;
+			a.Pooled = true;
+			a.Method = BotMethod.Unit;
+			a.Wants = true;
+			return a;
+		}
 		if (TrainerConfig.NoBots) {
 			if (TrainerConfig.UseTroopers && a.TryAdoptTrooper(a._enemyTeam, player.Position)) a.Wants = true;
 			return a;
@@ -350,6 +439,7 @@ sealed class Actor {
 
 	/// <summary>Give up the bot (e.g. it never appeared) and continue with a marker only.</summary>
 	public void DropBot() {
+		if (Pooled && Slot >= 0) { BotPool.Release(Slot); Slot = -1; Wants = false; Pooled = false; return; }
 		if (Method == BotMethod.Npc) { ReleaseNpc(); Wants = false; return; }
 		if (Slot >= 0) TrainerBots.Remove(Slot);
 		else if (_raw != CBaseEntity.InvalidEntityHandle) {

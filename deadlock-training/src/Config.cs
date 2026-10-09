@@ -24,7 +24,9 @@ static class TrainerConfig {
 	/// <summary>Default: no game bots (the game's bot spawn crashes the client); targets are hero-model props measured by geometry. Opt in with !tbot on.</summary>
 	public static bool NoBots = true;
 	/// <summary>Without game bots: borrow the map's trooper NPCs as targets (real health bar, damage numbers, animation).</summary>
-	public static bool UseTroopers = true;
+	public static bool UseTroopers = false;
+	/// <summary>Spawn game bots in the calm menu and lend them to the exercises (instead of spawning during an exercise).</summary>
+	public static bool UsePool = true;
 	/// <summary>Write the bots' view direction into memory so their melee swings point at the player.</summary>
 	public static bool WriteViewAngles = true;
 	/// <summary>Always draw a visible aim marker ('O') on bots, even if their model is visible.</summary>

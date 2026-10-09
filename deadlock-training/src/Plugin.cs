@@ -82,6 +82,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		DumpCvarsOnce();
 		StopAll(); // map change: old entities and bots are gone
 		TrainerBots.ClearAll();
+		BotPool.Clear();
 		_hubs.Clear();
 		_fromHub.Clear();
 		_returning.Clear();
@@ -247,6 +248,12 @@ public class TrainerPlugin : DeadworksPluginBase {
 			TrainerBots.CheatsOffAt = -1;
 			SpawnWatch.Log = false;
 			try { Server.ExecuteCommand("sv_cheats 0"); } catch { }
+		}
+
+		var human = Players.GetAll().FirstOrDefault(p => IsHuman(p.EntityIndex - 1, p));
+		if (human != null) {
+			BotPool.Active = _drills.TryGetValue(human.EntityIndex - 1, out var cd) && cd is MenuDrill;
+			try { BotPool.Update(now, human); } catch (Exception ex) { Console.WriteLine($"[Trainer] Pool error: {ex.Message}"); }
 		}
 
 		foreach (var c in Players.GetAll()) {
@@ -581,6 +588,10 @@ public class TrainerPlugin : DeadworksPluginBase {
 				}
 				TrainerConfig.BotHero = h;
 				Chat.PrintToChat(caller, $"[Training] Bot hero: {h}");
+				return;
+			case "pool":
+				if (int.TryParse(arg.Trim(), out int pn)) { TrainerConfig.UsePool = pn > 0; BotPool.Target = Math.Clamp(pn, 0, 8); }
+				Chat.PrintToChat(caller, $"[Training] Bot pool: {(TrainerConfig.UsePool ? "on" : "off")}, target {BotPool.Target}, ready {BotPool.Count} (free {BotPool.FreeCount}). Bots spawn only while the menu is open.");
 				return;
 			case "troopers":
 				TrainerConfig.UseTroopers = arg.Trim().ToLowerInvariant() is not ("off" or "0" or "aus");
