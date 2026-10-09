@@ -96,6 +96,7 @@ sealed class RouteRecorder {
 	public string Name = "";
 	public Vector3 StartPos;
 	public float StartYaw;
+	public bool FixedStart;
 	public readonly List<RoutePoint> Points = new();
 	private double _t0 = -1, _lastAt;
 	public double DurationMs => Points.Count > 0 ? Points[^1].T : 0;
@@ -241,31 +242,56 @@ sealed class RouteDrill : Drill {
 }
 
 
-/// <summary>Records the player's run. Press the PARRY key to finish. The plugin then shows the "save / try again / discard" menu.</summary>
+/// <summary>
+/// Records the player's run. Position yourself anywhere first; the first press of PARRY (or RELOAD) starts the recording, the next one
+/// ends it. The plugin then shows the "save / try again / discard" menu.
+/// </summary>
 sealed class RecordDrill : Drill {
 	public readonly RouteRecorder Rec;
-	private readonly int _edges0;
-	private double _t0 = -1;
+	private int _edges;
+	private bool _recording;
+	private double _t0 = -1, _hudAt;
 	private (string, byte, byte, byte)[]? _hud;
-	private double _hudAt;
 
 	public override string Name => "Record route";
 	public override bool ReturnsToMenu => false;
 
 	public RecordDrill(CCitadelPlayerController ctl, PlayerInput input, Level lvl, RouteRecorder rec) : base(ctl, input, lvl) {
 		Rec = rec;
-		_edges0 = input.ParryEdges;
+		_edges = input.KeyEdges;
 	}
 
 	protected override void Begin(CCitadelPlayerPawn pawn, double nowMs) { }
 
 	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) =>
-		Say($"[Route] RECORDING '{Rec.Name}' - the start is here. Run your route. At the end, press your PARRY key to finish.");
+		Say($"[Route] '{Rec.Name}': walk to where the route should START (anywhere on the map). Then press PARRY (or R) to start recording, and again at the end point.");
 
 	protected override void Tick(CCitadelPlayerPawn pawn, double nowMs) {
+		bool pressed = In.KeyEdges > _edges;
+		if (pressed) _edges = In.KeyEdges;
+
+		if (!_recording) {
+			if (pressed) {
+				_recording = true;
+				_t0 = nowMs;
+				if (!Rec.FixedStart) { Rec.StartPos = pawn.Position; Rec.StartYaw = pawn.EyeAngles.Y; }
+				Say($"[Route] RECORDING '{Rec.Name}' - run your route now. Press PARRY (or R) at the end point.");
+				return;
+			}
+			if (nowMs >= _hudAt || _hud == null) {
+				_hudAt = nowMs + 300;
+				_hud = new (string, byte, byte, byte)[] {
+					($"NEW ROUTE  {Rec.Name}", 255, 220, 60),
+					("Go to the START point", 255, 255, 255),
+					("then press PARRY (or R)", 255, 200, 120),
+				};
+			}
+			SetHud(pawn, _hud);
+			return;
+		}
+
 		Rec.Update(pawn.Position, nowMs);
-		if (_t0 < 0) _t0 = nowMs;
-		if (In.ParryEdges > _edges0 && nowMs - _t0 > 1500) {
+		if (pressed && nowMs - _t0 > 1500) {
 			Rec.Finish(pawn.Position, nowMs);
 			Finished = true;
 			return;
@@ -275,7 +301,7 @@ sealed class RecordDrill : Drill {
 			_hud = new (string, byte, byte, byte)[] {
 				($"RECORDING  {Rec.Name}", 255, 90, 90),
 				($"Time   {(nowMs - _t0) / 1000:0.0} s", 255, 255, 255),
-				("Press PARRY at the end point", 255, 200, 120),
+				("Press PARRY (or R) at the end point", 255, 200, 120),
 			};
 		}
 		SetHud(pawn, _hud);

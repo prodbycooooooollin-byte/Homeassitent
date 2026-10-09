@@ -194,6 +194,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 				inp.RegisterShot(new Shot(Clock.Ms, Aim.Eye(pawn), Aim.Dir(pawn)));
 		}
 		inp.AttackHeld = attackHeld;
+		if ((e.HeldButtons & InputButton.Reload) != 0 && (e.ChangedButtons & InputButton.Reload) != 0) inp.ReloadEdges++;
 
 		if (_parryMask != 0) {
 			bool held = ((ulong)e.HeldButtons & _parryMask) != 0;
@@ -613,6 +614,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		float startYaw = previous?.StartYaw ?? pawn.EyeAngles.Y;
 		if (previous != null) { try { pawn.TeleportWithView(startPos, new Vector3(0f, startYaw, 0f)); } catch { } }
 		var rec = new RouteRecorder { Name = name, StartPos = startPos, StartYaw = startYaw };
+		rec.FixedStart = previous != null; // retry: the start stays where it was
 		Timer.Once((previous != null ? 900 : 450).Milliseconds(), () => {
 			if (_drills.ContainsKey(slot)) return;
 			Begin(c, input => {
