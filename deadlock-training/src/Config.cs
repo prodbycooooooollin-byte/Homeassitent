@@ -25,7 +25,7 @@ static class TrainerConfig {
 	/// <summary>Write the bots' view direction into memory so their melee swings point at the player.</summary>
 	public static bool WriteViewAngles = true;
 	/// <summary>Always draw a visible aim marker ('O') on bots, even if their model is visible.</summary>
-	public static bool ShowMarkers = true;
+	public static bool ShowMarkers = false;
 	/// <summary>Height of the "chest" above the ground (where the aim point is).</summary>
 	public static float CenterZ = 58f;
 

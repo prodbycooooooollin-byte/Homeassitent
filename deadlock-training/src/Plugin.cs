@@ -68,7 +68,28 @@ public class TrainerPlugin : DeadworksPluginBase {
 		}
 	}
 
+	private bool _arenaCleaned;
+
+	/// <summary>Training server cleanup: no minion waves, no neutrals, and no guardians/walkers/bases that shoot or end the game.</summary>
+	private void CleanWorld() {
+		try {
+			foreach (var cmd in new[] { "sv_cheats 1", "citadel_npc_spawn_enabled 0", "citadel_trooper_spawn_enabled 0", "citadel_neutral_spawn_enabled 0", "citadel_powerup_spawn_enabled 0" })
+				Server.ExecuteCommand(cmd);
+			TrainerBots.CheatsOffAt = Clock.Ms + 1500;
+			int n = 0;
+			foreach (var e in Entities.All) {
+				string d;
+				try { d = e.DesignerName ?? ""; } catch { continue; }
+				if (d.StartsWith("npc_trooper") || d.StartsWith("npc_boss") || d.StartsWith("npc_barrack") || d.StartsWith("npc_base_defender") || d.StartsWith("npc_neutral") || d.StartsWith("npc_super_neutral")) {
+					try { e.Remove(); n++; } catch { }
+				}
+			}
+			Console.WriteLine($"[Trainer] World cleaned: removed {n} NPCs (troopers, guardians, walkers, defenders, neutrals).");
+		} catch (Exception ex) { Console.WriteLine($"[Trainer] CleanWorld failed: {ex.Message}"); }
+	}
+
 	public override void OnStartupServer() {
+		_arenaCleaned = false;
 		DumpCvarsOnce();
 		StopAll(); // map change: old entities and bots are gone
 		TrainerBots.ClearAll();
@@ -124,6 +145,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		if (c == null) return;
 		int slot = c.EntityIndex - 1;
 		if (!IsHuman(slot, c)) return;
+		if (!_arenaCleaned) { _arenaCleaned = true; Timer.Once(3.Seconds(), CleanWorld); }
 		if (_hubs.ContainsKey(slot) || _noAutoMenu.Contains(slot) || _drills.ContainsKey(slot)) return;
 
 		Timer.Once(2.Seconds(), () => {

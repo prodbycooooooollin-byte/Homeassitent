@@ -13,6 +13,9 @@ abstract class Drill {
 	private readonly List<CPointWorldText> _texts = new();
 	protected readonly List<Actor> Actors = new();
 	private bool _gated;
+	private bool _loadingSaid;
+	/// <summary>True after the first bot model was loaded this session (later bots appear faster).</summary>
+	private static bool BotWarm;
 	private double _gateDeadline;
 
 	/// <summary>All bots of this exercise exist (false = text markers only, simplified mode).</summary>
@@ -61,6 +64,14 @@ abstract class Drill {
 			bool allAlive = bots.All(a => a.BotReady);
 			bool allModels = bots.All(a => a.HasModel || nowMs - a.CreatedAtMs > 6500);
 			if (!(allAlive && allModels) && nowMs < _gateDeadline) return;
+			// The client streams the hero model in after the bot appears: it is invisible for a while (~12 s the first time).
+			double settle = BotWarm ? 3500 : 12000;
+			double newest = bots.Count > 0 ? bots.Max(a => a.CreatedAtMs) : nowMs;
+			if (allAlive && bots.Count > 0 && nowMs - newest < settle && nowMs < _gateDeadline + 12000) {
+				if (!_loadingSaid) { _loadingSaid = true; Say("[Training] Loading the bot model... the exercise starts in a moment."); }
+				return;
+			}
+			BotWarm = true;
 
 			_gated = false;
 			var failed = bots.Where(a => !a.BotReady).ToList();
