@@ -627,6 +627,11 @@ public class TrainerPlugin : DeadworksPluginBase {
 				if (int.TryParse(arg.Trim(), out int pn)) { TrainerConfig.UsePool = pn > 0; BotPool.Target = Math.Clamp(pn, 0, 8); }
 				Chat.PrintToChat(caller, $"[Training] Bot pool: {(TrainerConfig.UsePool ? "on" : "off")}, target {BotPool.Target}, ready {BotPool.Count} (free {BotPool.FreeCount}). Spawn bots with your numpad + key while the menu is open.");
 				return;
+			case "auto":
+				TrainerConfig.AutoSpawn = arg.Trim().ToLowerInvariant() is not ("off" or "0" or "aus");
+				TrainerConfig.UsePool = true;
+				Chat.PrintToChat(caller, $"[Training] Automatic bot spawn: {(TrainerConfig.AutoSpawn ? "ON (experimental - may crash your game; tell me what happens)" : "off (use your key)")}. Open the menu (!train) to start.");
+				return;
 			case "troopers":
 				TrainerConfig.UseTroopers = arg.Trim().ToLowerInvariant() is not ("off" or "0" or "aus");
 				Chat.PrintToChat(caller, $"[Training] Borrowed trooper targets: {(TrainerConfig.UseTroopers ? "on (health bar, damage numbers, animation)" : "off (hero-model props)")}");

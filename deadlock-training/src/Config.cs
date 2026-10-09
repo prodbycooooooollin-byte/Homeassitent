@@ -27,6 +27,8 @@ static class TrainerConfig {
 	public static bool UseTroopers = false;
 	/// <summary>Spawn game bots in the calm menu and lend them to the exercises (instead of spawning during an exercise).</summary>
 	public static bool UsePool = true;
+	/// <summary>Experimental: the server spawns the pool bots itself (practice bots) and moves them next to the player at once. Opt in with !tbot auto on.</summary>
+	public static bool AutoSpawn = false;
 	/// <summary>Write the bots' view direction into memory so their melee swings point at the player.</summary>
 	public static bool WriteViewAngles = true;
 	/// <summary>Always draw a visible aim marker ('O') on bots, even if their model is visible.</summary>

@@ -51,6 +51,20 @@ static class TrainerBots {
 	}
 
 	/// <summary>Ask the game to spawn a hero dummy in front of the player (needs cheats, switched on briefly).</summary>
+	/// <summary>Spawn one game practice bot from the server (a real player-like bot). Experimental: it used to crash the client while it sat at the world origin.</summary>
+	public static void RequestPractice(Heroes hero) {
+		SpawnWatch.Log = true;
+		Console.WriteLine("[Trainer] Requesting practice bot (automatic mode)");
+		try {
+			Server.ExecuteCommand("sv_cheats 1");
+			Server.ExecuteCommand("citadel_bot_test_mode 1");
+			Server.ExecuteCommand("citadel_spawn_practice_bots 0");
+			Server.ExecuteCommand("citadel_spawn_practice_bots_count 1");
+			Server.ExecuteCommand("citadel_spawn_practice_bots 1");
+			CheatsOffAt = Clock.Ms + 2500;
+		} catch (Exception ex) { LastError = ex.Message; }
+	}
+
 	private static readonly List<(double At, int Slot, string Cmd)> _queue = new();
 	private static double _lastPrompt;
 
@@ -144,7 +158,10 @@ static class BotPool {
 
 	private static readonly List<uint> _all = new();
 	private static readonly List<uint> _free = new();
-	private static double _lastScanAt, _lastPromptAt, _lastReviveAt;
+	private static double _lastScanAt, _lastPromptAt, _lastReviveAt, _autoRequestAt, _autoNextAt;
+	private static readonly HashSet<int> _knownSlots = new();
+	private static readonly List<int> _pendingCtl = new();
+	private static bool _autoWaiting;
 	private static Vector3 _park;
 
 	public static int Count => _all.Count;
@@ -179,7 +196,47 @@ static class BotPool {
 		if (human == null || !TrainerConfig.UsePool) return;
 		var pawn = human.GetHeroPawn();
 		if (pawn == null || !pawn.IsAlive) return;
-		if (Active) _park = pawn.Position - Aim.Forward(0f, pawn.EyeAngles.Y) * 450f;
+		if (Active || _autoWaiting || _pendingCtl.Count > 0) _park = pawn.Position - Aim.Forward(0f, pawn.EyeAngles.Y) * 450f;
+
+		// Automatic mode (experimental): the server spawns practice bots and moves each one next to the player in the very frame
+		// it appears, before the client ever sees it at the world origin.
+		if (TrainerConfig.AutoSpawn) {
+			if (_autoWaiting) {
+				foreach (var c in Players.GetAllControllers()) {
+					int sl = c.EntityIndex - 1;
+					if (_knownSlots.Contains(sl)) continue;
+					_knownSlots.Add(sl);
+					TrainerBots.Adopt(sl);
+					_pendingCtl.Add(sl);
+					_autoWaiting = false;
+					Console.WriteLine($"[Trainer] Auto bot controller in slot {sl}; moving its pawn next to you.");
+				}
+				if (_autoWaiting && nowMs - _autoRequestAt > 8000) { _autoWaiting = false; Console.WriteLine("[Trainer] Auto mode: no bot appeared."); }
+			}
+			foreach (var sl in _pendingCtl.ToArray()) {
+				var c = Players.FromSlot(sl);
+				var bp = c?.GetHeroPawn();
+				if (c == null) { _pendingCtl.Remove(sl); continue; }
+				if (bp == null || !bp.IsValid) continue;
+				try {
+					bp.Teleport(position: _park, velocity: Vector3.Zero);
+					if (bp.TeamNum == pawn.TeamNum) c.ChangeTeam(pawn.TeamNum == 2 ? 3 : 2);
+					_pendingCtl.Remove(sl);
+					_all.Add(bp.EntityHandle);
+					_free.Add(bp.EntityHandle);
+					Console.WriteLine($"[Trainer] Auto bot {_all.Count}/{Target} ready next to you (entity {bp.EntityIndex}, model '{bp.ModelName}').");
+					Chat.PrintToChat(human, $"[Training] Bot {_all.Count}/{Target} ready.");
+				} catch { }
+			}
+			if (Active && !_autoWaiting && _pendingCtl.Count == 0 && _all.Count < Target && nowMs >= _autoNextAt) {
+				_knownSlots.Clear();
+				foreach (var c in Players.GetAllControllers()) _knownSlots.Add(c.EntityIndex - 1);
+				_autoWaiting = true;
+				_autoRequestAt = nowMs;
+				_autoNextAt = nowMs + 6000;
+				TrainerBots.RequestPractice(pawn.HeroID);
+			}
+		}
 
 		// Keep the pooled bots alive: base defenders shoot enemy-team units standing in the hub.
 		foreach (var h in _all.ToArray()) {
@@ -218,7 +275,7 @@ static class BotPool {
 		}
 		_lastScanAt = nowMs;
 
-		if (Active && _all.Count < Target && nowMs - _lastPromptAt > 25000) {
+		if (!TrainerConfig.AutoSpawn && Active && _all.Count < Target && nowMs - _lastPromptAt > 25000) {
 			_lastPromptAt = nowMs;
 			try { Server.ExecuteCommand("sv_cheats 1"); } catch { }
 			TrainerBots.CheatsOffAt = -1;
