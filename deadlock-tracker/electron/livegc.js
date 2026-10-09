@@ -9,7 +9,7 @@ const APP_ID = 1422450;
 const MSG_HELLO = 4006, MSG_WELCOME = 4004, MSG_SPECTATE = 9109, MSG_SPECTATE_RESP = 9110;
 const RESULT = { 0: "interner Fehler", 1: "ok", 2: "deaktiviert", 3: "zu viel los", 4: "Rate-Limit", 5: "Spieler nicht im Spiel", 6: "für dieses Spiel deaktiviert", 7: "Server voll", 8: "nicht befreundet", 9: "Region fehlt", 10: "Zeitkontrolle", 11: "Client-Version ungültig", 12: "Region ungültig" };
 
-const live = { state: "aus", account: null, qr: null, error: null, matchId: null, lobbyId: null, url: null, result: null, players: [], playersAt: null, log: [] };
+const live = { state: "aus", account: null, qr: null, guard: null, error: null, matchId: null, lobbyId: null, url: null, result: null, players: [], playersAt: null, log: [] };
 globalThis.__dlLive = live;
 const note = (t) => { live.log.push(`${new Date().toLocaleTimeString("de-DE")} ${t}`); if (live.log.length > 40) live.log.shift(); };
 
@@ -165,6 +165,37 @@ async function loginQR() {
   return status();
 }
 
+/** Anmeldung mit Kontoname + Passwort (ohne Kamera). Das Passwort wird nur für diesen Vorgang benutzt und nie gespeichert. */
+async function loginCredentials(accountName, password) {
+  const { LoginSession, EAuthTokenPlatformType, EAuthSessionGuardType } = require("steam-session");
+  try { session?.cancelLoginAttempt(); } catch { /* egal */ }
+  session = new LoginSession(EAuthTokenPlatformType.SteamClient);
+  live.error = null; live.qr = null; live.guard = null;
+  session.on("authenticated", () => {
+    saveToken(session.accountName, session.refreshToken); live.account = session.accountName; live.guard = null; live.state = "gespeichert"; note(`Zweitkonto ${session.accountName} angemeldet`);
+    const g = ctx.gamelog?.get?.();
+    if (g?.inMatch || g?.lobbyId) onMatch({ matchId: g.matchId, lobbyId: g.lobbyId });
+  });
+  session.on("timeout", () => { live.state = "aus"; live.guard = null; live.error = "Anmeldung abgelaufen – bitte erneut versuchen"; });
+  session.on("error", (e) => { live.state = "fehler"; live.guard = null; live.error = `Anmeldung: ${e.message || e}`; });
+  try {
+    const r = await session.startWithCredentials({ accountName, password });
+    if (r.actionRequired) {
+      const types = (r.validActions || []).map((a) => a.type);
+      if (types.includes(EAuthSessionGuardType.DeviceCode)) { live.guard = "device"; live.state = "guard"; }
+      else if (types.includes(EAuthSessionGuardType.EmailCode)) { live.guard = "email"; live.state = "guard"; }
+      else { live.guard = "confirm"; live.state = "guard"; }
+      note(`Steam Guard nötig (${live.guard})`);
+    }
+  } catch (e) { live.state = "fehler"; live.error = `Anmeldung: ${e.message || e}`; }
+  return status();
+}
+
+async function submitGuard(code) {
+  try { await session.submitSteamGuardCode(String(code).trim()); live.error = null; } catch (e) { live.error = `Code: ${e.message || e}`; }
+  return status();
+}
+
 function logout() {
   disconnect(); try { workerProc?.kill(); } catch { /* egal */ }
   try { fs.rmSync(tokenFile(), { force: true }); } catch { /* egal */ }
@@ -173,4 +204,4 @@ function logout() {
 }
 
 const status = () => ({ ...live });
-module.exports = { _t: { encodeSpectate, decodeSpectateResponse, readMsg }, init, onMatch, onMatchOver, loginQR, logout, status };
+module.exports = { _t: { encodeSpectate, decodeSpectateResponse, readMsg }, init, onMatch, onMatchOver, loginQR, loginCredentials, submitGuard, logout, status };

@@ -134,6 +134,8 @@ function LiveLobby() {
   }, []);
   if (!isDesktop) return null;
   const act = (a: "login" | "logout") => window.desktop!.live(a).then(setD).catch(() => {});
+  const [acc, setAcc] = useState(""); const [pw, setPw] = useState(""); const [code, setCode] = useState("");
+  const send = (a: "credentials" | "guard", payload: { account?: string; password?: string; code?: string }) => window.desktop!.live(a, payload).then((r) => { setD(r); if (a === "credentials") setPw(""); if (a === "guard") setCode(""); }).catch(() => {});
   return (
     <section className="surface p-5">
       <div className="label mb-2">Live-Lobby (Zweitkonto)</div>
@@ -141,8 +143,21 @@ function LiveLobby() {
       <p className="text-sm"><b>Status:</b> {d?.state ?? "–"}{d?.account ? ` · Konto ${d.account}` : ""}{d?.matchId ? ` · Match #${d.matchId}` : ""}{d?.result ? ` · Antwort: ${d.result}` : ""}</p>
       {d?.error && <p className="mt-1 text-sm text-red-400">{d.error}</p>}
       {d?.qr && (<div className="mt-3"><img src={d.qr} alt="QR-Code" className="rounded-lg bg-white p-2" width={240} height={240} /><p className="mt-2 text-xs text-muted">In der Steam-App des <b>Zweitkontos</b>: Steam Guard → „QR-Code scannen“.</p></div>)}
+      {(!d || d.state === "aus" || d.state === "fehler") && (
+        <div className="mt-3 grid max-w-xs gap-2">
+          <input value={acc} onChange={(e) => setAcc(e.target.value)} placeholder="Kontoname des Zweitkontos" autoComplete="off" className="rounded-lg bg-black/30 px-3 py-2 text-sm" />
+          <input value={pw} onChange={(e) => setPw(e.target.value)} type="password" placeholder="Passwort (wird nicht gespeichert)" autoComplete="off" className="rounded-lg bg-black/30 px-3 py-2 text-sm" />
+          <button disabled={!acc || !pw} onClick={() => send("credentials", { account: acc, password: pw })} className="btn btn-ghost text-sm">Mit Passwort anmelden</button>
+        </div>
+      )}
+      {d?.state === "guard" && (
+        <div className="mt-3 grid max-w-xs gap-2">
+          <p className="text-xs text-muted">{d.guard === "confirm" ? "In der Steam-App des Zweitkontos die Anmeldung bestätigen (Benachrichtigung antippen)." : d.guard === "email" ? "Steam hat einen Code per E-Mail geschickt." : "Steam-Guard-Code aus der Steam-App des Zweitkontos eingeben."}</p>
+          {d.guard !== "confirm" && (<><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code" className="rounded-lg bg-black/30 px-3 py-2 text-sm" /><button disabled={!code} onClick={() => send("guard", { code })} className="btn btn-ghost text-sm">Code bestätigen</button></>)}
+        </div>
+      )}
       <div className="mt-3 flex gap-2">
-        {(!d || d.state === "aus" || d.state === "fehler") && <button onClick={() => act("login")} className="btn btn-ghost text-sm">Zweitkonto anmelden</button>}
+        {(!d || d.state === "aus" || d.state === "fehler") && <button onClick={() => act("login")} className="btn btn-ghost text-sm">Stattdessen QR-Code zeigen</button>}
         {d && d.account && <button onClick={() => act("logout")} className="btn btn-ghost text-sm">Abmelden / entfernen</button>}
       </div>
       {d && d.players.length > 0 && (

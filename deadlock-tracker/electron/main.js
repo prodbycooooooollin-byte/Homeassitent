@@ -177,7 +177,7 @@ ipcMain.handle("desktop:get", () => settings);
 // Der Installer startet die App nach einem Update mit „--updated“
 ipcMain.handle("desktop:updated", () => process.argv.includes("--updated"));
 ipcMain.handle("recorder:control", (_e, a) => (a === "start" ? recorder.start() : a === "stop" ? recorder.stop() : a === "reset" ? recorder.reset() : recorder.status()));
-ipcMain.handle("live:control", (_e, a) => (a === "login" ? livegc.loginQR() : a === "logout" ? livegc.logout() : livegc.status()));
+ipcMain.handle("live:control", (_e, a, p) => (a === "login" ? livegc.loginQR() : a === "credentials" ? livegc.loginCredentials(String(p?.account || ""), String(p?.password || "")) : a === "guard" ? livegc.submitGuard(p?.code) : a === "logout" ? livegc.logout() : livegc.status()));
 ipcMain.handle("matchwatch:info", () => matchwatch.info());
 ipcMain.handle("ingest:status", () => ingest.getStatus());
 ipcMain.handle("ingest:control", (_e, action) => ingest.control(String(action)));
