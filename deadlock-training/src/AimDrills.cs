@@ -172,6 +172,13 @@ sealed class FlickDrill : Drill {
 			if (dist < 260f) dist = 260f;
 
 			t.Feet = new Vector3(origin.X, origin.Y, _groundZ) + Aim.Forward(0f, chosen) * dist;
+			// Long Range with a saved target spot (!tlong target): the bot appears around that spot, e.g. on the bridge.
+			if (_mode == FlickMode.Long && Arena.TryGet(Server.MapName + "#longtarget", out var lt)) {
+				float toYaw = Aim.YawTo(origin, lt);
+				float side = ((float)Rng.NextDouble() * 2f - 1f) * 220f;
+				float depth = ((float)Rng.NextDouble() * 2f - 1f) * 90f;
+				t.Feet = new Vector3(lt.X, lt.Y, lt.Z) + Aim.Right(toYaw) * side + Aim.Forward(0f, toYaw) * depth;
+			}
 			t.Tol = Aim.AngularRadius(30f, Vector3.Distance(origin, t.Feet));
 			t.A.Feet = t.Feet;
 			t.A.Place(t.Feet, origin);

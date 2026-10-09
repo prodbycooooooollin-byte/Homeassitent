@@ -371,6 +371,33 @@ public class TrainerPlugin : DeadworksPluginBase {
 		} catch (Exception ex) { Chat.PrintToChat(caller, $"[Training] Could not change the hero: {ex.Message}"); }
 	}
 
+	[Command("tlong", Description = "Long Range spots: tlong me (where you stand) | tlong target (where the bots appear) | tlong reset | tlong show")]
+	public void CmdLong(CCitadelPlayerController caller, string sub = "") {
+		var pawn = caller.GetHeroPawn();
+		if (pawn == null || !pawn.IsAlive) { Chat.PrintToChat(caller, "[Training] You need a living hero."); return; }
+		string map = Server.MapName;
+		switch (sub.Trim().ToLowerInvariant()) {
+			case "me":
+				Arena.SetWithYaw(map + "#long", pawn.Position + new Vector3(0, 0, 8), pawn.EyeAngles.Y);
+				Chat.PrintToChat(caller, "[Training] Long Range: your standing spot saved. Next walk to where the bots should appear and type: !tlong target");
+				return;
+			case "target":
+				Arena.Set(map + "#longtarget", pawn.Position + new Vector3(0, 0, 4));
+				Chat.PrintToChat(caller, "[Training] Long Range: target spot saved. The bots now appear around here (left/right of it).");
+				return;
+			case "reset":
+				Arena.Reset(map + "#long"); Arena.Reset(map + "#longtarget");
+				Chat.PrintToChat(caller, "[Training] Long Range spots reset.");
+				return;
+			case "show":
+				Chat.PrintToChat(caller, $"[Training] Long Range: your spot {(Arena.TryGet(map + "#long", out _) ? "set" : "not set")}, target spot {(Arena.TryGet(map + "#longtarget", out _) ? "set" : "not set")}.");
+				return;
+			default:
+				Chat.PrintToChat(caller, "[Training] Long Range: stand where YOU want to be and type !tlong me. Then walk to where the bots should appear and type !tlong target.");
+				return;
+		}
+	}
+
 	[Command("tpos", Description = "Print your exact position and view direction (so good training spots can be built in as defaults)")]
 	public void CmdPos(CCitadelPlayerController caller, string label = "") {
 		var pawn = caller.GetHeroPawn();
