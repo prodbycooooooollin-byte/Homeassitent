@@ -860,14 +860,18 @@ public class TrainerPlugin : DeadworksPluginBase {
 			return;
 		}
 		var pts = RouteStore.Get(map, name);
-		if (pts == null || pts.Count < 2) { Chat.PrintToChat(c, "[Training] That route is too short."); Timer.Once(500.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenMenu(c, false); }); return; }
+		if (pts == null || pts.Count < 3) { Chat.PrintToChat(c, "[Training] That route is too short."); Timer.Once(500.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenMenu(c, false); }); return; }
 		_routeSel[slot] = name;
 		_fromHub.Add(slot);
 		var lvl = LevelOf(slot);
-		Timer.Once(300.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) Begin(c, input => new RouteDrill(c, input, lvl, name, map, pts)); });
+		var pw = c.GetHeroPawn();
+		if (pw != null && pw.IsAlive) { try { pw.TeleportWithView(pts[0].P, new Vector3(0f, Aim.YawTo(pts[0].P, pts[Math.Min(3, pts.Count - 1)].P), 0f)); } catch { } }
+		Timer.Once(900.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) Begin(c, input => new RouteDrill(c, input, lvl, name, map, pts)); });
 	}
 
-	[Command("troute", Description = "Route trainer: troute rec <name> | stop | play [name] | list | del <name>")]
+	private readonly Dictionary<int, RouteRecorder> _attempts = new();
+
+	[Command("troute", Description = "Route trainer: troute rec <name> | stop | save | redo | play [name] | list | del <name>")]
 	public void CmdRoute(CCitadelPlayerController caller, string sub = "", string name = "") {
 		int slot = caller.EntityIndex - 1;
 		var pawn = caller.GetHeroPawn();
@@ -877,16 +881,30 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "rec" or "record":
 				if (pawn == null || !pawn.IsAlive) { Chat.PrintToChat(caller, "[Training] You need a living hero."); return; }
 				if (name.Length == 0) { Chat.PrintToChat(caller, "[Training] Give the route a name: !troute rec base-to-mid"); return; }
-				_recorders[slot] = new RouteRecorder { Name = name };
-				_recorders[slot].Points.Add(pawn.Position);
-				Chat.PrintToChat(caller, $"[Training] Recording '{name}'. Walk the route (zipline, dash, whatever you use), then type !troute stop.");
+				_attempts.Remove(slot);
+				_recorders[slot] = new RouteRecorder { Name = name, StartPos = pawn.Position, StartYaw = pawn.EyeAngles.Y };
+				Chat.PrintToChat(caller, $"[Training] RECORDING '{name}' - the start is here. Run your route now, then type !troute stop at the end point.");
 				return;
-			case "stop" or "save":
-				if (!_recorders.Remove(slot, out var rec)) { Chat.PrintToChat(caller, "[Training] Not recording."); return; }
-				if (pawn != null) rec.Points.Add(pawn.Position);
-				if (rec.Points.Count < 3) { Chat.PrintToChat(caller, "[Training] Route too short - nothing saved."); return; }
-				RouteStore.Put(map, rec.Name, rec.Points);
-				Chat.PrintToChat(caller, $"[Training] Route '{rec.Name}' saved with {rec.Points.Count} checkpoints. Pick Routes in the menu or type !troute play {rec.Name}.");
+			case "stop":
+				if (!_recorders.Remove(slot, out var rec)) { Chat.PrintToChat(caller, "[Training] Not recording. Start with !troute rec <name>."); return; }
+				if (pawn != null) rec.Finish(pawn.Position, Clock.Ms);
+				if (rec.Points.Count < 3) { Chat.PrintToChat(caller, "[Training] That was too short - nothing recorded."); return; }
+				_attempts[slot] = rec;
+				Chat.PrintToChat(caller, $"[Training] Attempt finished: {rec.DurationMs / 1000:0.0} s. Happy with it? !troute save   |   Try again from the start: !troute redo");
+				return;
+			case "redo" or "retry":
+				if (!_attempts.TryGetValue(slot, out var old) && !_recorders.TryGetValue(slot, out old)) { Chat.PrintToChat(caller, "[Training] Nothing to redo. !troute rec <name>"); return; }
+				_attempts.Remove(slot); _recorders.Remove(slot);
+				if (pawn != null && pawn.IsAlive) {
+					try { pawn.TeleportWithView(old.StartPos, new Vector3(0f, old.StartYaw, 0f)); } catch { }
+				}
+				_recorders[slot] = new RouteRecorder { Name = old.Name, StartPos = old.StartPos, StartYaw = old.StartYaw };
+				Chat.PrintToChat(caller, $"[Training] Back at the start - RECORDING '{old.Name}' again. Run, then !troute stop.");
+				return;
+			case "save":
+				if (!_attempts.Remove(slot, out var att)) { Chat.PrintToChat(caller, "[Training] No finished attempt to save. Record with !troute rec <name>, finish with !troute stop."); return; }
+				RouteStore.Put(map, att.Name, att.Points);
+				Chat.PrintToChat(caller, $"[Training] Route '{att.Name}' saved ({att.DurationMs / 1000:0.0} s). Learn it with Routes in the menu or !troute play {att.Name} - a ghost runs it in front of you.");
 				return;
 			case "play" or "start":
 				if (name.Length == 0) name = RouteStore.Names(map).FirstOrDefault() ?? "";
@@ -894,7 +912,8 @@ public class TrainerPlugin : DeadworksPluginBase {
 				var pts = RouteStore.Get(map, name);
 				if (pts == null) { Chat.PrintToChat(caller, $"[Training] No route '{name}'. !troute list"); return; }
 				_routeSel[slot] = name;
-				Begin(caller, input => new RouteDrill(caller, input, LevelOf(slot), name, map, pts));
+				if (pawn != null && pawn.IsAlive) { try { pawn.TeleportWithView(pts[0].P, new Vector3(0f, Aim.YawTo(pts[0].P, pts[Math.Min(3, pts.Count - 1)].P), 0f)); } catch { } }
+				Timer.Once(600.Milliseconds(), () => Begin(caller, input => new RouteDrill(caller, input, LevelOf(slot), name, map, pts)));
 				return;
 			case "list":
 				var names = RouteStore.Names(map);
@@ -904,7 +923,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 				Chat.PrintToChat(caller, RouteStore.Delete(map, name) ? $"[Training] Route '{name}' deleted." : "[Training] No such route.");
 				return;
 			default:
-				Chat.PrintToChat(caller, "[Training] !troute rec <name> (record) | stop | play [name] | list | del <name>");
+				Chat.PrintToChat(caller, "[Training] Record: !troute rec <name> -> run -> !troute stop -> !troute save (or !troute redo). Learn: !troute play <name> | list | del <name>");
 				return;
 		}
 	}
@@ -930,7 +949,9 @@ public class TrainerPlugin : DeadworksPluginBase {
 		Timer.Once(1500.Milliseconds(), () => {
 			var names = SpawnWatch.Since(t0 - 50).Select(x => x.Designer).Where(x => x.Length > 0).GroupBy(x => x).Select(g => $"{g.Key} x{g.Count()}").Take(14).ToList();
 			Console.WriteLine("[Trainer/Orb] spawned after the kill: " + string.Join(", ", names));
-			string line = names.Count == 0 ? "nothing spawned" : string.Join(", ", names);
+			string state = "?";
+			try { state = best.IsValid ? $"trooper still alive, health {best.Health}" : "trooper is gone (died/removed)"; } catch { }
+			string line = (names.Count == 0 ? "nothing spawned" : string.Join(", ", names)) + " | " + state;
 			Chat.PrintToChat(caller, "[Training] Spawned after the kill: " + (line.Length > 220 ? line[..220] : line));
 			SpawnWatch.Log = false;
 		});

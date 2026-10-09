@@ -1,3 +1,4 @@
+using System.Numerics;
 using DeadworksManaged.Api;
 
 namespace DeadlockTrainer;
@@ -40,7 +41,18 @@ static class TrainerConfig {
 	public static bool FlickHeadOnly = false;
 	/// <summary>Lifts bots standing in the ground (tune with !tbotz).</summary>
 	public static float BotZOffset = 0f;
-	public static float HeadRadius = 9f;
+	public static float HeadRadius = 11f;
+
+	/// <summary>Head centre of a hero: its real eye position when known (adapts to the hero's height), else origin + HeadZ.</summary>
+	public static Vector3 HeadOf(CBaseEntity e) {
+		try {
+			if (e.Is<CCitadelPlayerPawn>()) {
+				var eye = e.As<CCitadelPlayerPawn>()!.EyePosition;
+				if (eye != Vector3.Zero && eye.Z > e.Position.Z + 30f) return eye;
+			}
+		} catch { }
+		return e.Position + new Vector3(0, 0, HeadZ);
+	}
 	public static float CenterZ = 58f;
 
 	/// <summary>Heroes that are preloaded and can be chosen as bot hero.</summary>

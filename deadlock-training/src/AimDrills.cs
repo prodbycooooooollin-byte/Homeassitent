@@ -89,8 +89,8 @@ sealed class FlickDrill : Drill {
 		var p = PlayerPawn;
 		if (p == null || bot.Ent == null) return false;
 		var eye = Aim.Eye(p);
-		var head = bot.Ent.Position + new Vector3(0, 0, TrainerConfig.HeadZ);
-		return Aim.AngleTo(eye, Aim.Dir(p), head) <= Aim.AngularRadius(TrainerConfig.HeadRadius * 1.3f, Vector3.Distance(eye, head));
+		var head = TrainerConfig.HeadOf(bot.Ent);
+		return Aim.AngleTo(eye, Aim.Dir(p), head) <= Aim.AngularRadius(TrainerConfig.HeadRadius * 1.5f, Vector3.Distance(eye, head));
 	}
 
 	protected override void Tick(CCitadelPlayerPawn pawn, double nowMs) {
@@ -362,7 +362,7 @@ sealed class TrackDrill : Drill {
 		float dist = Vector3.Distance(eye, center);
 		bool on = Aim.AngleTo(eye, fwd, center) <= Aim.AngularRadius(Tuning.TrackRadius(Lvl), dist);
 
-		var headPos = basePos + new Vector3(0, 0, TrainerConfig.HeadZ);
+		var headPos = (_a.Wants && _a.Ent is { } he && he.IsValid) ? TrainerConfig.HeadOf(he) : basePos + new Vector3(0, 0, TrainerConfig.HeadZ);
 		bool head = Aim.AngleTo(eye, fwd, headPos) <= Aim.AngularRadius(TrainerConfig.HeadRadius, Vector3.Distance(eye, headPos));
 		if (head) on = true; // the head is part of the target
 
