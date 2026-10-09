@@ -346,25 +346,35 @@ sealed class Actor {
 	/// <summary>A harmless model prop (no bot, no game AI) that looks like a hero. Hit tests are done by geometry.</summary>
 	public CBaseEntity? Body;
 
-	public void PlaceBody(Vector3 feet, Vector3 lookAt) {
-		if (string.IsNullOrEmpty(PlayerModel)) return;
+	/// <summary>When the first stand-in body was created plus the time the client needs to stream the model in (Clock.Ms), or 0.</summary>
+	public static double BodyReadyAt;
+
+	/// <summary>Spawn a stand-in prop with the player's hero model at pos (also used to pre-load the model while the menu is open).</summary>
+	public static CBaseEntity? MakeBody(Vector3 pos) {
+		if (string.IsNullOrEmpty(PlayerModel)) return null;
 		try {
-			if (Body == null || !Body.IsValid) {
-				var ent = CBaseEntity.CreateByName("prop_dynamic");
-				if (ent == null) return;
-				ent.Teleport(position: feet);
-				var kv = new CEntityKeyValues();
-				kv.SetString("model", PlayerModel);
-				kv.SetInt("solid", 0);
-				ent.Spawn(kv);
-				try { ent.SetModel(PlayerModel); } catch { }
-				Body = ent;
-			}
-			Body.Teleport(position: feet, angles: new Vector3(0f, Aim.YawTo(feet, lookAt), 0f));
+			var ent = CBaseEntity.CreateByName("prop_dynamic");
+			if (ent == null) return null;
+			ent.Teleport(position: pos);
+			var kv = new CEntityKeyValues();
+			kv.SetString("model", PlayerModel);
+			kv.SetInt("solid", 0);
+			ent.Spawn(kv);
+			try { ent.SetModel(PlayerModel); } catch { }
+			if (BodyReadyAt <= 0) BodyReadyAt = Clock.Ms + 10000;
+			return ent;
 		} catch (Exception ex) {
 			Console.WriteLine($"[Trainer] Stand-in body failed: {ex.Message}");
 			PlayerModel = "";
+			return null;
 		}
+	}
+
+	public void PlaceBody(Vector3 feet, Vector3 lookAt) {
+		try {
+			if (Body == null || !Body.IsValid) Body = MakeBody(feet);
+			Body?.Teleport(position: feet, angles: new Vector3(0f, Aim.YawTo(feet, lookAt), 0f));
+		} catch { }
 	}
 
 	public void KillBody() {

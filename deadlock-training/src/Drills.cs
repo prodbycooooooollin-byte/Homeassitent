@@ -51,11 +51,25 @@ abstract class Drill {
 		_gateDeadline = nowMs + 14000;
 		if (!_gated) {
 			RealBots = false;
-			Ready(pawn, nowMs);
+			// Stand-in bodies are invisible on the client for ~10 s after they first appear (model streaming): wait for that.
+			if (Actor.BodyReadyAt > nowMs + 500 && !string.IsNullOrEmpty(Actor.PlayerModel) && Actors.Count > 0) {
+				_waitUntil = Actor.BodyReadyAt;
+				Say("[Training] Loading the target model... the exercise starts in a few seconds.");
+			} else {
+				Ready(pawn, nowMs);
+			}
 		}
 	}
 
+	private double _waitUntil;
+
 	public void Update(CCitadelPlayerPawn pawn, double nowMs) {
+		if (_waitUntil > 0) {
+			foreach (var a in Actors) if (!a.Wants) a.PlaceBody(a.Feet, pawn.Position);
+			if (nowMs < _waitUntil) return;
+			_waitUntil = 0;
+			Ready(pawn, nowMs);
+		}
 		if (_gated) {
 			var bots = Actors.Where(a => a.Wants).ToList();
 			foreach (var b in bots) b.Poll(nowMs);

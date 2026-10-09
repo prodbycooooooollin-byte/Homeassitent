@@ -78,6 +78,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 
 	public override void OnStartupServer() {
 		_arenaCleaned = false;
+		Actor.BodyReadyAt = 0;
 		DumpCvarsOnce();
 		StopAll(); // map change: old entities and bots are gone
 		TrainerBots.ClearAll();
@@ -309,12 +310,23 @@ public class TrainerPlugin : DeadworksPluginBase {
 			return;
 		}
 		int slot = c.EntityIndex - 1;
+		WarmUpBody(pawn);
 		if (placeHere || !_hubs.ContainsKey(slot))
 			_hubs[slot] = new Hub { Feet = pawn.Position, Yaw = pawn.EyeAngles.Y };
 		_noAutoMenu.Remove(slot);
 		var hub = _hubs[slot];
 		Begin(c, input => new MenuDrill(c, input, LevelOf(slot), l => _levels[slot] = l, id => OnMenuSelect(c, slot, id),
 			hub.Feet + new Vector3(0, 0, 64), hub.Yaw));
+	}
+
+	private CBaseEntity? _warmBody;
+
+	/// <summary>Spawn one stand-in body behind the player while the menu is open, so the client has streamed the model in by the time an exercise starts.</summary>
+	private void WarmUpBody(CCitadelPlayerPawn pawn) {
+		if (!TrainerConfig.NoBots || Actor.BodyReadyAt > 0) return;
+		try { var m = pawn.ModelName; if (!string.IsNullOrEmpty(m)) Actor.PlayerModel = m; } catch { }
+		_warmBody = Actor.MakeBody(pawn.Position - Aim.Forward(0f, pawn.EyeAngles.Y) * 350f);
+		Timer.Once(30.Seconds(), () => { try { if (_warmBody != null && _warmBody.IsValid) _warmBody.Remove(); } catch { } _warmBody = null; });
 	}
 
 	private void CloseMenu(CCitadelPlayerController c, string? message = "[Training] Menu switched off. !train brings it back.") {
