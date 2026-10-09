@@ -774,10 +774,12 @@ sealed class CounterspellDrill : Drill {
 				if (In.ItemPresses > _items0) { _early++; _done++; Say($"[Counterspell {_done}/{_total}] TOO EARLY: you used it before {_heroName} cast anything."); Finish(pawn, nowMs, "TOO EARLY"); break; }
 				if (nowMs >= _phaseAt) {
 					_ph = Ph.Cast; _castAt = nowMs; _gotDamage = false; _cast = true; _pressAt = 0; _items0 = In.ItemPresses;
-					// Only THIS hero casts (per-bot call; the console command would make every bot cast). It faces you while it does.
+					// The per-bot call did not cast anything; the console command does, but it makes EVERY bot cast. So all other
+					// bots stand far away (see ParkOthers) and only the hero in front of you can reach you.
 					try {
 						Actors[_cur].Place(_pos, pawn.Position);
-						Actors[_cur].Pawn?.ExecuteAbilityBySlot((EAbilitySlot)(_slot - 1));
+						Server.ExecuteCommand($"citadel_bot_use_ability {_slot}");
+						TrainerBots.Schedule(450, "citadel_bot_use_ability 0");
 					} catch { }
 					_b1 = $"{_heroName}: {_ability}"; _b2 = "Counter it!";
 				}
@@ -823,10 +825,30 @@ sealed class CounterspellDrill : Drill {
 		_pos = pawn.Position + Aim.Forward(0f, yaw) * dist;
 		try { pawn.Health = pawn.MaxHealth; Actors[_cur].Ent?.Teleport(position: new Vector3(_pos.X, _pos.Y, pawn.Position.Z + 8f), velocity: Vector3.Zero); } catch { }
 
+		ParkOthers(pawn);
 		_ph = Ph.Intro; _phaseAt = nowMs + 900; _items0 = In.ItemPresses; _cast = false;
 		Kill(_label); _label = null;
 		_label = SpawnText($"{_heroName.ToUpperInvariant()}", _pos + new Vector3(0, 0, 215f), Aim.Eye(pawn), 16f, 255, 255, 255);
 		_b1 = _heroName; _b2 = "Get ready.";
+	}
+
+	private Vector3? _far;
+
+	/// <summary>Every bot except the one in front of you goes to the spot of the map farthest from you, out of reach and out of sight.</summary>
+	private void ParkOthers(CCitadelPlayerPawn pawn) {
+		if (_far == null || Vector3.Distance(_far.Value, pawn.Position) < 3500f) {
+			Vector3? best = null; float bd = 0;
+			foreach (var en in MapData.Get(Server.MapName)) {
+				var q = new Vector3(en.X, en.Y, en.Z + 60f);
+				float d = Vector3.Distance(q, pawn.Position);
+				if (d > bd) { bd = d; best = q; }
+			}
+			_far = best ?? BotPool.ParkPos;
+		}
+		for (int i = 0; i < Actors.Count; i++) {
+			if (i == _cur) continue;
+			try { Actors[i].Ent?.Teleport(position: _far.Value + new Vector3(i * 30f, 0, 0), velocity: Vector3.Zero); } catch { }
+		}
 	}
 
 	private void Resolve(CCitadelPlayerPawn pawn, double nowMs) {
