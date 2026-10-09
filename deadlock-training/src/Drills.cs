@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Numerics;
 using DeadworksManaged.Api;
 
@@ -5,13 +6,23 @@ namespace DeadlockTrainer;
 
 /// <summary>Einstellungen, die man im Spiel per Chat aendern kann.</summary>
 static class TrainerConfig {
-	/// <summary>Zusaetzlicher Yaw-Offset, damit Text-Entities zum Spieler zeigen (Test mit !ttest, Wechsel mit !tface).</summary>
-	public static float TextYawOffset = 90f;
+	/// <summary>Drehung der Text-Entities. Standard 270 = Text zeigt zum Spieler (mit !tface anpassbar).</summary>
+	public static float TextYawOffset = 270f;
 	/// <summary>Schrift fuer World-Text. null = Standard. Die Deadworks-Beispiele nutzen "Reaver" / "Radiance".</summary>
 	public static string? Font = null;
 	/// <summary>true: Ziele werden durch 0,25 s auf dem Ziel bleiben "getroffen" statt durch Klicken (Fallback, falls Klicks nicht ankommen).</summary>
 	public static bool Dwell = false;
 	public const double DwellMs = 250;
+
+	/// <summary>Modell fuer Angreifer/Ziele (wird mit !tmodel geaendert).</summary>
+	public static string BodyModel = Models.Werewolf;
+	/// <summary>Hoehe der "Brust" ueber dem Boden bei Skalierung 1 (dorthin wird gezielt).</summary>
+	public static float CenterZ = 55f;
+}
+
+static class Models {
+	/// <summary>Aus den Deadworks-Beispielen (SetModelPlugin); wird in OnPrecacheResources vorgeladen.</summary>
+	public const string Werewolf = "models/heroes_wip/werewolf/werewolf.vmdl";
 }
 
 enum Level { Easy, Normal, Hard }
@@ -31,7 +42,8 @@ abstract class Drill {
 	protected readonly CCitadelPlayerController Ctl;
 	protected readonly PlayerInput In;
 	protected static readonly Random Rng = Random.Shared;
-	private readonly List<CPointWorldText> _spawned = new();
+	private readonly List<CPointWorldText> _texts = new();
+	private readonly List<CBaseEntity> _bodies = new();
 
 	public bool Finished { get; set; }
 	public abstract string Name { get; }
@@ -46,21 +58,30 @@ abstract class Drill {
 
 	/// <summary>Raeumt alle erzeugten Entities weg. Wird bei Ende/Abbruch/Unload aufgerufen.</summary>
 	public virtual void Stop() {
-		foreach (var t in _spawned.ToArray()) Kill(t);
-		_spawned.Clear();
+		foreach (var t in _texts.ToArray()) Kill(t);
+		foreach (var b in _bodies.ToArray()) KillBody(b);
+		_texts.Clear();
+		_bodies.Clear();
 	}
 
 	protected void Say(string text) => Chat.PrintToChat(Ctl, text);
 
+	// ---- Text ------------------------------------------------------------------------------------------------------
+
 	protected CPointWorldText? SpawnText(string msg, Vector3 pos, Vector3 eye, float radius, byte r, byte g, byte b) {
-		var t = CPointWorldText.Create(msg, pos, fontSize: 100f, r: r, g: g, b: b, fontName: TrainerConfig.Font, reorientMode: 0);
-		if (t == null) return null;
-		t.WorldUnitsPerPx = radius / 35f;
-		t.JustifyHorizontal = HorizontalJustify.Center;
-		t.JustifyVertical = VerticalJustify.Center;
-		Face(t, pos, eye);
-		_spawned.Add(t);
-		return t;
+		try {
+			var t = CPointWorldText.Create(msg, pos, fontSize: 100f, r: r, g: g, b: b, fontName: TrainerConfig.Font, reorientMode: 0);
+			if (t == null) return null;
+			t.WorldUnitsPerPx = radius / 35f;
+			t.JustifyHorizontal = HorizontalJustify.Center;
+			t.JustifyVertical = VerticalJustify.Center;
+			Face(t, pos, eye);
+			_texts.Add(t);
+			return t;
+		} catch (Exception ex) {
+			Console.WriteLine($"[Trainer] Text konnte nicht erzeugt werden: {ex.Message}");
+			return null;
+		}
 	}
 
 	protected static void Face(CPointWorldText t, Vector3 pos, Vector3 eye) =>
@@ -68,58 +89,98 @@ abstract class Drill {
 
 	protected void Kill(CPointWorldText? t) {
 		if (t == null) return;
-		_spawned.Remove(t);
-		if (t.IsValid) t.Remove();
+		_texts.Remove(t);
+		try { if (t.IsValid) t.Remove(); } catch { /* Entity schon weg */ }
+	}
+
+	// ---- Figuren ---------------------------------------------------------------------------------------------------
+
+	/// <summary>Erzeugt eine nicht-solide, sichtbare Figur (Modell) an der Bodenposition feet. null, wenn es nicht klappt.</summary>
+	protected CBaseEntity? SpawnBody(Vector3 feet, float yaw, float scale, CCitadelPlayerPawn pawn) {
+		try {
+			var e = CBaseEntity.CreateByName("prop_dynamic");
+			if (e == null) return null;
+			e.Teleport(position: feet, angles: new Vector3(0f, yaw, 0f));
+			var kv = new CEntityKeyValues();
+			kv.SetString("model", TrainerConfig.BodyModel);
+			kv.SetFloat("modelscale", scale);
+			kv.SetInt("solid", 0);
+			e.Spawn(kv);
+			if (string.IsNullOrEmpty(e.ModelName)) e.SetModel(TrainerConfig.BodyModel);
+			e.SetScale(scale);
+			try { e.DisableCollisionsWith(pawn); } catch { /* nicht kritisch */ }
+			_bodies.Add(e);
+			return e;
+		} catch (Exception ex) {
+			Console.WriteLine($"[Trainer] Figur konnte nicht erzeugt werden: {ex.Message}");
+			return null;
+		}
+	}
+
+	protected static void Tint(CBaseEntity? e, byte r, byte g, byte b) {
+		if (e == null) return;
+		try { if (e.IsValid) e.RenderColor = Color.FromArgb(255, r, g, b); } catch { /* kein Modell-Entity */ }
+	}
+
+	protected static void MoveBody(CBaseEntity? e, Vector3 feet, Vector3 lookAt) {
+		if (e == null) return;
+		try {
+			if (e.IsValid) e.Teleport(position: feet, angles: new Vector3(0f, Aim.YawTo(feet, lookAt), 0f));
+		} catch { /* Entity schon weg */ }
+	}
+
+	protected void KillBody(CBaseEntity? e) {
+		if (e == null) return;
+		_bodies.Remove(e);
+		try { if (e.IsValid) e.Remove(); } catch { /* Entity schon weg */ }
 	}
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Menue: Textfelder vor dir; draufschiessen waehlt die Uebung.
+// Menue: dauerhaft vor dir; draufschiessen waehlt die Uebung. Bleibt bestehen, bis !train off.
 // ---------------------------------------------------------------------------------------------------------------------
 sealed class MenuDrill : Drill {
 	private readonly Action<string> _onSelect;
+	private readonly Vector3 _anchorEye;
+	private readonly float _anchorYaw;
 	private record Item(string Id, string Label, float YawOffset);
 	private readonly List<(Item Item, CPointWorldText? Text, Vector3 Pos)> _items = new();
 	private const float Dist = 380f;
 	private const float HitDeg = 8f;
-	private double _startedAt;
 	private int _hover = -1;
 	private double _hoverSince;
 
 	public override string Name => "Menue";
 
-	public MenuDrill(CCitadelPlayerController ctl, PlayerInput input, Action<string> onSelect) : base(ctl, input) => _onSelect = onSelect;
+	public MenuDrill(CCitadelPlayerController ctl, PlayerInput input, Action<string> onSelect, Vector3 anchorEye, float anchorYaw)
+		: base(ctl, input) {
+		_onSelect = onSelect;
+		_anchorEye = anchorEye;
+		_anchorYaw = anchorYaw;
+	}
 
 	public override void Start(CCitadelPlayerPawn pawn, double nowMs) {
-		_startedAt = nowMs;
 		var eye = Aim.Eye(pawn);
-		float yaw = pawn.EyeAngles.Y;
 		var items = new[] {
 			new Item("parry", "PARRY", -38f),
 			new Item("flick", "FLICK", -13f),
 			new Item("track", "TRACK", 13f),
-			new Item("stop", "ENDE", 38f),
+			new Item("stop", "MENUE AUS", 38f),
 		};
 		foreach (var it in items) {
-			var pos = eye + Aim.Forward(0f, yaw + it.YawOffset) * Dist;
+			var pos = _anchorEye + Aim.Forward(0f, _anchorYaw + it.YawOffset) * Dist;
 			var t = SpawnText(it.Label, pos, eye, 24f, 255, 255, 255);
 			_items.Add((it, t, pos));
 		}
-		var title = eye + Aim.Forward(-14f, yaw) * Dist;
-		SpawnText("TRAINING - Schiess auf eine Uebung", title, eye, 12f, 255, 200, 0);
-		Say("[Training] Menue offen: Ziele mit dem Fadenkreuz anvisieren und schiessen (oder !parry / !flick / !track).");
+		var title = _anchorEye + Aim.Forward(-14f, _anchorYaw) * Dist;
+		SpawnText("TRAINING - schiess auf eine Uebung", title, eye, 12f, 255, 200, 0);
+		Say("[Training] Menue ist da: Ziele mit dem Fadenkreuz anvisieren und schiessen. (!train off schliesst es)");
 		while (In.Shots.Count > 0) In.Shots.Dequeue(); // alte Klicks verwerfen
 	}
 
 	public override void Update(CCitadelPlayerPawn pawn, double nowMs) {
-		if (nowMs - _startedAt > 120_000) {
-			Say("[Training] Menue geschlossen (Zeitueberschreitung). !train oeffnet es neu.");
-			Finished = true;
-			return;
-		}
 		var eye = Aim.Eye(pawn);
-		var ang = pawn.EyeAngles;
-		var fwd = Aim.Forward(ang);
+		var fwd = Aim.Forward(pawn.EyeAngles);
 
 		int hover = -1;
 		for (int i = 0; i < _items.Count; i++)
@@ -132,7 +193,7 @@ sealed class MenuDrill : Drill {
 			_hoverSince = nowMs;
 		}
 
-		// Texte mitdrehen, falls der Spieler sich bewegt.
+		// Texte zum Spieler drehen (falls er herumlaeuft).
 		foreach (var (_, text, pos) in _items) if (text != null) Face(text, pos, eye);
 
 		bool choose = false;
@@ -154,13 +215,15 @@ sealed class MenuDrill : Drill {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Parry: Windup-Signal, dann "Treffer" zu einem festen Zeitpunkt. Dein Parry-Fenster muss den Treffer abdecken.
+// Parry: Angreifer-Figuren stehen um dich herum. Einer holt aus (rot), kurz darauf schlaegt er zu (Ausfall + Ton).
+// Dein Parry-Fenster muss den Schlag abdecken. Blau = Finte, nicht parieren.
 // ---------------------------------------------------------------------------------------------------------------------
 sealed class ParryDrill : Drill {
 	private enum Ph { Gap, Windup }
 
 	private readonly int _rounds;
 	private readonly Level _lvl;
+	private readonly int _attackerCount;
 	private Ph _ph = Ph.Gap;
 	private int _round;
 	private double _nextCue;
@@ -170,15 +233,24 @@ sealed class ParryDrill : Drill {
 	private readonly List<double> _edges = new();
 	private CPointWorldText? _cue;
 
+	private readonly List<(CBaseEntity? Body, Vector3 Home)> _att = new();
+	private int _cur = -1, _last = -1;
+	private Vector3 _playerFeet;
+	private Vector3 _cueFallbackPos;
+
 	private int _ok, _early, _late, _missed, _fakeOk, _fakeFail, _fakeCount;
 	private readonly List<double> _offsets = new();
 	private readonly List<double> _reactions = new();
 
+	private const float RingDist = 300f;
+	private const double LungeOutMs = 140, LungeBackMs = 220;
+
 	public override string Name => "Parry";
 
-	public ParryDrill(CCitadelPlayerController ctl, PlayerInput input, int rounds, Level lvl) : base(ctl, input) {
+	public ParryDrill(CCitadelPlayerController ctl, PlayerInput input, int rounds, Level lvl, int attackers) : base(ctl, input) {
 		_rounds = Math.Clamp(rounds, 1, 100);
 		_lvl = lvl;
+		_attackerCount = Math.Clamp(attackers, 1, 5);
 	}
 
 	private double WindupMs() => _lvl switch {
@@ -196,27 +268,53 @@ sealed class ParryDrill : Drill {
 	private double FeintChance() => _lvl switch { Level.Easy => 0.0, Level.Hard => 0.30, _ => 0.15 };
 
 	public override void Start(CCitadelPlayerPawn pawn, double nowMs) {
-		_nextCue = nowMs + 2000;
+		_nextCue = nowMs + 2500;
 		_edgeSeen = In.ParryEdges;
-		Say($"[Parry] {_rounds} Runden, Stufe {LevelParse.Label(_lvl)}.");
-		Say("[Parry] Rotes >> << = gleich kommt ein Treffer: parry so, dass dein Parry-Fenster den Treffer abdeckt (Treffer-Signal: '!!!' + Ton).");
-		if (FeintChance() > 0) Say("[Parry] Blaues '?' = Finte, NICHT parieren.");
-		Say("[Parry] Zum Abbrechen: !tstop");
+		_playerFeet = pawn.Position;
+		float yaw0 = pawn.EyeAngles.Y;
+		var eye = Aim.Eye(pawn);
+
+		for (int i = 0; i < _attackerCount; i++) {
+			float frac = _attackerCount == 1 ? 0.5f : i / (float)(_attackerCount - 1);
+			float yaw = yaw0 - 65f + frac * 130f;
+			var home = new Vector3(_playerFeet.X, _playerFeet.Y, _playerFeet.Z) + Aim.Forward(0f, yaw) * RingDist;
+			var body = SpawnBody(home, Aim.YawTo(home, _playerFeet), 1f, pawn);
+			_att.Add((body, home));
+		}
+		_cueFallbackPos = eye + Aim.Forward(-4f, yaw0) * 260f;
+
+		bool anyBody = _att.Any(a => a.Body != null);
+		if (!anyBody)
+			Say("[Parry] Hinweis: Figuren konnten nicht erzeugt werden (Modell?) - es gibt nur Text-Signale. Siehe !tmodel.");
+
+		Say($"[Parry] {_rounds} Runden, Stufe {LevelParse.Label(_lvl)}, {_attackerCount} Angreifer.");
+		Say("[Parry] ROT leuchtender Angreifer = er holt aus und schlaegt gleich zu: parry so, dass dein Parry-Fenster den Schlag abdeckt (Schlag = Ausfall + Ton).");
+		if (FeintChance() > 0) Say("[Parry] BLAU leuchtender Angreifer = Finte, NICHT parieren.");
+		Say("[Parry] Abbrechen: !tstop");
 	}
 
 	public override void Update(CCitadelPlayerPawn pawn, double nowMs) {
+		_playerFeet = pawn.Position;
+		var eye = Aim.Eye(pawn);
+
 		if (In.ParryEdges != _edgeSeen) {
 			_edgeSeen = In.ParryEdges;
 			if (_ph == Ph.Windup) _edges.Add(In.LastParryEdgeMs);
 		}
 
+		// Alle Angreifer schauen den Spieler an (nur der aktive wird beim Zuschlagen bewegt).
+		for (int i = 0; i < _att.Count; i++)
+			if (i != _cur || _ph != Ph.Windup || !_sampled)
+				MoveBody(_att[i].Body, _att[i].Home, _playerFeet);
+
 		if (_ph == Ph.Gap) {
-			if (nowMs >= _nextCue) BeginRound(pawn, nowMs);
+			if (nowMs >= _nextCue) BeginRound(nowMs, eye);
 			return;
 		}
 
-		// Windup
-		if (_cue != null) Face(_cue, _cuePos, Aim.Eye(pawn));
+		var (body, home) = _att[_cur];
+		var cuePos = body != null ? home + new Vector3(0, 0, 135) : _cueFallbackPos;
+		if (_cue != null) Face(_cue, cuePos, eye);
 
 		if (!_sampled && nowMs >= _strikeAt) {
 			_sampled = true;
@@ -225,15 +323,28 @@ sealed class ParryDrill : Drill {
 				if (_fake) { _cue.SetMessage("--"); _cue.SetColor(120, 120, 120); }
 				else { _cue.SetMessage("!!!"); _cue.SetColor(255, 255, 255); }
 			}
-			if (!_fake) pawn.EmitSound("Damage.Send.Crit", volume: 0.5f);
+			if (!_fake) { Tint(body, 255, 255, 255); pawn.EmitSound("Damage.Send.Crit", volume: 0.5f); }
+			else Tint(body, 255, 255, 255);
+		}
+
+		// Ausfall: nur bei echtem Schlag.
+		if (_sampled && !_fake && body != null) {
+			double t = nowMs - _strikeAt;
+			var dir = home - _playerFeet;
+			dir.Z = 0;
+			dir = dir.LengthSquared() > 1 ? Vector3.Normalize(dir) : Vector3.UnitX;
+			var near = _playerFeet + dir * 85f;
+			Vector3 pos;
+			if (t <= LungeOutMs) pos = Vector3.Lerp(home, near, (float)(t / LungeOutMs));
+			else if (t <= LungeOutMs + LungeBackMs) pos = Vector3.Lerp(near, home, (float)((t - LungeOutMs) / LungeBackMs));
+			else pos = home;
+			MoveBody(body, pos, _playerFeet);
 		}
 
 		if (_sampled && nowMs >= _strikeAt + 450) FinishRound(nowMs);
 	}
 
-	private Vector3 _cuePos;
-
-	private void BeginRound(CCitadelPlayerPawn pawn, double nowMs) {
+	private void BeginRound(double nowMs, Vector3 eye) {
 		_round++;
 		_fake = Rng.NextDouble() < FeintChance();
 		if (_fake) _fakeCount++;
@@ -244,18 +355,26 @@ sealed class ParryDrill : Drill {
 		_edges.Clear();
 		_edgeSeen = In.ParryEdges;
 
-		var eye = Aim.Eye(pawn);
-		_cuePos = eye + Aim.Forward(-4f, pawn.EyeAngles.Y) * 260f;
+		do { _cur = Rng.Next(_att.Count); } while (_att.Count > 1 && _cur == _last);
+		_last = _cur;
+
+		var (body, home) = _att[_cur];
+		if (_fake) Tint(body, 80, 140, 255); else Tint(body, 255, 40, 40);
+
 		Kill(_cue);
+		var cuePos = body != null ? home + new Vector3(0, 0, 135) : _cueFallbackPos;
 		_cue = _fake
-			? SpawnText("?", _cuePos, eye, 30f, 80, 140, 255)
-			: SpawnText(">>   <<", _cuePos, eye, 30f, 255, 40, 40);
+			? SpawnText("?", cuePos, eye, 30f, 80, 140, 255)
+			: SpawnText(">>   <<", cuePos, eye, 30f, 255, 40, 40);
 		_ph = Ph.Windup;
 	}
 
 	private void FinishRound(double nowMs) {
 		Kill(_cue);
 		_cue = null;
+		var (body, home) = _att[_cur];
+		Tint(body, 255, 255, 255);
+		MoveBody(body, home, _playerFeet);
 		double t = _strikeAt;
 		string head = $"[Parry {_round}/{_rounds}]";
 
@@ -267,16 +386,16 @@ sealed class ParryDrill : Drill {
 			if (success) {
 				_ok++;
 				double first = _edges.Count > 0 ? _edges[0] : t;
-				double offset = first - t; // negativ = frueher gedrueckt als der Treffer
+				double offset = first - t; // negativ = frueher gedrueckt als der Schlag
 				_offsets.Add(offset);
 				if (_edges.Count > 0) _reactions.Add(first - _cueStart);
 				string where = offset < -20 ? "frueh" : offset > 20 ? "spaet" : "perfekt";
-				Say($"{head} PARRY! Druck {Fmt.Signed(offset)} zum Treffer ({where})" +
+				Say($"{head} PARRY! Druck {Fmt.Signed(offset)} zum Schlag ({where})" +
 					(_edges.Count > 0 ? $", Reaktion {Fmt.Ms(first - _cueStart)}" : ""));
 			} else if (_edges.Count > 0) {
 				double e = _edges[^1];
-				if (e > t) { _late++; Say($"{head} ZU SPAET: {Fmt.Ms(e - t)} nach dem Treffer."); }
-				else { _early++; Say($"{head} ZU FRUEH: {Fmt.Ms(t - e)} vor dem Treffer gedrueckt, Fenster war schon zu."); }
+				if (e > t) { _late++; Say($"{head} ZU SPAET: {Fmt.Ms(e - t)} nach dem Schlag."); }
+				else { _early++; Say($"{head} ZU FRUEH: {Fmt.Ms(t - e)} vor dem Schlag gedrueckt, Fenster war schon zu."); }
 			} else {
 				_missed++;
 				Say($"{head} VERPENNT - kein Parry.");
@@ -309,7 +428,7 @@ sealed class ParryDrill : Drill {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Flick: Ziele erscheinen um dein Fadenkreuz herum; so schnell wie moeglich draufklicken.
+// Flick: Figuren erscheinen um dich herum; so schnell wie moeglich draufschiessen.
 // ---------------------------------------------------------------------------------------------------------------------
 sealed class FlickDrill : Drill {
 	private readonly int _count;
@@ -317,9 +436,12 @@ sealed class FlickDrill : Drill {
 	private int _spawned, _hits, _timeouts, _shotsFired;
 	private readonly List<double> _reactions = new();
 
-	private CPointWorldText? _target;
-	private Vector3 _pos;
+	private CBaseEntity? _body;
+	private CPointWorldText? _label;
+	private Vector3 _feet;
+	private Vector3 _pos; // Zielpunkt (Brust)
 	private float _tolDeg;
+	private float _groundZ;
 	private bool _active;
 	private double _spawnAtMs, _targetSpawnMs, _timeoutAt, _resultUntil, _dwellSince;
 
@@ -330,85 +452,97 @@ sealed class FlickDrill : Drill {
 		_lvl = lvl;
 	}
 
-	private float Radius() => _lvl switch { Level.Easy => 38f, Level.Hard => 15f, _ => 26f };
+	private float Scale() => _lvl switch { Level.Easy => 1.35f, Level.Hard => 0.7f, _ => 1.0f };
 	private double TimeoutMs() => _lvl switch { Level.Easy => 3000, Level.Hard => 1500, _ => 2200 };
+	private bool HasTarget => _body != null || _label != null || _active;
 
 	public override void Start(CCitadelPlayerPawn pawn, double nowMs) {
 		_spawnAtMs = nowMs + 2000;
+		_groundZ = pawn.Position.Z;
 		while (In.Shots.Count > 0) In.Shots.Dequeue();
-		Say($"[Flick] {_count} Ziele, Stufe {LevelParse.Label(_lvl)}. Rote Kugeln 'O' erscheinen - schnell anvisieren und schiessen. Abbruch: !tstop");
+		Say($"[Flick] {_count} Ziele, Stufe {LevelParse.Label(_lvl)}. Figuren erscheinen um dich herum - schnell anvisieren und schiessen. Abbruch: !tstop");
 	}
 
 	public override void Update(CCitadelPlayerPawn pawn, double nowMs) {
 		var eye = Aim.Eye(pawn);
 		var fwd = Aim.Forward(pawn.EyeAngles);
 
-		// Klicks auswerten.
 		while (In.Shots.Count > 0) {
 			var s = In.Shots.Dequeue();
 			if (!_active) continue;
 			_shotsFired++;
 			if (s.TimeMs >= _targetSpawnMs && Aim.AngleTo(s.Eye, s.Forward, _pos) <= _tolDeg)
-				Hit(s.TimeMs);
+				Hit(pawn, s.TimeMs);
 		}
 
-		// Dwell-Fallback.
 		if (_active && TrainerConfig.Dwell) {
 			if (Aim.AngleTo(eye, fwd, _pos) <= _tolDeg) {
 				if (_dwellSince == 0) _dwellSince = nowMs;
-				else if (nowMs - _dwellSince >= TrainerConfig.DwellMs) Hit(nowMs);
+				else if (nowMs - _dwellSince >= TrainerConfig.DwellMs) Hit(pawn, nowMs);
 			} else _dwellSince = 0;
 		}
 
 		if (_active && nowMs >= _timeoutAt) {
 			_timeouts++;
 			_active = false;
-			_resultUntil = nowMs + 350;
-			_target?.SetMessage("MISS");
-			_target?.SetColor(120, 120, 120);
+			_resultUntil = nowMs + 400;
+			Tint(_body, 120, 120, 120);
+			_label = SpawnText("MISS", _pos + new Vector3(0, 0, 70 * Scale()), eye, 22f, 200, 200, 200);
 		}
 
-		if (!_active && _target != null && nowMs >= _resultUntil) {
-			Kill(_target);
-			_target = null;
+		if (!_active && HasTarget && nowMs >= _resultUntil) {
+			KillBody(_body);
+			_body = null;
+			Kill(_label);
+			_label = null;
 			if (_spawned >= _count) { Summarize(); Finished = true; return; }
 			_spawnAtMs = nowMs + 350 + Rng.NextDouble() * 600;
 		}
 
-		if (!_active && _target == null && _spawned < _count && nowMs >= _spawnAtMs)
+		if (!_active && !HasTarget && _spawned < _count && nowMs >= _spawnAtMs)
 			Spawn(pawn, eye, nowMs);
 
-		if (_target != null) Face(_target, _pos, eye);
+		if (_active) MoveBody(_body, _feet, eye);
+		if (_label != null) Face(_label, _label.Position, eye);
 	}
 
 	private void Spawn(CCitadelPlayerPawn pawn, Vector3 eye, double nowMs) {
-		float yaw = pawn.EyeAngles.Y + (Rng.Next(2) == 0 ? -1 : 1) * (20f + (float)Rng.NextDouble() * 45f);
-		float pitch = -20f + (float)Rng.NextDouble() * 35f;
-		float dist = 650f + (float)Rng.NextDouble() * 450f;
-		_pos = eye + Aim.Forward(pitch, yaw) * dist;
-		float radius = Radius();
-		_tolDeg = Aim.AngularRadius(radius * 0.9f, dist);
-		_target = SpawnText("O", _pos, eye, radius, 255, 40, 40);
+		float yaw = pawn.EyeAngles.Y + (Rng.Next(2) == 0 ? -1 : 1) * (20f + (float)Rng.NextDouble() * 55f);
+		float dist = 450f + (float)Rng.NextDouble() * 450f;
+		var origin = pawn.Position;
+		float scale = Scale();
+		_feet = new Vector3(origin.X, origin.Y, _groundZ) + Aim.Forward(0f, yaw) * dist;
+		_pos = _feet + new Vector3(0, 0, TrainerConfig.CenterZ * scale);
+		_tolDeg = Aim.AngularRadius(26f * scale * 0.9f, dist);
+
+		_body = SpawnBody(_feet, Aim.YawTo(_feet, origin), scale, pawn);
+		if (_body == null) {
+			// Fallback: Text-Kugel.
+			_label = SpawnText("O", _pos, eye, 26f * scale, 255, 40, 40);
+			if (_label == null) {
+				Say("[Flick] Konnte weder Figur noch Text erzeugen. Abbruch. (Siehe !tmodel / !ttest)");
+				Finished = true;
+				return;
+			}
+		} else Tint(_body, 255, 60, 60);
+
 		_spawned++;
-		_active = _target != null;
+		_active = true;
 		_targetSpawnMs = nowMs;
 		_timeoutAt = nowMs + TimeoutMs();
 		_dwellSince = 0;
-		if (_target == null) {
-			Say("[Flick] Konnte kein Ziel erzeugen (World-Text nicht verfuegbar). Abbruch.");
-			Finished = true;
-		}
 	}
 
-	private void Hit(double atMs) {
+	private void Hit(CCitadelPlayerPawn pawn, double atMs) {
 		double react = atMs - _targetSpawnMs;
 		_hits++;
 		_reactions.Add(react);
 		_active = false;
-		_resultUntil = atMs + 350;
-		_target?.SetMessage($"{react:0} ms");
-		_target?.SetColor(60, 255, 90);
-		Ctl.GetHeroPawn()?.EmitSound("Damage.Send.Crit", volume: 0.3f);
+		_resultUntil = atMs + 400;
+		Tint(_body, 60, 255, 90);
+		Kill(_label); // evtl. Fallback-Kugel
+		_label = SpawnText($"{react:0} ms", _pos + new Vector3(0, 0, 70 * Scale()), Aim.Eye(pawn), 24f, 60, 255, 90);
+		pawn.EmitSound("Damage.Send.Crit", volume: 0.3f);
 	}
 
 	private void Summarize() {
@@ -426,13 +560,15 @@ sealed class FlickDrill : Drill {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Tracking: ein Ziel bewegt sich glatt hin und her; Fadenkreuz draufhalten (und dabei schiessen).
+// Tracking: eine Figur laeuft hin und her; Fadenkreuz draufhalten (und dabei schiessen).
 // ---------------------------------------------------------------------------------------------------------------------
 sealed class TrackDrill : Drill {
 	private readonly double _durationMs;
 	private readonly Level _lvl;
-	private CPointWorldText? _target;
-	private Vector3 _center, _right;
+	private CBaseEntity? _body;
+	private CPointWorldText? _fallbackText;
+	private Vector3 _center, _right, _forward;
+	private float _groundZ;
 	private double _startMs, _lastMs;
 	private double _total, _onTarget, _firing, _firingOn;
 	private bool _wasOn;
@@ -448,30 +584,37 @@ sealed class TrackDrill : Drill {
 		_p3 = Rng.NextDouble() * Math.PI * 2;
 	}
 
-	private float Radius() => _lvl switch { Level.Easy => 45f, Level.Hard => 22f, _ => 32f };
+	private float Scale() => _lvl switch { Level.Easy => 1.35f, Level.Hard => 0.7f, _ => 1.0f };
 	private double Speed() => _lvl switch { Level.Easy => 0.5, Level.Hard => 1.5, _ => 0.9 };
 
 	public override void Start(CCitadelPlayerPawn pawn, double nowMs) {
-		var eye = Aim.Eye(pawn);
+		var origin = pawn.Position;
 		float yaw = pawn.EyeAngles.Y;
-		_center = eye + Aim.Forward(4f, yaw) * 900f;
+		_groundZ = origin.Z;
+		_forward = Aim.Forward(0f, yaw);
 		float yr = yaw * MathF.PI / 180f;
 		_right = new Vector3(MathF.Sin(yr), -MathF.Cos(yr), 0f);
+		_center = new Vector3(origin.X, origin.Y, _groundZ) + _forward * 700f;
 		_startMs = _lastMs = nowMs;
-		_target = SpawnText("O", PosAt(0), eye, Radius(), 255, 40, 40);
-		if (_target == null) {
-			Say("[Tracking] Konnte kein Ziel erzeugen (World-Text nicht verfuegbar). Abbruch.");
-			Finished = true;
-			return;
-		}
-		Say($"[Tracking] {_durationMs / 1000:0} s, Stufe {LevelParse.Label(_lvl)}. Halte das Fadenkreuz auf der Kugel (gruen = auf dem Ziel) und schiesse dabei. Abbruch: !tstop");
+
+		var feet = FeetAt(0);
+		_body = SpawnBody(feet, Aim.YawTo(feet, origin), Scale(), pawn);
+		if (_body == null) {
+			_fallbackText = SpawnText("O", feet + new Vector3(0, 0, TrainerConfig.CenterZ * Scale()), Aim.Eye(pawn), 26f * Scale(), 255, 40, 40);
+			if (_fallbackText == null) {
+				Say("[Tracking] Konnte weder Figur noch Text erzeugen. Abbruch. (Siehe !tmodel / !ttest)");
+				Finished = true;
+				return;
+			}
+		} else Tint(_body, 255, 60, 60);
+		Say($"[Tracking] {_durationMs / 1000:0} s, Stufe {LevelParse.Label(_lvl)}. Halte das Fadenkreuz auf der Figur (gruen = auf dem Ziel) und schiesse dabei. Abbruch: !tstop");
 	}
 
-	private Vector3 PosAt(double tSec) {
+	private Vector3 FeetAt(double tSec) {
 		double w = Speed();
 		double lat = 380 * Math.Sin(w * tSec + _p1) + 160 * Math.Sin(2.3 * w * tSec + _p2);
-		double vert = 110 * Math.Sin(1.7 * w * tSec + _p3);
-		return _center + _right * (float)lat + new Vector3(0f, 0f, (float)vert);
+		double depth = 120 * Math.Sin(0.7 * w * tSec + _p3);
+		return _center + _right * (float)lat + _forward * (float)depth;
 	}
 
 	public override void Update(CCitadelPlayerPawn pawn, double nowMs) {
@@ -483,20 +626,23 @@ sealed class TrackDrill : Drill {
 
 		var eye = Aim.Eye(pawn);
 		var fwd = Aim.Forward(pawn.EyeAngles);
-		var pos = PosAt(elapsed / 1000.0);
+		var feet = FeetAt(elapsed / 1000.0);
+		float scale = Scale();
+		var pos = feet + new Vector3(0, 0, TrainerConfig.CenterZ * scale);
 		float dist = Vector3.Distance(eye, pos);
-		bool on = Aim.AngleTo(eye, fwd, pos) <= Aim.AngularRadius(Radius() * 0.9f, dist);
+		bool on = Aim.AngleTo(eye, fwd, pos) <= Aim.AngularRadius(26f * scale * 0.9f, dist);
 
 		_total += dt;
 		if (on) _onTarget += dt;
 		if (In.AttackHeld) { _firing += dt; if (on) _firingOn += dt; }
 
-		if (_target != null) {
-			Face(_target, pos, eye);
-			if (on != _wasOn) {
-				_wasOn = on;
-				if (on) _target.SetColor(60, 255, 90); else _target.SetColor(255, 40, 40);
-			}
+		MoveBody(_body, feet, pawn.Position);
+		if (_fallbackText != null) Face(_fallbackText, pos, eye);
+
+		if (on != _wasOn) {
+			_wasOn = on;
+			if (on) { Tint(_body, 60, 255, 90); _fallbackText?.SetColor(60, 255, 90); }
+			else { Tint(_body, 255, 60, 60); _fallbackText?.SetColor(255, 40, 40); }
 		}
 
 		if (elapsed >= _durationMs) {
