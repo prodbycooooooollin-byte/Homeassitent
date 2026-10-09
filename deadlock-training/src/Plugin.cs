@@ -575,7 +575,10 @@ public class TrainerPlugin : DeadworksPluginBase {
 			string cmd = c;
 			Server.ExecuteCommand(cmd, o => {
 				Console.WriteLine($"[Trainer/Try] '{cmd}' output: {o}");
-				Chat.PrintToChat(caller, $"[Try {n}] {cmd} -> {(string.IsNullOrWhiteSpace(o) ? "(no output)" : o.Trim())}");
+				// The captured text can be huge and multi-line (it contained other log lines); an oversized chat message crashes the client.
+				string one = string.IsNullOrWhiteSpace(o) ? "(no output)" : string.Join(" ", o.Split('\r', '\n', StringSplitOptions.RemoveEmptyEntries)).Trim();
+				if (one.Length > 100) one = one[..100] + "...";
+				Chat.PrintToChat(caller, $"[Try {n}] {cmd} -> {one}");
 			});
 		}
 		TrainerBots.CheatsOffAt = Clock.Ms + 4000;
