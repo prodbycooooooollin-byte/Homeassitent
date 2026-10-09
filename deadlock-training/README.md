@@ -6,24 +6,45 @@ Trainingsmodus **direkt in Deadlock**, auf einem lokalen Offline-Server. Gebaut 
 Du lädst eine normale Map, öffnest per Chat-Befehl ein Menü, das **vor dir in der Welt schwebt**, schießt auf eine
 Übung – und bekommst das Ergebnis **im Chat** (Treffer, zu früh/zu spät in ms, Reaktionszeit, Quote).
 
-## Übungen (Version 0.2)
+## Übungen (Version 0.3)
 
-Sobald du mit einem Helden spawnst, baut sich vor dir ein **Menü** auf (PARRY / FLICK / TRACK / MENÜ AUS). Es bleibt
-stehen. Du schießt auf eine Übung und wirst in eine **freie Arena** teleportiert (automatisch gesucht, oder mit
-`!tarena` selbst festgelegt). Nach der Übung geht es zurück zum Menü. Alle Ziele sind **echte 3D-Figuren**
-(Werewolf-Modell), keine Text-Kugeln mehr.
+Sobald du mit einem Helden spawnst, baut sich vor dir ein **Menü** auf. Es bleibt stehen. Du schießt auf eine Übung
+und wirst automatisch in einen **freien Bereich** der Map gebracht (die Arena wird per Raycasts selbst gesucht, du musst
+nichts einstellen). Nach der Übung geht es zurück zum Menü. Unten im Menü wählst du die **Stufe** (LEICHT / NORMAL / SCHWER).
 
-| Befehl | Was passiert |
+Die Gegner sind **echte Bot-Helden** (Fake-Clients mit einem echten Helden, standardmäßig Infernus): sichtbar, mit echten
+Hitboxen, und sie schlagen **wirklich** zu. Das Plugin steuert sie (Position, Blickrichtung, Angriffszeitpunkt).
+
+| Kategorie | Übung | Was passiert |
+| --- | --- | --- |
+| PARRY | **Einzel** | Ein Bot steht vor dir und schlägt in unregelmäßigen Abständen zu. Du parryst. |
+| PARRY | **Mehrere** | Drei Bots im Halbkreis, zufällig schlägt einer zu. |
+| PARRY | **Salve** | Mehrere Schläge direkt hintereinander (3 / 4 / 5 je nach Stufe). |
+| AIM | **Flick** | Der Bot springt an neue Stellen um dich herum. Treffen = Punkt + Reaktionszeit (echter Schaden zählt). |
+| AIM | **Strafe** | Der Bot läuft gleichmäßig hin und her. Fadenkreuz draufhalten und schießen. |
+| AIM | **Zufall** | Wie Strafe, aber ruckartige Richtungswechsel. |
+
+Im Chat bekommst du pro Schlag: **PARRY!** mit Druckpunkt in ms zum Treffer, oder **GETROFFEN** mit „zu früh / zu spät / kein
+Parry“. Am Ende Quote, Ø Druckpunkt, Bestwert. Beim Aim: Reaktionszeit pro Treffer (über dem Bot), am Ende Trefferquote bzw.
+„% der Zeit auf dem Ziel“ (live über dem Bot angezeigt). Bots können dich in der Übung nicht töten (Schaden wird geblockt).
+
+**Stufen:** leicht = lange Vorwarnung (rotes `>>` über dem Kopf), große Abstände; normal = kurze Vorwarnung; schwer = keine
+Vorwarnung (Animation lesen), kurze Abstände, schnellere/weitere Aim-Ziele.
+
+| Befehl | Zweck |
 | --- | --- |
-| `!train` | Menü hier und jetzt aufbauen. `!train off` schaltet es aus. |
-| `!parry [runden=10] [leicht\|normal\|schwer] [angreifer=3]` | Angreifer stehen um dich herum. Einer leuchtet **rot** (holt aus) und schlägt kurz darauf zu (Ausfall + Ton). Dein Parry-Fenster muss den Schlag abdecken. **Blau** = Finte, nicht parieren. Pro Runde im Chat: Parry / zu früh / zu spät / verpennt in ms, am Ende Quote. |
-| `!flick [anzahl=20] [stufe]` | Figuren erscheinen um dich herum; so schnell wie möglich draufschießen. Reaktionszeit steht kurz über der Figur, am Ende Treffer, Ø/Median/beste Reaktion, Genauigkeit. |
-| `!track [sekunden=30] [stufe]` | Eine Figur läuft hin und her (grün = du bist drauf). Am Ende: % der Zeit auf dem Ziel, auch nur beim Schießen. |
-| `!tstop` | Übung abbrechen (zurück zum Menü) |
-| `!tarena` / `!tarena reset` | Aktuelle Position als Arena speichern (pro Map, bleibt nach Neustart) / wieder automatisch suchen |
-| `!thero <name>` | Held wechseln, z. B. `!thero wraith` |
+| `!train` / `!train off` | Menü hier aufbauen / ausschalten |
+| `!parry [einzel\|mehrere\|salve] [runden] [stufe]` | Parry direkt starten |
+| `!flick [anzahl] [stufe]`, `!track [strafe\|zufall] [sekunden] [stufe]` | Aim direkt starten |
+| `!tlevel leicht\|normal\|schwer` | Standard-Stufe |
+| `!tstop` | Übung abbrechen |
+| `!tbot test` | **Bot-Selbsttest**: erzeugt einen Bot, lässt ihn zuschlagen, berichtet im Chat |
+| `!tbot hero <name>` | Bot-Held wechseln (Inferno, Wraith, Haze, Ghost, Hornet, Atlas, ...) |
+| `!tbot off` | Notfall: ohne Bots, mit Text-Zielen |
+| `!tarena` / `!tarena reset` | *Optional*: eigene Arena festlegen / wieder automatisch |
+| `!tcvars bot` | Sucht Konsolenbefehle/-variablen mit „bot“ und schreibt `trainer_cvars.txt` |
 
-Bestwerte pro Stufe werden für die Dauer der Server-Sitzung gemerkt.
+Bestwerte pro Übung und Stufe werden für die Dauer der Server-Sitzung gemerkt.
 
 ## Installation (Windows)
 
@@ -56,35 +77,34 @@ Der Server läuft nur auf deinem Rechner, es ist kein Online-Spiel und kein Matc
 
 ## Erster Test (5 Minuten) – bitte in dieser Reihenfolge
 
-Die Übungen sind gegen die echte Deadworks-API geschrieben und kompilieren, aber **ich konnte sie nicht im Spiel
-ausprobieren**. Wahrscheinlichste Stolpersteine:
+Gegen die echte Deadworks-API geschrieben und kompiliert, aber **nicht im Spiel getestet**. Die riskanteste Stelle sind die
+Bots, deshalb gibt es einen Selbsttest:
 
-1. **`!ttest`** – zeigt 8 s lang eine Figur und den Text „TEXT-TEST“.
-   - Keine Figur → `!tmodel default` ausprobieren oder ein anderes Modell mit `!tmodel <pfad.vmdl>` setzen und die
-     Meldung im Server-Fenster ansehen.
-   - Text gespiegelt/seitlich → `!tface` (mehrmals, dreht um 90°), dann `!train` neu tippen.
-   - Kein Text → `!tfont Reaver`.
-2. **`!flick 5 leicht`** – wird die Figur getroffen, wenn du klickst? Falls nicht: `!tinput dwell`.
-3. **`!parry 5 leicht`** – wird dein Parry erkannt? Kommt immer „VERPENNT“: `!tdebug` einschalten, einmal parieren, Konsole (F7)
-   ansehen. Taucht bei `buttons changed=0x…` ein Wert auf, der nur beim Parry kommt: `!tparrykey <hex>`.
-4. **Menü & Arena** – auf PARRY schießen: Wirst du teleportiert? Landest du an einem sinnvollen Ort? Sonst `!tarena`
-   an einem freien Platz.
+1. **`!tbot test`** – erzeugt einen Bot vor dir und lässt ihn einmal zuschlagen. Im Chat steht Schritt für Schritt:
+   Bot da? Held/Team? Schlag ausgeführt? Welche Ereignisse kamen (MeleeAttack, ParrySuccess, Schaden)?
+   - **„Kein Bot-Held entstanden“** → `Server.CreateFakeClient` bekommt keinen Slot oder `SelectHero` greift nicht. Schick mir
+     den Chat-Text und das Server-Fenster. Bis dahin laufen die Übungen im vereinfachten Modus (Text-Ziele).
+   - **„Kein Nahkampf-Ereignis“** → der Bot steht, schlägt aber nicht zu. Dann nutzt Parry automatisch die Simulation
+     (Text-Signale + Zeitfenster-Auswertung); schick mir die Ausgabe.
+2. **`!train`** → auf *Einzel* schießen: Wirst du teleportiert? Steht ein Bot vor dir, der zuschlägt?
+3. **Flick/Strafe** – steht der Bot sichtbar da, und zählt dein Schaden als Treffer?
 
-Meldet mir, was nicht klappt (am besten mit den `[dbg]`-Zeilen und der Server-Fenster-Ausgabe).
+Meldet mir, was nicht klappt (am besten Chat-Text + Server-Fenster-Ausgabe).
 
 ## Zusätzliche Befehle zur Fehlersuche
 
-`!ttest`, `!tface [grad]`, `!tfont <name|default>`, `!tmodel <pfad|default> [brusthöhe]`, `!tinput <klick|dwell>`, `!tdebug`, `!tparrykey [hex]`
+`!tbot test`, `!tface [grad]`, `!tfont <name|default>`, `!tinput <klick|dwell>`, `!tdebug`, `!tparrykey [hex]`, `!tbot view on|off`, `!tcvars <wort>`
 
 ## Was es noch nicht gibt (geplant)
 
-- Echte Gegner/Bots: Melee-Reihen mit mehreren Angreifern, Counterspell gegen echte Fähigkeiten (die Deadworks-API
-  hat dafür `ParrySuccess`-/`MeleeAttack`-Events und `npc_*`-Entities; das braucht Tests im Spiel).
-- Aim auf echten Hitboxen (Headshots), Animationen der Angreifer, Movement-Parcours, Bestwerte über Neustarts.
+- Counterspell/Fähigkeiten-Übungen gegen Bots, Headshot-Auswertung, Movement-Parcours, Bestwerte über Neustarts.
+- Mehr Aim-Szenarien (Peek, Mehrfachziele, Distanzstufen) und eine „Reaktion“-Übung.
+- Eigene Optik/UI (aktuell Text im Raum und Chat).
 
 ## Aufbau
 
 - `src/Plugin.cs` – Befehle und Hooks (Eingabe, Parry-Zustand, Frame-Schleife)
-- `src/Drills.cs` – Menü, Parry-, Flick- und Tracking-Übung
+- `src/Drills.cs` – Basisklasse und Menü; `src/ParryDrill.cs` – Parry; `src/AimDrills.cs` – Flick, Tracking, Bot-Selbsttest
+- `src/Bots.cs` – Bot-Verwaltung (Fake-Clients), `src/Config.cs` – Einstellungen und Schwierigkeits-Zahlen
 - `src/Arena.cs` – Arena speichern und automatisch freien Platz suchen
 - `src/Util.cs` – Zielgeometrie, Uhr, Eingabezustand, Bestwerte

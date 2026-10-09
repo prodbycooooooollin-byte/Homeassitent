@@ -48,45 +48,66 @@ static class Arena {
 		return false;
 	}
 
-	private const float MinClear = 650f;
 	private const float ProbeLen = 900f;
 
-	/// <summary>Sucht rund um origin einen freien, ebenen Platz. null, wenn nichts Passendes gefunden wurde.</summary>
+	/// <summary>
+	/// Sucht rund um origin einen freien Platz: Boden vorhanden, kein Dach, moeglichst viel Platz in alle Richtungen.
+	/// Zwei Durchgaenge (erst streng, dann lockerer). Gibt null zurueck, wenn nichts gefunden wurde.
+	/// </summary>
 	public static Vector3? Find(Vector3 origin, CBaseEntity? ignore) {
-		Vector3? best = null;
-		float bestScore = float.MinValue;
+		foreach (float minClear in new[] { 700f, 450f }) {
+			Vector3? best = null;
+			float bestScore = float.MinValue;
+			float bestClear = 0;
 
-		foreach (float r in new[] { 500f, 900f, 1400f, 2000f, 2800f }) {
-			for (int i = 0; i < 16; i++) {
-				float a = i * (MathF.PI / 8f);
-				var xy = new Vector3(origin.X + MathF.Cos(a) * r, origin.Y + MathF.Sin(a) * r, 0f);
+			foreach (float r in new[] { 450f, 800f, 1200f, 1700f, 2300f, 3000f, 3800f }) {
+				for (int i = 0; i < 24; i++) {
+					float a = i * (MathF.PI / 12f);
+					var x = origin.X + MathF.Cos(a) * r;
+					var y = origin.Y + MathF.Sin(a) * r;
 
-				// Boden finden.
-				var down = Trace.Ray(new Vector3(xy.X, xy.Y, origin.Z + 300f), new Vector3(xy.X, xy.Y, origin.Z - 500f),
-					InteractionLayer.Solid, ignore);
-				if (!down.DidHit || down.Trace.StartInSolid) continue;
-				var ground = down.HitPosition;
-				if (MathF.Abs(ground.Z - origin.Z) > 250f) continue; // ungefaehr gleiche Hoehe wie das Menue
+					// Boden suchen (von oben nach unten).
+					var down = Trace.Ray(new Vector3(x, y, origin.Z + 400f), new Vector3(x, y, origin.Z - 700f), InteractionLayer.Solid, ignore);
+					if (!down.DidHit || down.Trace.StartInSolid) continue;
+					var ground = down.HitPosition;
+					if (MathF.Abs(ground.Z - origin.Z) > 500f) continue;
 
-				// Kein Dach / keine niedrige Decke.
-				var up = Trace.Ray(ground + new Vector3(0, 0, 10), ground + new Vector3(0, 0, 500), InteractionLayer.Solid, ignore);
-				if (up.DidHit) continue;
+					// Freier Himmel / hohe Decke.
+					var up = Trace.Ray(ground + new Vector3(0, 0, 10), ground + new Vector3(0, 0, 450), InteractionLayer.Solid, ignore);
+					if (up.DidHit) continue;
 
-				// Platz in 8 Richtungen auf Brusthoehe.
-				float clear = float.MaxValue;
-				var chest = ground + new Vector3(0, 0, 60);
-				for (int k = 0; k < 8; k++) {
-					float b = k * (MathF.PI / 4f);
-					var dir = new Vector3(MathF.Cos(b), MathF.Sin(b), 0f);
-					var h = Trace.Ray(chest, chest + dir * ProbeLen, InteractionLayer.Solid, ignore);
-					clear = MathF.Min(clear, h.Fraction * ProbeLen);
+					// Platz in 12 Richtungen auf Brusthoehe.
+					float clear = float.MaxValue;
+					var chest = ground + new Vector3(0, 0, 60);
+					for (int k = 0; k < 12; k++) {
+						float b = k * (MathF.PI / 6f);
+						var dir = new Vector3(MathF.Cos(b), MathF.Sin(b), 0f);
+						var h = Trace.Ray(chest, chest + dir * ProbeLen, InteractionLayer.Solid, ignore);
+						clear = MathF.Min(clear, h.Fraction * ProbeLen);
+					}
+					if (clear < minClear) continue;
+
+					// Boden muss ungefaehr eben sein: vier Punkte rundum auf gleicher Hoehe.
+					bool flat = true;
+					for (int k = 0; k < 4 && flat; k++) {
+						float b = k * (MathF.PI / 2f);
+						var px = ground.X + MathF.Cos(b) * 150f;
+						var py = ground.Y + MathF.Sin(b) * 150f;
+						var g = Trace.Ray(new Vector3(px, py, ground.Z + 60f), new Vector3(px, py, ground.Z - 120f), InteractionLayer.Solid, ignore);
+						if (!g.DidHit || MathF.Abs(g.HitPosition.Z - ground.Z) > 30f) flat = false;
+					}
+					if (!flat) continue;
+
+					float score = clear - r * 0.04f;
+					if (score > bestScore) { bestScore = score; best = ground + new Vector3(0, 0, 12); bestClear = clear; }
 				}
-				if (clear < MinClear) continue;
-
-				float score = clear - r * 0.05f; // viel Platz gut, nah dran leicht besser
-				if (score > bestScore) { bestScore = score; best = ground + new Vector3(0, 0, 12); }
+			}
+			if (best != null) {
+				Console.WriteLine($"[Trainer] Arena gefunden bei ({best.Value.X:0},{best.Value.Y:0},{best.Value.Z:0}), Platz ~{bestClear:0} (Schwelle {minClear:0})");
+				return best;
 			}
 		}
-		return best;
+		Console.WriteLine("[Trainer] Keine freie Arena gefunden (Traces lieferten nichts Passendes).");
+		return null;
 	}
 }

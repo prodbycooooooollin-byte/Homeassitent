@@ -24,6 +24,12 @@ static class Aim {
 
 	public static Vector3 Forward(float pitchDeg, float yawDeg) => Forward(new Vector3(pitchDeg, yawDeg, 0f));
 
+	/// <summary>Vektor nach rechts (horizontal) zu einem Yaw.</summary>
+	public static Vector3 Right(float yawDeg) {
+		float y = yawDeg * Deg2Rad;
+		return new Vector3(MathF.Sin(y), -MathF.Cos(y), 0f);
+	}
+
 	/// <summary>Augenposition des Spielers (Fallback: Position + 64, falls das Feld leer ist).</summary>
 	public static Vector3 Eye(CCitadelPlayerPawn pawn) {
 		var e = pawn.EyePosition;
@@ -63,15 +69,21 @@ sealed class PlayerInput {
 	public bool ParryActive;
 	public int ParryEdges;
 	public double LastParryEdgeMs = -1;
+	/// <summary>Zeitpunkte der letzten Parry-Ausloesungen (steigende Flanken), aelteste zuerst.</summary>
+	public readonly List<double> ParryEdgeTimes = new();
 
 	public readonly Queue<Shot> Shots = new();
+	public int ShotsFired;
 
 	public void RegisterParryEdge(double nowMs) {
 		ParryEdges++;
 		LastParryEdgeMs = nowMs;
+		ParryEdgeTimes.Add(nowMs);
+		if (ParryEdgeTimes.Count > 24) ParryEdgeTimes.RemoveAt(0);
 	}
 
 	public void RegisterShot(Shot s) {
+		ShotsFired++;
 		Shots.Enqueue(s);
 		while (Shots.Count > 32) Shots.Dequeue();
 	}
