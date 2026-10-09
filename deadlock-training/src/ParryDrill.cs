@@ -229,6 +229,7 @@ sealed class ParryDrill : Drill {
 			try { if (bot != null) rc = bot.ExecuteAbilityBySlot(EAbilitySlot.WeaponMelee); }
 			catch (Exception ex) { Console.WriteLine($"[Trainer] Bot melee failed: {ex.Message}"); }
 			Console.WriteLine($"[Trainer] Parry swing {_done + 1}: bot melee rc={rc}");
+			if (!_rcSaid) { _rcSaid = true; Say($"[Parry debug] bot swing call returned {rc} ({(bot == null ? "the target has no hero pawn" : bot.GetType().Name)}, model '{Actors[_cur].ModelName}')."); }
 			if (rc != 0) {
 				// The ability call did not make the bot swing: use the game's own "bots melee" switch for a moment
 				// (cheats are already on for the whole drill, see Begin).
@@ -383,6 +384,7 @@ sealed class ParryDrill : Drill {
 	}
 
 	private bool _cheatsOn;
+	private bool _rcSaid;
 
 	public override void Stop() {
 		if (_cheatsOn) { _cheatsOn = false; try { Server.ExecuteCommand("citadel_bot_melee 0"); Server.ExecuteCommand("sv_cheats 0"); } catch { } }

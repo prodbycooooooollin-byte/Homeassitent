@@ -326,6 +326,8 @@ sealed class MenuDrill : Drill {
 		_anchorYaw = anchorYaw;
 	}
 
+	private static string HeadLabel() => TrainerConfig.FlickHeadOnly ? "Head only: ON" : "Head only: OFF";
+
 	private static IEnumerable<Item> Layout() {
 		yield return new("title", "DEADLOCK TRAINER", 0f, -24f, 15f, false, 255, 200, 0);
 
@@ -339,6 +341,7 @@ sealed class MenuDrill : Drill {
 		yield return new("f_flick", "Flick", -11f, -8f, 9f, true, 255, 255, 255);
 		yield return new("f_switch", "Switch", -11f, -3.5f, 9f, true, 255, 255, 255);
 		yield return new("f_long", "Long Range", -11f, 1f, 9f, true, 255, 255, 255);
+		yield return new("f_head", HeadLabel(), -11f, 5.2f, 7f, true, 255, 190, 120);
 
 		yield return new("hdr_track", "TRACK", 11f, -13f, 12f, false, 255, 140, 40);
 		yield return new("t_strafe", "Strafe", 11f, -8f, 9f, true, 255, 255, 255);
@@ -347,6 +350,7 @@ sealed class MenuDrill : Drill {
 		yield return new("hdr_other", "OTHER", 33f, -13f, 12f, false, 255, 140, 40);
 		yield return new("o_reaction", "Reaction", 33f, -8f, 9f, true, 255, 255, 255);
 		yield return new("o_deny", "Deny Souls", 33f, -3.5f, 9f, true, 255, 255, 255);
+		yield return new("o_routes", "Routes", 33f, 1f, 9f, true, 255, 255, 255);
 
 		yield return new("lv_easy", "EASY", -12f, 9f, 9f, true, 255, 255, 255);
 		yield return new("lv_normal", "NORMAL", 0f, 9f, 9f, true, 255, 255, 255);
@@ -416,6 +420,12 @@ sealed class MenuDrill : Drill {
 			_onLevel(_level);
 			_status?.SetMessage(StatusText());
 			RefreshColors(_hover);
+			return;
+		}
+		if (id == "f_head") {
+			TrainerConfig.FlickHeadOnly = !TrainerConfig.FlickHeadOnly;
+			for (int i = 0; i < _items.Count; i++) if (_items[i].Item.Id == "f_head") _items[i].Text?.SetMessage(HeadLabel());
+			Say($"[Training] Flick / Long Range: {(TrainerConfig.FlickHeadOnly ? "only HEADSHOTS count" : "any hit counts")}.");
 			return;
 		}
 		Finished = true;

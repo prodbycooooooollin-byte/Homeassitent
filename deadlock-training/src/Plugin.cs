@@ -74,8 +74,25 @@ public class TrainerPlugin : DeadworksPluginBase {
 
 	/// <summary>Training server setup: stop new minion waves, neutrals and power-ups (existing NPCs are only removed on request via !tclean; removing them at once crashed the client).</summary>
 	private void CleanWorld() {
-		// Intentionally empty. Switching off npc/trooper/neutral spawns with cvars coincided with every client crash after the
-		// bot spawn (the cvars replicate to the client); runs before that change worked. Use !tclean for single groups instead.
+		// Remove the structures that shoot the training bots (guardians, walkers, bases) in small steps. (No cvar changes: they were
+		// replicated to the client and are not needed.)
+		int n = RemoveNpcGroup(new[] { "npc_boss", "npc_barrack", "npc_base_defender" });
+		Console.WriteLine($"[Trainer] Removed {n} structures (guardians/walkers/bases) so they cannot shoot the bots.");
+	}
+
+	/// <summary>Remove all entities whose designer name starts with one of the prefixes, spread over time. Returns how many.</summary>
+	private int RemoveNpcGroup(string[] prefixes) {
+		int n = 0;
+		foreach (var e in Entities.All) {
+			string d;
+			try { d = e.DesignerName ?? ""; } catch { continue; }
+			if (!prefixes.Any(d.StartsWith)) continue;
+			int delay = 10 * (n / 5);
+			var ent = e;
+			Timer.Once(delay.Milliseconds(), () => { try { if (ent.IsValid) ent.Remove(); } catch { } });
+			n++;
+		}
+		return n;
 	}
 
 	public override void OnStartupServer() {
@@ -137,7 +154,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		if (c == null) return;
 		int slot = c.EntityIndex - 1;
 		if (!IsHuman(slot, c)) return;
-		if (!_arenaCleaned) { _arenaCleaned = true; Timer.Once(3.Seconds(), CleanWorld); }
+		if (!_arenaCleaned) { _arenaCleaned = true; Timer.Once(15.Seconds(), CleanWorld); }
 		if (BotPool.GuardNotice != null) { var n = BotPool.GuardNotice; BotPool.GuardNotice = null; Timer.Once(6.Seconds(), () => { try { Chat.PrintToChat(c, "[Training] " + n); } catch { } }); }
 		if (_hubs.ContainsKey(slot) || _noAutoMenu.Contains(slot) || _drills.ContainsKey(slot)) return;
 
@@ -274,6 +291,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			if (!IsHuman(slot, c)) continue;
 			var pawn = c.GetHeroPawn();
 			var inp = Input(slot);
+			if (pawn != null && _recorders.TryGetValue(slot, out var recorder)) recorder.Update(pawn.Position, now);
 
 			// Parry-Fenster der Engine beobachten (steigende Flanke = Parry ausgeloest).
 			bool parry = pawn?.ModifierProp?.HasModifierState(EModifierState.ParryActive) ?? false;
@@ -505,6 +523,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "o_reaction": GoToArenaThen(c, slot, () => StartReaction(c, 0, lvl)); break;
 			case "o_deny": GoToArenaThen(c, slot, () => StartOrb(c, OrbMode.Deny, 0, lvl)); break;
 			case "o_lasthit": GoToArenaThen(c, slot, () => StartOrb(c, OrbMode.LastHit, 0, lvl)); break;
+			case "o_routes": StartRouteFromMenu(c, slot, null); break;
 			case "sp_arena":
 			case "sp_long":
 			case "sp_reset": SetSpot(c, slot, id); break;
@@ -826,6 +845,97 @@ public class TrainerPlugin : DeadworksPluginBase {
 		});
 	}
 
+	// ---- Routes -----------------------------------------------------------------------------------------------------
+
+	private readonly Dictionary<int, RouteRecorder> _recorders = new();
+	private readonly Dictionary<int, string> _routeSel = new();
+
+	private void StartRouteFromMenu(CCitadelPlayerController c, int slot, string? name) {
+		string map = Server.MapName;
+		var names = RouteStore.Names(map);
+		if (name == null) name = _routeSel.TryGetValue(slot, out var s) && names.Contains(s) ? s : names.FirstOrDefault();
+		if (name == null) {
+			Chat.PrintToChat(c, "[Training] No routes yet. Record one: walk to the start, type !troute rec <name>, walk your route, type !troute stop. Then pick Routes again.");
+			Timer.Once(500.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenMenu(c, false); });
+			return;
+		}
+		var pts = RouteStore.Get(map, name);
+		if (pts == null || pts.Count < 2) { Chat.PrintToChat(c, "[Training] That route is too short."); Timer.Once(500.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenMenu(c, false); }); return; }
+		_routeSel[slot] = name;
+		_fromHub.Add(slot);
+		var lvl = LevelOf(slot);
+		Timer.Once(300.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) Begin(c, input => new RouteDrill(c, input, lvl, name, map, pts)); });
+	}
+
+	[Command("troute", Description = "Route trainer: troute rec <name> | stop | play [name] | list | del <name>")]
+	public void CmdRoute(CCitadelPlayerController caller, string sub = "", string name = "") {
+		int slot = caller.EntityIndex - 1;
+		var pawn = caller.GetHeroPawn();
+		string map = Server.MapName;
+		name = name.Trim();
+		switch (sub.Trim().ToLowerInvariant()) {
+			case "rec" or "record":
+				if (pawn == null || !pawn.IsAlive) { Chat.PrintToChat(caller, "[Training] You need a living hero."); return; }
+				if (name.Length == 0) { Chat.PrintToChat(caller, "[Training] Give the route a name: !troute rec base-to-mid"); return; }
+				_recorders[slot] = new RouteRecorder { Name = name };
+				_recorders[slot].Points.Add(pawn.Position);
+				Chat.PrintToChat(caller, $"[Training] Recording '{name}'. Walk the route (zipline, dash, whatever you use), then type !troute stop.");
+				return;
+			case "stop" or "save":
+				if (!_recorders.Remove(slot, out var rec)) { Chat.PrintToChat(caller, "[Training] Not recording."); return; }
+				if (pawn != null) rec.Points.Add(pawn.Position);
+				if (rec.Points.Count < 3) { Chat.PrintToChat(caller, "[Training] Route too short - nothing saved."); return; }
+				RouteStore.Put(map, rec.Name, rec.Points);
+				Chat.PrintToChat(caller, $"[Training] Route '{rec.Name}' saved with {rec.Points.Count} checkpoints. Pick Routes in the menu or type !troute play {rec.Name}.");
+				return;
+			case "play" or "start":
+				if (name.Length == 0) name = RouteStore.Names(map).FirstOrDefault() ?? "";
+				if (name.Length == 0) { Chat.PrintToChat(caller, "[Training] No routes yet. !troute rec <name>"); return; }
+				var pts = RouteStore.Get(map, name);
+				if (pts == null) { Chat.PrintToChat(caller, $"[Training] No route '{name}'. !troute list"); return; }
+				_routeSel[slot] = name;
+				Begin(caller, input => new RouteDrill(caller, input, LevelOf(slot), name, map, pts));
+				return;
+			case "list":
+				var names = RouteStore.Names(map);
+				Chat.PrintToChat(caller, names.Count == 0 ? "[Training] No routes yet." : "[Training] Routes: " + string.Join(", ", names));
+				return;
+			case "del" or "delete":
+				Chat.PrintToChat(caller, RouteStore.Delete(map, name) ? $"[Training] Route '{name}' deleted." : "[Training] No such route.");
+				return;
+			default:
+				Chat.PrintToChat(caller, "[Training] !troute rec <name> (record) | stop | play [name] | list | del <name>");
+				return;
+		}
+	}
+
+	[Command("torb", Description = "Diagnostic: kill the nearest trooper in front of you and list what the game spawns (to find the real soul orb)")]
+	public void CmdOrb(CCitadelPlayerController caller) {
+		var pawn = caller.GetHeroPawn();
+		if (pawn == null || !pawn.IsAlive) { Chat.PrintToChat(caller, "[Training] You need a living hero."); return; }
+		CBaseEntity? best = null; float bd = float.MaxValue;
+		foreach (var e in Entities.All) {
+			string d; try { d = e.DesignerName ?? ""; } catch { continue; }
+			if (!d.StartsWith("npc_trooper")) continue;
+			try { if (!e.IsValid || e.Health <= 0) continue; float dist = Vector3.Distance(e.Position, pawn.Position); if (dist < bd) { bd = dist; best = e; } } catch { }
+		}
+		if (best == null) { Chat.PrintToChat(caller, "[Training] No trooper alive right now (wait for a wave)."); return; }
+		double t0 = Clock.Ms;
+		SpawnWatch.Log = true;
+		try {
+			best.Teleport(position: pawn.Position + Aim.Forward(0f, pawn.EyeAngles.Y) * 450f);
+			using var info = new CTakeDamageInfo(100000f, pawn, pawn, null, 1);
+			best.TakeDamage(info);
+		} catch (Exception ex) { Chat.PrintToChat(caller, "[Training] Kill failed: " + ex.Message); return; }
+		Timer.Once(1500.Milliseconds(), () => {
+			var names = SpawnWatch.Since(t0 - 50).Select(x => x.Designer).Where(x => x.Length > 0).GroupBy(x => x).Select(g => $"{g.Key} x{g.Count()}").Take(14).ToList();
+			Console.WriteLine("[Trainer/Orb] spawned after the kill: " + string.Join(", ", names));
+			string line = names.Count == 0 ? "nothing spawned" : string.Join(", ", names);
+			Chat.PrintToChat(caller, "[Training] Spawned after the kill: " + (line.Length > 220 ? line[..220] : line));
+			SpawnWatch.Log = false;
+		});
+	}
+
 	[Command("tclean", Description = "Remove NPCs: tclean troopers | neutrals | guardians | all (experimental - removing many at once crashed a client)")]
 	public void CmdClean(CCitadelPlayerController caller, string what = "") {
 		string[] prefixes = what.Trim().ToLowerInvariant() switch {
@@ -836,17 +946,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			_ => Array.Empty<string>(),
 		};
 		if (prefixes.Length == 0) { Chat.PrintToChat(caller, "[Training] Use: !tclean troopers | neutrals | guardians | all"); return; }
-		int n = 0;
-		foreach (var e in Entities.All) {
-			string d;
-			try { d = e.DesignerName ?? ""; } catch { continue; }
-			if (!prefixes.Any(d.StartsWith)) continue;
-			// Spread the removal over time: a big burst hitches the server.
-			int delay = 10 * (n / 5);
-			var ent = e;
-			Timer.Once(delay.Milliseconds(), () => { try { if (ent.IsValid) ent.Remove(); } catch { } });
-			n++;
-		}
+		int n = RemoveNpcGroup(prefixes);
 		Chat.PrintToChat(caller, $"[Training] Removing {n} NPCs ('{what}') in small steps.");
 	}
 
