@@ -59,7 +59,7 @@ static class TrainerBots {
 			Server.ExecuteCommand("sv_cheats 1");
 			Server.ExecuteCommand("citadel_bot_test_mode 1");
 			Server.ExecuteCommand("citadel_spawn_practice_bots 0");
-			Server.ExecuteCommand($"citadel_spawn_practice_bots_count {Math.Clamp(count, 1, 8)}");
+			Server.ExecuteCommand($"citadel_spawn_practice_bots_count {Math.Clamp(count, 1, 12)}");
 			Server.ExecuteCommand("citadel_spawn_practice_bots 1");
 			CheatsOffAt = Clock.Ms + 2500;
 		} catch (Exception ex) { LastError = ex.Message; }

@@ -12,6 +12,14 @@ static class ScenarioSet {
 		"Lone enemy, you are ahead", "Enemy missing from the minimap", "Group is pushing you",
 		"You are behind, two come", "Even 1v1", "You are low on health",
 	};
+	public static readonly string[] Desc = {
+		"You are far ahead. One hurt enemy farms alone while his team is far away.",
+		"You are ahead, one enemy is visible and the last one is hiding somewhere.",
+		"Four enemies walk at you. Is this a fight?",
+		"You are behind in souls and two enemies come.",
+		"Equal strength, one enemy, nobody else near.",
+		"You have 25% health and an enemy is coming.",
+	};
 	public static string Label(int i) => (On[i] ? "[X]  " : "[  ]  ") + Names[i];
 	public static bool Any() => On.Any(x => x);
 }
@@ -32,6 +40,8 @@ sealed class ScenarioDrill : Drill {
 		public double NextShot, AppearAt;
 		public Vector3 Home;
 		public int StartHp;
+		public CPointWorldText? Tag;
+		public double TagAt;
 	}
 
 	private readonly int _rounds;
@@ -70,7 +80,8 @@ sealed class ScenarioDrill : Drill {
 	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) {
 		if (!RealBots) { Say("[Scenarios] This needs real bots (wait until they have loaded, or switch Automatic bots on in Settings)."); Finished = true; return; }
 		_phaseAt = nowMs + 1500;
-		Say($"[Scenarios] {_rounds} situations in random order. Read the briefing on the right side of the screen, then decide. Enemies shoot back. Abort: !tstop");
+		Say($"[Scenarios] {_rounds} situations. Each round: read the 4-line briefing at the top of your screen (souls, health, minimap), then DECIDE:");
+		Say("  FIGHT = kill the enemies   |   RETREAT = run to the green SAFE ZONE. The right choice depends on souls, numbers and health. Enemies shoot back. Abort: !tstop");
 	}
 
 	// ---- helpers -----------------------------------------------------------------------------------------------------
@@ -120,7 +131,11 @@ sealed class ScenarioDrill : Drill {
 				if (nowMs >= _phaseAt) { StartRound(pawn, nowMs); }
 				break;
 			case Ph.Active:
-				foreach (var f in _foes) { MoveFoe(f, pawn, nowMs, dt); Shoot(f, pawn, nowMs); }
+				bool briefing = nowMs - _roundStart < 3500;
+				foreach (var f in _foes) {
+					if (!briefing) { MoveFoe(f, pawn, nowMs, dt); Shoot(f, pawn, nowMs); }
+					UpdateTag(f, pawn, nowMs);
+				}
 				CheckAmbusher(pawn, nowMs);
 				if (pawn.Health <= 1) { pawn.Health = pawn.MaxHealth; _died = true; }
 				Evaluate(pawn, nowMs);
@@ -137,6 +152,7 @@ sealed class ScenarioDrill : Drill {
 				($"SCENARIO  {Math.Min(_round, _rounds)}/{_rounds}   right: {_right}", 255, 220, 60),
 				(_b1, 255, 255, 255),
 				(_b2, 150, 210, 255),
+				("Options: FIGHT (kill them)  or  RETREAT to the green SAFE ZONE", 255, 200, 120),
 				(_status, nowMs - _lastHit < 900 ? (byte)255 : (byte)200, nowMs - _lastHit < 900 ? (byte)90 : (byte)200, nowMs - _lastHit < 900 ? (byte)90 : (byte)200),
 			};
 		}
@@ -160,7 +176,7 @@ sealed class ScenarioDrill : Drill {
 		Kill(_safe); _safe = null;
 		try { pawn.TeleportWithView(_origin + new Vector3(0, 0, 8), new Vector3(0f, _yaw, 0f)); pawn.Health = pawn.MaxHealth; } catch { }
 		foreach (var f in _foes) {
-			f.On = false; f.Aggro = false; f.Ambusher = false;
+			f.On = false; f.Aggro = false; f.Ambusher = false; Kill(f.Tag); f.Tag = null;
 			try { var bp = f.A.Pawn; if (bp != null && (bp.Health <= 0 || !bp.IsAlive)) bp.ForceRespawn(); } catch { }
 			try { f.A.Ent?.Teleport(position: BotPool.ParkPos, velocity: Vector3.Zero); } catch { }
 		}
@@ -190,6 +206,7 @@ sealed class ScenarioDrill : Drill {
 		int meters = (int)(dist / 39f);
 		_safeYaw = 0f;
 		_status = "";
+		SetSafe(pawn, dirA);
 
 		switch (_kind) {
 			case ScenKind.Lone:
@@ -206,20 +223,17 @@ sealed class ScenarioDrill : Drill {
 				break;
 			case ScenKind.Group:
 				for (int i = 0; i < 4; i++) Arm(_foes[i], Spot(dirA, dist + i * 50f, (i - 1.5f) * 200f), 1f, true, aggroSpeed * 0.9f, 650f, nowMs);
-				SetSafe(pawn, dirA);
 				_b1 = "Even souls. You are alone, your team is far away.";
 				_b2 = $"Minimap: FOUR enemies grouped at {clk}, ~{meters} m, walking at you. Safe zone is marked behind you.";
 				break;
 			case ScenKind.Behind:
 				for (int i = 0; i < 2; i++) Arm(_foes[i], Spot(dirA, dist + i * 60f, (i - 0.5f) * 220f), 1f, true, aggroSpeed, 600f, nowMs);
-				SetSafe(pawn, dirA);
 				_b1 = "You are 3000 souls BEHIND. Your team is dead or far away.";
 				_b2 = $"Minimap: TWO enemies at {clk}, ~{meters} m, pushing you. Safe zone is marked behind you.";
 				break;
 			case ScenKind.LowHp:
 				try { pawn.Health = Math.Max(2, (int)(pawn.MaxHealth * 0.25f)); } catch { }
 				Arm(_foes[0], Spot(dirA, dist), 1f, true, aggroSpeed, 600f, nowMs);
-				SetSafe(pawn, dirA);
 				_b1 = "Even souls, but you are at 25% HEALTH.";
 				_b2 = $"Minimap: one enemy at {clk}, ~{meters} m, full health, coming at you. Safe zone is marked behind you.";
 				break;
@@ -294,6 +308,22 @@ sealed class ScenarioDrill : Drill {
 		_lastHit = nowMs;
 	}
 
+	private void UpdateTag(Foe f, CCitadelPlayerPawn pawn, double nowMs) {
+		var e = f.A.Ent;
+		if (!f.On || e == null || Dead(f.A)) { if (f.Tag != null) { Kill(f.Tag); f.Tag = null; } return; }
+		var pos = e.Position + new Vector3(0, 0, 210f);
+		var eye = Aim.Eye(pawn);
+		float dist = Vector3.Distance(pawn.Position, e.Position);
+		if (f.Tag == null) f.Tag = SpawnText("ENEMY", pos, eye, 16f, 255, 70, 70);
+		if (f.Tag == null) return;
+		Face(f.Tag, pos, eye);
+		if (nowMs >= f.TagAt) {
+			f.TagAt = nowMs + 250;
+			int hp = Math.Max(0, e.Health * 100 / Math.Max(1, e.MaxHealth));
+			f.Tag.SetMessage($"ENEMY  {(int)(dist / 39f)} m  {hp}%");
+		}
+	}
+
 	private void CheckAmbusher(CCitadelPlayerPawn pawn, double nowMs) {
 		foreach (var f in _foes) {
 			if (!f.Ambusher || f.On || nowMs < f.AppearAt) continue;
@@ -307,7 +337,7 @@ sealed class ScenarioDrill : Drill {
 		double t = (nowMs - _roundStart) / 1000.0;
 		double limit = _kind switch { ScenKind.Lone => 30, ScenKind.Unknown => 45, ScenKind.Duel => 45, ScenKind.LowHp => 14, _ => 14 };
 		int hp = Math.Max(0, pawn.Health * 100 / Math.Max(1, pawn.MaxHealth));
-		_status = $"{t:0} / {limit:0} s     your health {hp}%" + (nowMs - _lastHit < 900 ? "     UNDER FIRE" : "");
+		_status = (t < 3.5 ? "They start moving in a moment - decide now.   " : "") + $"{t:0} / {limit:0} s     your health {hp}%" + (nowMs - _lastHit < 900 ? "     UNDER FIRE" : "");
 
 		if (_died) { _deaths++; Conclude(false, "You died.", Why(false), nowMs); return; }
 
@@ -317,9 +347,11 @@ sealed class ScenarioDrill : Drill {
 		switch (_kind) {
 			case ScenKind.Lone:
 				if (Dead(_foes[0].A)) { _kills++; Conclude(true, $"Killed him in {t:0.0} s.", Why(true), nowMs); return; }
+				if (atSafe) { Conclude(false, "You retreated although this was a free kill.", Why(false), nowMs); return; }
 				break;
 			case ScenKind.Unknown: {
 				if (!_killedVisible && Dead(_foes[0].A)) { _killedVisible = true; _killedAt = nowMs; _kills++; }
+				if (atSafe && !_killedVisible) { Conclude(false, "You retreated although you were far ahead and one enemy was alone.", Why(false), nowMs); return; }
 				var amb = _foes[1];
 				if (_killedVisible && amb.On && Dead(amb.A)) { _kills++; Conclude(true, "You killed the visible one AND handled the one from the jungle.", Why(true), nowMs); return; }
 				if (_killedVisible && amb.On && nowMs - amb.AppearAt > 16000) { Conclude(true, "You killed the visible one and survived the ambush.", Why(true), nowMs); return; }
@@ -327,6 +359,7 @@ sealed class ScenarioDrill : Drill {
 			}
 			case ScenKind.Duel:
 				if (Dead(_foes[0].A)) { _kills++; Conclude(true, $"Duel won in {t:0.0} s.", Why(true), nowMs); return; }
+				if (atSafe) { Conclude(false, "You ran from an even 1v1 - take fights you can win.", Why(false), nowMs); return; }
 				break;
 			case ScenKind.LowHp:
 				if (atSafe) { Conclude(true, $"You disengaged at low health in {t:0.0} s.", Why(true), nowMs); return; }
@@ -366,7 +399,7 @@ sealed class ScenarioDrill : Drill {
 		Say(why);
 		_b1 = ok ? "Round won" : "Round lost"; _b2 = text; _status = "";
 		_log.Add($"{ScenarioSet.Names[(int)_kind]}: {(ok ? "ok" : "wrong")}");
-		foreach (var f in _foes) { f.On = false; try { f.A.Ent?.Teleport(position: BotPool.ParkPos, velocity: Vector3.Zero); } catch { } }
+		foreach (var f in _foes) { f.On = false; Kill(f.Tag); f.Tag = null; try { f.A.Ent?.Teleport(position: BotPool.ParkPos, velocity: Vector3.Zero); } catch { } }
 		Kill(_safe); _safe = null;
 		_ph = Ph.Result;
 		_phaseAt = nowMs + 3500;
@@ -393,31 +426,49 @@ sealed class ScenarioDrill : Drill {
 }
 
 /// <summary>
-/// Counterspell training. In every round a different hero appears in front of you, casts an ability that Counterspell can stop, and is gone again.
-/// The hero's name and ability are shown above him with a cast bar. Use your Counterspell item (any item key) after the cast starts and before it lands.
-/// The casts are simulated by the trainer (the model is always your own hero's; the label tells you who it is supposed to be).
+/// Counterspell training with real enemy heroes. Every round a different hero bot (the pool has up to 15 different heroes) steps up in front of you,
+/// uses a signature ability on you, and disappears again. Abilities have two parts: the part you can NOT stop (the cast, the dagger flying,
+/// the bomb sticking to you) and the part you CAN stop with Counterspell (the explosion / the impact). Use your item only in that second part.
+/// The bots are real heroes; the ability effects are simulated by the trainer, because the game's own bot casts are not reliable.
 /// </summary>
 sealed class CounterspellDrill : Drill {
-	private enum Ph { Gap, Cast, Result }
+	private enum Ph { Gap, Intro, Pre, Window, Result }
 
-	private static readonly (string Hero, string Ability, float Mult)[] Casts = {
-		("Haze", "Sleep Dagger", 1.0f), ("Infernus", "Concussive Combustion", 1.2f), ("Grey Talon", "Spirit Snare", 1.1f),
-		("Lady Geist", "Essence Bomb", 1.0f), ("Lady Geist", "Life Drain", 0.9f), ("Kelvin", "Frost Grenade", 1.0f),
-		("Bebop", "Sticky Bomb", 1.0f), ("Dynamo", "Kinetic Pulse", 1.1f), ("Ivy", "Kudzu Bomb", 1.0f),
-		("Lash", "Grapple", 0.9f), ("Mo & Krill", "Scorn", 0.9f), ("Paradox", "Pulse Grenade", 1.0f),
-		("Seven", "Lightning Ball", 1.1f), ("Shiv", "Serrated Knives", 0.9f), ("Vindicta", "Stake", 1.0f),
-		("Viscous", "Splatter", 1.0f), ("Warden", "Alchemical Flask", 1.0f), ("Warden", "Binding Word", 0.9f),
-		("Wraith", "Telekinesis", 0.9f), ("Yamato", "Power Slash", 1.0f), ("Holliday", "Spirit Lasso", 1.0f),
-		("Vyper", "Screwjab Dagger", 0.9f), ("Abrams", "Siphon Life", 0.9f), ("Sinclair", "Vexing Bolt", 1.0f),
+	private sealed record Cast(string Ability, int PreMs, int WindowMs, string PreText, string WindowText);
+
+	private static readonly Dictionary<Heroes, (string Name, Cast C)> Table = new() {
+		[Heroes.Bebop] = ("Bebop", new("Sticky Bomb", 900, 2000, "sticks a BOMB on you (you cannot stop this)", "BOMB EXPLODES")),
+		[Heroes.Haze] = ("Haze", new("Sleep Dagger", 500, 650, "throws the dagger", "DAGGER INCOMING")),
+		[Heroes.Inferno] = ("Infernus", new("Concussive Combustion", 700, 1200, "launches the bomb", "EXPLOSION")),
+		[Heroes.Ghost] = ("Lady Geist", new("Essence Bomb", 600, 1000, "lobs the bomb", "BOMB LANDS")),
+		[Heroes.Hornet] = ("Vindicta", new("Stake", 600, 800, "fires the stake", "STAKE INCOMING")),
+		[Heroes.Atlas] = ("Abrams", new("Siphon Life", 500, 1200, "latches on", "DRAIN STARTS")),
+		[Heroes.Wraith] = ("Wraith", new("Telekinesis", 700, 900, "reaches for you", "LIFT")),
+		[Heroes.Shiv] = ("Shiv", new("Serrated Knives", 500, 800, "throws knives", "KNIVES INCOMING")),
+		[Heroes.Kelvin] = ("Kelvin", new("Frost Grenade", 600, 1100, "throws the grenade", "FREEZE BURST")),
+		[Heroes.Lash] = ("Lash", new("Grapple", 500, 700, "fires the hook", "HOOK PULLS YOU")),
+		[Heroes.Viper] = ("Vyper", new("Screwjab Dagger", 500, 800, "throws the dagger", "DAGGER INCOMING")),
+		[Heroes.Gigawatt] = ("Seven", new("Lightning Ball", 700, 1100, "launches the ball", "BALL ARRIVES")),
+		[Heroes.Dynamo] = ("Dynamo", new("Kinetic Pulse", 700, 1100, "charges the pulse", "STUN PULSE")),
+		[Heroes.Chrono] = ("Paradox", new("Pulse Grenade", 600, 1000, "throws the grenade", "BLAST")),
+		[Heroes.Astro] = ("Holliday", new("Spirit Lasso", 600, 800, "throws the lasso", "LASSO PULLS YOU")),
+		[Heroes.Tengu] = ("Ivy", new("Kudzu Bomb", 600, 1100, "throws the bomb", "KUDZU BURST")),
+		[Heroes.Krill] = ("Mo & Krill", new("Scorn", 500, 800, "winds up", "STUN")),
+		[Heroes.Warden] = ("Warden", new("Alchemical Flask", 600, 1000, "throws the flask", "FLASK SHATTERS")),
+		[Heroes.Yamato] = ("Yamato", new("Power Slash", 600, 800, "winds up", "SLASH")),
+		[Heroes.Viscous] = ("Viscous", new("Splatter", 600, 900, "launches it", "SPLATTER")),
+		[Heroes.Magician] = ("Sinclair", new("Vexing Bolt", 500, 800, "fires the bolt", "BOLT INCOMING")),
+		[Heroes.Orion] = ("Grey Talon", new("Spirit Snare", 600, 1000, "sets the snare", "SNARE CLOSES")),
 	};
 
 	private readonly int _total;
-	private int _done, _ok, _late, _early;
+	private int _done, _ok, _late, _early, _lastActor = -1;
 	private readonly List<double> _react = new();
 	private Ph _ph = Ph.Gap;
-	private double _nextAt, _castAt, _hitAt, _hudAt, _barAt;
-	private int _cur = -1, _last = -1, _items0;
-	private double _firstPress;
+	private int _cur = -1, _items0;
+	private Cast _cast = new("Ability", 600, 1000, "casts", "IMPACT");
+	private string _heroName = "";
+	private double _nextAt, _phaseAt, _winStart, _winEnd, _hudAt, _barAt;
 	private bool _itemOk;
 	private CPointWorldText? _label;
 	private Vector3 _pos;
@@ -436,111 +487,145 @@ sealed class CounterspellDrill : Drill {
 		foreach (var n in names) {
 			try { if (pawn.AddItem(n) != null) { _itemOk = true; Console.WriteLine($"[Trainer] Counterspell item granted as '{n}'."); break; } } catch { }
 		}
-		AddActor(pawn, pawn.Position + Aim.Forward(0f, pawn.EyeAngles.Y) * 600f, nowMs);
+		// one actor per free pool bot: every bot is a different hero
+		int n2 = Math.Clamp(BotPool.FreeCount, 1, 12);
+		for (int i = 0; i < n2; i++) AddActor(pawn, pawn.Position + Aim.Forward(0f, pawn.EyeAngles.Y) * 700f, nowMs);
 		foreach (var a in Actors) if (a.Wants) { try { var e = a.Ent; if (e != null) BotPool.Exempt.Add(e.EntityHandle); } catch { } }
 	}
 
 	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) {
 		if (!RealBots) { Say("[Counterspell] This needs real bots."); Finished = true; return; }
 		_nextAt = nowMs + 2500;
-		Say($"[Counterspell] {_total} rounds. A hero appears, a cast bar fills above him - use your Counterspell BEFORE the bar is full.");
-		Say(_itemOk ? "[Counterspell] The item was added to your inventory. Any item key counts as the press."
-			: "[Counterspell] I could not add the item automatically: put Counterspell in an item slot (buy it in the shop). Any item key counts as the press.");
+		var heroes = Actors.Select(HeroOf).Where(h => h.HasValue).Select(h => Table.TryGetValue(h!.Value, out var t) ? t.Name : h.ToString()).Distinct().ToList();
+		Say($"[Counterspell] {_total} rounds. Heroes available right now: {string.Join(", ", heroes)}.");
+		Say("Each hero uses an ability on you. The first part you cannot stop. When the red bar says COUNTER NOW, press your Counterspell item (any item key).");
+		if (!_itemOk) Say("I could not add the item automatically: put Counterspell in an item slot (shop).");
 	}
 
-	private float Windup(int i) {
-		float basis = Lvl == Level.Easy ? 1500f : Lvl == Level.Hard ? 650f : 1000f;
-		return basis * Casts[i].Mult;
-	}
+	private Heroes? HeroOf(Actor a) { try { var p = a.Pawn; return p == null ? null : p.HeroID; } catch { return null; } }
+
+	private float WindowScale => Lvl == Level.Easy ? 1.5f : Lvl == Level.Hard ? 0.65f : 1f;
 
 	protected override void Tick(CCitadelPlayerPawn pawn, double nowMs) {
 		var eye = Aim.Eye(pawn);
-		var a = Actors[0];
-		var lp = _pos + new Vector3(0, 0, 190f);
+		if (_cur >= 0 && _ph != Ph.Gap) {
+			try { Actors[_cur].Place(_pos, pawn.Position); } catch { }
+			if (_label != null) Face(_label, _pos + new Vector3(0, 0, 215f), eye);
+		}
 
 		switch (_ph) {
 			case Ph.Gap:
-				try { a.Ent?.Teleport(position: BotPool.ParkPos, velocity: Vector3.Zero); } catch { }
 				_b1 = "Next hero..."; _b2 = "";
 				if (nowMs < _nextAt) break;
 				if (_done >= _total) { Summarize(); Finished = true; return; }
-				BeginCast(pawn, a, nowMs);
+				Spawn(pawn, nowMs);
 				break;
-			case Ph.Cast: {
-				try { a.Place(_pos, pawn.Position); } catch { }
-				if (_label != null) Face(_label, lp, eye);
-				// the first item press after the cast started
-				if (_firstPress <= 0 && In.ItemPresses > _items0) _firstPress = In.LastItemPressMs;
-				if (_firstPress > 0 && _firstPress >= _castAt - 1500 && _firstPress < _castAt) { Resolve(false, true, nowMs); break; }
-				if (_firstPress >= _castAt && _firstPress <= _hitAt + 120) { Resolve(true, false, nowMs); break; }
-				if (nowMs >= _barAt && _label != null) {
-					_barAt = nowMs + 80;
-					double f = Math.Clamp((nowMs - _castAt) / (_hitAt - _castAt), 0, 1);
-					int n = (int)(f * 10);
-					_label.SetMessage($"{Casts[_cur].Hero.ToUpperInvariant()} casts {Casts[_cur].Ability.ToUpperInvariant()}\n[{new string('#', n)}{new string('.', 10 - n)}]");
+			case Ph.Intro:
+			case Ph.Pre:
+			case Ph.Window: {
+				bool pressed = In.ItemPresses > _items0;
+				double pressAt = pressed ? In.LastItemPressMs : 0;
+				if (pressed) {
+					if (pressAt < _winStart) { Resolve(false, true, pressAt, nowMs); break; }
+					if (pressAt <= _winEnd + 120) { Resolve(true, false, pressAt, nowMs); break; }
 				}
-				if (nowMs > _hitAt + 120) Resolve(false, false, nowMs);
+				if (_ph == Ph.Intro && nowMs >= _phaseAt) {
+					_ph = Ph.Pre;
+					_b1 = $"{_heroName} {_cast.PreText}"; _b2 = "Wait - you cannot stop this part.";
+					SetLabel($"{_heroName.ToUpperInvariant()}\n{_cast.Ability.ToUpperInvariant()}", 255, 200, 90);
+				} else if (_ph == Ph.Pre && nowMs >= _winStart) {
+					_ph = Ph.Window;
+					_b1 = $"{_cast.WindowText}!"; _b2 = "COUNTER NOW!";
+				}
+				if (_ph == Ph.Window && nowMs >= _barAt) {
+					_barAt = nowMs + 70;
+					double f = Math.Clamp((nowMs - _winStart) / (_winEnd - _winStart), 0, 1);
+					int n = (int)(f * 12);
+					SetLabel($"{_cast.WindowText}\nCOUNTER NOW  [{new string('#', n)}{new string('.', 12 - n)}]", 255, 70, 70);
+				}
+				if (nowMs > _winEnd + 120) Resolve(false, false, 0, nowMs);
 				break;
 			}
 			case Ph.Result:
-				if (nowMs >= _nextAt) { Kill(_label); _label = null; _ph = Ph.Gap; _nextAt = nowMs + 300; }
+				if (nowMs >= _nextAt) {
+					Kill(_label); _label = null;
+					try { Actors[_cur].Ent?.Teleport(position: BotPool.ParkPos, velocity: Vector3.Zero); } catch { }
+					_cur = -1;
+					_ph = Ph.Gap; _nextAt = nowMs + 500 + Rng.NextDouble() * 700;
+				}
 				break;
 		}
 
 		if (nowMs >= _hudAt || _hud == null) {
-			_hudAt = nowMs + 250;
+			_hudAt = nowMs + 200;
 			_hud = new (string, byte, byte, byte)[] {
-				($"COUNTERSPELL  {Math.Min(_done + (_ph == Ph.Cast ? 1 : 0), _total)}/{_total}   countered: {_ok}", 255, 220, 60),
+				($"COUNTERSPELL  {Math.Min(_done + (_cur >= 0 && _ph != Ph.Result ? 1 : 0), _total)}/{_total}   countered: {_ok}", 255, 220, 60),
 				(_b1, 255, 255, 255),
-				(_b2, 150, 210, 255),
+				(_b2, _ph == Ph.Window ? (byte)255 : (byte)150, _ph == Ph.Window ? (byte)90 : (byte)210, _ph == Ph.Window ? (byte)90 : (byte)255),
 			};
 		}
 		SetHud(pawn, _hud);
 	}
 
-	private void BeginCast(CCitadelPlayerPawn pawn, Actor a, double nowMs) {
-		do { _cur = Rng.Next(Casts.Length); } while (_cur == _last && Casts.Length > 1);
-		_last = _cur;
-		// a different place every time, not always straight ahead
-		float yaw = pawn.EyeAngles.Y + (float)(Rng.NextDouble() * 80.0 - 40.0);
-		float dist = Math.Min(620f + (float)Rng.NextDouble() * 280f, ClearDist(pawn, yaw, 900f));
-		dist = Math.Max(380f, dist);
-		_pos = pawn.Position + Aim.Forward(0f, yaw) * dist;
-		try { a.Ent?.Teleport(position: new Vector3(_pos.X, _pos.Y, pawn.Position.Z + 8f), velocity: Vector3.Zero); } catch { }
-		_castAt = nowMs + 450; // a short moment to see who it is
-		_hitAt = _castAt + Windup(_cur);
-		_items0 = In.ItemPresses;
-		_firstPress = 0;
-		_ph = Ph.Cast;
-		Kill(_label);
-		_label = SpawnText($"{Casts[_cur].Hero.ToUpperInvariant()} casts {Casts[_cur].Ability.ToUpperInvariant()}\n[..........]", _pos + new Vector3(0, 0, 190f), Aim.Eye(pawn), 14f, 255, 90, 90);
-		_b1 = $"{Casts[_cur].Hero}: {Casts[_cur].Ability}";
-		_b2 = "Use Counterspell BEFORE the bar is full!";
+	private void SetLabel(string text, byte r, byte g, byte b) {
+		if (_label == null) { _label = SpawnText(text, _pos + new Vector3(0, 0, 215f), Aim.Eye(PlayerPawn!), 16f, r, g, b); return; }
+		_label.SetMessage(text);
+		_label.SetColor(r, g, b);
 	}
 
-	private void Resolve(bool countered, bool early, double nowMs) {
+	private void Spawn(CCitadelPlayerPawn pawn, double nowMs) {
+		// a different real hero every round (never the same bot twice in a row)
+		var ok = new List<int>();
+		for (int i = 0; i < Actors.Count; i++) if (Actors[i].BotReady && i != _lastActor) ok.Add(i);
+		if (ok.Count == 0) for (int i = 0; i < Actors.Count; i++) if (Actors[i].BotReady) ok.Add(i);
+		if (ok.Count == 0) { Say("[Counterspell] No bot available."); Finished = true; return; }
+		var withCast = ok.Where(i => HeroOf(Actors[i]) is { } h && Table.ContainsKey(h)).ToList();
+		_cur = (withCast.Count > 0 ? withCast : ok)[Rng.Next((withCast.Count > 0 ? withCast : ok).Count)];
+		_lastActor = _cur;
+		var hero = HeroOf(Actors[_cur]);
+		if (hero.HasValue && Table.TryGetValue(hero.Value, out var t)) { _heroName = t.Name; _cast = t.C; }
+		else { _heroName = hero?.ToString() ?? "Enemy"; _cast = new("Ability", 600, 1000, "casts an ability", "IMPACT"); }
+
+		float yaw = pawn.EyeAngles.Y + (float)(Rng.NextDouble() * 80.0 - 40.0);
+		float dist = Math.Max(380f, Math.Min(620f + (float)Rng.NextDouble() * 280f, ClearDist(pawn, yaw, 900f)));
+		_pos = pawn.Position + Aim.Forward(0f, yaw) * dist;
+		try { Actors[_cur].Ent?.Teleport(position: new Vector3(_pos.X, _pos.Y, pawn.Position.Z + 8f), velocity: Vector3.Zero); } catch { }
+
+		_ph = Ph.Intro;
+		_phaseAt = nowMs + 700; // a moment to see who it is
+		_winStart = _phaseAt + _cast.PreMs;
+		_winEnd = _winStart + _cast.WindowMs * WindowScale;
+		_items0 = In.ItemPresses;
+		Kill(_label); _label = null;
+		SetLabel($"{_heroName.ToUpperInvariant()}", 255, 255, 255);
+		_b1 = _heroName; _b2 = "Get ready.";
+	}
+
+	private void Resolve(bool countered, bool early, double pressAt, double nowMs) {
 		_done++;
-		var c = Casts[_cur];
+		string who = $"{_heroName} - {_cast.Ability}";
+		string text, big;
 		if (countered) {
 			_ok++;
-			double ms = _firstPress - _castAt;
+			double ms = pressAt - _winStart;
 			_react.Add(ms);
-			Say($"[Counterspell {_done}/{_total}] COUNTERED {c.Hero} - {c.Ability}: you reacted {ms:0} ms after the cast started (the cast takes {_hitAt - _castAt:0} ms).");
-			_b1 = $"COUNTERED  ({ms:0} ms)"; _b2 = "";
+			Say($"[Counterspell {_done}/{_total}] COUNTERED {who}: pressed {ms:0} ms after the stoppable part began ({_cast.WindowMs * WindowScale:0} ms available).");
+			text = $"COUNTERED  ({ms:0} ms)"; big = "COUNTERED";
 		} else if (early) {
 			_early++;
-			Say($"[Counterspell {_done}/{_total}] TOO EARLY: you pressed before {c.Hero} even started casting - the Counterspell is wasted. Wait for the cast.");
-			_b1 = "TOO EARLY"; _b2 = "Wait until the cast starts.";
+			Say($"[Counterspell {_done}/{_total}] TOO EARLY on {who}: the first part ({_cast.PreText}) cannot be stopped. Wait for the red COUNTER NOW bar.");
+			text = "TOO EARLY"; big = "TOO EARLY";
 		} else {
 			_late++;
-			Say($"[Counterspell {_done}/{_total}] TOO LATE: {c.Hero}'s {c.Ability} would have landed (cast time {_hitAt - _castAt:0} ms). React the moment the bar starts.");
-			_b1 = "TOO LATE - it hit you"; _b2 = "";
+			Say($"[Counterspell {_done}/{_total}] TOO LATE: {who} landed ({_cast.WindowText.ToLowerInvariant()}). React the moment the red bar appears.");
+			text = "TOO LATE - it landed"; big = "HIT";
 		}
-		Kill(_label);
-		_label = SpawnText(countered ? "COUNTERED" : early ? "TOO EARLY" : "HIT", _pos + new Vector3(0, 0, 190f), Aim.Eye(PlayerPawn!), 16f,
+		_b1 = text; _b2 = "";
+		Kill(_label); _label = null;
+		_label = SpawnText(big, _pos + new Vector3(0, 0, 215f), Aim.Eye(PlayerPawn!), 18f,
 			countered ? (byte)90 : (byte)255, countered ? (byte)255 : (byte)90, 90);
 		_ph = Ph.Result;
-		_nextAt = nowMs + 900 + Rng.NextDouble() * 900;
+		_nextAt = nowMs + 1300;
 	}
 
 	private void Summarize() {

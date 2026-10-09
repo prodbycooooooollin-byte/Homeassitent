@@ -136,11 +136,13 @@ Shoot an entry to select it. Main menu: PARRY, AIM (Flick / Switch / Long Range,
 Removed from the menu: Deny Souls and Last Hit (they used fake text orbs; real soul orbs are not supported yet).
 
 ## Scenarios, Counterspell, Quiz (menu)
-- **MORE > Scenarios**: a checklist. Tick the situations you want, then START. They are played in random order:
-  lone hurt enemy while you are ahead, an enemy missing from the minimap (an ambusher comes later), a group pushing you,
-  two enemies while you are behind, an even 1v1, and a low-health retreat. The briefing (souls, minimap, direction) is on the HUD.
-  Enemies come from a direction you could have seen, not out of thin air; they shoot back (shots are simulated, you cannot really die).
-- **MORE > Scenarios > SHOP / DECISION QUIZ**: shoot the right answer; the reason is printed in chat.
-- **PARRY > Counterspell**: a different hero appears each round, a cast bar fills above him, use your Counterspell item before it is full.
-  The casts are simulated and the list of abilities is my best knowledge, not verified in game.
-- Routes: during the countdown you are frozen; hold W and you run instantly at GO. The save menu after a recording stands at the hub.
+- **GAME SENSE > Scenarios**: tick the situations, press START. Each round shows a 4-line briefing (souls, health, minimap with clock direction)
+  and red ENEMY tags on every enemy. You decide: FIGHT (kill them) or RETREAT (run to the green SAFE ZONE). Enemies hold still for 3.5 s
+  (decision time), then walk at you and shoot (simulated damage; you cannot die). After each round the chat explains why the choice was right or wrong.
+- **Scenarios > SHOP / DECISION QUIZ**: shoot the right answer (10 questions, 6 per run, random order).
+- **REFLEX > Counterspell**: the real hero bots of the pool step up one after another (never the same twice in a row) and use a signature ability.
+  The first part (cast, dagger flying, bomb sticking to you) cannot be stopped; press your Counterspell item only when the red COUNTER NOW bar shows.
+  The ability effects are simulated, the heroes are real. SETTINGS > Enemy bots raises the number of different heroes (experimental).
+- **Routes**: you are frozen during the countdown; hold W and you run at GO. A route recorded on a zipline tries to mount the zipline again at GO.
+  The save menu after a recording stands at the hub.
+- Hover an entry in the menu: the top line tells you what it does.

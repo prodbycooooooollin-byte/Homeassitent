@@ -4,40 +4,50 @@ using DeadworksManaged.Api;
 namespace DeadlockTrainer;
 
 /// <summary>One floating entry of a menu page. Yaw/Pitch are relative to the menu's centre.</summary>
-sealed record MenuItem(string Id, string Label, float Yaw, float Pitch, float Size, bool Selectable, byte R = 255, byte G = 255, byte B = 255);
+sealed record MenuItem(string Id, string Label, float Yaw, float Pitch, float Size, bool Selectable, byte R = 255, byte G = 255, byte B = 255, string Desc = "");
 
 /// <summary>The layouts of all menu pages. Ids: pg_* = go to a page, tg_* = toggle in place, lv_* = difficulty, everything else = an action.</summary>
 static class MenuPages {
 	private static MenuItem Title(string t) => new("title", t, 0f, -24f, 15f, false, 255, 200, 0);
 	private static MenuItem Hdr(string id, string t, float yaw) => new(id, t, yaw, -13f, 12f, false, 255, 140, 40);
-	private static MenuItem Btn(string id, string t, float yaw, float pitch, float size = 9f, byte r = 255, byte g = 255, byte b = 255) => new(id, t, yaw, pitch, size, true, r, g, b);
+	private static MenuItem Btn(string id, string t, float yaw, float pitch, float size = 9f, byte r = 255, byte g = 255, byte b = 255, string d = "") => new(id, t, yaw, pitch, size, true, r, g, b, d);
+
+	public static string BotsLabel() => $"Enemy bots: {(BotPool.Target <= 4 ? "normal (7)" : BotPool.Target <= 8 ? "more (11)" : "many (15)")}";
 
 	public static string HeadLabel() => TrainerConfig.FlickHeadOnly ? "Head only: ON" : "Head only: OFF";
 
 	public static List<MenuItem> Main() => new() {
 		Title("DEADLOCK TRAINER"),
-		Hdr("hp", "PARRY", -33f),
-		Btn("p_single", "Single", -33f, -8f), Btn("p_multi", "Multiple", -33f, -3.5f), Btn("p_burst", "Burst", -33f, 1f),
-		Btn("c_counter", "Counterspell", -33f, 5.2f, 8f, 140, 200, 255),
+		Hdr("hp", "REFLEX", -33f),
+		Btn("p_single", "Parry", -33f, -8f, d: "Parry ONE melee swing. Heavy and light melee are mixed - heavy is more common."),
+		Btn("p_multi", "Parry x3", -33f, -3.5f, d: "Three bots swing at different times. Parry each one."),
+		Btn("p_burst", "Parry Burst", -33f, 1f, d: "Short bursts of swings in a row."),
+		Btn("c_counter", "Counterspell", -33f, 5.2f, 8f, 140, 200, 255, "A real enemy hero casts an ability at you. Counter it with your item at the right moment."),
 		Hdr("hf", "AIM", -11f),
-		Btn("f_flick", "Flick", -11f, -8f), Btn("f_switch", "Switch", -11f, -3.5f), Btn("f_long", "Long Range", -11f, 1f),
-		Btn("tg_head", HeadLabel(), -11f, 5.2f, 7f, 255, 190, 120),
+		Btn("f_flick", "Flick", -11f, -8f, d: "Bots appear around you - flick onto each one."),
+		Btn("f_switch", "Target Switch", -11f, -3.5f, d: "Several bots at once - switch between them fast."),
+		Btn("f_long", "Long Range", -11f, 1f, d: "Bots far away. Needs the long-range spots (!spot)."),
+		Btn("tg_head", HeadLabel(), -11f, 5.2f, 7f, 255, 190, 120, "Only headshots count in the aim exercises."),
 		Hdr("ht", "TRACK", 11f),
-		Btn("t_strafe", "Strafe", 11f, -8f), Btn("t_random", "Random", 11f, -3.5f),
-		Hdr("ho", "MORE", 33f),
-		Btn("o_reaction", "Reaction", 33f, -8f), Btn("pg_routes", "Routes", 33f, -3.5f),
-		Btn("pg_scen", "Scenarios", 33f, 1f, 9f, 255, 160, 160),
-		Btn("lv_easy", "EASY", -12f, 9f), Btn("lv_normal", "NORMAL", 0f, 9f), Btn("lv_hard", "HARD", 12f, 9f),
-		Btn("pg_settings", "SETTINGS", -10f, 14.5f, 6.5f, 170, 170, 170),
-		Btn("off", "CLOSE MENU", 10f, 14.5f, 6.5f, 170, 170, 170),
+		Btn("t_strafe", "Strafing Target", 11f, -8f, d: "Keep your crosshair on a bot that strafes left and right."),
+		Btn("t_random", "Random Target", 11f, -3.5f, d: "A bot with unpredictable movement."),
+		Hdr("ho", "GAME SENSE", 33f),
+		Btn("o_reaction", "Reaction", 33f, -8f, d: "Shoot as fast as you can when the signal appears."),
+		Btn("pg_scen", "Scenarios", 33f, -3.5f, 9f, 255, 160, 160, "Realistic situations: fight, flee, or play around a missing enemy. Includes a shop quiz."),
+		Btn("pg_routes", "Routes", 33f, 1f, d: "Record a path and race a ghost of yourself."),
+		Btn("lv_easy", "EASY", -12f, 9f, d: "Slower, more forgiving."),
+		Btn("lv_normal", "NORMAL", 0f, 9f, d: "The default."),
+		Btn("lv_hard", "HARD", 12f, 9f, d: "Faster, stricter."),
+		Btn("pg_settings", "SETTINGS", -10f, 14.5f, 6.5f, 170, 170, 170, "Bots, head-only, enemy count."),
+		Btn("off", "CLOSE MENU", 10f, 14.5f, 6.5f, 170, 170, 170, "Hides the menu. Type !train to bring it back."),
 	};
 
 	public static List<MenuItem> Scenarios() {
 		var l = new List<MenuItem> { Title("SCENARIOS - tick what you want to play") };
 		for (int i = 0; i < ScenarioSet.Names.Length; i++)
-			l.Add(Btn("tg_s" + i, ScenarioSet.Label(i), 0f, -14f + i * 4f, 7.5f, 255, 230, 160));
-		l.Add(Btn("sc_start", "START SCENARIOS", -14f, 11f, 9f, 120, 255, 140));
-		l.Add(Btn("sc_quiz", "SHOP / DECISION QUIZ", 14f, 11f, 8f, 120, 200, 255));
+			l.Add(Btn("tg_s" + i, ScenarioSet.Label(i), 0f, -14f + i * 4f, 7.5f, 255, 230, 160, ScenarioSet.Desc[i]));
+		l.Add(Btn("sc_start", "START SCENARIOS", -14f, 11f, 9f, 120, 255, 140, "8 situations in random order from the ticked ones."));
+		l.Add(Btn("sc_quiz", "SHOP / DECISION QUIZ", 14f, 11f, 8f, 120, 200, 255, "What to buy, what to do - answer by shooting."));
 		l.Add(Btn("pg_main", "BACK", 0f, 16.5f, 6.5f, 170, 170, 170));
 		return l;
 	}
@@ -87,9 +97,10 @@ static class MenuPages {
 		Title("SETTINGS"),
 		Btn("tg_head", HeadLabel(), 0f, -10f, 9f, 255, 190, 120),
 		Btn("tg_pool", TrainerConfig.AutoSpawn ? "Automatic bots: ON" : "Automatic bots: OFF", 0f, -5.5f, 9f, 255, 190, 120),
-		new("hint1", "Training spots: walk to the place you want, type  !spot", 0f, 0f, 6.5f, false, 200, 200, 200),
-		new("hint2", "and choose from the menu that appears there.", 0f, 3f, 6.5f, false, 200, 200, 200),
-		Btn("pg_main", "BACK", 0f, 12f, 6.5f, 170, 170, 170),
+		Btn("tg_bots", BotsLabel(), 0f, -1f, 9f, 255, 190, 120, "How many enemy bots (and heroes) are loaded. More = more variety, but a higher risk of invisible heroes."),
+		new("hint1", "Training spots: walk to the place you want, type  !spot", 0f, 3f, 6.5f, false, 200, 200, 200),
+		new("hint2", "and choose from the menu that appears there.", 0f, 6f, 6.5f, false, 200, 200, 200),
+		Btn("pg_main", "BACK", 0f, 14f, 6.5f, 170, 170, 170),
 	};
 
 	public static List<MenuItem> Spots() => new() {

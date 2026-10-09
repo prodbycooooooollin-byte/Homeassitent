@@ -375,6 +375,7 @@ sealed class MenuDrill : Drill {
 			_hover = hover;
 			_hoverSince = nowMs;
 			RefreshColors(hover);
+			_status?.SetMessage(hover >= 0 && _items[hover].Item.Desc.Length > 0 ? _items[hover].Item.Desc : StatusText());
 		}
 
 		foreach (var (_, text, pos) in _items) if (text != null) Face(text, pos, eye);

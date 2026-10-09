@@ -12,6 +12,7 @@ static class RouteStore {
 	private sealed class Data {
 		public Dictionary<string, List<float[]>> Routes { get; set; } = new();
 		public Dictionary<string, double> Best { get; set; } = new();
+		public HashSet<string> Zip { get; set; } = new();
 	}
 
 	private static Data _d = new();
@@ -29,8 +30,11 @@ static class RouteStore {
 
 	private static string Key(string map, string name) => map + "|" + name.Trim().ToLowerInvariant();
 
-	public static void Put(string map, string name, List<RoutePoint> pts) {
+	public static bool IsZip(string map, string name) { Ensure(); return _d.Zip.Contains(Key(map, name)); }
+
+	public static void Put(string map, string name, List<RoutePoint> pts, bool zip = false) {
 		Ensure();
+		if (zip) _d.Zip.Add(Key(map, name)); else _d.Zip.Remove(Key(map, name));
 		_d.Routes[Key(map, name)] = pts.Select(p => new[] { p.P.X, p.P.Y, p.P.Z, p.T }).ToList();
 		_d.Best.Remove(Key(map, name));
 		Save();
@@ -60,6 +64,7 @@ static class RouteStore {
 	public static bool Delete(string map, string name) {
 		Ensure();
 		bool ok = _d.Routes.Remove(Key(map, name));
+		_d.Zip.Remove(Key(map, name));
 		_d.Best.Remove(Key(map, name));
 		if (ok) Save();
 		return ok;
@@ -97,6 +102,12 @@ sealed class RouteRecorder {
 	public Vector3 StartPos;
 	public float StartYaw;
 	public bool FixedStart;
+	/// <summary>The recording began while riding a zipline.</summary>
+	public bool StartZip;
+
+	public static bool OnZipline(CCitadelPlayerPawn p) {
+		try { return p.ModifierProp?.HasModifierState(EModifierState.UsingZipline) == true; } catch { return false; }
+	}
 	public readonly List<RoutePoint> Points = new();
 	private double _t0 = -1, _lastAt;
 	public double DurationMs => Points.Count > 0 ? Points[^1].T : 0;
@@ -129,6 +140,8 @@ sealed class RouteDrill : Drill {
 	private bool _go, _done;
 	private int _edges;
 	private CBaseEntity? _ghost;
+	private bool _zip;
+	private double _mountAt, _lastMount;
 	private CPointWorldText? _ghostTag;
 	private CPointWorldText? _marker, _count;
 	private (string, byte, byte, byte)[]? _hudCache;
@@ -141,6 +154,7 @@ sealed class RouteDrill : Drill {
 
 	public RouteDrill(CCitadelPlayerController ctl, PlayerInput input, Level lvl, string name, string map, List<RoutePoint> pts) : base(ctl, input, lvl) {
 		_name = name; _map = map; _pts = pts;
+		_zip = RouteStore.IsZip(map, name);
 		BuildCheckpoints();
 	}
 
@@ -214,7 +228,12 @@ sealed class RouteDrill : Drill {
 			if (_count == null) _count = SpawnText(c, cpos, eye, 26f, 255, 220, 60);
 			else _count.SetMessage(c);
 			if (_count != null) Face(_count, cpos, eye);
-			if (left <= 0) { _go = true; Kill(_count); _count = null; _run = new RouteRecorder(); Freeze(pawn, false); }
+			if (left <= 0) { _go = true; Kill(_count); _count = null; _run = new RouteRecorder(); Freeze(pawn, false); if (_zip) _mountAt = nowMs; }
+		}
+		if (_zip && _mountAt > 0) {
+			// The route began on a zipline: grab it again (a teleport drops you off the rope).
+			if (RouteRecorder.OnZipline(pawn) || nowMs - _mountAt > 1500) _mountAt = 0;
+			else if (nowMs - _lastMount > 250) { _lastMount = nowMs; try { pawn.ExecuteAbilityBySlot(EAbilitySlot.Ability_ZipLine); } catch { } }
 		}
 		double ms = _go ? nowMs - _goMs : 0;
 		var gp = GhostAt(ms, out var gyaw);
@@ -277,7 +296,7 @@ sealed class RouteDrill : Drill {
 		if (totalMs < rec - 50 && _run.Points.Count > 3) {
 			_run.Finish(pawn.Position, nowMs);
 			var faster = _run.Points.Select(q => new RoutePoint(q.P, q.T)).ToList();
-			RouteStore.Put(_map, _name, faster);
+			RouteStore.Put(_map, _name, faster, _zip);
 			RouteStore.SubmitTime(_map, _name, totalMs);
 			Say($"NEW RECORD! You were {(rec - totalMs) / 1000:0.00} s faster than the recording - your run is now the route (the ghost will run it next time).");
 		} else {
@@ -330,6 +349,8 @@ sealed class RecordDrill : Drill {
 				_recording = true;
 				_t0 = nowMs;
 				if (!Rec.FixedStart) { Rec.StartPos = pawn.Position; Rec.StartYaw = pawn.EyeAngles.Y; }
+				Rec.StartZip = RouteRecorder.OnZipline(pawn);
+				if (Rec.StartZip) Say("[Route] Zipline start detected - the replay will try to put you on the zipline again.");
 				Say($"[Route] RECORDING '{Rec.Name}' - run your route now. Press PARRY (or R) at the end point.");
 				return;
 			}

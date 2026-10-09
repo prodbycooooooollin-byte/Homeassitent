@@ -425,6 +425,10 @@ public class TrainerPlugin : DeadworksPluginBase {
 			return ScenarioSet.Label(si);
 		}
 		switch (id) {
+			case "tg_bots":
+				BotPool.Target = BotPool.Target <= 4 ? 8 : BotPool.Target <= 8 ? 12 : 4;
+				if (BotPool.Target > BotPool.Count) { BotPool.GuardClear(); BotPool.ResetAuto(); }
+				return MenuPages.BotsLabel();
 			case "tg_head": TrainerConfig.FlickHeadOnly = !TrainerConfig.FlickHeadOnly; return MenuPages.HeadLabel();
 			case "tg_pool":
 				TrainerConfig.AutoSpawn = !TrainerConfig.AutoSpawn;
@@ -614,7 +618,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "rec_new": StartRecording(c, slot, RouteStore.NextName(map), null); return;
 			case "att_save": {
 				if (_attempts.Remove(slot, out var att)) {
-					RouteStore.Put(map, att.Name, att.Points);
+					RouteStore.Put(map, att.Name, att.Points, att.StartZip);
 					Chat.PrintToChat(c, $"[Training] Route '{att.Name}' saved. Pick it in the list to practice it with the ghost.");
 				}
 				ReturnToHubThen(c, slot, "routes");
@@ -1080,7 +1084,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 				return;
 			case "save":
 				if (!_attempts.Remove(slot, out var att)) { Chat.PrintToChat(caller, "[Training] No finished attempt to save. Record with !troute rec <name>, finish with !troute stop."); return; }
-				RouteStore.Put(map, att.Name, att.Points);
+				RouteStore.Put(map, att.Name, att.Points, att.StartZip);
 				Chat.PrintToChat(caller, $"[Training] Route '{att.Name}' saved ({att.DurationMs / 1000:0.0} s). Learn it with Routes in the menu or !troute play {att.Name} - a ghost runs it in front of you.");
 				return;
 			case "play" or "start":
