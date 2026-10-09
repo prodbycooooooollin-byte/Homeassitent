@@ -35,6 +35,15 @@ static class TrainerConfig {
 		Heroes.Bebop, Heroes.Shiv, Heroes.Kelvin, Heroes.Lash, Heroes.Mirage, Heroes.Viper,
 		Heroes.Gigawatt, Heroes.Dynamo,
 	];
+
+	/// <summary>The game's practice bots pick a random hero; every hero they might pick must be precached or the bot is invisible.</summary>
+	public static readonly Heroes[] BotPoolHeroes = [
+		Heroes.Forge, Heroes.Chrono, Heroes.Astro, Heroes.Nano, Heroes.Orion, Heroes.Krill, Heroes.Tengu, Heroes.Kali,
+		Heroes.Warden, Heroes.Yamato, Heroes.Viscous, Heroes.Gunslinger, Heroes.Wrecker, Heroes.Rutger, Heroes.Synth,
+		Heroes.Thumper, Heroes.Slork, Heroes.Cadence, Heroes.Vandal, Heroes.Magician, Heroes.Trapper, Heroes.Operative,
+		Heroes.VampireBat, Heroes.Drifter, Heroes.Priest, Heroes.Frank, Heroes.Bookworm, Heroes.Boho, Heroes.Doorman,
+		Heroes.Skyrunner, Heroes.Swan, Heroes.PunkGoat, Heroes.Druid, Heroes.Graf, Heroes.Fortuna, Heroes.Necro, Heroes.Fencer,
+	];
 }
 
 enum BotMethod { Unit, Fake }
