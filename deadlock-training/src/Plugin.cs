@@ -19,9 +19,9 @@ public class TrainerPlugin : DeadworksPluginBase {
 	private readonly Dictionary<int, Drill> _drills = new();
 	private readonly Dictionary<int, Hub> _hubs = new();
 	private readonly Dictionary<int, Level> _levels = new();
-	private readonly HashSet<int> _fromHub = new();     // Uebung wurde aus dem Menue gestartet -> danach zurueck
-	private readonly HashSet<int> _returning = new();   // Rueckweg ist schon eingeplant
-	private readonly HashSet<int> _noAutoMenu = new();  // Spieler hat das Menue ausgeschaltet
+	private readonly HashSet<int> _fromHub = new();     // exercise was started from the menu -> return afterwards
+	private readonly HashSet<int> _returning = new();   // return trip is already scheduled
+	private readonly HashSet<int> _noAutoMenu = new();  // player switched the menu off
 	private readonly Dictionary<string, Vector3?> _autoArena = new();
 
 	private bool _debug;
@@ -45,7 +45,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 	}
 
 	public override void OnStartupServer() {
-		StopAll(); // Map-Wechsel: alte Entities und Bots sind weg
+		StopAll(); // map change: old entities and bots are gone
 		TrainerBots.ClearAll();
 		_hubs.Clear();
 		_fromHub.Clear();
@@ -187,7 +187,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			if (!_drills.TryGetValue(slot, out var drill)) continue;
 
 			if (pawn == null || !pawn.IsAlive) {
-				Chat.PrintToChat(c, "[Training] Uebung abgebrochen (kein lebender Held).");
+				Chat.PrintToChat(c, "[Training] Exercise aborted (your hero is not alive).");
 				bool wasExercise = drill is not MenuDrill;
 				StopDrill(slot);
 				if (wasExercise) ScheduleReturn(c, slot);
@@ -198,7 +198,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 				drill.Update(pawn, now);
 			} catch (Exception ex) {
 				Console.WriteLine($"[Trainer] Fehler in {drill.Name}: {ex}");
-				Chat.PrintToChat(c, $"[Training] Fehler in {drill.Name}: {ex.Message} (Uebung beendet)");
+				Chat.PrintToChat(c, $"[Training] Error in {drill.Name}: {ex.Message} (exercise ended)");
 				drill.Finished = true;
 			}
 
@@ -215,7 +215,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 	private bool Begin(CCitadelPlayerController c, Func<PlayerInput, Drill> make) {
 		var pawn = c.GetHeroPawn();
 		if (pawn == null || !pawn.IsAlive) {
-			Chat.PrintToChat(c, "[Training] Du brauchst einen lebenden Helden. Waehle zuerst einen Helden und spawne.");
+			Chat.PrintToChat(c, "[Training] You need a living hero. Pick a hero and spawn first.");
 			return false;
 		}
 		int slot = c.EntityIndex - 1;
@@ -230,7 +230,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 	private void OpenMenu(CCitadelPlayerController c, bool placeHere) {
 		var pawn = c.GetHeroPawn();
 		if (pawn == null || !pawn.IsAlive) {
-			Chat.PrintToChat(c, "[Training] Du brauchst einen lebenden Helden. Waehle zuerst einen Helden und spawne.");
+			Chat.PrintToChat(c, "[Training] You need a living hero. Pick a hero and spawn first.");
 			return;
 		}
 		int slot = c.EntityIndex - 1;
@@ -242,7 +242,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			hub.Feet + new Vector3(0, 0, 64), hub.Yaw));
 	}
 
-	private void CloseMenu(CCitadelPlayerController c, string? message = "[Training] Menue ausgeschaltet. !train bringt es zurueck.") {
+	private void CloseMenu(CCitadelPlayerController c, string? message = "[Training] Menu switched off. !train brings it back.") {
 		int slot = c.EntityIndex - 1;
 		StopDrill(slot);
 		_hubs.Remove(slot);
@@ -257,9 +257,12 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "p_single": GoToArenaThen(c, slot, () => StartParry(c, ParryMode.Single, 10, lvl)); break;
 			case "p_multi": GoToArenaThen(c, slot, () => StartParry(c, ParryMode.Multi, 10, lvl)); break;
 			case "p_burst": GoToArenaThen(c, slot, () => StartParry(c, ParryMode.Burst, 4, lvl)); break;
-			case "a_flick": GoToArenaThen(c, slot, () => StartFlick(c, 0, lvl)); break;
-			case "a_strafe": GoToArenaThen(c, slot, () => StartTrack(c, false, 0, lvl)); break;
-			case "a_random": GoToArenaThen(c, slot, () => StartTrack(c, true, 0, lvl)); break;
+			case "f_flick": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Flick, 0, lvl)); break;
+			case "f_switch": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Switch, 0, lvl)); break;
+			case "f_long": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Long, 0, lvl)); break;
+			case "t_strafe": GoToArenaThen(c, slot, () => StartTrack(c, false, 0, lvl)); break;
+			case "t_random": GoToArenaThen(c, slot, () => StartTrack(c, true, 0, lvl)); break;
+			case "o_reaction": GoToArenaThen(c, slot, () => StartReaction(c, 0, lvl)); break;
 			default: CloseMenu(c); break;
 		}
 	}
@@ -267,11 +270,14 @@ public class TrainerPlugin : DeadworksPluginBase {
 	private bool StartParry(CCitadelPlayerController c, ParryMode mode, int rounds, Level lvl) =>
 		Begin(c, input => new ParryDrill(c, input, lvl, mode, rounds));
 
-	private bool StartFlick(CCitadelPlayerController c, int count, Level lvl) =>
-		Begin(c, input => new FlickDrill(c, input, lvl, count));
+	private bool StartFlick(CCitadelPlayerController c, FlickMode mode, int count, Level lvl) =>
+		Begin(c, input => new FlickDrill(c, input, lvl, mode, count));
 
 	private bool StartTrack(CCitadelPlayerController c, bool random, int seconds, Level lvl) =>
 		Begin(c, input => new TrackDrill(c, input, lvl, random, seconds));
+
+	private bool StartReaction(CCitadelPlayerController c, int rounds, Level lvl) =>
+		Begin(c, input => new ReactionDrill(c, input, lvl, rounds));
 
 	private Vector3? ArenaFor(Hub hub, CCitadelPlayerPawn pawn) {
 		string map = Server.MapName;
@@ -295,7 +301,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		_fromHub.Add(slot);
 		if (arena.HasValue) {
 			pawn.TeleportWithView(arena.Value, new Vector3(0f, hub.Yaw, 0f));
-			Chat.PrintToChat(c, "[Training] Los geht's - du wurdest in einen freien Bereich gebracht. Nach der Uebung zurueck zum Menue.");
+			Chat.PrintToChat(c, "[Training] Here we go - you were moved to an open area. After the exercise you return to the menu.");
 		}
 		// Kurz warten, bis Position und Blickrichtung beim Spieler angekommen sind.
 		Timer.Once(900.Milliseconds(), () => {
@@ -334,7 +340,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 
 	// ---- Befehle --------------------------------------------------------------------------------------------------
 
-	[Command("train", "training", Description = "Trainingsmenue vor dir aufbauen (auf eine Uebung schiessen). train off = ausschalten")]
+	[Command("train", "training", Description = "Open the training menu in front of you (shoot an exercise). train off = close it")]
 	public void CmdTrain(CCitadelPlayerController caller, string sub = "") {
 		switch (sub.Trim().ToLowerInvariant()) {
 			case "off" or "aus" or "stop":
@@ -347,93 +353,108 @@ public class TrainerPlugin : DeadworksPluginBase {
 		OpenMenu(caller, placeHere: true);
 	}
 
-	[Command("tlevel", Description = "Schwierigkeit: tlevel leicht|normal|schwer")]
+	[Command("tlevel", Description = "Difficulty: tlevel easy|normal|hard")]
 	public void CmdLevel(CCitadelPlayerController caller, string level = "") {
 		int slot = caller.EntityIndex - 1;
 		var l = LevelParse.Parse(level, LevelOf(slot));
 		_levels[slot] = l;
-		Chat.PrintToChat(caller, $"[Training] Stufe: {LevelParse.Label(l)}. Gilt fuer die naechste Uebung (Menue neu oeffnen: !train).");
+		Chat.PrintToChat(caller, $"[Training] Difficulty: {LevelParse.Label(l)}. Applies to the next exercise (reopen the menu with !train).");
 	}
 
-	[Command("parry", Description = "Parry gegen Bots: parry [einzel|mehrere|salve] [runden=10] [leicht|normal|schwer]")]
-	public void CmdParry(CCitadelPlayerController caller, string mode = "mehrere", int rounds = 10, string level = "") {
+	[Command("parry", Description = "Parry against bots: parry [single|multi|burst] [rounds=10] [easy|normal|hard]")]
+	public void CmdParry(CCitadelPlayerController caller, string mode = "multi", int rounds = 10, string level = "") {
 		int slot = caller.EntityIndex - 1;
 		var m = mode.Trim().ToLowerInvariant() switch {
-			"einzel" or "single" or "1" => ParryMode.Single,
-			"salve" or "burst" => ParryMode.Burst,
+			"single" or "einzel" or "1" => ParryMode.Single,
+			"burst" or "salve" => ParryMode.Burst,
 			_ => ParryMode.Multi,
 		};
 		StartParry(caller, m, m == ParryMode.Burst ? Math.Min(rounds, 8) : rounds, LevelParse.Parse(level, LevelOf(slot)));
 	}
 
-	[Command("flick", Description = "Flick-Aim gegen einen Bot: flick [anzahl] [leicht|normal|schwer]")]
-	public void CmdFlick(CCitadelPlayerController caller, int count = 0, string level = "") =>
-		StartFlick(caller, count, LevelParse.Parse(level, LevelOf(caller.EntityIndex - 1)));
+	[Command("flick", Description = "Flick aim against a bot: flick [flick|switch|long] [count] [easy|normal|hard]")]
+	public void CmdFlick(CCitadelPlayerController caller, string mode = "flick", int count = 0, string level = "") {
+		var m = mode.Trim().ToLowerInvariant() switch {
+			"switch" or "multi" => FlickMode.Switch,
+			"long" or "far" => FlickMode.Long,
+			_ => FlickMode.Flick,
+		};
+		StartFlick(caller, m, count, LevelParse.Parse(level, LevelOf(caller.EntityIndex - 1)));
+	}
 
-	[Command("track", Description = "Tracking gegen einen Bot: track [strafe|zufall] [sekunden=30] [leicht|normal|schwer]")]
+	[Command("track", Description = "Tracking against a bot: track [strafe|random] [seconds=30] [easy|normal|hard]")]
 	public void CmdTrack(CCitadelPlayerController caller, string mode = "strafe", int seconds = 30, string level = "") {
-		bool random = mode.Trim().ToLowerInvariant() is "zufall" or "random" or "z";
+		bool random = mode.Trim().ToLowerInvariant() is "random" or "zufall" or "r";
 		StartTrack(caller, random, seconds, LevelParse.Parse(level, LevelOf(caller.EntityIndex - 1)));
 	}
 
-	[Command("tstop", Description = "Aktuelle Trainingsuebung beenden (zurueck zum Menue)")]
+	[Command("reaction", Description = "Reaction test: reaction [rounds] [easy|normal|hard]")]
+	public void CmdReaction(CCitadelPlayerController caller, int rounds = 0, string level = "") =>
+		StartReaction(caller, rounds, LevelParse.Parse(level, LevelOf(caller.EntityIndex - 1)));
+
+	[Command("tstop", Description = "End the current exercise (back to the menu)")]
 	public void CmdStop(CCitadelPlayerController caller) {
 		int slot = caller.EntityIndex - 1;
 		bool wasExercise = _drills.TryGetValue(slot, out var d) && d is not MenuDrill;
 		StopDrill(slot);
-		Chat.PrintToChat(caller, "[Training] Uebung beendet.");
+		Chat.PrintToChat(caller, "[Training] Exercise ended.");
 		if (wasExercise) ScheduleReturn(caller, slot);
 	}
 
-	[Command("tarena", Description = "Optional: eigene Arena festlegen (tarena) oder wieder automatisch (tarena reset)")]
+	[Command("tarena", Description = "Optional: set your own arena (tarena) or go back to automatic (tarena reset)")]
 	public void CmdArena(CCitadelPlayerController caller, string sub = "") {
 		var pawn = caller.GetHeroPawn();
-		if (pawn == null || !pawn.IsAlive) { Chat.PrintToChat(caller, "[Training] Du brauchst einen lebenden Helden."); return; }
+		if (pawn == null || !pawn.IsAlive) { Chat.PrintToChat(caller, "[Training] You need a living hero."); return; }
 		string map = Server.MapName;
 		if (sub.Trim().Equals("reset", StringComparison.OrdinalIgnoreCase)) {
 			Arena.Reset(map);
 			_autoArena.Remove(map);
-			Chat.PrintToChat(caller, "[Training] Arena zurueckgesetzt - es wird automatisch ein freier Platz gesucht.");
+			Chat.PrintToChat(caller, "[Training] Arena reset - an open area is searched automatically.");
 			return;
 		}
 		Arena.Set(map, pawn.Position + new Vector3(0, 0, 8));
-		Chat.PrintToChat(caller, $"[Training] Arena fuer {map} gesetzt: deine aktuelle Position.");
+		Chat.PrintToChat(caller, $"[Training] Arena for {map} set to your current position.");
 	}
 
-	[Command("thero", Description = "Eigenen Helden wechseln: thero <name>  (z.B. thero wraith)")]
+	[Command("thero", Description = "Change your own hero: thero <name>  (e.g. thero wraith)")]
 	public void CmdHero(CCitadelPlayerController caller, string name = "") {
 		if (string.IsNullOrWhiteSpace(name) || !Enum.TryParse<Heroes>(name.Trim(), ignoreCase: true, out var hero) || !Enum.IsDefined(hero)) {
-			Chat.PrintToChat(caller, "[Training] Unbekannter Held. Beispiele: Wraith, Haze, Inferno, Ghost, Hornet, Atlas, Bebop, Shiv, Kelvin, Lash, Mirage, Viper");
+			Chat.PrintToChat(caller, "[Training] Unknown hero. Examples: Wraith, Haze, Inferno, Ghost, Hornet, Atlas, Bebop, Shiv, Kelvin, Lash, Mirage, Viper");
 			return;
 		}
 		caller.SelectHero(hero);
-		Chat.PrintToChat(caller, $"[Training] Held: {hero}");
+		Chat.PrintToChat(caller, $"[Training] Hero: {hero}");
 	}
 
-	// ---- Bots / Diagnose ------------------------------------------------------------------------------------------
+	// ---- Bots / diagnostics ---------------------------------------------------------------------------------------
 
-	[Command("tbot", Description = "Bots: tbot test | tbot hero <name> | tbot off | tbot on | tbot view on|off")]
+	[Command("tbot", Description = "Bots: tbot test | tbot hero <name|same> | tbot off | tbot on | tbot view on|off")]
 	public void CmdBot(CCitadelPlayerController caller, string sub = "test", string arg = "") {
 		switch (sub.Trim().ToLowerInvariant()) {
 			case "off":
 				TrainerConfig.NoBots = true;
-				Chat.PrintToChat(caller, "[Training] Bots aus: Uebungen laufen mit Text-Zielen (vereinfacht).");
+				Chat.PrintToChat(caller, "[Training] Bots off: exercises use text targets (simplified).");
 				return;
 			case "on":
 				TrainerConfig.NoBots = false;
-				Chat.PrintToChat(caller, "[Training] Bots an.");
+				Chat.PrintToChat(caller, "[Training] Bots on.");
 				return;
 			case "view":
 				TrainerConfig.WriteViewAngles = arg.Trim().ToLowerInvariant() is not ("off" or "aus" or "0");
-				Chat.PrintToChat(caller, $"[Training] Bot-Blickrichtung schreiben: {(TrainerConfig.WriteViewAngles ? "an" : "aus")}");
+				Chat.PrintToChat(caller, $"[Training] Writing the bots' view direction: {(TrainerConfig.WriteViewAngles ? "on" : "off")}");
 				return;
 			case "hero":
+				if (arg.Trim().Equals("same", StringComparison.OrdinalIgnoreCase)) {
+					TrainerConfig.BotHero = null;
+					Chat.PrintToChat(caller, "[Training] Bot hero: same as yours.");
+					return;
+				}
 				if (!Enum.TryParse<Heroes>(arg.Trim(), ignoreCase: true, out var h) || !TrainerConfig.PrecachedHeroes.Contains(h)) {
-					Chat.PrintToChat(caller, "[Training] Moegliche Bot-Helden: " + string.Join(", ", TrainerConfig.PrecachedHeroes));
+					Chat.PrintToChat(caller, "[Training] Possible bot heroes: same, " + string.Join(", ", TrainerConfig.PrecachedHeroes));
 					return;
 				}
 				TrainerConfig.BotHero = h;
-				Chat.PrintToChat(caller, $"[Training] Bot-Held: {h}");
+				Chat.PrintToChat(caller, $"[Training] Bot hero: {h}");
 				return;
 			default:
 				Begin(caller, input => new BotTestDrill(caller, input));
@@ -441,7 +462,13 @@ public class TrainerPlugin : DeadworksPluginBase {
 		}
 	}
 
-	[Command("tcvars", Description = "Konsolen-Variablen/Befehle nach Stichwort suchen (z.B. tcvars bot) - schreibt auch trainer_cvars.txt")]
+	[Command("tmarker", Description = "Aim markers 'O' on bots: tmarker on|off (on by default so you always see the target)")]
+	public void CmdMarker(CCitadelPlayerController caller, string arg = "") {
+		TrainerConfig.ShowMarkers = arg.Trim().ToLowerInvariant() is not ("off" or "aus" or "0");
+		Chat.PrintToChat(caller, $"[Training] Aim markers: {(TrainerConfig.ShowMarkers ? "on" : "off (only shown when the bot has no model)")}");
+	}
+
+	[Command("tcvars", Description = "Search console variables/commands by keyword (e.g. tcvars bot) - also writes trainer_cvars.txt")]
 	public void CmdCvars(CCitadelPlayerController caller, string filter = "bot") {
 		filter = filter.Trim();
 		var lines = new List<string>();
@@ -454,58 +481,58 @@ public class TrainerPlugin : DeadworksPluginBase {
 		try {
 			var path = Path.Combine(Path.GetDirectoryName(typeof(TrainerPlugin).Assembly.Location) ?? ".", "trainer_cvars.txt");
 			File.WriteAllLines(path, lines);
-			Chat.PrintToChat(caller, $"[Training] {lines.Count} Treffer fuer '{filter}', gespeichert in {path}");
+			Chat.PrintToChat(caller, $"[Training] {lines.Count} matches for '{filter}', saved to {path}");
 		} catch (Exception ex) {
-			Chat.PrintToChat(caller, $"[Training] {lines.Count} Treffer, Datei nicht schreibbar: {ex.Message}");
+			Chat.PrintToChat(caller, $"[Training] {lines.Count} matches, file not writable: {ex.Message}");
 		}
 		foreach (var l in lines.Take(25)) caller.PrintToConsole(l);
 	}
 
-	[Command("tdebug", Description = "Debug-Ausgabe an/aus (Buttons, Parry-/Melee-Events)")]
+	[Command("tdebug", Description = "Debug output on/off (buttons, parry/melee events)")]
 	public void CmdDebug(CCitadelPlayerController caller) {
 		_debug = !_debug;
-		Chat.PrintToChat(caller, $"[Training] Debug {(_debug ? "AN: Tasten/Parry-Events erscheinen in der Spiel-Konsole (F7)" : "AUS")}");
+		Chat.PrintToChat(caller, $"[Training] Debug {(_debug ? "ON: buttons/parry events appear in the game console (F7)" : "OFF")}");
 	}
 
-	[Command("tparrykey", Description = "Parry-Taste per Bitmaske festlegen (Hex, aus !tdebug-Ausgabe). Ohne Wert: aus.")]
+	[Command("tparrykey", Description = "Set the parry key by bitmask (hex, from !tdebug output). No value: off.")]
 	public void CmdParryKey(CCitadelPlayerController caller, string hex = "") {
 		hex = hex.Trim();
 		if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) hex = hex[2..];
 		if (hex.Length == 0) {
 			_parryMask = 0;
-			Chat.PrintToChat(caller, "[Training] Zusaetzliche Parry-Taste aus (es zaehlt nur das Engine-Parry-Fenster).");
+			Chat.PrintToChat(caller, "[Training] Extra parry key off (only the engine's parry window counts).");
 			return;
 		}
 		if (!ulong.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var mask)) {
-			Chat.PrintToChat(caller, "[Training] Ungueltiger Hex-Wert.");
+			Chat.PrintToChat(caller, "[Training] Invalid hex value.");
 			return;
 		}
 		_parryMask = mask;
-		Chat.PrintToChat(caller, $"[Training] Parry-Taste: Maske 0x{mask:X}");
+		Chat.PrintToChat(caller, $"[Training] Parry key: mask 0x{mask:X}");
 	}
 
-	[Command("tinput", Description = "Zielen bestaetigen per 'klick' (Standard) oder 'dwell' (Fadenkreuz kurz halten)")]
+	[Command("tinput", Description = "Confirm aiming by 'click' (default) or 'dwell' (hold the crosshair briefly)")]
 	public void CmdInput(CCitadelPlayerController caller, string mode = "") {
 		TrainerConfig.Dwell = mode.Trim().ToLowerInvariant() is "dwell" or "halten";
-		Chat.PrintToChat(caller, $"[Training] Treffer-Erkennung: {(TrainerConfig.Dwell ? "Dwell (Fadenkreuz halten)" : "Klick")}");
+		Chat.PrintToChat(caller, $"[Training] Hit detection: {(TrainerConfig.Dwell ? "dwell (hold the crosshair)" : "click")}");
 	}
 
-	[Command("tface", Description = "Drehung der Texte aendern (falls spiegelverkehrt/seitlich): tface [grad]")]
+	[Command("tface", Description = "Rotate texts if they are mirrored/sideways: tface [degrees]")]
 	public void CmdFace(CCitadelPlayerController caller, string degrees = "") {
 		if (!float.TryParse(degrees, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d))
 			d = (TrainerConfig.TextYawOffset + 90f) % 360f;
 		TrainerConfig.TextYawOffset = d;
-		Chat.PrintToChat(caller, $"[Training] Text-Drehung: {d:0} Grad. Mit !train (Menue neu) pruefen.");
+		Chat.PrintToChat(caller, $"[Training] Text rotation: {d:0} degrees. Reopen the menu with !train to check.");
 	}
 
-	[Command("tfont", Description = "Schriftart der Texte: tfont <name> | tfont default")]
+	[Command("tfont", Description = "Font for texts: tfont <name> | tfont default")]
 	public void CmdFont(CCitadelPlayerController caller, string name = "") {
 		TrainerConfig.Font = string.IsNullOrWhiteSpace(name) || name.Equals("default", StringComparison.OrdinalIgnoreCase) ? null : name;
-		Chat.PrintToChat(caller, $"[Training] Schrift: {TrainerConfig.Font ?? "Standard"}");
+		Chat.PrintToChat(caller, $"[Training] Font: {TrainerConfig.Font ?? "default"}");
 	}
 
 	private static void PrintHelp(CCitadelPlayerController c) {
-		Chat.PrintToChat(c, "[Training] !train = Menue (draufschiessen) | !parry [einzel|mehrere|salve] | !flick | !track [strafe|zufall] | !tlevel leicht|normal|schwer | !tstop");
-		Chat.PrintToChat(c, "[Training] Probleme: !tbot test (Bots pruefen), !tbot off (ohne Bots), !tface, !tfont, !tinput dwell, !tdebug, !tcvars bot");
+		Chat.PrintToChat(c, "[Training] !train = menu (shoot an exercise) | !parry [single|multi|burst] | !flick [flick|switch|long] | !track [strafe|random] | !reaction | !tlevel easy|normal|hard | !tstop");
+		Chat.PrintToChat(c, "[Training] Problems: !tbot test (check bots), !tbot off, !tmarker off, !tface, !tfont, !tinput dwell, !tdebug, !tcvars bot");
 	}
 }

@@ -3,7 +3,7 @@ using DeadworksManaged.Api;
 
 namespace DeadlockTrainer;
 
-/// <summary>Basis fuer alle Uebungen. Eine Uebung gehoert genau einem Spieler.</summary>
+/// <summary>Base class for all exercises. An exercise belongs to exactly one player.</summary>
 abstract class Drill {
 	protected readonly CCitadelPlayerController Ctl;
 	protected readonly PlayerInput In;
@@ -15,7 +15,7 @@ abstract class Drill {
 	private bool _gated;
 	private double _gateDeadline;
 
-	/// <summary>Alle Bots dieser Uebung sind da (false = nur Text-Marker, vereinfachter Modus).</summary>
+	/// <summary>All bots of this exercise exist (false = text markers only, simplified mode).</summary>
 	protected bool RealBots { get; private set; }
 
 	public bool Finished { get; set; }
@@ -27,25 +27,25 @@ abstract class Drill {
 		Lvl = lvl;
 	}
 
-	/// <summary>Figuren erzeugen (AddActor) und Meldungen ausgeben. Die Uebung selbst startet erst in <see cref="Ready"/>.</summary>
+	/// <summary>Create the figures (AddActor) and print intro messages. The exercise itself starts in <see cref="Ready"/>.</summary>
 	protected abstract void Begin(CCitadelPlayerPawn pawn, double nowMs);
-	/// <summary>Alle Bots sind bereit (oder aufgegeben). Zeitplaene hier starten.</summary>
+	/// <summary>All bots are ready (or given up). Start schedules here.</summary>
 	protected abstract void Ready(CCitadelPlayerPawn pawn, double nowMs);
 	protected abstract void Tick(CCitadelPlayerPawn pawn, double nowMs);
 
-	/// <summary>Schaden im Spiel (vor dem Anwenden). Stop blockiert ihn.</summary>
+	/// <summary>Damage in the game (before it is applied). Stop blocks it.</summary>
 	public virtual HookResult OnTakeDamage(TakeDamageEvent e) => HookResult.Continue;
-	/// <summary>Modifier-Ereignisse (Parry, Nahkampf, ...). Nur beobachten.</summary>
+	/// <summary>Modifier events (parry, melee, ...). Observe only.</summary>
 	public virtual void OnModifier(ModifierEvent e) { }
 
 	public void Start(CCitadelPlayerPawn pawn, double nowMs) {
 		Begin(pawn, nowMs);
 		if (!TrainerConfig.NoBots && Actors.Any(a => !a.WantsBot)) {
-			Say($"[Training] Bot konnte nicht angelegt werden ({TrainerBots.LastError}). Vereinfachter Modus mit Text-Zielen. Mit !tbot test pruefst du den Grund.");
-			Console.WriteLine($"[Trainer] Bot-Anlegen fehlgeschlagen: {TrainerBots.LastError}");
+			Say($"[Training] Could not create a bot ({TrainerBots.LastError}). Simplified mode with text targets. Run !tbot test to see why.");
+			Console.WriteLine($"[Trainer] Bot creation failed: {TrainerBots.LastError}");
 		}
 		_gated = Actors.Any(a => a.WantsBot);
-		_gateDeadline = nowMs + 8000;
+		_gateDeadline = nowMs + 10000;
 		if (!_gated) {
 			RealBots = false;
 			Ready(pawn, nowMs);
@@ -54,23 +54,35 @@ abstract class Drill {
 
 	public void Update(CCitadelPlayerPawn pawn, double nowMs) {
 		if (_gated) {
-			bool allReady = Actors.Where(a => a.WantsBot).All(a => a.BotReady);
-			if (!allReady && nowMs < _gateDeadline) return;
+			var bots = Actors.Where(a => a.WantsBot).ToList();
+			foreach (var b in bots) if (b.BotReady && !b.HasModel) b.Recover(nowMs);
+
+			bool allAlive = bots.All(a => a.BotReady);
+			bool allModels = bots.All(a => a.HasModel || nowMs - a.CreatedAtMs > 5500);
+			if (!(allAlive && allModels) && nowMs < _gateDeadline) return;
 
 			_gated = false;
-			var failed = Actors.Where(a => a.WantsBot && !a.BotReady).ToList();
+			var failed = bots.Where(a => !a.BotReady).ToList();
 			foreach (var a in failed) a.DropBot();
 			RealBots = failed.Count == 0;
 			if (!RealBots) {
-				Say($"[Training] Bots nicht verfuegbar ({TrainerBots.LastError}). Vereinfachter Modus mit Text-Zielen. Mit !tbot test pruefst du den Grund.");
-				Console.WriteLine($"[Trainer] Bot-Erzeugung fehlgeschlagen: {TrainerBots.LastError}");
+				Say($"[Training] Bots are not available ({TrainerBots.LastError}). Simplified mode with text targets. Run !tbot test to see why.");
+				Console.WriteLine($"[Trainer] Bot creation failed: {TrainerBots.LastError}");
+			} else {
+				foreach (var a in bots.Where(x => x.WantsBot)) {
+					Console.WriteLine($"[Trainer] Bot slot {a.Slot} ready: hero {a.Hero}, model '{a.ModelName}'");
+					if (!a.HasModel) {
+						Say("[Training] The bot has no model (it may be invisible). Using aim markers 'O' - shoot those, hits still register on the bot.");
+						break;
+					}
+				}
 			}
 			Ready(pawn, nowMs);
 		}
 		Tick(pawn, nowMs);
 	}
 
-	/// <summary>Raeumt alle erzeugten Entities und Bots weg. Wird bei Ende/Abbruch/Unload aufgerufen.</summary>
+	/// <summary>Remove all created entities and bots. Called on finish/abort/unload.</summary>
 	public virtual void Stop() {
 		foreach (var a in Actors) a.Dispose();
 		Actors.Clear();
@@ -82,24 +94,33 @@ abstract class Drill {
 
 	protected CCitadelPlayerPawn? PlayerPawn => Ctl.GetHeroPawn();
 
-	// ---- Figuren ---------------------------------------------------------------------------------------------------
+	// ---- Figures ---------------------------------------------------------------------------------------------------
 
-	/// <summary>Neue Figur an feet. Versucht zuerst einen echten Bot (Gegner-Team) zu erzeugen.</summary>
+	/// <summary>New figure at feet. First tries to create a real bot on the enemy team, playing the same hero as the player.</summary>
 	protected Actor AddActor(CCitadelPlayerPawn player, Vector3 feet, double nowMs) {
+		var hero = TrainerConfig.BotHero ?? (Enum.IsDefined(player.HeroID) ? player.HeroID : Heroes.Inferno);
 		int slot = -1;
 		if (!TrainerConfig.NoBots) {
 			int enemy = player.TeamNum == 2 ? 3 : 2;
-			slot = TrainerBots.Create(enemy, TrainerConfig.BotHero, "Trainer");
+			slot = TrainerBots.Create(enemy, hero, "Trainer");
 		}
-		var a = new Actor(slot, feet, nowMs);
+		var a = new Actor(slot, hero, feet, nowMs);
 		Actors.Add(a);
 		return a;
 	}
 
-	protected void PlaceActor(Actor a, Vector3 feet, Vector3 lookAt, Vector3 eye, float labelHeight) {
+	/// <summary>Create the aim marker 'O' on an actor if it is needed (no bot, no model, or markers enabled).</summary>
+	protected void EnsureMarker(Actor a, Vector3 eye, float radius, byte r, byte g, byte b, string text = "O") {
+		if (a.Marker != null) return;
+		bool need = TrainerConfig.ShowMarkers || !a.WantsBot || !a.HasModel;
+		if (!need) return;
+		a.Marker = SpawnText(text, a.Center, eye, radius, r, g, b);
+	}
+
+	protected void PlaceActor(Actor a, Vector3 feet, Vector3 lookAt, Vector3 eye, float markerHeight) {
 		a.Feet = feet;
 		if (a.WantsBot) a.Place(feet, lookAt);
-		if (a.Marker != null) Face(a.Marker, feet + new Vector3(0, 0, labelHeight), eye);
+		if (a.Marker != null) Face(a.Marker, feet + new Vector3(0, 0, markerHeight), eye);
 	}
 
 	protected bool IsPlayer(CBaseEntity? e) {
@@ -116,7 +137,7 @@ abstract class Drill {
 		return null;
 	}
 
-	/// <summary>Wie weit man ab dem Spieler in Richtung yaw (auf Brusthoehe) frei sehen kann, hoechstens wanted.</summary>
+	/// <summary>How far you can see (at chest height) from the player in direction yaw, at most wanted.</summary>
 	protected float ClearDist(CCitadelPlayerPawn pawn, float yaw, float wanted) {
 		try {
 			var start = pawn.Position + new Vector3(0, 0, 60f);
@@ -142,7 +163,7 @@ abstract class Drill {
 			_texts.Add(t);
 			return t;
 		} catch (Exception ex) {
-			Console.WriteLine($"[Trainer] Text konnte nicht erzeugt werden: {ex.Message}");
+			Console.WriteLine($"[Trainer] Could not create text: {ex.Message}");
 			return null;
 		}
 	}
@@ -150,18 +171,18 @@ abstract class Drill {
 	protected static void Face(CPointWorldText t, Vector3 pos, Vector3 eye) {
 		try {
 			t.Teleport(position: pos, angles: new Vector3(180f, Aim.YawTo(pos, eye) + TrainerConfig.TextYawOffset, 270f));
-		} catch { /* Entity gerade weg */ }
+		} catch { /* entity just got removed */ }
 	}
 
 	protected void Kill(CPointWorldText? t) {
 		if (t == null) return;
 		_texts.Remove(t);
-		try { if (t.IsValid) t.Remove(); } catch { /* Entity schon weg */ }
+		try { if (t.IsValid) t.Remove(); } catch { /* already gone */ }
 	}
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Menue: dauerhaft in der Welt, in Kategorien. Draufschiessen waehlt. Bleibt bestehen, bis "MENUE AUS".
+// Menu: permanent in the world, in categories. Shoot an entry to choose it. Stays until "CLOSE MENU".
 // ---------------------------------------------------------------------------------------------------------------------
 sealed class MenuDrill : Drill {
 	private sealed record Item(string Id, string Label, float Yaw, float Pitch, float Size, bool Selectable, byte R, byte G, byte B);
@@ -175,11 +196,12 @@ sealed class MenuDrill : Drill {
 	private readonly List<(Item Item, CPointWorldText? Text, Vector3 Pos)> _items = new();
 	private CPointWorldText? _status;
 	private const float Dist = 430f;
-	private const float HitDeg = 4.2f;
+	private const float HitDeg = 3.4f;
+	private const float StatusPitch = -19.5f;
 	private int _hover = -1;
 	private double _hoverSince;
 
-	public override string Name => "Menue";
+	public override string Name => "Menu";
 
 	public MenuDrill(CCitadelPlayerController ctl, PlayerInput input, Level level, Action<Level> onLevel, Action<string> onSelect,
 		Vector3 anchorEye, float anchorYaw) : base(ctl, input, level) {
@@ -191,23 +213,31 @@ sealed class MenuDrill : Drill {
 	}
 
 	private static IEnumerable<Item> Layout() {
-		yield return new("title", "DEADLOCK TRAINER", 0f, -27f, 17f, false, 255, 200, 0);
+		yield return new("title", "DEADLOCK TRAINER", 0f, -24f, 15f, false, 255, 200, 0);
 
-		yield return new("hdr_parry", "PARRY", -24f, -15f, 14f, false, 255, 140, 40);
-		yield return new("p_single", "Einzel", -24f, -8f, 11f, true, 255, 255, 255);
-		yield return new("p_multi", "Mehrere", -24f, -2f, 11f, true, 255, 255, 255);
-		yield return new("p_burst", "Salve", -24f, 4f, 11f, true, 255, 255, 255);
+		// Four columns: PARRY | FLICK | TRACK | OTHER
+		yield return new("hdr_parry", "PARRY", -33f, -13f, 12f, false, 255, 140, 40);
+		yield return new("p_single", "Single", -33f, -8f, 9f, true, 255, 255, 255);
+		yield return new("p_multi", "Multiple", -33f, -3.5f, 9f, true, 255, 255, 255);
+		yield return new("p_burst", "Burst", -33f, 1f, 9f, true, 255, 255, 255);
 
-		yield return new("hdr_aim", "AIM", 24f, -15f, 14f, false, 255, 140, 40);
-		yield return new("a_flick", "Flick", 24f, -8f, 11f, true, 255, 255, 255);
-		yield return new("a_strafe", "Strafe", 24f, -2f, 11f, true, 255, 255, 255);
-		yield return new("a_random", "Zufall", 24f, 4f, 11f, true, 255, 255, 255);
+		yield return new("hdr_flick", "FLICK", -11f, -13f, 12f, false, 255, 140, 40);
+		yield return new("f_flick", "Flick", -11f, -8f, 9f, true, 255, 255, 255);
+		yield return new("f_switch", "Switch", -11f, -3.5f, 9f, true, 255, 255, 255);
+		yield return new("f_long", "Long Range", -11f, 1f, 9f, true, 255, 255, 255);
 
-		yield return new("lv_easy", "LEICHT", -12f, 13f, 10f, true, 255, 255, 255);
-		yield return new("lv_normal", "NORMAL", 0f, 13f, 10f, true, 255, 255, 255);
-		yield return new("lv_hard", "SCHWER", 12f, 13f, 10f, true, 255, 255, 255);
+		yield return new("hdr_track", "TRACK", 11f, -13f, 12f, false, 255, 140, 40);
+		yield return new("t_strafe", "Strafe", 11f, -8f, 9f, true, 255, 255, 255);
+		yield return new("t_random", "Random", 11f, -3.5f, 9f, true, 255, 255, 255);
 
-		yield return new("off", "MENUE AUS", 0f, 20f, 7f, true, 170, 170, 170);
+		yield return new("hdr_other", "OTHER", 33f, -13f, 12f, false, 255, 140, 40);
+		yield return new("o_reaction", "Reaction", 33f, -8f, 9f, true, 255, 255, 255);
+
+		yield return new("lv_easy", "EASY", -12f, 9f, 9f, true, 255, 255, 255);
+		yield return new("lv_normal", "NORMAL", 0f, 9f, 9f, true, 255, 255, 255);
+		yield return new("lv_hard", "HARD", 12f, 9f, 9f, true, 255, 255, 255);
+
+		yield return new("off", "CLOSE MENU", 0f, 14.5f, 6.5f, true, 170, 170, 170);
 	}
 
 	private static string LevelId(Level l) => l switch { Level.Easy => "lv_easy", Level.Hard => "lv_hard", _ => "lv_normal" };
@@ -219,16 +249,17 @@ sealed class MenuDrill : Drill {
 			var t = SpawnText(it.Label, pos, eye, it.Size, it.R, it.G, it.B);
 			_items.Add((it, t, pos));
 		}
-		var statusPos = _anchorEye + Aim.Forward(-22.5f, _anchorYaw) * Dist;
-		_status = SpawnText(StatusText(), statusPos, eye, 7f, 200, 200, 200);
+		_status = SpawnText(StatusText(), StatusPos(), eye, 6.5f, 200, 200, 200);
 		RefreshColors(-1);
-		while (In.Shots.Count > 0) In.Shots.Dequeue(); // alte Klicks verwerfen
+		while (In.Shots.Count > 0) In.Shots.Dequeue(); // drop old clicks
 	}
 
-	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) =>
-		Say("[Training] Menue ist da: Fadenkreuz auf eine Uebung (wird gelb) und schiessen. Stufe waehlst du unten. (!train off schliesst es)");
+	private Vector3 StatusPos() => _anchorEye + Aim.Forward(StatusPitch, _anchorYaw) * Dist;
 
-	private string StatusText() => $"Stufe: {LevelParse.Label(_level).ToUpperInvariant()}  -  schiess auf eine Uebung";
+	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) =>
+		Say("[Training] Menu is up: aim at an exercise (it turns yellow) and shoot it. Choose the difficulty at the bottom. (!train off closes it)");
+
+	private string StatusText() => $"Difficulty: {LevelParse.Label(_level).ToUpperInvariant()}  -  shoot an exercise to start";
 
 	private void RefreshColors(int hover) {
 		string lv = LevelId(_level);
@@ -253,7 +284,7 @@ sealed class MenuDrill : Drill {
 		}
 
 		foreach (var (_, text, pos) in _items) if (text != null) Face(text, pos, eye);
-		if (_status != null) Face(_status, _anchorEye + Aim.Forward(-22.5f, _anchorYaw) * Dist, eye);
+		if (_status != null) Face(_status, StatusPos(), eye);
 
 		int chosen = -1;
 		while (In.Shots.Count > 0) {
@@ -277,7 +308,7 @@ sealed class MenuDrill : Drill {
 		_onSelect(id);
 	}
 
-	/// <summary>Naechstes anwaehlbares Feld innerhalb der Trefferzone, sonst -1.</summary>
+	/// <summary>The nearest selectable entry inside the hit zone, else -1.</summary>
 	private int NearestItem(Vector3 eye, Vector3 forward) {
 		int best = -1;
 		float bestAngle = HitDeg;

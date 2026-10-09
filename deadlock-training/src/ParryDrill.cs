@@ -6,33 +6,32 @@ namespace DeadlockTrainer;
 enum ParryMode { Single, Multi, Burst }
 
 /// <summary>
-/// Parry-Training gegen Bots. Im echten Modus holt ein Bot-Held tatsaechlich zum Nahkampfschlag aus (Engine-Melee);
-/// ausgewertet wird, ob dein Parry den Schlag abgefangen hat (ParrySuccess) oder du getroffen wurdest (Schaden wird
-/// dabei blockiert, du stirbst nicht). Klappt der Bot-Schlag nicht, schaltet die Uebung auf eine Simulation um
-/// (Zeitfenster-Auswertung mit Text-Signalen).
+/// Parry training against bots. In real mode a bot hero actually performs an engine melee attack; the result is whether
+/// your parry caught it (ParrySuccess) or you got hit (damage is blocked, you cannot die). If the bot swing does not
+/// work, the drill switches to a simulation (timing window with text cues).
 /// </summary>
 sealed class ParryDrill : Drill {
 	private enum Ph { Gap, Telegraph, Await }
 
 	private readonly ParryMode _mode;
-	private readonly int _total;           // Anzahl Schlaege insgesamt
+	private readonly int _total;           // number of swings in total
 	private readonly int _burstSize;
-	private int _done;                     // abgeschlossene Schlaege
+	private int _done;                     // completed swings
 	private int _burstLeft;
 	private Ph _ph = Ph.Gap;
 	private double _nextAt;
 
-	private readonly List<float> _offs = new();   // Winkel der Angreifer relativ zur Blickrichtung zu Beginn
+	private readonly List<float> _offs = new();   // angle of each attacker relative to the start view
 	private float _baseYaw;
 	private float _radius;
 	private int _cur = -1, _last = -1;
 
-	// aktuelle Runde
+	// current round
 	private double _roundStart, _triggerAt, _deadline;
 	private bool _realRound;
 	private double _evParry = -1, _evHit = -1, _evMelee = -1, _evStart = -1, _firstEv = -1, _outcomeAt = -1;
 	private CPointWorldText? _cue;
-	// Simulation
+	// simulation
 	private double _strikeAt;
 	private bool _sampled, _activeAtStrike;
 	private readonly List<double> _simEdges = new();
@@ -41,7 +40,7 @@ sealed class ParryDrill : Drill {
 	private bool _realBroken;
 	private int _noAttackStreak;
 
-	// Statistik
+	// stats
 	private int _ok, _early, _late, _missed, _derived;
 	private readonly List<double> _offsets = new();
 	private readonly List<double> _reactions = new();
@@ -77,30 +76,28 @@ sealed class ParryDrill : Drill {
 		_edgeSeen = In.ParryEdges;
 		var eye = Aim.Eye(pawn);
 
-		if (!RealBots) {
-			// Marker fuer die Angreifer, damit man sieht, wo sie stehen.
-			for (int i = 0; i < Actors.Count; i++)
-				Actors[i].Marker = SpawnText("O", HomeFor(pawn.Position, i) + new Vector3(0, 0, TrainerConfig.CenterZ), eye, 22f, 150, 150, 150);
+		for (int i = 0; i < Actors.Count; i++) {
+			Actors[i].Feet = HomeFor(pawn.Position, i);
+			EnsureMarker(Actors[i], eye, 12f, 150, 150, 150);
 		}
 
 		string modeText = _mode switch {
-			ParryMode.Single => "Einzel (1 Angreifer)",
-			ParryMode.Multi => "Mehrere (3 Angreifer, zufaellige Reihenfolge)",
-			_ => $"Salve ({_burstSize} Schlaege hintereinander)"
+			ParryMode.Single => "Single (1 attacker)",
+			ParryMode.Multi => "Multiple (3 attackers, random order)",
+			_ => $"Burst ({_burstSize} swings in a row)"
 		};
-		Say($"[Parry] {modeText}, Stufe {LevelParse.Label(Lvl)}, {_total} Schlaege.");
+		Say($"[Parry] {modeText}, difficulty {LevelParse.Label(Lvl)}, {_total} swings.");
 		if (RealBots) {
-			Say("[Parry] Die Bots schlagen wirklich zu. Parry im richtigen Moment (Standard-Taste) - dein Parry wird von der Engine ausgewertet.");
-			double tg = Tuning.ParryTelegraphMs(Lvl);
-			if (tg > 0) Say("[Parry] Rotes '>>' ueber dem Kopf = gleich holt er aus (nur auf leicht/normal).");
-			else Say("[Parry] Schwer: keine Vorwarnung - lies die Animation.");
+			Say("[Parry] The bots really swing at you. Parry with your normal parry key - the game itself judges your parry.");
+			if (Tuning.ParryTelegraphMs(Lvl) > 0) Say("[Parry] A red '>>' above a bot = it is about to swing (easy/normal only).");
+			else Say("[Parry] Hard: no warning - read the animation.");
 		} else {
-			Say("[Parry] Vereinfachter Modus: Rotes '>> <<' = gleich kommt ein Schlag ('!!!' = jetzt). Parry so, dass dein Fenster den Schlag abdeckt.");
+			Say("[Parry] Simplified mode: red '>>   <<' = a swing is coming, '!!!' = now. Parry so that your window covers the swing.");
 		}
-		Say("[Parry] Abbrechen: !tstop");
+		Say("[Parry] Abort: !tstop");
 	}
 
-	// ---- Ereignisse ------------------------------------------------------------------------------------------------
+	// ---- Events ----------------------------------------------------------------------------------------------------
 
 	public override void OnModifier(ModifierEvent e) {
 		if (_ph != Ph.Await) return;
@@ -128,7 +125,7 @@ sealed class ParryDrill : Drill {
 	}
 
 	public override HookResult OnTakeDamage(TakeDamageEvent e) {
-		// Bots duerfen dich in dieser Uebung nicht verletzen: Schaden blocken, aber als "getroffen" werten.
+		// Bots must not hurt you in this exercise: block the damage but count it as "hit".
 		if (IsPlayer(e.Entity) && (ActorOf(e.Info.Attacker) != null || ActorOf(e.Info.Inflictor) != null)) {
 			if (_ph == Ph.Await && _evHit < 0) {
 				double now = Clock.Ms;
@@ -138,7 +135,7 @@ sealed class ParryDrill : Drill {
 			}
 			return HookResult.Stop;
 		}
-		// Bots sollen nicht sterben.
+		// Bots should not die.
 		if (ActorOf(e.Entity) is { } bot && bot.Pawn is { } bp && bp.Health - e.Info.Damage <= 50)
 			bp.Health = bp.MaxHealth;
 		return HookResult.Continue;
@@ -146,13 +143,13 @@ sealed class ParryDrill : Drill {
 
 	private void Touch(double now) { if (_firstEv < 0) _firstEv = now; }
 
-	// ---- Ablauf ----------------------------------------------------------------------------------------------------
+	// ---- Flow ------------------------------------------------------------------------------------------------------
 
 	protected override void Tick(CCitadelPlayerPawn pawn, double nowMs) {
 		var player = pawn.Position;
 		var eye = Aim.Eye(pawn);
 
-		// Alle Angreifer stehen im Kreis um den Spieler und schauen ihn an.
+		// All attackers stand in a ring around the player and look at him.
 		for (int i = 0; i < Actors.Count; i++)
 			PlaceActor(Actors[i], HomeFor(player, i), player, eye, TrainerConfig.CenterZ);
 
@@ -163,11 +160,11 @@ sealed class ParryDrill : Drill {
 
 		switch (_ph) {
 			case Ph.Gap:
-				if (nowMs >= _nextAt) StartRound(pawn, nowMs, eye);
+				if (nowMs >= _nextAt) StartRound(nowMs, eye);
 				break;
 			case Ph.Telegraph:
 				KeepCue(eye);
-				if (nowMs >= _triggerAt) Trigger(pawn, nowMs);
+				if (nowMs >= _triggerAt) Trigger(nowMs);
 				break;
 			case Ph.Await:
 				KeepCue(eye);
@@ -179,7 +176,7 @@ sealed class ParryDrill : Drill {
 
 	private Vector3 CuePos() {
 		var a = Actors[_cur];
-		return a.Feet + new Vector3(0, 0, RealBots ? 155f : TrainerConfig.CenterZ + 55f);
+		return a.Feet + new Vector3(0, 0, 155f);
 	}
 
 	private void KeepCue(Vector3 eye) {
@@ -196,7 +193,7 @@ sealed class ParryDrill : Drill {
 		_cue = null;
 	}
 
-	private void StartRound(CCitadelPlayerPawn pawn, double nowMs, Vector3 eye) {
+	private void StartRound(double nowMs, Vector3 eye) {
 		do { _cur = Rng.Next(Actors.Count); } while (Actors.Count > 1 && _cur == _last);
 		_last = _cur;
 
@@ -221,21 +218,21 @@ sealed class ParryDrill : Drill {
 		_ph = Ph.Telegraph;
 	}
 
-	private void Trigger(CCitadelPlayerPawn pawn, double nowMs) {
+	private void Trigger(double nowMs) {
 		_ph = Ph.Await;
 		if (_realRound) {
 			var bot = Actors[_cur].Pawn;
 			int rc = -99;
 			try { if (bot != null) rc = bot.ExecuteAbilityBySlot(EAbilitySlot.WeaponMelee); }
-			catch (Exception ex) { Console.WriteLine($"[Trainer] Bot-Melee fehlgeschlagen: {ex.Message}"); }
-			Console.WriteLine($"[Trainer] Parry-Runde {_done + 1}: Bot-Melee rc={rc}");
+			catch (Exception ex) { Console.WriteLine($"[Trainer] Bot melee failed: {ex.Message}"); }
+			Console.WriteLine($"[Trainer] Parry swing {_done + 1}: bot melee rc={rc}");
 			_deadline = nowMs + 1700;
 		} else {
 			_deadline = _strikeAt + 450;
 		}
 	}
 
-	// ---- Auswertung: echter Bot ------------------------------------------------------------------------------------
+	// ---- Evaluation: real bot --------------------------------------------------------------------------------------
 
 	private void AwaitReal(double nowMs) {
 		bool settled =
@@ -252,9 +249,9 @@ sealed class ParryDrill : Drill {
 			_noAttackStreak++;
 			if (_noAttackStreak >= 2) {
 				_realBroken = true;
-				Say("[Parry] Der Bot-Schlag kommt nicht an (kein Nahkampf-Ereignis). Ich schalte auf die einfache Simulation um. Mehr dazu: !tbot test");
+				Say("[Parry] The bot's swing does not arrive (no melee event). Switching to the simple simulation. More: !tbot test");
 			} else {
-				Say("[Parry] Der Bot hat nicht zugeschlagen - Runde wird wiederholt.");
+				Say("[Parry] The bot did not swing - repeating this one.");
 			}
 			_nextAt = nowMs + 1200;
 			_ph = Ph.Gap;
@@ -267,9 +264,8 @@ sealed class ParryDrill : Drill {
 		double tHit = _evParry >= 0 ? _evParry : _evHit >= 0 ? _evHit : _evMelee >= 0 ? _evMelee : _evStart + 300;
 		bool derived = _evParry < 0 && _evHit < 0;
 
-		var edges = In.ParryEdgeTimes;
 		double? before = null, after = null;
-		foreach (var t in edges) {
+		foreach (var t in In.ParryEdgeTimes) {
 			if (t < _roundStart - 100) continue;
 			if (t <= tHit + 30) before = t;
 			else if (after == null && t <= tHit + 600) after = t;
@@ -278,32 +274,32 @@ sealed class ParryDrill : Drill {
 		if (parried) {
 			_ok++;
 			if (derived) _derived++;
-			string tail = derived ? " (abgeleitet: Bot hat geschlagen, du wurdest nicht getroffen)" : "";
+			string tail = derived ? " (inferred: the bot swung and you were not hit)" : "";
 			if (before != null) {
 				double off = before.Value - tHit;
 				_offsets.Add(off);
 				_reactions.Add(before.Value - _roundStart);
-				string where = off < -90 ? "frueh" : off > 20 ? "spaet" : "gut";
-				Say($"{head} PARRY! Druck {Fmt.Signed(off)} zum Treffer ({where}){tail}");
+				string where = off < -90 ? "early" : off > 20 ? "late" : "good";
+				Say($"{head} PARRIED! Pressed {Fmt.Signed(off)} relative to the hit ({where}){tail}");
 			} else {
-				Say($"{head} PARRY!{tail}");
+				Say($"{head} PARRIED!{tail}");
 			}
 		} else {
 			if (before != null) {
 				_early++;
-				Say($"{head} GETROFFEN - zu frueh: {Fmt.Ms(tHit - before.Value)} vor dem Treffer gedrueckt, das Fenster war schon zu.");
+				Say($"{head} HIT - too early: pressed {Fmt.Ms(tHit - before.Value)} before the hit, the window had already closed.");
 			} else if (after != null) {
 				_late++;
-				Say($"{head} GETROFFEN - zu spaet: {Fmt.Ms(after.Value - tHit)} nach dem Treffer gedrueckt.");
+				Say($"{head} HIT - too late: pressed {Fmt.Ms(after.Value - tHit)} after the hit.");
 			} else {
 				_missed++;
-				Say($"{head} GETROFFEN - kein Parry gedrueckt.");
+				Say($"{head} HIT - no parry pressed.");
 			}
 		}
 		AfterRound(nowMs);
 	}
 
-	// ---- Auswertung: Simulation ------------------------------------------------------------------------------------
+	// ---- Evaluation: simulation ------------------------------------------------------------------------------------
 
 	private void AwaitSim(CCitadelPlayerPawn pawn, double nowMs) {
 		if (!_sampled && nowMs >= _strikeAt) {
@@ -326,20 +322,20 @@ sealed class ParryDrill : Drill {
 			double off = first - t;
 			_offsets.Add(off);
 			if (_simEdges.Count > 0) _reactions.Add(first - _roundStart);
-			string where = off < -90 ? "frueh" : off > 20 ? "spaet" : "gut";
-			Say($"{head} PARRY! Druck {Fmt.Signed(off)} zum Schlag ({where}) [Simulation]");
+			string where = off < -90 ? "early" : off > 20 ? "late" : "good";
+			Say($"{head} PARRIED! Pressed {Fmt.Signed(off)} relative to the swing ({where}) [simulation]");
 		} else if (_simEdges.Count > 0) {
 			double e = _simEdges[^1];
-			if (e > t) { _late++; Say($"{head} ZU SPAET: {Fmt.Ms(e - t)} nach dem Schlag. [Simulation]"); }
-			else { _early++; Say($"{head} ZU FRUEH: {Fmt.Ms(t - e)} vor dem Schlag gedrueckt, Fenster war schon zu. [Simulation]"); }
+			if (e > t) { _late++; Say($"{head} TOO LATE: {Fmt.Ms(e - t)} after the swing. [simulation]"); }
+			else { _early++; Say($"{head} TOO EARLY: pressed {Fmt.Ms(t - e)} before the swing, the window had closed. [simulation]"); }
 		} else {
 			_missed++;
-			Say($"{head} VERPENNT - kein Parry. [Simulation]");
+			Say($"{head} MISSED - no parry pressed. [simulation]");
 		}
 		AfterRound(nowMs);
 	}
 
-	// ---- gemeinsam -------------------------------------------------------------------------------------------------
+	// ---- Shared ----------------------------------------------------------------------------------------------------
 
 	private void AfterRound(double nowMs) {
 		_done++;
@@ -363,16 +359,16 @@ sealed class ParryDrill : Drill {
 
 	private void Summarize() {
 		double rate = _total > 0 ? 100.0 * _ok / _total : 0;
-		Say($"=== Parry fertig ({_mode}, {LevelParse.Label(Lvl)}) ===");
-		Say($"Geparried: {_ok}/{_total} ({rate:0}%) | zu frueh {_early} | zu spaet {_late} | kein Parry {_missed}");
+		Say($"=== Parry finished ({_mode}, {LevelParse.Label(Lvl)}) ===");
+		Say($"Parried: {_ok}/{_total} ({rate:0}%) | too early {_early} | too late {_late} | no parry {_missed}");
 		if (_offsets.Count > 0)
-			Say($"Ø Druckpunkt: {Fmt.Signed(_offsets.Average())} zum Treffer | Ø Reaktion ab Runden-Start: " +
+			Say($"Avg press point: {Fmt.Signed(_offsets.Average())} relative to the hit | avg reaction since round start: " +
 				(_reactions.Count > 0 ? Fmt.Ms(_reactions.Average()) : "-"));
-		if (_derived > 0) Say($"({_derived} Parries nur abgeleitet - Engine-Event 'ParrySuccess' kam nicht an.)");
+		if (_derived > 0) Say($"({_derived} parries were only inferred - the engine 'ParrySuccess' event did not arrive.)");
 		string key = $"parry_{_mode}_{Lvl}";
 		bool best = Records.Submit(key, rate);
-		Say(best ? $"Neuer Bestwert fuer diese Sitzung: {rate:0}%" : $"Bestwert diese Sitzung: {Records.Get(key):0}%");
-		Ctl.HudAnnounce("PARRY FERTIG", $"{_ok}/{_total} ({rate:0}%)");
+		Say(best ? $"New best this session: {rate:0}%" : $"Best this session: {Records.Get(key):0}%");
+		Ctl.HudAnnounce("PARRY DONE", $"{_ok}/{_total} ({rate:0}%)");
 	}
 
 	public override void Stop() {

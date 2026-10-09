@@ -1,110 +1,99 @@
 # Deadlock Trainer
 
-Trainingsmodus **direkt in Deadlock**, auf einem lokalen Offline-Server. Gebaut als Plugin für
-[Deadworks](https://github.com/Deadworks-net/deadworks) (Server-Modding für Deadlock, C#).
+An in-game training mode for **Deadlock**, running on a local offline server. It is a plugin for
+[Deadworks](https://github.com/Deadworks-net/deadworks) (server-side modding for Deadlock, C#).
 
-Du lädst eine normale Map, öffnest per Chat-Befehl ein Menü, das **vor dir in der Welt schwebt**, schießt auf eine
-Übung – und bekommst das Ergebnis **im Chat** (Treffer, zu früh/zu spät in ms, Reaktionszeit, Quote).
+Spawn on a normal map, a **menu floats in front of you**, shoot an exercise to start it, and you get the result **in chat**
+(hits, early/late in ms, reaction times, rates). You are moved to a free area automatically and brought back afterwards.
 
-## Übungen (Version 0.3)
+## Exercises (version 0.4)
 
-Sobald du mit einem Helden spawnst, baut sich vor dir ein **Menü** auf. Es bleibt stehen. Du schießt auf eine Übung
-und wirst automatisch in einen **freien Bereich** der Map gebracht (die Arena wird per Raycasts selbst gesucht, du musst
-nichts einstellen). Nach der Übung geht es zurück zum Menü. Unten im Menü wählst du die **Stufe** (LEICHT / NORMAL / SCHWER).
+The menu has four categories and a difficulty row (EASY / NORMAL / HARD). All opponents are **bot heroes** (fake clients
+that play a real hero - by default the *same hero as you*): they have real hitboxes and can do real melee attacks. The
+plugin drives them (position, view direction, attack timing). Bots cannot kill you during an exercise.
 
-Die Gegner sind **echte Bot-Helden** (Fake-Clients mit einem echten Helden, standardmäßig Infernus): sichtbar, mit echten
-Hitboxen, und sie schlagen **wirklich** zu. Das Plugin steuert sie (Position, Blickrichtung, Angriffszeitpunkt).
-
-| Kategorie | Übung | Was passiert |
+| Category | Exercise | What happens |
 | --- | --- | --- |
-| PARRY | **Einzel** | Ein Bot steht vor dir und schlägt in unregelmäßigen Abständen zu. Du parryst. |
-| PARRY | **Mehrere** | Drei Bots im Halbkreis, zufällig schlägt einer zu. |
-| PARRY | **Salve** | Mehrere Schläge direkt hintereinander (3 / 4 / 5 je nach Stufe). |
-| AIM | **Flick** | Der Bot springt an neue Stellen um dich herum. Treffen = Punkt + Reaktionszeit (echter Schaden zählt). |
-| AIM | **Strafe** | Der Bot läuft gleichmäßig hin und her. Fadenkreuz draufhalten und schießen. |
-| AIM | **Zufall** | Wie Strafe, aber ruckartige Richtungswechsel. |
+| PARRY | **Single** | One bot stands in front of you and swings at irregular intervals. You parry. |
+| PARRY | **Multiple** | Three bots in a half circle; a random one swings. |
+| PARRY | **Burst** | Several swings in a row (3 / 4 / 5 by difficulty). |
+| FLICK | **Flick** | The bot jumps to new spots around you. Hit it (real damage counts) for a point + reaction time. |
+| FLICK | **Switch** | Three bots at once - hit all of them (target switching). |
+| FLICK | **Long Range** | One bot, far away. |
+| TRACK | **Strafe** | The bot moves steadily back and forth. Keep the crosshair on it and shoot. |
+| TRACK | **Random** | Same, but with abrupt direction changes. |
+| OTHER | **Reaction** | Wait for the green "CLICK!" and shoot. Early clicks repeat the round. |
 
-Im Chat bekommst du pro Schlag: **PARRY!** mit Druckpunkt in ms zum Treffer, oder **GETROFFEN** mit „zu früh / zu spät / kein
-Parry“. Am Ende Quote, Ø Druckpunkt, Bestwert. Beim Aim: Reaktionszeit pro Treffer (über dem Bot), am Ende Trefferquote bzw.
-„% der Zeit auf dem Ziel“ (live über dem Bot angezeigt). Bots können dich in der Übung nicht töten (Schaden wird geblockt).
+Chat shows, per swing: **PARRIED!** with your press point in ms relative to the hit, or **HIT** with "too early / too late / no
+parry". At the end you get the rate and a session best. Aim drills show the reaction time above the bot per hit and, for
+tracking, the live hit rate above it.
 
-**Stufen:** leicht = lange Vorwarnung (rotes `>>` über dem Kopf), große Abstände; normal = kurze Vorwarnung; schwer = keine
-Vorwarnung (Animation lesen), kurze Abstände, schnellere/weitere Aim-Ziele.
+**Difficulty:** easy = long warning (red `>>` above the head), big distances; normal = short warning; hard = no warning (read
+the animation), short gaps, faster and wider aim targets.
 
-| Befehl | Zweck |
+**Aim markers:** every bot also gets a visible `O` marker at its chest by default, so you can always see where it is, even if
+a bot model does not render. Hits still register on the bot itself. `!tmarker off` hides them.
+
+## Commands
+
+| Command | Purpose |
 | --- | --- |
-| `!train` / `!train off` | Menü hier aufbauen / ausschalten |
-| `!parry [einzel\|mehrere\|salve] [runden] [stufe]` | Parry direkt starten |
-| `!flick [anzahl] [stufe]`, `!track [strafe\|zufall] [sekunden] [stufe]` | Aim direkt starten |
-| `!tlevel leicht\|normal\|schwer` | Standard-Stufe |
-| `!tstop` | Übung abbrechen |
-| `!tbot test` | **Bot-Selbsttest**: erzeugt einen Bot, lässt ihn zuschlagen, berichtet im Chat |
-| `!tbot hero <name>` | Bot-Held wechseln (Inferno, Wraith, Haze, Ghost, Hornet, Atlas, ...) |
-| `!tbot off` | Notfall: ohne Bots, mit Text-Zielen |
-| `!tarena` / `!tarena reset` | *Optional*: eigene Arena festlegen / wieder automatisch |
-| `!tcvars bot` | Sucht Konsolenbefehle/-variablen mit „bot“ und schreibt `trainer_cvars.txt` |
+| `!train` / `!train off` | Open the menu here / switch it off |
+| `!parry [single\|multi\|burst] [rounds] [level]` | Start parry directly |
+| `!flick [flick\|switch\|long] [count] [level]` | Start flick directly |
+| `!track [strafe\|random] [seconds] [level]` | Start tracking directly |
+| `!reaction [rounds] [level]` | Reaction test |
+| `!tlevel easy\|normal\|hard` | Default difficulty |
+| `!tstop` | Abort the current exercise |
+| `!tbot test` | **Bot self-test**: creates a bot, lets it swing, reports in chat (hero, model, events) |
+| `!tbot hero <name\|same>` | Bot hero (same = your hero) |
+| `!tbot off` / `!tbot on` | Emergency mode without bots (text targets) |
+| `!tmarker on\|off` | Aim markers on bots |
+| `!tarena` / `!tarena reset` | *Optional*: set your own arena / back to automatic |
+| `!tcvars bot` | Search console commands/variables for "bot", writes `trainer_cvars.txt` |
+| `!tface`, `!tfont`, `!tinput dwell`, `!tdebug`, `!tparrykey` | Troubleshooting helpers |
 
-Bestwerte pro Übung und Stufe werden für die Dauer der Server-Sitzung gemerkt.
+## Install (Windows)
 
-## Installation (Windows)
+Requirements: Deadlock (Steam) and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
-Voraussetzungen: Deadlock (Steam), [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
-
-1. **Deadworks besorgen.** Zuerst bei den
-   [GitHub-Releases](https://github.com/Deadworks-net/deadworks/releases) nachsehen. Gibt es dort nichts Passendes,
-   Deadworks wie in dessen README aus dem Quellcode bauen (Visual Studio + protobuf, ca. 30 Minuten).
-   Danach liegt `deadworks.exe` in `…\Deadlock\game\bin\win64\`.
-2. **Plugin bauen** (in PowerShell, in diesem Ordner `deadlock-training`):
+1. **Get Deadworks** from the [releases](https://github.com/Deadworks-net/deadworks/releases) (`deadworks-vX.Y.Z.zip`) and copy
+   the contents of its `game` folder into `...\Deadlock\game`. Afterwards `...\Deadlock\game\bin\win64\deadworks.exe` exists.
+2. **Build the plugin** (PowerShell, in this folder):
    ```
    dotnet build -c Release -p:DeadlockDir="C:\Program Files (x86)\Steam\steamapps\common\Deadlock\game\bin\win64"
    ```
-   Das kopiert `DeadlockTrainer.dll` nach `…\win64\managed\plugins\`. (Liegt die `DeadworksManaged.Api.dll`
-   woanders, mit `-p:DeadworksApiDll=<Pfad>` angeben.)
-3. **Server starten:** `deadworks.exe` aus `…\win64\` ausführen (Fenster offen lassen).
-4. **Deadlock normal starten**, Konsole öffnen (Einstellungen → „Entwicklerkonsole“, dann F7) und:
-   ```
-   connect localhost:27067
-   ```
-5. Held wählen, spawnen, im Chat `!train` tippen (oder `!parry`, `!flick`, `!track`).
+   This copies `DeadlockTrainer.dll` to `...\win64\managed\plugins\`.
+3. **Start the server:** run `deadworks.exe` from `...\win64\` (keep the window open).
+4. **Start Deadlock**, open the console (enable it in the settings, then F7) and run `connect localhost:27067`.
+5. Pick a hero, spawn, and the menu appears (or type `!train`).
 
-Der Server läuft nur auf deinem Rechner, es ist kein Online-Spiel und kein Matchmaking.
+### Updating
 
-## Update einspielen (wenn du neuen Code von mir bekommst)
+`git pull`, close the server window, rebuild (same command), restart `deadworks.exe` (a restart is required), reconnect.
 
-1. Im Ordner des Repos: `git pull`
-2. Server-Fenster (`deadworks.exe`) schließen, dann im Ordner `deadlock-training` neu bauen (Befehl wie bei der Installation).
-3. `deadworks.exe` neu starten (**Neustart nötig**, sonst wird das Figuren-Modell nicht vorgeladen), in Deadlock `connect localhost:27067`.
+## First test (5 minutes)
 
-## Erster Test (5 Minuten) – bitte in dieser Reihenfolge
+Written against the real Deadworks API and compiled, but **not tested in the game**. The riskiest part is the bots, so there is
+a self-test:
 
-Gegen die echte Deadworks-API geschrieben und kompiliert, aber **nicht im Spiel getestet**. Die riskanteste Stelle sind die
-Bots, deshalb gibt es einen Selbsttest:
+1. **`!tbot test`** creates a bot in front of you, shows its hero/model, makes it swing once and reports the events.
+   - "No bot hero came into existence" -> the server gave no slot or `SelectHero` does not work for fake clients.
+   - "The bot has NO model" -> its hero data did not load; it is invisible (use the markers).
+   - "NO melee event" -> the bot stands but does not swing; parry then falls back to a simulation.
+2. **`!train`** -> shoot *Single*: are you moved to an open area? Is a bot (or at least an `O` marker) in front of you?
+3. Try Flick / Strafe: do hits register on the bot?
 
-1. **`!tbot test`** – erzeugt einen Bot vor dir und lässt ihn einmal zuschlagen. Im Chat steht Schritt für Schritt:
-   Bot da? Held/Team? Schlag ausgeführt? Welche Ereignisse kamen (MeleeAttack, ParrySuccess, Schaden)?
-   - **„Kein Bot-Held entstanden“** → `Server.CreateFakeClient` bekommt keinen Slot oder `SelectHero` greift nicht. Schick mir
-     den Chat-Text und das Server-Fenster. Bis dahin laufen die Übungen im vereinfachten Modus (Text-Ziele).
-   - **„Kein Nahkampf-Ereignis“** → der Bot steht, schlägt aber nicht zu. Dann nutzt Parry automatisch die Simulation
-     (Text-Signale + Zeitfenster-Auswertung); schick mir die Ausgabe.
-2. **`!train`** → auf *Einzel* schießen: Wirst du teleportiert? Steht ein Bot vor dir, der zuschlägt?
-3. **Flick/Strafe** – steht der Bot sichtbar da, und zählt dein Schaden als Treffer?
+Report what does not work, ideally with the chat text and the server window output.
 
-Meldet mir, was nicht klappt (am besten Chat-Text + Server-Fenster-Ausgabe).
+## Layout
 
-## Zusätzliche Befehle zur Fehlersuche
+- `src/Plugin.cs` - commands and hooks (input, parry state, frame loop, menu/arena flow)
+- `src/Drills.cs` - base class and the menu; `src/ParryDrill.cs` - parry; `src/AimDrills.cs` - flick, tracking, reaction, bot self-test
+- `src/Bots.cs` - bot management (fake clients); `src/Config.cs` - settings and difficulty numbers
+- `src/Arena.cs` - automatic search for an open area; `src/Util.cs` - geometry, clock, input state, records
 
-`!tbot test`, `!tface [grad]`, `!tfont <name|default>`, `!tinput <klick|dwell>`, `!tdebug`, `!tparrykey [hex]`, `!tbot view on|off`, `!tcvars <wort>`
+## Not there yet
 
-## Was es noch nicht gibt (geplant)
-
-- Counterspell/Fähigkeiten-Übungen gegen Bots, Headshot-Auswertung, Movement-Parcours, Bestwerte über Neustarts.
-- Mehr Aim-Szenarien (Peek, Mehrfachziele, Distanzstufen) und eine „Reaktion“-Übung.
-- Eigene Optik/UI (aktuell Text im Raum und Chat).
-
-## Aufbau
-
-- `src/Plugin.cs` – Befehle und Hooks (Eingabe, Parry-Zustand, Frame-Schleife)
-- `src/Drills.cs` – Basisklasse und Menü; `src/ParryDrill.cs` – Parry; `src/AimDrills.cs` – Flick, Tracking, Bot-Selbsttest
-- `src/Bots.cs` – Bot-Verwaltung (Fake-Clients), `src/Config.cs` – Einstellungen und Schwierigkeits-Zahlen
-- `src/Arena.cs` – Arena speichern und automatisch freien Platz suchen
-- `src/Util.cs` – Zielgeometrie, Uhr, Eingabezustand, Bestwerte
+- Counterspell/ability exercises against bots, headshot scoring, a movement course, records that survive restarts.
+- A nicer UI than text in the world and chat.

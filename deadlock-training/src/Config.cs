@@ -2,26 +2,28 @@ using DeadworksManaged.Api;
 
 namespace DeadlockTrainer;
 
-/// <summary>Einstellungen, die man im Spiel per Chat aendern kann.</summary>
+/// <summary>Settings that can be changed in-game via chat commands.</summary>
 static class TrainerConfig {
-	/// <summary>Drehung der Text-Entities. Standard 270 = Text zeigt zum Spieler (mit !tface anpassbar).</summary>
+	/// <summary>Extra yaw for text entities. Default 270 = text faces the player (adjust with !tface).</summary>
 	public static float TextYawOffset = 270f;
-	/// <summary>Schrift fuer World-Text. null = Standard. Die Deadworks-Beispiele nutzen "Reaver" / "Radiance".</summary>
+	/// <summary>Font for world text. null = default. The Deadworks examples use "Reaver" / "Radiance".</summary>
 	public static string? Font = null;
-	/// <summary>true: Ziele/Menue werden durch kurzes Draufhalten des Fadenkreuzes bestaetigt statt per Klick (Fallback).</summary>
+	/// <summary>true: confirm menu/targets by holding the crosshair on them instead of clicking (fallback).</summary>
 	public static bool Dwell = false;
 	public const double DwellMs = 250;
 
-	/// <summary>Held, den die Trainings-Bots spielen (muss in OnPrecacheResources vorgeladen sein).</summary>
-	public static Heroes BotHero = Heroes.Inferno;
-	/// <summary>true = keine Bots, nur Text-Marker (Notfall-Modus, falls Bots auf dem Server nicht klappen).</summary>
+	/// <summary>Hero the training bots play. null = same hero as the player (its model is guaranteed to be loaded).</summary>
+	public static Heroes? BotHero = null;
+	/// <summary>true = no bots, only text targets (emergency mode if bots do not work on this server).</summary>
 	public static bool NoBots = false;
-	/// <summary>Blickrichtung der Bots roh in den Speicher schreiben (damit ihre Nahkampfschlaege zum Spieler zeigen).</summary>
+	/// <summary>Write the bots' view direction into memory so their melee swings point at the player.</summary>
 	public static bool WriteViewAngles = true;
-	/// <summary>Hoehe der "Brust" ueber dem Boden (dorthin wird gezielt).</summary>
+	/// <summary>Always draw a visible aim marker ('O') on bots, even if their model is visible.</summary>
+	public static bool ShowMarkers = true;
+	/// <summary>Height of the "chest" above the ground (where the aim point is).</summary>
 	public static float CenterZ = 58f;
 
-	/// <summary>Helden, die vorgeladen werden und als Bot-Held in Frage kommen.</summary>
+	/// <summary>Heroes that are preloaded and can be chosen as bot hero.</summary>
 	public static readonly Heroes[] PrecachedHeroes = [
 		Heroes.Inferno, Heroes.Wraith, Heroes.Haze, Heroes.Ghost, Heroes.Hornet, Heroes.Atlas,
 		Heroes.Bebop, Heroes.Shiv, Heroes.Kelvin, Heroes.Lash, Heroes.Mirage, Heroes.Viper,
@@ -34,15 +36,15 @@ enum Level { Easy, Normal, Hard }
 static class LevelParse {
 	public static Level Parse(string? s, Level fallback = Level.Normal) => (s ?? "").Trim().ToLowerInvariant() switch {
 		"e" or "easy" or "leicht" or "1" => Level.Easy,
-		"n" or "normal" or "mittel" or "2" => Level.Normal,
+		"n" or "normal" or "mittel" or "medium" or "2" => Level.Normal,
 		"h" or "hard" or "schwer" or "3" => Level.Hard,
 		_ => fallback,
 	};
 
-	public static string Label(Level l) => l switch { Level.Easy => "leicht", Level.Hard => "schwer", _ => "normal" };
+	public static string Label(Level l) => l switch { Level.Easy => "easy", Level.Hard => "hard", _ => "normal" };
 }
 
-/// <summary>Alle Schwierigkeits-Zahlen an einem Ort.</summary>
+/// <summary>All difficulty numbers in one place.</summary>
 static class Tuning {
 	private static double Lerp(double a, double b, Random r) => a + (b - a) * r.NextDouble();
 
@@ -66,4 +68,8 @@ static class Tuning {
 	// ---- Tracking ----
 	public static float TrackSpeed(Level l) => l switch { Level.Easy => 140f, Level.Normal => 240f, _ => 360f };
 	public static float TrackRadius(Level l) => l switch { Level.Easy => 38f, Level.Normal => 30f, _ => 24f };
+
+	// ---- Reaction ----
+	public static int ReactionRounds(Level l) => l switch { Level.Easy => 5, Level.Normal => 8, _ => 10 };
+	public static (double Min, double Max) ReactionDelayMs(Level l) => l switch { Level.Easy => (2000, 4000), Level.Normal => (1200, 3500), _ => (700, 3000) };
 }

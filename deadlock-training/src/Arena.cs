@@ -5,9 +5,9 @@ using DeadworksManaged.Api;
 namespace DeadlockTrainer;
 
 /// <summary>
-/// Arena = Ort, an den du aus dem Menue heraus teleportiert wirst. Entweder von dir mit !tarena gesetzt
-/// (wird pro Map in trainer_arenas.json neben der Plugin-DLL gespeichert) oder automatisch per Raycasts gesucht:
-/// freier Boden, kein Dach, mindestens ~6,5 m Platz in alle Richtungen.
+/// Arena = the place you are teleported to from the menu. Either set by you with !tarena
+/// (stored per map in trainer_arenas.json next to the plugin DLL) or found automatically with raycasts:
+/// open ground, no roof, plenty of room in all directions.
 /// </summary>
 static class Arena {
 	private static readonly Dictionary<string, float[]> _saved = new();
@@ -22,13 +22,13 @@ static class Arena {
 			_saved.Clear();
 			if (d != null) foreach (var (k, v) in d) if (v.Length == 3) _saved[k] = v;
 		} catch (Exception ex) {
-			Console.WriteLine($"[Trainer] Arena-Datei nicht lesbar: {ex.Message}");
+			Console.WriteLine($"[Trainer] Arena file not readable: {ex.Message}");
 		}
 	}
 
 	private static void Save() {
 		try { File.WriteAllText(FilePath, JsonSerializer.Serialize(_saved)); }
-		catch (Exception ex) { Console.WriteLine($"[Trainer] Arena-Datei nicht schreibbar: {ex.Message}"); }
+		catch (Exception ex) { Console.WriteLine($"[Trainer] Arena file not writable: {ex.Message}"); }
 	}
 
 	public static void Set(string map, Vector3 p) {
@@ -51,8 +51,8 @@ static class Arena {
 	private const float ProbeLen = 900f;
 
 	/// <summary>
-	/// Sucht rund um origin einen freien Platz: Boden vorhanden, kein Dach, moeglichst viel Platz in alle Richtungen.
-	/// Zwei Durchgaenge (erst streng, dann lockerer). Gibt null zurueck, wenn nichts gefunden wurde.
+	/// Searches around origin for an open spot: ground, no roof, as much room as possible in all directions.
+	/// Two passes (strict, then looser). Returns null if nothing was found.
 	/// </summary>
 	public static Vector3? Find(Vector3 origin, CBaseEntity? ignore) {
 		foreach (float minClear in new[] { 700f, 450f }) {
@@ -103,11 +103,11 @@ static class Arena {
 				}
 			}
 			if (best != null) {
-				Console.WriteLine($"[Trainer] Arena gefunden bei ({best.Value.X:0},{best.Value.Y:0},{best.Value.Z:0}), Platz ~{bestClear:0} (Schwelle {minClear:0})");
+				Console.WriteLine($"[Trainer] Arena found at ({best.Value.X:0},{best.Value.Y:0},{best.Value.Z:0}), room ~{bestClear:0} (threshold {minClear:0})");
 				return best;
 			}
 		}
-		Console.WriteLine("[Trainer] Keine freie Arena gefunden (Traces lieferten nichts Passendes).");
+		Console.WriteLine("[Trainer] No open arena found (traces returned nothing suitable).");
 		return null;
 	}
 }
