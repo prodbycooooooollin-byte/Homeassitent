@@ -26,18 +26,33 @@ static class ScenarioSet {
 
 /// <summary>The game's own bot AI switches (fighting, shooting, dodging, parrying, abilities). Unknown ones are simply ignored by the console.</summary>
 static class FightAi {
-	public static void Prepare() {
-		try { Server.ExecuteCommand("sv_cheats 1"); Server.ExecuteCommand("citadel_bot_test_mode 1"); TrainerBots.CheatsOffAt = -1; } catch { }
-	}
-	public static void On() {
+	private static readonly string[] Switches = { "citadel_bot_shoot", "citadel_bot_zig_zag", "citadel_bot_parry", "citadel_bot_attack_enemies", "citadel_bot_use_random_abilities" };
+
+	/// <summary>Everything off, bots idle. These switches are global and stay on until switched off: always reset before an exercise that must not have fighting bots.</summary>
+	public static void Reset() {
 		try {
-			foreach (var c in new[] { "citadel_bot_test_mode 0", "citadel_bot_shoot 1", "citadel_bot_zig_zag 1", "citadel_bot_parry 1",
-				"citadel_bot_attack_enemies 1", "citadel_bot_use_random_abilities 1" })
-				Server.ExecuteCommand(c);
+			Server.ExecuteCommand("sv_cheats 1");
+			Server.ExecuteCommand("citadel_bot_test_mode 1");
+			foreach (var c in Switches) Server.ExecuteCommand(c + " 0");
+			Server.ExecuteCommand("citadel_bot_melee 0");
+			Server.ExecuteCommand("citadel_bot_use_ability 0");
+			TrainerBots.CheatsOffAt = -1;
 		} catch { }
 	}
-	public static void Idle() { try { Server.ExecuteCommand("citadel_bot_test_mode 1"); } catch { } }
-	public static void Release() { Idle(); TrainerBots.CheatsOffAt = Clock.Ms + 800; }
+	public static void Prepare() => Reset();
+	public static void On() {
+		try {
+			Server.ExecuteCommand("citadel_bot_test_mode 0");
+			foreach (var c in Switches) Server.ExecuteCommand(c + " 1");
+		} catch { }
+	}
+	public static void Idle() {
+		try {
+			Server.ExecuteCommand("citadel_bot_test_mode 1");
+			foreach (var c in Switches) Server.ExecuteCommand(c + " 0");
+		} catch { }
+	}
+	public static void Release() { Reset(); TrainerBots.CheatsOffAt = Clock.Ms + 800; }
 }
 
 /// <summary>
@@ -69,10 +84,15 @@ sealed class ScenarioDrill : Drill {
 	private Vector3 _origin;
 	private float _yaw, _top = 300f, _dirA;
 	private bool _died, _killedVisible;
-	private bool _aiOn, _aiDecided, _realAi, _realDamage;
+	private bool _aiOn, _aiDecided, _realAi, _realDamage, _simShots;
 	private double _aiStartAt;
 	private (string, byte, byte, byte)[]? _hud;
 	private string _b1 = "", _b2 = "", _status = "";
+	private LaneModel _lanes = new();
+	private LaneModel.Lane? _lane;
+	private Vector3 _hub;
+	private int _team;
+	private float _sPlayer;
 
 	public override string Name => "Scenarios";
 	protected override float LeashRadius => 0f;
@@ -92,13 +112,16 @@ sealed class ScenarioDrill : Drill {
 		}
 		foreach (var a in Actors) if (a.Wants) { try { var e = a.Ent; if (e != null) BotPool.Exempt.Add(e.EntityHandle); } catch { } }
 		FightAi.Prepare();
-		// Build the list of street spots now (a short hitch once per map).
-		Arena.RandomSpot(Server.MapName, pawn);
+		_hub = pawn.Position;
+		_team = pawn.TeamNum;
+		try { _lanes = LaneModel.Build(Server.MapName, _hub, _team); } catch (Exception ex) { Console.WriteLine($"[Trainer] Lane model failed: {ex.Message}"); }
+		if (!_lanes.Ok) Arena.RandomSpot(Server.MapName, pawn); // fallback spots (a short hitch once per map)
 	}
 
 	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) {
 		if (!RealBots) { Say("[Scenarios] This needs real bots (wait until they have loaded, or switch Automatic bots on in Settings)."); Finished = true; return; }
 		_phaseAt = nowMs + 1500;
+		if (!_lanes.Ok) Say("[Scenarios] The lane layout of this map is not known yet (the trainer reads it ~15 s after you join, before the guardians are removed). Restart the server once, wait 30 s after joining, then start again. For now: random street spots.");
 		Say($"[Scenarios] {_rounds} situations at random places on the map. Each round: read the briefing at the top of your screen (souls, health, minimap), then DECIDE:");
 		Say("  FIGHT = kill the enemies   |   RETREAT = get far away from them and out of their sight. The right choice depends on souls, numbers and health. Abort: !tstop");
 	}
@@ -136,8 +159,26 @@ sealed class ScenarioDrill : Drill {
 		return (h == 0 ? 12 : h) + " o'clock";
 	}
 
-	private Vector3 Spot(float yaw, float dist, float side = 0f) =>
-		_origin + Aim.Forward(0f, yaw) * dist + Aim.Right(yaw) * side;
+	private Vector3 Ground(Vector3 p, float refZ) {
+		try {
+			var r = Trace.Ray(new Vector3(p.X, p.Y, refZ + 500f), new Vector3(p.X, p.Y, refZ - 700f), InteractionLayer.Solid);
+			if (r.DidHit && !r.Trace.StartInSolid) return r.HitPosition + new Vector3(0, 0, 8f);
+		} catch { }
+		return new Vector3(p.X, p.Y, refZ + 8f);
+	}
+
+	private Vector3 Spot(float yaw, float dist, float side = 0f) {
+		var p = _origin + Aim.Forward(0f, yaw) * dist + Aim.Right(yaw) * side;
+		return Ground(p, _origin.Z);
+	}
+
+	/// <summary>A point on the lane 'ahead' units further toward the enemy than the player, shifted sideways.</summary>
+	private Vector3 LaneAhead(float ahead, float side = 0f) {
+		if (_lane == null) return Spot(_yaw, ahead, side);
+		float s = _sPlayer + ahead;
+		var p = _lane.At(s) + Aim.Right(_lane.Yaw(s)) * side;
+		return Ground(p, _lane.At(s).Z);
+	}
 
 	private bool HasLos(Foe f, CCitadelPlayerPawn pawn) {
 		try {
@@ -215,11 +256,23 @@ sealed class ScenarioDrill : Drill {
 		_round++;
 		_kind = NextKind();
 		FightAi.Idle();
-		_aiOn = _aiDecided = _realAi = false;
+		_aiOn = _aiDecided = _realAi = _simShots = false;
 		_hiddenSince = -1;
-		// somewhere else on the map every round
-		var sp = Arena.RandomSpot(Server.MapName, pawn, _origin);
-		if (sp.HasValue) { _origin = sp.Value.Pos; _yaw = sp.Value.Yaw; }
+		// a believable place: on a lane (or, without map data, at a random street spot away from the base)
+		_lane = null;
+		if (_lanes.Ok) {
+			_lane = _lanes.Lanes[Rng.Next(_lanes.Lanes.Count)];
+			float frac = _kind switch { ScenKind.Group => 0.84f, ScenKind.Behind => 0.42f, ScenKind.LowHp => 0.55f, ScenKind.Duel => 0.5f, _ => 0.62f };
+			frac = Math.Clamp(frac + (float)(Rng.NextDouble() * 0.08 - 0.04), 0.1f, 0.95f);
+			_sPlayer = _lane.Len * frac;
+			var lp = _lane.At(_sPlayer);
+			_origin = Ground(lp, lp.Z);
+			_yaw = _lane.Yaw(_sPlayer) + (float)(Rng.NextDouble() * 90.0 - 45.0);
+		} else {
+			var sp = Arena.RandomSpot(Server.MapName, pawn, _hub);
+			for (int i = 0; i < 8 && sp.HasValue && Vector3.Distance(sp.Value.Pos, _hub) < 1800f; i++) sp = Arena.RandomSpot(Server.MapName, pawn, _hub);
+			if (sp.HasValue && Vector3.Distance(sp.Value.Pos, _hub) >= 1800f) { _origin = sp.Value.Pos; _yaw = sp.Value.Yaw; }
+		}
 		try { pawn.TeleportWithView(_origin + new Vector3(0, 0, 8), new Vector3(0f, _yaw, 0f)); pawn.Health = pawn.MaxHealth; } catch { }
 		foreach (var f in _foes) {
 			f.On = false; f.Aggro = false; f.Ambusher = false; Kill(f.Tag); f.Tag = null;
@@ -239,7 +292,7 @@ sealed class ScenarioDrill : Drill {
 			if (e == null) return;
 			e.Health = Math.Max(1, (int)(e.MaxHealth * hpFrac));
 			f.StartHp = e.Health;
-			e.Teleport(position: new Vector3(pos.X, pos.Y, _origin.Z + 8f), angles: new Vector3(0f, Aim.YawTo(pos, _origin), 0f), velocity: Vector3.Zero);
+			e.Teleport(position: pos, angles: new Vector3(0f, Aim.YawTo(pos, _origin), 0f), velocity: Vector3.Zero);
 		} catch { }
 	}
 
@@ -247,47 +300,57 @@ sealed class ScenarioDrill : Drill {
 		_ph = Ph.Brief; _phaseAt = nowMs + 4500; _roundStart = nowMs; _died = false; _killedVisible = false; _lastHit = 0; _realDamage = false;
 		float k = Lvl == Level.Easy ? 0.62f : Lvl == Level.Hard ? 0.86f : 0.74f;
 		float spd = Math.Clamp(_top * k, 150f, 420f); // enemies are slower than you: running away can work
-		float want = 1700f;
-		_dirA = PickDir(want);
-		float dist = Math.Clamp(ClearFrom(_dirA, want), 900f, want);
-		string clk = ClockDir(_dirA);
-		int meters = (int)(dist / 39f);
+		Vector3 first;
+		string where;
 
 		switch (_kind) {
-			case ScenKind.Lone:
-				Arm(_foes[0], Spot(_dirA, dist), 0.55f, false, spd, 600f);
+			case ScenKind.Lone: {
+				// a jungle camp near the lane if there is one, otherwise farming on the lane
+				Vector3? camp = null;
+				foreach (var c in _lanes.Camps.OrderBy(_ => Rng.Next()))
+					if (Vector3.Distance(c, _origin) is > 900f and < 2400f) { camp = c; break; }
+				first = camp.HasValue ? Ground(camp.Value, camp.Value.Z) : LaneAhead(1300f);
+				where = camp.HasValue ? "farming a jungle camp" : "farming in the lane";
+				Arm(_foes[0], first, 0.55f, false, spd, 600f);
 				_b1 = "You are 4000 souls AHEAD of everyone. His team: 2 at their base, 1 dead.";
-				_b2 = $"Minimap: ONE enemy at {clk}, ~{meters} m, farming and unaware, hurt (about half health).";
+				_b2 = $"Minimap: ONE enemy at {ClockDir(Aim.YawTo(_origin, first))}, ~{(int)(Vector3.Distance(_origin, first) / 39f)} m, {where}, unaware and hurt.";
 				break;
+			}
 			case ScenKind.Unknown:
-				Arm(_foes[0], Spot(_dirA, dist), 0.7f, false, spd, 600f);
+				first = LaneAhead(1300f);
+				Arm(_foes[0], first, 0.7f, false, spd, 600f);
 				_foes[1].Ambusher = true;
 				_foes[1].AppearAt = _phaseAt + 8000 + Rng.NextDouble() * 4000;
 				_b1 = "You are 4000 souls AHEAD. His team: 1 dead, 1 far away, 1 in front of you.";
-				_b2 = $"Minimap: one enemy at {clk}, ~{meters} m. The LAST one is not on the minimap - he can be anywhere.";
+				_b2 = $"Minimap: one enemy at {ClockDir(Aim.YawTo(_origin, first))}, ~{(int)(Vector3.Distance(_origin, first) / 39f)} m. The LAST one is not on the minimap - he can be anywhere.";
 				break;
 			case ScenKind.Group:
-				for (int i = 0; i < 4; i++) Arm(_foes[i], Spot(_dirA, dist + i * 50f, (i - 1.5f) * 200f), 1f, true, spd * 0.95f, 650f);
-				_b1 = "Even souls. You are alone, your team is far away.";
-				_b2 = $"Minimap: FOUR enemies grouped at {clk}, ~{meters} m, walking at you.";
+				first = LaneAhead(1500f);
+				for (int i = 0; i < 4; i++) Arm(_foes[i], LaneAhead(1500f + i * 60f, (i - 1.5f) * 200f), 1f, true, spd * 0.95f, 650f);
+				_b1 = "You pushed far into their side of the lane and are OVEREXTENDED. Even souls, your team is far away.";
+				_b2 = $"Minimap: FOUR enemies coming from their base at {ClockDir(Aim.YawTo(_origin, first))}, ~{(int)(Vector3.Distance(_origin, first) / 39f)} m.";
 				break;
 			case ScenKind.Behind:
-				for (int i = 0; i < 2; i++) Arm(_foes[i], Spot(_dirA, dist + i * 60f, (i - 0.5f) * 220f), 1f, true, spd, 600f);
+				first = LaneAhead(1400f);
+				for (int i = 0; i < 2; i++) Arm(_foes[i], LaneAhead(1400f + i * 60f, (i - 0.5f) * 220f), 1f, true, spd, 600f);
 				_b1 = "You are 3000 souls BEHIND. Your team is dead or far away.";
-				_b2 = $"Minimap: TWO enemies at {clk}, ~{meters} m, pushing you.";
+				_b2 = $"Minimap: TWO enemies at {ClockDir(Aim.YawTo(_origin, first))}, ~{(int)(Vector3.Distance(_origin, first) / 39f)} m, pushing the lane at you.";
 				break;
 			case ScenKind.LowHp:
 				try { pawn.Health = Math.Max(2, (int)(pawn.MaxHealth * 0.25f)); } catch { }
-				Arm(_foes[0], Spot(_dirA, dist), 1f, true, spd, 600f);
+				first = LaneAhead(1300f);
+				Arm(_foes[0], first, 1f, true, spd, 600f);
 				_b1 = "Even souls, but you are at 25% HEALTH.";
-				_b2 = $"Minimap: one enemy at {clk}, ~{meters} m, full health, coming at you.";
+				_b2 = $"Minimap: one enemy at {ClockDir(Aim.YawTo(_origin, first))}, ~{(int)(Vector3.Distance(_origin, first) / 39f)} m, full health, coming at you.";
 				break;
 			default:
-				Arm(_foes[0], Spot(_dirA, dist), 1f, true, spd, 600f);
+				first = LaneAhead(1300f);
+				Arm(_foes[0], first, 1f, true, spd, 600f);
 				_b1 = "Even souls, full health, nobody else around.";
-				_b2 = $"Minimap: one enemy at {clk}, ~{meters} m, walking at you. Win the duel.";
+				_b2 = $"Minimap: one enemy at {ClockDir(Aim.YawTo(_origin, first))}, ~{(int)(Vector3.Distance(_origin, first) / 39f)} m, walking at you. Win the duel.";
 				break;
 		}
+		_dirA = Aim.YawTo(_origin, first);
 		Say($"[Scenario {_round}/{_rounds}] {_b1} {_b2}");
 	}
 
@@ -313,10 +376,16 @@ sealed class ScenarioDrill : Drill {
 			Console.WriteLine($"[Trainer] Scenario bots: game AI {(_realAi ? "is moving them" : "does not move them - trainer drives them")}.");
 			if (!_realAi) { FightAi.Idle(); foreach (var f in _foes) f.NextShot = nowMs + 400; }
 		}
+		// The game's AI may walk at you but shoot elsewhere: if it has not hurt you after a while, the trainer adds the hits.
+		if (_aiDecided && _realAi && !_realDamage && !_simShots && nowMs > _aiStartAt + 7000) {
+			_simShots = true;
+			foreach (var f in _foes) f.NextShot = nowMs + 400;
+			Console.WriteLine("[Trainer] Scenario bots: the game AI does not hit you - simulated hits added.");
+		}
 		foreach (var f in _foes) {
 			if (f.On && !f.Aggro) { /* unaware: wanders (trainer-driven) until it notices you */ }
 			if (Sim || (f.On && !f.Aggro)) MoveFoe(f, pawn, nowMs, dt);
-			if (Sim) Shoot(f, pawn, nowMs);
+			if (Sim || _simShots) Shoot(f, pawn, nowMs);
 			UpdateTag(f, pawn, nowMs);
 		}
 		CheckAmbusher(nowMs);
@@ -372,7 +441,8 @@ sealed class ScenarioDrill : Drill {
 			}
 			look = pp;
 		}
-		f.A.Place(new Vector3(cur.X, cur.Y, _origin.Z) + move / 7f, look);
+		float floor = Ground(cur, cur.Z).Z - 8f;
+		f.A.Place(new Vector3(cur.X, cur.Y, floor) + move / 7f, look);
 	}
 
 	private void Shoot(Foe f, CCitadelPlayerPawn pawn, double nowMs) {
@@ -392,8 +462,18 @@ sealed class ScenarioDrill : Drill {
 	private void CheckAmbusher(double nowMs) {
 		foreach (var f in _foes) {
 			if (!f.Ambusher || f.On || nowMs < f.AppearAt) continue;
-			float dirB = PickDir(900f, _dirA);
-			Arm(f, Spot(dirB, Math.Clamp(ClearFrom(dirB, 1100f), 500f, 1100f)), 1f, true, Math.Clamp(_top * 0.8f, 150f, 420f), 550f);
+			float dirB;
+			Vector3 at;
+			if (_lane != null) {
+				// out of the jungle, from the side of the lane
+				float side = Rng.Next(2) == 0 ? 1000f : -1000f;
+				at = Ground(_origin + Aim.Right(_lane.Yaw(_sPlayer)) * side, _origin.Z);
+				dirB = Aim.YawTo(_origin, at);
+			} else {
+				dirB = PickDir(900f, _dirA);
+				at = Spot(dirB, Math.Clamp(ClearFrom(dirB, 1100f), 500f, 1100f));
+			}
+			Arm(f, at, 1f, true, Math.Clamp(_top * 0.8f, 150f, 420f), 550f);
 			f.NextShot = nowMs + 600;
 			StartAi(nowMs);
 			Say($"[Scenario] Enemy spotted at {ClockDir(dirB)} - that was the missing one!");
@@ -582,9 +662,14 @@ sealed class CounterspellDrill : Drill {
 	private Heroes? HeroOf(Actor a) { try { var p = a.Pawn; return p == null ? null : p.HeroID; } catch { return null; } }
 
 	public override HookResult OnTakeDamage(TakeDamageEvent e) {
-		if (IsPlayer(e.Entity) && (ActorOf(e.Info.Attacker) != null || ActorOf(e.Info.Inflictor) != null) && e.Entity is { } p) {
-			if (_ph == Ph.Cast && e.Info.Damage > 0) _gotDamage = true;
-			if (p.Health - e.Info.Damage <= 1) e.Info.Damage = 0; // you cannot die here
+		if (IsPlayer(e.Entity) && e.Entity is { } p) {
+			var by = ActorOf(e.Info.Attacker) ?? ActorOf(e.Info.Inflictor);
+			if (by != null) {
+				bool current = _cur >= 0 && _cur < Actors.Count && ReferenceEquals(by, Actors[_cur]);
+				if (!current) { e.Info.Damage = 0; return HookResult.Stop; } // only the hero in front of you counts
+				if (_ph == Ph.Cast && e.Info.Damage > 0) _gotDamage = true;
+				if (p.Health - e.Info.Damage <= 1) e.Info.Damage = 0; // you cannot die here
+			}
 		}
 		return HookResult.Continue;
 	}

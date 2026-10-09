@@ -76,6 +76,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 	private void CleanWorld() {
 		// Remove the structures that shoot the training bots (guardians, walkers, bases) in small steps. (No cvar changes: they were
 		// replicated to the client and are not needed.)
+		try { MapData.Capture(Server.MapName); } catch (Exception ex) { Console.WriteLine($"[Trainer] Map data capture failed: {ex.Message}"); }
 		int n = RemoveNpcGroup(new[] { "npc_boss", "npc_barrack", "npc_base_defender" });
 		Console.WriteLine($"[Trainer] Removed {n} structures (guardians/walkers/bases) so they cannot shoot the bots.");
 	}

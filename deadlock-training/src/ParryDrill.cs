@@ -60,9 +60,10 @@ sealed class ParryDrill : Drill {
 
 	protected override void Begin(CCitadelPlayerPawn pawn, double nowMs) {
 		// citadel_bot_melee is a cheat variable: cheats must already be on when it is set.
+		FightAi.Reset(); // no leftover fighting switches from other exercises
 		try { Server.ExecuteCommand("sv_cheats 1"); TrainerBots.CheatsOffAt = -1; _cheatsOn = true; } catch { }
 		_baseYaw = pawn.EyeAngles.Y;
-		_radius = _mode == ParryMode.Single ? 135f : 165f;
+		_radius = _mode == ParryMode.Single ? 95f : 115f; // melee range is short: the swing has to reach you
 		int n = AttackerCount;
 		for (int i = 0; i < n; i++) {
 			float frac = n == 1 ? 0.5f : i / (float)(n - 1);
@@ -305,6 +306,10 @@ sealed class ParryDrill : Drill {
 				Say($"{head} PARRIED!{tail}");
 			}
 		} else {
+			if (_evHit < 0) {
+				// The game sent no damage: make the miss felt anyway (never lethal).
+				try { var pl = PlayerPawn; if (pl != null) pl.Health = Math.Max(2, pl.Health - (int)(pl.MaxHealth * 0.12f)); } catch { }
+			}
 			if (before != null) {
 				_early++;
 				Say($"{head} HIT - too early: pressed {Fmt.Ms(tHit - before.Value)} before the hit, the window had already closed.");

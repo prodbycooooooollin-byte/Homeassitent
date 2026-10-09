@@ -148,3 +148,8 @@ Removed from the menu: Deny Souls and Last Hit (they used fake text orbs; real s
 - **REFLEX > Parry**: a missed parry now really damages you (you cannot die). If the game sends no parry/damage event, the verdict comes from your key press.
 - **Routes**: frozen during the countdown; hold W and you run at GO. Routes recorded on a zipline try to mount it again at GO.
 - Hover an entry in the menu: it shows "> entry <" and the top line explains it. Settings > Enemy bots raises the number of different heroes.
+
+## Lanes (scenarios)
+About 15 s after you join, the trainer reads the guardians/walkers/patrons and jungle camps of the map (before it removes them) and stores them in `trainer_mapdata.json`.
+Scenarios place you on a lane and the enemies on the same lane or at a jungle camp. Without this data (first start with this version: restart the server once) random street spots are used.
+All fighting-bot switches are reset before Parry and Counterspell, so bots no longer shoot around by themselves there.
