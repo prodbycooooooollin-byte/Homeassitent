@@ -30,11 +30,19 @@ static class Aim {
 		return new Vector3(MathF.Sin(y), -MathF.Cos(y), 0f);
 	}
 
-	/// <summary>Augenposition des Spielers (Fallback: Position + 64, falls das Feld leer ist).</summary>
+	/// <summary>
+	/// Origin of the crosshair ray. Deadlock is third person, so the crosshair aims from the CAMERA, not from the hero's head;
+	/// the client sends its camera position with every input command (CamState). Falls back to the head position.
+	/// </summary>
 	public static Vector3 Eye(CCitadelPlayerPawn pawn) {
+		if (CamState.TryGetPos(pawn.EntityHandle, out var cam)) return cam;
 		var e = pawn.EyePosition;
 		return e == Vector3.Zero ? pawn.Position + new Vector3(0f, 0f, 64f) : e;
 	}
+
+	/// <summary>Direction of the crosshair ray (camera view angles from the client, else the pawn's eye angles).</summary>
+	public static Vector3 Dir(CCitadelPlayerPawn pawn) =>
+		Forward(CamState.TryGetAng(pawn.EntityHandle, out var ang) ? ang : pawn.EyeAngles);
 
 	/// <summary>Winkel in Grad zwischen der Blickrichtung (ab eye) und dem Punkt target.</summary>
 	public static float AngleTo(Vector3 eye, Vector3 forward, Vector3 target) {
@@ -102,4 +110,37 @@ static class Records {
 	}
 
 	public static double? Get(string key) => _best.TryGetValue(key, out var v) ? v : null;
+}
+
+
+/// <summary>The client's camera position and view angles, taken from its input commands (OnProcessUsercmds).</summary>
+static class CamState {
+	private sealed class Cam { public Vector3 Pos, Ang; public double PosAt = -1e9, AngAt = -1e9; }
+	private static readonly Dictionary<uint, Cam> _cams = new();
+
+	public static void SetPos(uint pawn, Vector3 pos) {
+		if (!_cams.TryGetValue(pawn, out var c)) _cams[pawn] = c = new Cam();
+		c.Pos = pos; c.PosAt = Clock.Ms;
+	}
+
+	public static void SetAng(uint pawn, Vector3 ang) {
+		if (!_cams.TryGetValue(pawn, out var c)) _cams[pawn] = c = new Cam();
+		c.Ang = ang; c.AngAt = Clock.Ms;
+	}
+
+	public static bool TryGetPos(uint pawn, out Vector3 pos) {
+		pos = default;
+		if (!_cams.TryGetValue(pawn, out var c) || Clock.Ms - c.PosAt > 600) return false;
+		pos = c.Pos;
+		return true;
+	}
+
+	public static bool TryGetAng(uint pawn, out Vector3 ang) {
+		ang = default;
+		if (!_cams.TryGetValue(pawn, out var c) || Clock.Ms - c.AngAt > 600) return false;
+		ang = c.Ang;
+		return true;
+	}
+
+	public static void Clear() => _cams.Clear();
 }

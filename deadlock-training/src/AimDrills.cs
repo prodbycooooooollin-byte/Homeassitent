@@ -82,7 +82,7 @@ sealed class FlickDrill : Drill {
 
 	protected override void Tick(CCitadelPlayerPawn pawn, double nowMs) {
 		var eye = Aim.Eye(pawn);
-		var fwd = Aim.Forward(pawn.EyeAngles);
+		var fwd = Aim.Dir(pawn);
 		double dt = Math.Clamp(nowMs - _lastMs, 0, 100) / 1000.0;
 		_lastMs = nowMs;
 
@@ -323,7 +323,7 @@ sealed class TrackDrill : Drill {
 		_lastMs = nowMs;
 
 		var eye = Aim.Eye(pawn);
-		var fwd = Aim.Forward(pawn.EyeAngles);
+		var fwd = Aim.Dir(pawn);
 		var feet = NextFeet(elapsed, dt);
 		PlaceActor(_a, feet, pawn.Position, eye, TrainerConfig.CenterZ);
 

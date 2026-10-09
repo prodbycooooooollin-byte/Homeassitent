@@ -331,7 +331,7 @@ sealed class MenuDrill : Drill {
 
 	protected override void Tick(CCitadelPlayerPawn pawn, double nowMs) {
 		var eye = Aim.Eye(pawn);
-		var fwd = Aim.Forward(pawn.EyeAngles);
+		var fwd = Aim.Dir(pawn);
 
 		int hover = NearestItem(eye, fwd);
 		if (hover != _hover) {

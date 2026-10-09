@@ -159,7 +159,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		if (attackHeld && (e.ChangedButtons & InputButton.Attack) != 0) {
 			var pawn = ctl.GetHeroPawn();
 			if (pawn != null)
-				inp.RegisterShot(new Shot(Clock.Ms, Aim.Eye(pawn), Aim.Forward(pawn.EyeAngles)));
+				inp.RegisterShot(new Shot(Clock.Ms, Aim.Eye(pawn), Aim.Dir(pawn)));
 		}
 		inp.AttackHeld = attackHeld;
 
@@ -174,6 +174,22 @@ public class TrainerPlugin : DeadworksPluginBase {
 			if (changedNonMove != 0)
 				ctl.PrintToConsole($"[dbg] buttons changed=0x{(ulong)e.ChangedButtons:X} held=0x{(ulong)e.HeldButtons:X}");
 		}
+	}
+
+	/// <summary>Remember the client's camera position/angles: the crosshair ray starts at the camera, not at the hero's head.</summary>
+	public override void OnProcessUsercmds(ProcessUsercmdsEvent e) {
+		try {
+			var pawn = e.Controller?.GetHeroPawn();
+			if (pawn == null) return;
+			for (int i = e.Usercmds.Count - 1; i >= 0; i--) {
+				var cmd = e.Usercmds[i];
+				if (cmd.VecCameraPosition is { } p)
+					CamState.SetPos(pawn.EntityHandle, new Vector3(p.X, p.Y, p.Z));
+				if (cmd.Base?.Viewangles is { } a)
+					CamState.SetAng(pawn.EntityHandle, new Vector3(a.X, a.Y, a.Z));
+				if (cmd.VecCameraPosition != null && cmd.Base?.Viewangles != null) break;
+			}
+		} catch { /* never disturb input processing */ }
 	}
 
 	public override HookResult OnTakeDamage(TakeDamageEvent args) {
@@ -526,6 +542,17 @@ public class TrainerPlugin : DeadworksPluginBase {
 				Begin(caller, input => new BotTestDrill(caller, input));
 				return;
 		}
+	}
+
+	[Command("tcam", Description = "Show where your camera and crosshair ray start (diagnostic for aiming offsets)")]
+	public void CmdCam(CCitadelPlayerController caller) {
+		var pawn = caller.GetHeroPawn();
+		if (pawn == null) { Chat.PrintToChat(caller, "[Training] You need a hero."); return; }
+		var head = pawn.EyePosition;
+		bool hasPos = CamState.TryGetPos(pawn.EntityHandle, out var cam);
+		bool hasAng = CamState.TryGetAng(pawn.EntityHandle, out var ang);
+		Chat.PrintToChat(caller, $"[Training] head ({head.X:0},{head.Y:0},{head.Z:0}) | camera " + (hasPos ? $"({cam.X:0},{cam.Y:0},{cam.Z:0}) distance to head {Vector3.Distance(head, cam):0}" : "NOT received"));
+		Chat.PrintToChat(caller, $"[Training] eye angles ({pawn.EyeAngles.X:0.0},{pawn.EyeAngles.Y:0.0}) | camera angles " + (hasAng ? $"({ang.X:0.0},{ang.Y:0.0})" : "NOT received"));
 	}
 
 	[Command("tmarker", Description = "Aim markers 'O' on bots: tmarker on|off (on by default so you always see the target)")]

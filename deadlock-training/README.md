@@ -56,6 +56,7 @@ a bot model does not render. Hits still register on the bot itself. `!tmarker of
 | `!deny [count] [level]`, `!lasthit [count] [level]` | Deny souls / last-hit trainer |
 | `!tlevel easy\|normal\|hard` | Default difficulty |
 | `!tstop` | Abort the current exercise |
+| `!tcam` | Shows whether your client's camera data is received (aiming uses the third-person camera ray, not the head) |
 | `!tbot test` | **Bot self-test**: creates a bot, lets it swing, reports in chat (hero, model, events) |
 | `!tbot method unit\|fake` | How bots are created (unit = game command, fake = fake client) |
 | `!tbot hero <name\|same>` | Bot hero (same = your hero) |
