@@ -116,29 +116,45 @@ static class Arena {
 	/// normal: open ground with room in all directions. long: the spot with the longest straight view (the player is turned
 	/// along it), so far targets are visible. Both are remembered per map in trainer_arenas.json (keys "map#auto", "map#autolong").
 	/// </summary>
-	public static void FindGlobal(string map, Vector3 hubFeet, CBaseEntity? ignore) {
+	public static string FindGlobal(string map, Vector3 hubFeet, CBaseEntity? ignore) {
+		// Pass 1: ground height over a coarse grid; the median is "street level" (rooftops are higher outliers).
+		var zs = new List<float>();
+		for (float gx = -7000f; gx <= 7000f; gx += 700f)
+			for (float gy = -7000f; gy <= 7000f; gy += 700f) {
+				try {
+					var t = Trace.Ray(new Vector3(gx, gy, 2500f), new Vector3(gx, gy, -1500f), InteractionLayer.Solid, ignore);
+					if (t.DidHit && !t.Trace.StartInSolid) zs.Add(t.HitPosition.Z);
+				} catch { }
+			}
+		zs.Sort();
+		float level = zs.Count > 0 ? zs[zs.Count / 2] : hubFeet.Z;
+
 		Vector3? bestN = null, bestL = null;
 		float scoreN = float.MinValue, scoreL = float.MinValue, yawL = 0f;
-		int spots = 0;
+		int grounds = 0, afterZ = 0, afterRoof = 0, afterFlat = 0;
 		for (float gx = -7000f; gx <= 7000f; gx += 700f) {
 			for (float gy = -7000f; gy <= 7000f; gy += 700f) {
 				try {
-					var down = Trace.Ray(new Vector3(gx, gy, hubFeet.Z + 800f), new Vector3(gx, gy, hubFeet.Z - 600f), InteractionLayer.Solid, ignore);
+					// Start near street level so the first hit is the floor and not a roof.
+					var down = Trace.Ray(new Vector3(gx, gy, level + 300f), new Vector3(gx, gy, level - 500f), InteractionLayer.Solid, ignore);
 					if (!down.DidHit || down.Trace.StartInSolid) continue;
+					grounds++;
 					var ground = down.HitPosition;
-					if (MathF.Abs(ground.Z - hubFeet.Z) > 350f) continue;
+					if (MathF.Abs(ground.Z - level) > 250f) continue;
+					afterZ++;
 					var up = Trace.Ray(ground + new Vector3(0, 0, 10), ground + new Vector3(0, 0, 450), InteractionLayer.Solid, ignore);
 					if (up.DidHit) continue;
+					afterRoof++;
 
 					bool flat = true;
 					for (int k = 0; k < 4 && flat; k++) {
 						float bb = k * (MathF.PI / 2f);
 						var g = Trace.Ray(new Vector3(ground.X + MathF.Cos(bb) * 150f, ground.Y + MathF.Sin(bb) * 150f, ground.Z + 60f),
 							new Vector3(ground.X + MathF.Cos(bb) * 150f, ground.Y + MathF.Sin(bb) * 150f, ground.Z - 120f), InteractionLayer.Solid, ignore);
-						if (!g.DidHit || MathF.Abs(g.HitPosition.Z - ground.Z) > 30f) flat = false;
+						if (!g.DidHit || MathF.Abs(g.HitPosition.Z - ground.Z) > 40f) flat = false;
 					}
 					if (!flat) continue;
-					spots++;
+					afterFlat++;
 
 					var chest = ground + new Vector3(0, 0, 60);
 					float minClear = float.MaxValue, bestLen = 0f; float bestYaw = 0f;
@@ -151,15 +167,17 @@ static class Arena {
 						if (len > bestLen) { bestLen = len; bestYaw = bb * 180f / MathF.PI; }
 					}
 					float sN = minClear - MathF.Sqrt(gx * gx + gy * gy) * 0.02f;
-					if (minClear >= 450f && sN > scoreN) { scoreN = sN; bestN = ground + new Vector3(0, 0, 12); }
+					if (minClear >= 300f && sN > scoreN) { scoreN = sN; bestN = ground + new Vector3(0, 0, 12); }
 					float sL = MathF.Min(bestLen, 2400f) + minClear * 0.4f;
-					if (bestLen >= 1500f && minClear >= 150f && sL > scoreL) { scoreL = sL; bestL = ground + new Vector3(0, 0, 12); yawL = bestYaw; }
+					if (bestLen >= 1200f && sL > scoreL) { scoreL = sL; bestL = ground + new Vector3(0, 0, 12); yawL = bestYaw; }
 				} catch { }
 			}
 		}
-		Console.WriteLine($"[Trainer] Map scan: {spots} flat open spots. normal={(bestN.HasValue ? $"({bestN.Value.X:0},{bestN.Value.Y:0},{bestN.Value.Z:0})" : "none")} long={(bestL.HasValue ? $"({bestL.Value.X:0},{bestL.Value.Y:0},{bestL.Value.Z:0}) yaw {yawL:0}" : "none")}");
+		string msg = $"street level z={level:0}; ground {grounds}, at street level {afterZ}, no roof {afterRoof}, flat {afterFlat}. normal={(bestN.HasValue ? $"({bestN.Value.X:0},{bestN.Value.Y:0},{bestN.Value.Z:0})" : "none")} long={(bestL.HasValue ? $"({bestL.Value.X:0},{bestL.Value.Y:0},{bestL.Value.Z:0}) yaw {yawL:0}" : "none")}";
+		Console.WriteLine("[Trainer] Map scan: " + msg);
 		if (bestN.HasValue) Set(map + "#auto", bestN.Value);
 		if (bestL.HasValue) { _saved[map + "#autolong"] = [bestL.Value.X, bestL.Value.Y, bestL.Value.Z, yawL]; Save(); }
+		return msg;
 	}
 
 	/// <summary>Auto-found long-range spot with its viewing yaw.</summary>

@@ -628,22 +628,13 @@ sealed class Actor {
 				_groundZ = gz + TrainerConfig.BotZOffset;
 			} else {
 				var v = len > 6f ? d / len * MathF.Min(len * 7f, 420f) : Vector3.Zero;
-				// Ground height under the bot, measured every 400 ms; the vertical velocity is steered smoothly toward it
-				// (teleporting up and down made the bot hover and jitter).
-				double nowT = Clock.Ms;
-				if (nowT - _lastGroundCheck > 400) {
-					_lastGroundCheck = nowT;
-					try {
-						var r = Trace.Ray(cur + new Vector3(0f, 0f, 150f), cur - new Vector3(0f, 0f, 400f), InteractionLayer.Solid, e);
-						if (r.DidHit) _groundZ = cur.Z + 150f - r.Fraction * 550f + TrainerConfig.BotZOffset;
-					} catch { }
-				}
+				// Vertical: hold the bot at the arena floor height (the player stands on it too) with a dead zone, so it neither
+				// hovers nor jitters. No ground traces (they hit the bot itself and made it bob).
+				_groundZ = feet.Z + TrainerConfig.BotZOffset;
 				float vz = e.AbsVelocity.Z;
-				if (_groundZ > -1e8f) {
-					float dz = _groundZ - cur.Z;
-					if (MathF.Abs(dz) > 220f) e.Teleport(position: new Vector3(cur.X, cur.Y, _groundZ + 2f));
-					else vz = MathF.Abs(dz) > 3f ? Math.Clamp(dz * 9f, -350f, 350f) : 0f;
-				}
+				float dz = _groundZ - cur.Z;
+				if (MathF.Abs(dz) > 220f) e.Teleport(position: new Vector3(cur.X, cur.Y, _groundZ + 2f));
+				else vz = MathF.Abs(dz) > 8f ? Math.Clamp(dz * 5f, -250f, 250f) : MathF.Min(vz, 0f);
 				e.Teleport(velocity: new Vector3(v.X, v.Y, vz));
 			}
 			if (e.Is<CCitadelPlayerPawn>()) SetView(e.As<CCitadelPlayerPawn>()!, yaw);

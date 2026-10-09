@@ -371,6 +371,19 @@ public class TrainerPlugin : DeadworksPluginBase {
 		} catch (Exception ex) { Chat.PrintToChat(caller, $"[Training] Could not change the hero: {ex.Message}"); }
 	}
 
+	[Command("tscan", Description = "Rescan the map for training spots and show what was found")]
+	public void CmdScan(CCitadelPlayerController caller) {
+		var pawn = caller.GetHeroPawn();
+		if (pawn == null || !pawn.IsAlive) { Chat.PrintToChat(caller, "[Training] You need a living hero."); return; }
+		string map = Server.MapName;
+		Arena.Reset(map + "#auto"); Arena.Reset(map + "#autolong"); _scanned.Remove(map); _autoArena.Remove(map);
+		_scanned.Add(map);
+		string msg;
+		try { msg = Arena.FindGlobal(map, _hubs.TryGetValue(caller.EntityIndex - 1, out var h) ? h.Feet : pawn.Position, pawn); }
+		catch (Exception ex) { msg = "scan failed: " + ex.Message; }
+		Chat.PrintToChat(caller, "[Training] Scan: " + (msg.Length > 230 ? msg[..230] : msg));
+	}
+
 	[Command("tbotz", Description = "Raise (or lower) the bots if they stand in the ground: tbotz 30")]
 	public void CmdBotZ(CCitadelPlayerController caller, string v = "") {
 		if (float.TryParse(v.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f)) TrainerConfig.BotZOffset = Math.Clamp(f, -100f, 150f);
