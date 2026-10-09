@@ -20,7 +20,7 @@ static class Arena {
 			if (!File.Exists(FilePath)) return;
 			var d = JsonSerializer.Deserialize<Dictionary<string, float[]>>(File.ReadAllText(FilePath));
 			_saved.Clear();
-			if (d != null) foreach (var (k, v) in d) if (v.Length == 3) _saved[k] = v;
+			if (d != null) foreach (var (k, v) in d) if (v.Length >= 3) _saved[k] = v;
 		} catch (Exception ex) {
 			Console.WriteLine($"[Trainer] Arena file not readable: {ex.Message}");
 		}
@@ -109,5 +109,63 @@ static class Arena {
 		}
 		Console.WriteLine("[Trainer] No open arena found (traces returned nothing suitable).");
 		return null;
+	}
+
+	/// <summary>
+	/// Searches the whole map (a grid around the middle) at the player's height for the best training spots.
+	/// normal: open ground with room in all directions. long: the spot with the longest straight view (the player is turned
+	/// along it), so far targets are visible. Both are remembered per map in trainer_arenas.json (keys "map#auto", "map#autolong").
+	/// </summary>
+	public static void FindGlobal(string map, Vector3 hubFeet, CBaseEntity? ignore) {
+		Vector3? bestN = null, bestL = null;
+		float scoreN = float.MinValue, scoreL = float.MinValue, yawL = 0f;
+		int spots = 0;
+		for (float gx = -7000f; gx <= 7000f; gx += 700f) {
+			for (float gy = -7000f; gy <= 7000f; gy += 700f) {
+				try {
+					var down = Trace.Ray(new Vector3(gx, gy, hubFeet.Z + 800f), new Vector3(gx, gy, hubFeet.Z - 600f), InteractionLayer.Solid, ignore);
+					if (!down.DidHit || down.Trace.StartInSolid) continue;
+					var ground = down.HitPosition;
+					if (MathF.Abs(ground.Z - hubFeet.Z) > 350f) continue;
+					var up = Trace.Ray(ground + new Vector3(0, 0, 10), ground + new Vector3(0, 0, 450), InteractionLayer.Solid, ignore);
+					if (up.DidHit) continue;
+
+					bool flat = true;
+					for (int k = 0; k < 4 && flat; k++) {
+						float bb = k * (MathF.PI / 2f);
+						var g = Trace.Ray(new Vector3(ground.X + MathF.Cos(bb) * 150f, ground.Y + MathF.Sin(bb) * 150f, ground.Z + 60f),
+							new Vector3(ground.X + MathF.Cos(bb) * 150f, ground.Y + MathF.Sin(bb) * 150f, ground.Z - 120f), InteractionLayer.Solid, ignore);
+						if (!g.DidHit || MathF.Abs(g.HitPosition.Z - ground.Z) > 30f) flat = false;
+					}
+					if (!flat) continue;
+					spots++;
+
+					var chest = ground + new Vector3(0, 0, 60);
+					float minClear = float.MaxValue, bestLen = 0f; float bestYaw = 0f;
+					for (int k = 0; k < 24; k++) {
+						float bb = k * (MathF.PI / 12f);
+						var dir = new Vector3(MathF.Cos(bb), MathF.Sin(bb), 0f);
+						var h = Trace.Ray(chest, chest + dir * 3000f, InteractionLayer.Solid, ignore);
+						float len = h.Fraction * 3000f;
+						minClear = MathF.Min(minClear, MathF.Min(len, 1200f));
+						if (len > bestLen) { bestLen = len; bestYaw = bb * 180f / MathF.PI; }
+					}
+					float sN = minClear - MathF.Sqrt(gx * gx + gy * gy) * 0.02f;
+					if (minClear >= 450f && sN > scoreN) { scoreN = sN; bestN = ground + new Vector3(0, 0, 12); }
+					float sL = MathF.Min(bestLen, 2400f) + minClear * 0.4f;
+					if (bestLen >= 1500f && minClear >= 150f && sL > scoreL) { scoreL = sL; bestL = ground + new Vector3(0, 0, 12); yawL = bestYaw; }
+				} catch { }
+			}
+		}
+		Console.WriteLine($"[Trainer] Map scan: {spots} flat open spots. normal={(bestN.HasValue ? $"({bestN.Value.X:0},{bestN.Value.Y:0},{bestN.Value.Z:0})" : "none")} long={(bestL.HasValue ? $"({bestL.Value.X:0},{bestL.Value.Y:0},{bestL.Value.Z:0}) yaw {yawL:0}" : "none")}");
+		if (bestN.HasValue) Set(map + "#auto", bestN.Value);
+		if (bestL.HasValue) { _saved[map + "#autolong"] = [bestL.Value.X, bestL.Value.Y, bestL.Value.Z, yawL]; Save(); }
+	}
+
+	/// <summary>Auto-found long-range spot with its viewing yaw.</summary>
+	public static bool TryGetAutoLong(string map, out Vector3 p, out float yaw) {
+		if (_saved.TryGetValue(map + "#autolong", out var v) && v.Length >= 4) { p = new Vector3(v[0], v[1], v[2]); yaw = v[3]; return true; }
+		p = default; yaw = 0;
+		return false;
 	}
 }

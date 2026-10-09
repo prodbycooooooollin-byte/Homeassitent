@@ -457,17 +457,29 @@ public class TrainerPlugin : DeadworksPluginBase {
 	private bool StartOrb(CCitadelPlayerController c, OrbMode mode, int count, Level lvl) =>
 		Begin(c, input => new OrbDrill(c, input, lvl, mode, count));
 
-	private Vector3? ArenaFor(Hub hub, CCitadelPlayerPawn pawn, bool longRange = false) {
+	/// <summary>Where to train: your own spot (!tarena), else the best spots found by scanning the map once (saved per map).</summary>
+	private (Vector3 Pos, float? Yaw)? ArenaFor(Hub hub, CCitadelPlayerPawn pawn, bool longRange = false) {
 		string map = Server.MapName;
-		if (longRange && Arena.TryGet(map + "#long", out var savedLong)) return savedLong;
-		if (Arena.TryGet(map, out var saved)) return saved;
-		if (!_autoArena.TryGetValue(map, out var auto)) {
-			try { auto = Arena.Find(hub.Feet, pawn); }
-			catch (Exception ex) { Console.WriteLine($"[Trainer] Arena-Suche fehlgeschlagen: {ex.Message}"); auto = null; }
-			_autoArena[map] = auto;
+		if (longRange && Arena.TryGet(map + "#long", out var savedLong)) return (savedLong, null);
+		if (Arena.TryGet(map, out var saved)) return (saved, null);
+
+		if (!Arena.TryGet(map + "#auto", out _) && !Arena.TryGetAutoLong(map, out _, out _) && !_scanned.Contains(map)) {
+			_scanned.Add(map);
+			try { Arena.FindGlobal(map, hub.Feet, pawn); }
+			catch (Exception ex) { Console.WriteLine($"[Trainer] Map scan failed: {ex.Message}"); }
 		}
-		return auto;
+		if (longRange && Arena.TryGetAutoLong(map, out var lp, out var lyaw)) return (lp, lyaw);
+		if (Arena.TryGet(map + "#auto", out var auto)) return (auto, null);
+
+		if (!_autoArena.TryGetValue(map, out var local)) {
+			try { local = Arena.Find(hub.Feet, pawn); }
+			catch (Exception ex) { Console.WriteLine($"[Trainer] Arena-Suche fehlgeschlagen: {ex.Message}"); local = null; }
+			_autoArena[map] = local;
+		}
+		return local.HasValue ? (local.Value, null) : null;
 	}
+
+	private readonly HashSet<string> _scanned = new();
 
 	private void GoToArenaThen(CCitadelPlayerController c, int slot, Action start, bool longRange = false) {
 		var pawn = c.GetHeroPawn();
@@ -479,7 +491,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		var arena = ArenaFor(hub, pawn, longRange);
 		_fromHub.Add(slot);
 		if (arena.HasValue) {
-			pawn.TeleportWithView(arena.Value, new Vector3(0f, hub.Yaw, 0f));
+			pawn.TeleportWithView(arena.Value.Pos, new Vector3(0f, arena.Value.Yaw ?? hub.Yaw, 0f));
 			Chat.PrintToChat(c, "[Training] Here we go - you were moved to an open area. After the exercise you return to the menu.");
 		} else {
 			Chat.PrintToChat(c, "[Training] No open area found near here, so you train where you stand. Better: walk to a good spot and type !tarena (for Long Range: !tarena long).");
@@ -599,6 +611,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		if (a == "reset") {
 			string key = b == "long" ? map + "#long" : map;
 			Arena.Reset(key);
+			if (b != "long") { Arena.Reset(map + "#auto"); Arena.Reset(map + "#autolong"); _scanned.Remove(map); }
 			_autoArena.Remove(map);
 			Chat.PrintToChat(caller, b == "long" ? "[Training] Long Range arena reset (the normal arena is used)." : "[Training] Arena reset - an open area is searched automatically.");
 			return;

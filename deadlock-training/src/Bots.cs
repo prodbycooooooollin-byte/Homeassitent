@@ -603,6 +603,7 @@ sealed class Actor {
 	public double FirstPlaceAt;
 	private bool _placed;
 	private double _lastGroundCheck;
+	private float _groundZ = -1e9f;
 
 	public void Place(Vector3 feet, Vector3 lookAt) {
 		Feet = feet;
@@ -624,21 +625,26 @@ sealed class Actor {
 				} catch { }
 				e.Teleport(position: new Vector3(feet.X, feet.Y, gz + 4f + TrainerConfig.BotZOffset), angles: new Vector3(0f, yaw, 0f), velocity: Vector3.Zero);
 				_placed = true;
+				_groundZ = gz + TrainerConfig.BotZOffset;
 			} else {
 				var v = len > 6f ? d / len * MathF.Min(len * 7f, 420f) : Vector3.Zero;
-				e.Teleport(velocity: new Vector3(v.X, v.Y, e.AbsVelocity.Z));
-				// Every 400 ms: if the bot sank into the ground or hangs in the air, put it back on the ground.
+				// Ground height under the bot, measured every 400 ms; the vertical velocity is steered smoothly toward it
+				// (teleporting up and down made the bot hover and jitter).
 				double nowT = Clock.Ms;
 				if (nowT - _lastGroundCheck > 400) {
 					_lastGroundCheck = nowT;
 					try {
-						var r = Trace.Ray(cur + new Vector3(0f, 0f, 150f), cur - new Vector3(0f, 0f, 300f), InteractionLayer.Solid, e);
-						if (r.DidHit) {
-							float g = cur.Z + 150f - r.Fraction * 450f + TrainerConfig.BotZOffset;
-							if (cur.Z < g - 6f || cur.Z > g + 30f) e.Teleport(position: new Vector3(cur.X, cur.Y, g + 2f));
-						}
+						var r = Trace.Ray(cur + new Vector3(0f, 0f, 150f), cur - new Vector3(0f, 0f, 400f), InteractionLayer.Solid, e);
+						if (r.DidHit) _groundZ = cur.Z + 150f - r.Fraction * 550f + TrainerConfig.BotZOffset;
 					} catch { }
 				}
+				float vz = e.AbsVelocity.Z;
+				if (_groundZ > -1e8f) {
+					float dz = _groundZ - cur.Z;
+					if (MathF.Abs(dz) > 220f) e.Teleport(position: new Vector3(cur.X, cur.Y, _groundZ + 2f));
+					else vz = MathF.Abs(dz) > 3f ? Math.Clamp(dz * 9f, -350f, 350f) : 0f;
+				}
+				e.Teleport(velocity: new Vector3(v.X, v.Y, vz));
 			}
 			if (e.Is<CCitadelPlayerPawn>()) SetView(e.As<CCitadelPlayerPawn>()!, yaw);
 			if (e.Health < e.MaxHealth) e.Health = e.MaxHealth;
