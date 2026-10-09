@@ -344,6 +344,14 @@ public class TrainerPlugin : DeadworksPluginBase {
 		Timer.Once(60.Seconds(), () => { try { if (_warmBody != null && _warmBody.IsValid) _warmBody.Remove(); } catch { } _warmBody = null; });
 	}
 
+	[Command("tcheats", Description = "Switch sv_cheats on/off for testing (lets you type game cheat commands such as citadel_create_unit in your own console)")]
+	public void CmdCheats(CCitadelPlayerController caller, string arg = "on") {
+		bool on = arg.Trim().ToLowerInvariant() is not ("off" or "0" or "aus");
+		TrainerBots.CheatsOffAt = -1;
+		Server.ExecuteCommand(on ? "sv_cheats 1" : "sv_cheats 0");
+		Chat.PrintToChat(caller, $"[Training] sv_cheats {(on ? "1 (on)" : "0 (off)")}. Try in your own console (F7 / ~): citadel_create_unit hero_wraith");
+	}
+
 	[Command("tbody", Description = "Spawn a stand-in hero model 350 units behind you (diagnostic for the target models)")]
 	public void CmdBody(CCitadelPlayerController caller) {
 		var pawn = caller.GetHeroPawn();
