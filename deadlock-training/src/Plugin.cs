@@ -243,6 +243,8 @@ public class TrainerPlugin : DeadworksPluginBase {
 		if (!simulating) return;
 		double now = Clock.Ms;
 
+		TrainerBots.Pump(now);
+
 		// Switch cheats off again after a unit-spawn command.
 		if (TrainerBots.CheatsOffAt > 0 && now >= TrainerBots.CheatsOffAt) {
 			TrainerBots.CheatsOffAt = -1;

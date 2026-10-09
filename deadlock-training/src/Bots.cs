@@ -51,20 +51,36 @@ static class TrainerBots {
 	}
 
 	/// <summary>Ask the game to spawn a hero dummy in front of the player (needs cheats, switched on briefly).</summary>
+	private static readonly List<(double At, int Slot, string Cmd)> _queue = new();
+
+	/// <summary>
+	/// Spawn a hero dummy in front of the player with the game's own command. It works only when it runs as the player
+	/// (like typing it in the console) AND sv_cheats is already on: so cheats are switched on first and the command is
+	/// sent to the player's client a moment later. (From the server console it does nothing; run in the same frame as
+	/// the cheats switch it is rejected.)
+	/// </summary>
 	public static void RequestUnit(int playerSlot, Heroes hero, string teamArg) {
 		SpawnWatch.Log = true;
-		Console.WriteLine($"[Trainer] Requesting practice bot ({hero.ToHeroName()})");
+		string cmd = $"citadel_create_unit {hero.ToHeroName()}";
+		Console.WriteLine($"[Trainer] Requesting unit: {cmd}");
 		try {
-			// The game's own practice-bot system (verified: creates a real hero bot with a brain).
 			Server.ExecuteCommand("sv_cheats 1");
-			Server.ExecuteCommand("citadel_bot_test_mode 1");
-			Server.ExecuteCommand("citadel_spawn_practice_bots 0");
-			Server.ExecuteCommand($"citadel_bot_practice_opponent {hero.ToHeroName()}");
-			Server.ExecuteCommand("citadel_spawn_practice_bots_count 1");
-			Server.ExecuteCommand("citadel_spawn_practice_bots 1");
-			CheatsOffAt = Clock.Ms + 1500;
+			double at = Clock.Ms + 700 + 400 * _queue.Count;
+			_queue.Add((at, playerSlot, cmd));
+			CheatsOffAt = at + 4000;
 		} catch (Exception ex) {
 			LastError = ex.Message;
+		}
+	}
+
+	/// <summary>Send queued unit commands to the player's client once cheats are on.</summary>
+	public static void Pump(double nowMs) {
+		for (int i = 0; i < _queue.Count; i++) {
+			var q = _queue[i];
+			if (nowMs < q.At) continue;
+			_queue.RemoveAt(i--);
+			try { Server.ClientCommand(q.Slot, q.Cmd); }
+			catch (Exception ex) { LastError = ex.Message; }
 		}
 	}
 
@@ -215,6 +231,7 @@ sealed class Actor {
 	private uint _playerPawn = CBaseEntity.InvalidEntityHandle;
 	private double _requestAt;
 	private bool _fellBack;
+	private static readonly HashSet<uint> _usedUnits = new();
 	private int _recoverStep;
 	private double _heroAt = -1;
 
@@ -366,13 +383,12 @@ sealed class Actor {
 
 		if (Method == BotMethod.Unit && Slot < 0 && _raw == CBaseEntity.InvalidEntityHandle) {
 			TryAdoptUnit();
-			if (Slot < 0 && _raw == CBaseEntity.InvalidEntityHandle && nowMs - _requestAt > 3500 && !_fellBack) {
+			if (Slot < 0 && _raw == CBaseEntity.InvalidEntityHandle && nowMs - _requestAt > 7000 && !_fellBack) {
 				_fellBack = true;
-				Console.WriteLine("[Trainer] practice bot produced no unit within 3.5 s; falling back to a fake client.");
+				Console.WriteLine("[Trainer] The unit command produced no unit; using model props instead.");
 				var seen = SpawnWatch.Since(_requestAt - 50).Select(s => s.Designer).Where(d => d.Length > 0).Distinct().Take(15);
 				Console.WriteLine($"[Trainer] Entities spawned meanwhile: {string.Join(", ", seen)}");
-				StartFake();
-				CreatedAtMs = nowMs;
+				Wants = false;
 			}
 		}
 		if (Slot >= 0 && Method == BotMethod.Fake && BotReady && !HasModel) Recover(nowMs);
@@ -405,11 +421,13 @@ sealed class Actor {
 			try {
 				if (!e.IsValid || e.EntityHandle == _playerPawn) continue;
 				bool isPawn = e.Is<CCitadelPlayerPawn>();
-				bool npc = seen.Designer.StartsWith("npc_");
+				bool npc = seen.Designer.StartsWith("npc_") && !new[] { "npc_trooper", "npc_boss", "npc_neutral", "npc_super", "npc_barrack", "npc_base", "npc_player_bot_brain" }.Any(seen.Designer.StartsWith);
 				if (!isPawn && !npc) continue;
+				if (_usedUnits.Contains(e.EntityHandle)) continue;
 				if (e.Health <= 0) continue;
 				if (Vector3.Distance(e.Position, ppos) > 800f) continue;
 				_raw = e.EntityHandle;
+				_usedUnits.Add(_raw);
 				Console.WriteLine($"[Trainer] Adopted unit entity '{seen.Designer}' (idx {e.EntityIndex}).");
 				if (e.TeamNum == _playerTeam) e.TeamNum = _enemyTeam;
 				return;
@@ -443,6 +461,7 @@ sealed class Actor {
 		if (Method == BotMethod.Npc) { ReleaseNpc(); Wants = false; return; }
 		if (Slot >= 0) TrainerBots.Remove(Slot);
 		else if (_raw != CBaseEntity.InvalidEntityHandle) {
+			_usedUnits.Remove(_raw);
 			try { CBaseEntity.FromHandle(_raw)?.Remove(); } catch { }
 		}
 		Slot = -1;

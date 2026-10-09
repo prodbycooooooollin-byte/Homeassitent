@@ -22,7 +22,7 @@ static class TrainerConfig {
 	public static Heroes? BotHero = null;
 	/// <summary>true = no bots, only text targets (emergency mode if bots do not work on this server).</summary>
 	/// <summary>Default: no game bots (the game's bot spawn crashes the client); targets are hero-model props measured by geometry. Opt in with !tbot on.</summary>
-	public static bool NoBots = true;
+	public static bool NoBots = false;
 	/// <summary>Without game bots: borrow the map's trooper NPCs as targets (real health bar, damage numbers, animation).</summary>
 	public static bool UseTroopers = false;
 	/// <summary>Spawn game bots in the calm menu and lend them to the exercises (instead of spawning during an exercise).</summary>
