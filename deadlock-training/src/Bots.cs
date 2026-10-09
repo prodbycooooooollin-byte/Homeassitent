@@ -136,6 +136,7 @@ sealed class Actor {
 	private double _requestAt;
 	private bool _fellBack;
 	private int _recoverStep;
+	private double _heroAt = -1;
 
 	private Actor(Heroes hero, Vector3 feet, double nowMs) {
 		Hero = hero;
@@ -218,6 +219,11 @@ sealed class Actor {
 	/// <summary>Called every frame while the drill waits for its bots: adopts a spawned unit, falls back, repairs.</summary>
 	public void Poll(double nowMs) {
 		if (!Wants) return;
+		if (_heroAt > 0 && nowMs >= _heroAt && Slot >= 0) {
+			_heroAt = -1;
+			try { Players.FromSlot(Slot)?.SelectHero(Hero); Console.WriteLine($"[Trainer] Bot hero set to {Hero}"); }
+			catch (Exception ex) { Console.WriteLine($"[Trainer] Bot SelectHero failed: {ex.Message}"); }
+		}
 
 		if (Method == BotMethod.Unit && Slot < 0 && _raw == CBaseEntity.InvalidEntityHandle) {
 			TryAdoptUnit();
@@ -247,8 +253,7 @@ sealed class Actor {
 			} catch { }
 			// The practice bot picked a random hero whose model the client may not have loaded (invisible, and loading it
 			// mid-game crashed the client). Switch it to our hero, whose resources are precached.
-			var hero = Hero;
-			Timer.Once(400.Milliseconds(), () => { try { c.SelectHero(hero); Console.WriteLine($"[Trainer] Bot hero set to {hero}"); } catch (Exception ex) { Console.WriteLine($"[Trainer] Bot SelectHero failed: {ex.Message}"); } });
+			_heroAt = Clock.Ms + 400;
 			return;
 		}
 
