@@ -55,12 +55,12 @@ static class Arena {
 	/// Two passes (strict, then looser). Returns null if nothing was found.
 	/// </summary>
 	public static Vector3? Find(Vector3 origin, CBaseEntity? ignore) {
-		foreach (float minClear in new[] { 700f, 450f }) {
+		foreach (float minClear in new[] { 700f, 450f, 300f }) {
 			Vector3? best = null;
 			float bestScore = float.MinValue;
 			float bestClear = 0;
 
-			foreach (float r in new[] { 450f, 800f, 1200f, 1700f, 2300f, 3000f, 3800f }) {
+			foreach (float r in new[] { 450f, 800f, 1200f, 1700f, 2300f, 3000f, 3800f, 5000f, 6500f }) {
 				for (int i = 0; i < 24; i++) {
 					float a = i * (MathF.PI / 12f);
 					var x = origin.X + MathF.Cos(a) * r;

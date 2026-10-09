@@ -263,6 +263,31 @@ abstract class Drill {
 		} catch { /* entity just got removed */ }
 	}
 
+	// ---- Screen HUD (world text glued to the camera, top left) ---------------------------------------------------------
+
+	private readonly List<CPointWorldText?> _hud = new();
+	private readonly List<string> _hudLast = new();
+
+	/// <summary>Show up to a few lines of text in the top-left of the screen. Lines: (text, r, g, b).</summary>
+	protected void SetHud(CCitadelPlayerPawn pawn, params (string Text, byte R, byte G, byte B)[] lines) {
+		var eye = Aim.Eye(pawn);
+		var dir = Aim.Dir(pawn);
+		float yaw = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+		var right = Aim.Right(yaw);
+		for (int i = 0; i < lines.Length; i++) {
+			var pos = eye + dir * 70f + right * -37f + new Vector3(0f, 0f, 21f - i * 3.6f);
+			while (_hud.Count <= i) { _hud.Add(null); _hudLast.Add(""); }
+			if (_hud[i] == null) {
+				_hud[i] = SpawnText(lines[i].Text, pos, eye, i == 0 ? 1.15f : 1.6f, lines[i].R, lines[i].G, lines[i].B);
+				_hudLast[i] = lines[i].Text;
+			} else if (_hudLast[i] != lines[i].Text) {
+				_hud[i]!.SetMessage(lines[i].Text);
+				_hudLast[i] = lines[i].Text;
+			}
+			if (_hud[i] != null) Face(_hud[i]!, pos, eye);
+		}
+	}
+
 	protected void Kill(CPointWorldText? t) {
 		if (t == null) return;
 		_texts.Remove(t);

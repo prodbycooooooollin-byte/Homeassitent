@@ -227,6 +227,15 @@ sealed class ParryDrill : Drill {
 			try { if (bot != null) rc = bot.ExecuteAbilityBySlot(EAbilitySlot.WeaponMelee); }
 			catch (Exception ex) { Console.WriteLine($"[Trainer] Bot melee failed: {ex.Message}"); }
 			Console.WriteLine($"[Trainer] Parry swing {_done + 1}: bot melee rc={rc}");
+			if (rc != 0) {
+				// The ability call did not make the bot swing: use the game's own "bots melee" switch for a moment.
+				try {
+					Server.ExecuteCommand("sv_cheats 1");
+					Server.ExecuteCommand("citadel_bot_melee 1");
+					TrainerBots.Schedule(170, "citadel_bot_melee 0");
+					TrainerBots.CheatsOffAt = Clock.Ms + 1500;
+				} catch { }
+			}
 			_deadline = nowMs + 1700;
 		} else {
 			_deadline = _strikeAt + 450;

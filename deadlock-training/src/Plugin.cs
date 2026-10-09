@@ -356,6 +356,12 @@ public class TrainerPlugin : DeadworksPluginBase {
 		Timer.Once(60.Seconds(), () => { try { if (_warmBody != null && _warmBody.IsValid) _warmBody.Remove(); } catch { } _warmBody = null; });
 	}
 
+	[Command("tbotz", Description = "Raise (or lower) the bots if they stand in the ground: tbotz 30")]
+	public void CmdBotZ(CCitadelPlayerController caller, string v = "") {
+		if (float.TryParse(v.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f)) TrainerConfig.BotZOffset = Math.Clamp(f, -100f, 150f);
+		Chat.PrintToChat(caller, $"[Training] Bot height offset: {TrainerConfig.BotZOffset:0} (applies the next time a bot is placed)");
+	}
+
 	[Command("tflags", Description = "List console commands the server may run on your client (ServerCanExecute): tflags <keyword>. Saved to trainer_flags.txt")]
 	public void CmdFlags(CCitadelPlayerController caller, string filter = "") {
 		filter = filter.Trim();
@@ -411,7 +417,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "p_burst": GoToArenaThen(c, slot, () => StartParry(c, ParryMode.Burst, 4, lvl)); break;
 			case "f_flick": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Flick, 0, lvl)); break;
 			case "f_switch": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Switch, 0, lvl)); break;
-			case "f_long": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Long, 0, lvl)); break;
+			case "f_long": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Long, 0, lvl), longRange: true); break;
 			case "t_strafe": GoToArenaThen(c, slot, () => StartTrack(c, false, 0, lvl)); break;
 			case "t_random": GoToArenaThen(c, slot, () => StartTrack(c, true, 0, lvl)); break;
 			case "o_reaction": GoToArenaThen(c, slot, () => StartReaction(c, 0, lvl)); break;
@@ -436,8 +442,9 @@ public class TrainerPlugin : DeadworksPluginBase {
 	private bool StartOrb(CCitadelPlayerController c, OrbMode mode, int count, Level lvl) =>
 		Begin(c, input => new OrbDrill(c, input, lvl, mode, count));
 
-	private Vector3? ArenaFor(Hub hub, CCitadelPlayerPawn pawn) {
+	private Vector3? ArenaFor(Hub hub, CCitadelPlayerPawn pawn, bool longRange = false) {
 		string map = Server.MapName;
+		if (longRange && Arena.TryGet(map + "#long", out var savedLong)) return savedLong;
 		if (Arena.TryGet(map, out var saved)) return saved;
 		if (!_autoArena.TryGetValue(map, out var auto)) {
 			try { auto = Arena.Find(hub.Feet, pawn); }
@@ -447,18 +454,20 @@ public class TrainerPlugin : DeadworksPluginBase {
 		return auto;
 	}
 
-	private void GoToArenaThen(CCitadelPlayerController c, int slot, Action start) {
+	private void GoToArenaThen(CCitadelPlayerController c, int slot, Action start, bool longRange = false) {
 		var pawn = c.GetHeroPawn();
 		if (pawn == null || !pawn.IsAlive) return;
 		if (!_hubs.TryGetValue(slot, out var hub)) {
 			_hubs[slot] = hub = new Hub { Feet = pawn.Position, Yaw = pawn.EyeAngles.Y };
 		}
 
-		var arena = ArenaFor(hub, pawn);
+		var arena = ArenaFor(hub, pawn, longRange);
 		_fromHub.Add(slot);
 		if (arena.HasValue) {
 			pawn.TeleportWithView(arena.Value, new Vector3(0f, hub.Yaw, 0f));
 			Chat.PrintToChat(c, "[Training] Here we go - you were moved to an open area. After the exercise you return to the menu.");
+		} else {
+			Chat.PrintToChat(c, "[Training] No open area found near here, so you train where you stand. Better: walk to a good spot and type !tarena (for Long Range: !tarena long).");
 		}
 		// Kurz warten, bis Position und Blickrichtung beim Spieler angekommen sind.
 		Timer.Once(900.Milliseconds(), () => {
@@ -566,19 +575,22 @@ public class TrainerPlugin : DeadworksPluginBase {
 		if (wasExercise) ScheduleReturn(caller, slot);
 	}
 
-	[Command("tarena", Description = "Optional: set your own arena (tarena) or go back to automatic (tarena reset)")]
-	public void CmdArena(CCitadelPlayerController caller, string sub = "") {
+	[Command("tarena", Description = "Set your own arena where you stand: tarena | tarena long (for Long Range) | tarena reset | tarena reset long")]
+	public void CmdArena(CCitadelPlayerController caller, string sub = "", string sub2 = "") {
 		var pawn = caller.GetHeroPawn();
 		if (pawn == null || !pawn.IsAlive) { Chat.PrintToChat(caller, "[Training] You need a living hero."); return; }
 		string map = Server.MapName;
-		if (sub.Trim().Equals("reset", StringComparison.OrdinalIgnoreCase)) {
-			Arena.Reset(map);
+		string a = sub.Trim().ToLowerInvariant(), b = sub2.Trim().ToLowerInvariant();
+		if (a == "reset") {
+			string key = b == "long" ? map + "#long" : map;
+			Arena.Reset(key);
 			_autoArena.Remove(map);
-			Chat.PrintToChat(caller, "[Training] Arena reset - an open area is searched automatically.");
+			Chat.PrintToChat(caller, b == "long" ? "[Training] Long Range arena reset (the normal arena is used)." : "[Training] Arena reset - an open area is searched automatically.");
 			return;
 		}
-		Arena.Set(map, pawn.Position + new Vector3(0, 0, 8));
-		Chat.PrintToChat(caller, $"[Training] Arena for {map} set to your current position.");
+		string k = a == "long" ? map + "#long" : map;
+		Arena.Set(k, pawn.Position + new Vector3(0, 0, 8));
+		Chat.PrintToChat(caller, a == "long" ? "[Training] Long Range arena set to your current position. Face along the direction you want the targets to appear." : $"[Training] Arena for {map} set to your current position.");
 	}
 
 	[Command("thero", Description = "Change your own hero: thero <name>  (e.g. thero wraith)")]

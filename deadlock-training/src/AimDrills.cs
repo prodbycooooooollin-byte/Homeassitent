@@ -239,6 +239,7 @@ sealed class TrackDrill : Drill {
 	private double _damage;
 	private bool _wasOn;
 	private CPointWorldText? _label;
+	private (string Text, byte R, byte G, byte B)[]? _hudCache;
 
 	// Strafe
 	private readonly double _p1, _p2;
@@ -327,11 +328,14 @@ sealed class TrackDrill : Drill {
 		var feet = NextFeet(elapsed, dt);
 		PlaceActor(_a, feet, pawn.Position, eye, TrainerConfig.CenterZ);
 
-		var center = feet + new Vector3(0, 0, TrainerConfig.CenterZ);
+		// With a real bot the hit zones follow the bot's real position (it lags behind the target spot).
+		var basePos = feet;
+		if (_a.Wants && _a.Ent is { } realEnt) { try { if (realEnt.IsValid && realEnt.Health > 0) basePos = realEnt.Position; } catch { } }
+		var center = basePos + new Vector3(0, 0, TrainerConfig.CenterZ);
 		float dist = Vector3.Distance(eye, center);
 		bool on = Aim.AngleTo(eye, fwd, center) <= Aim.AngularRadius(Tuning.TrackRadius(Lvl), dist);
 
-		var headPos = feet + new Vector3(0, 0, TrainerConfig.HeadZ);
+		var headPos = basePos + new Vector3(0, 0, TrainerConfig.HeadZ);
 		bool head = Aim.AngleTo(eye, fwd, headPos) <= Aim.AngularRadius(TrainerConfig.HeadRadius, Vector3.Distance(eye, headPos));
 		if (head) on = true; // the head is part of the target
 
@@ -346,16 +350,19 @@ sealed class TrackDrill : Drill {
 			else { _a.Tint(255, 90, 90); _a.Marker?.SetColor(255, 60, 60); }
 		}
 
-		// Live readout above the head.
-		if (nowMs >= _labelAt) {
-			_labelAt = nowMs + 400;
+		// Live readout: a small panel in the top-left of the screen (text refreshed 4x/s, position glued to the camera every tick).
+		if (nowMs >= _labelAt || _hudCache == null) {
+			_labelAt = nowMs + 250;
 			double shown = _firing > 800 ? 100.0 * _firingOn / _firing : 100.0 * _onTarget / Math.Max(_total, 1);
 			double headShown = _firing > 800 ? 100.0 * _firingHead / _firing : 100.0 * _onHead / Math.Max(_total, 1);
-			string text = $"{shown:0}%  head {headShown:0}%";
-			if (_label == null) _label = SpawnText(text, feet + new Vector3(0, 0, 160), eye, 16f, 255, 220, 0);
-			else _label.SetMessage(text);
+			double left = Math.Max(0, (_durationMs - elapsed) / 1000.0);
+			_hudCache = new (string, byte, byte, byte)[] {
+				($"TRACKING  {left:0} s", 255, 220, 60),
+				($"On target   {shown:0}%", 255, 255, 255),
+				($"Headshots   {headShown:0}%", 255, 160, 60),
+			};
 		}
-		if (_label != null) Face(_label, feet + new Vector3(0, 0, 160), eye);
+		SetHud(pawn, _hudCache);
 
 		if (elapsed >= _durationMs) {
 			Summarize();

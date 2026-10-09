@@ -66,7 +66,11 @@ static class TrainerBots {
 	}
 
 	private static readonly List<(double At, int Slot, string Cmd)> _queue = new();
+	private static readonly List<(double At, string Cmd)> _cmds = new();
 	private static double _lastPrompt;
+
+	/// <summary>Run a server console command after delayMs.</summary>
+	public static void Schedule(double delayMs, string cmd) => _cmds.Add((Clock.Ms + delayMs, cmd));
 
 	/// <summary>
 	/// citadel_create_unit only works when the PLAYER runs it from their own console (the server cannot send it: the client
@@ -89,6 +93,11 @@ static class TrainerBots {
 
 	/// <summary>Send queued unit commands to the player's client once cheats are on.</summary>
 	public static void Pump(double nowMs) {
+		for (int j = 0; j < _cmds.Count; j++) {
+			if (nowMs < _cmds[j].At) continue;
+			var c = _cmds[j]; _cmds.RemoveAt(j--);
+			try { Server.ExecuteCommand(c.Cmd); } catch { }
+		}
 		for (int i = 0; i < _queue.Count; i++) {
 			var q = _queue[i];
 			if (nowMs < q.At) continue;
@@ -582,6 +591,7 @@ sealed class Actor {
 	/// <summary>Teleport the bot to feet and turn it toward lookAt. Keeps its health full.</summary>
 	public double FirstPlaceAt;
 	private bool _placed;
+	private double _lastGroundCheck;
 
 	public void Place(Vector3 feet, Vector3 lookAt) {
 		Feet = feet;
@@ -601,11 +611,23 @@ sealed class Actor {
 					var r = Trace.Ray(feet + new Vector3(0f, 0f, 120f), feet - new Vector3(0f, 0f, 300f), InteractionLayer.Solid, e);
 					if (r.DidHit) gz = feet.Z + 120f - r.Fraction * 420f; // ground height under the target spot
 				} catch { }
-				e.Teleport(position: new Vector3(feet.X, feet.Y, gz + 4f), angles: new Vector3(0f, yaw, 0f), velocity: Vector3.Zero);
+				e.Teleport(position: new Vector3(feet.X, feet.Y, gz + 4f + TrainerConfig.BotZOffset), angles: new Vector3(0f, yaw, 0f), velocity: Vector3.Zero);
 				_placed = true;
 			} else {
 				var v = len > 6f ? d / len * MathF.Min(len * 7f, 420f) : Vector3.Zero;
 				e.Teleport(velocity: new Vector3(v.X, v.Y, e.AbsVelocity.Z));
+				// Every 400 ms: if the bot sank into the ground or hangs in the air, put it back on the ground.
+				double nowT = Clock.Ms;
+				if (nowT - _lastGroundCheck > 400) {
+					_lastGroundCheck = nowT;
+					try {
+						var r = Trace.Ray(cur + new Vector3(0f, 0f, 150f), cur - new Vector3(0f, 0f, 300f), InteractionLayer.Solid, e);
+						if (r.DidHit) {
+							float g = cur.Z + 150f - r.Fraction * 450f + TrainerConfig.BotZOffset;
+							if (cur.Z < g - 6f || cur.Z > g + 30f) e.Teleport(position: new Vector3(cur.X, cur.Y, g + 2f));
+						}
+					} catch { }
+				}
 			}
 			if (e.Is<CCitadelPlayerPawn>()) SetView(e.As<CCitadelPlayerPawn>()!, yaw);
 			if (e.Health < e.MaxHealth) e.Health = e.MaxHealth;
