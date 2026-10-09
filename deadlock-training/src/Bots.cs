@@ -66,7 +66,7 @@ static class TrainerBots {
 			CheatsOffAt = Clock.Ms + 120000;
 			if (Clock.Ms - _lastPrompt > 4000) {
 				_lastPrompt = Clock.Ms;
-				Chat.PrintToChat(ctl, "[Training] Press F6 to spawn each target bot. (One-time setup in the console: bind f6 \"citadel_create_unit my_hero\")");
+				Chat.PrintToChat(ctl, "[Training] Press KP_PLUS (numpad +) to spawn each target bot. (One-time setup in the console: bind kp_plus \"citadel_create_unit my_hero\")");
 			}
 		} catch (Exception ex) {
 			LastError = ex.Message;

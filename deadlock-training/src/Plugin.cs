@@ -346,6 +346,24 @@ public class TrainerPlugin : DeadworksPluginBase {
 		Timer.Once(60.Seconds(), () => { try { if (_warmBody != null && _warmBody.IsValid) _warmBody.Remove(); } catch { } _warmBody = null; });
 	}
 
+	[Command("tflags", Description = "List console commands the server may run on your client (ServerCanExecute): tflags <keyword>. Saved to trainer_flags.txt")]
+	public void CmdFlags(CCitadelPlayerController caller, string filter = "") {
+		filter = filter.Trim();
+		var lines = new List<string>();
+		foreach (var c in Server.EnumerateConCommands()) {
+			if (filter.Length > 0 && !c.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
+			var f = (FCVar)c.Flags;
+			lines.Add($"{(f.HasFlag(FCVar.ServerCanExecute) ? "[SERVER-OK]" : "[no]       ")} {(f.HasFlag(FCVar.Cheat) ? "[cheat]" : "       ")} {c.Name} | {c.Description}");
+		}
+		try {
+			var path = Path.Combine(Path.GetDirectoryName(typeof(TrainerPlugin).Assembly.Location) ?? ".", "trainer_flags.txt");
+			File.WriteAllLines(path, lines);
+			Chat.PrintToChat(caller, $"[Training] {lines.Count} commands match '{filter}', {lines.Count(l => l.StartsWith("[SERVER-OK]"))} are server-executable. Saved to {path}");
+		} catch (Exception ex) {
+			Chat.PrintToChat(caller, $"[Training] {lines.Count} matches, file not writable: {ex.Message}");
+		}
+	}
+
 	[Command("tcheats", Description = "Switch sv_cheats on/off for testing (lets you type game cheat commands such as citadel_create_unit in your own console)")]
 	public void CmdCheats(CCitadelPlayerController caller, string arg = "on") {
 		bool on = arg.Trim().ToLowerInvariant() is not ("off" or "0" or "aus");
