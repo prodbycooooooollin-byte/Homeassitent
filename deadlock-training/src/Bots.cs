@@ -491,6 +491,7 @@ sealed class Actor {
 
 	/// <summary>Teleport the bot to feet and turn it toward lookAt. Keeps its health full.</summary>
 	public double FirstPlaceAt;
+	private bool _placed;
 
 	public void Place(Vector3 feet, Vector3 lookAt) {
 		Feet = feet;
@@ -499,7 +500,18 @@ sealed class Actor {
 		if (e == null || !e.IsValid) return;
 		float yaw = Aim.YawTo(feet, lookAt);
 		try {
-			e.Teleport(position: feet, angles: new Vector3(0f, yaw, 0f), velocity: Vector3.Zero);
+			// Teleporting every frame froze the bot in a T-pose in mid-air with no animation. Teleport only to get it into place,
+			// then let it walk: set its horizontal velocity toward the target and leave gravity/animation to the game.
+			var cur = e.Position;
+			var d = new Vector3(feet.X - cur.X, feet.Y - cur.Y, 0f);
+			float len = d.Length();
+			if (!_placed || len > 220f || MathF.Abs(feet.Z - cur.Z) > 160f) {
+				e.Teleport(position: feet + new Vector3(0f, 0f, 6f), angles: new Vector3(0f, yaw, 0f), velocity: Vector3.Zero);
+				_placed = true;
+			} else {
+				var v = len > 6f ? d / len * MathF.Min(len * 7f, 420f) : Vector3.Zero;
+				e.Teleport(velocity: new Vector3(v.X, v.Y, e.AbsVelocity.Z));
+			}
 			if (e.Is<CCitadelPlayerPawn>()) SetView(e.As<CCitadelPlayerPawn>()!, yaw);
 			if (e.Health < e.MaxHealth) e.Health = e.MaxHealth;
 		} catch { /* being rebuilt */ }
