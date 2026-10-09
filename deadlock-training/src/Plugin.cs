@@ -355,13 +355,11 @@ public class TrainerPlugin : DeadworksPluginBase {
 			var f = (FCVar)c.Flags;
 			lines.Add($"{(f.HasFlag(FCVar.ServerCanExecute) ? "[SERVER-OK]" : "[no]       ")} {(f.HasFlag(FCVar.Cheat) ? "[cheat]" : "       ")} {c.Name} | {c.Description}");
 		}
-		try {
-			var path = Path.Combine(Path.GetDirectoryName(typeof(TrainerPlugin).Assembly.Location) ?? ".", "trainer_flags.txt");
-			File.WriteAllLines(path, lines);
-			Chat.PrintToChat(caller, $"[Training] {lines.Count} commands match '{filter}', {lines.Count(l => l.StartsWith("[SERVER-OK]"))} are server-executable. Saved to {path}");
-		} catch (Exception ex) {
-			Chat.PrintToChat(caller, $"[Training] {lines.Count} matches, file not writable: {ex.Message}");
-		}
+		int ok = lines.Count(l => l.StartsWith("[SERVER-OK]"));
+		Console.WriteLine($"[Trainer/Flags] '{filter}': {lines.Count} commands, {ok} server-executable");
+		foreach (var l in lines.Where(l => l.StartsWith("[SERVER-OK]")).Take(60)) Console.WriteLine("[Trainer/Flags] " + (l.Length > 200 ? l[..200] : l));
+		var names = lines.Where(l => l.StartsWith("[SERVER-OK]")).Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries).Skip(1).FirstOrDefault(w => !w.StartsWith("[")) ?? "").Take(8);
+		Chat.PrintToChat(caller, $"[Training] {lines.Count} commands match '{filter}', {ok} server-executable" + (ok > 0 ? ": " + string.Join(", ", names) : ".") + " (details in the server window)");
 	}
 
 	[Command("tcheats", Description = "Switch sv_cheats on/off for testing (lets you type game cheat commands such as citadel_create_unit in your own console)")]
