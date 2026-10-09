@@ -72,10 +72,11 @@ Requirements: Deadlock (Steam) and the [.NET 10 SDK](https://dotnet.microsoft.co
 
 1. **Get Deadworks** from the [releases](https://github.com/Deadworks-net/deadworks/releases) (`deadworks-vX.Y.Z.zip`) and copy
    the contents of its `game` folder into `...\Deadlock\game`. Afterwards `...\Deadlock\game\bin\win64\deadworks.exe` exists.
-2. **Build the plugin** (PowerShell, in this folder):
+2. **Build the plugin** (PowerShell, in this folder). With the default Steam path a plain build is enough:
    ```
-   dotnet build -c Release -p:DeadlockDir="C:\Program Files (x86)\Steam\steamapps\common\Deadlock\game\bin\win64"
+   dotnet build -c Release
    ```
+   (or `.\build.ps1`; for another install location pass the `win64` folder: `.\build.ps1 "D:\Games\Deadlock\game\bin\win64"`).
    This copies `DeadlockTrainer.dll` to `...\win64\managed\plugins\`.
 3. **Start the server:** run `deadworks.exe` from `...\win64\` (keep the window open).
 4. **Start Deadlock**, open the console (enable it in the settings, then F7) and run `connect localhost:27067`.

@@ -22,6 +22,11 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <!-- Default Steam install path, so a plain "dotnet build -c Release" works without extra arguments. -->
+  <PropertyGroup Condition="'$(DeadlockDir)' == '' And Exists('C:\Program Files (x86)\Steam\steamapps\common\Deadlock\game\bin\win64\deadworks.exe')">
+    <DeadlockDir>C:\Program Files (x86)\Steam\steamapps\common\Deadlock\game\bin\win64</DeadlockDir>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(DeadlockDir)' != ''">
     <DeadlockManagedDir>$(DeadlockDir)\managed</DeadlockManagedDir>
     <DeadworksApiDll Condition="'$(DeadworksApiDll)' == ''">$(DeadlockManagedDir)\DeadworksManaged.Api.dll</DeadworksApiDll>
