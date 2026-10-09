@@ -217,6 +217,42 @@ static class BotPool {
 	public static bool Contains(uint handle) => _all.Contains(handle);
 	public static Vector3 ParkPos => _park;
 
+	/// <summary>The known map position farthest from 'from' (a structure or camp), at least 3500 units away; null if no map data.</summary>
+	public static Vector3? FarSpot(Vector3 from) {
+		Vector3? best = null; float bd = 3500f;
+		foreach (var en in MapData.Get(Server.MapName)) {
+			var q = new Vector3(en.X, en.Y, en.Z + 60f);
+			float d = Vector3.Distance(q, from);
+			if (d > bd) { bd = d; best = q; }
+		}
+		return best;
+	}
+
+	/// <summary>Pool bots an exercise does not use go far away, so they cannot swing/cast with the used ones (the bot switches are global). Returns them.</summary>
+	public static List<uint> SendAway(IEnumerable<uint> keep, Vector3 from) {
+		var away = new List<uint>();
+		var far = FarSpot(from);
+		if (far == null) return away;
+		var keepSet = new HashSet<uint>(keep);
+		int i = 0;
+		foreach (var h in _all.ToArray()) {
+			if (keepSet.Contains(h)) continue;
+			try {
+				var e = CBaseEntity.FromHandle(h);
+				if (e == null || !e.IsValid) continue;
+				e.Teleport(position: far.Value + new Vector3(i++ * 40f, 0, 0), velocity: Vector3.Zero);
+				away.Add(h);
+			} catch { }
+		}
+		return away;
+	}
+
+	public static void Recall(IEnumerable<uint> handles) {
+		foreach (var h in handles) {
+			try { var e = CBaseEntity.FromHandle(h); if (e != null && e.IsValid) e.Teleport(position: _park, velocity: Vector3.Zero); } catch { }
+		}
+	}
+
 	public static int Count => _all.Count;
 	public static int FreeCount => _free.Count;
 

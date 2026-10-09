@@ -78,7 +78,12 @@ sealed class ParryDrill : Drill {
 	private Vector3 HomeFor(Vector3 playerFeet, int i) =>
 		new Vector3(playerFeet.X, playerFeet.Y, playerFeet.Z) + Aim.Forward(0f, _baseYaw + _offs[i]) * _radius;
 
+	private List<uint> _away = new();
+	private Vector3? _farSpot;
+
 	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) {
+		// the swing switch is global: every other pool bot would swing along. Send the unused ones far away.
+		_away = BotPool.SendAway(Actors.Select(a => a.Ent?.EntityHandle ?? CBaseEntity.InvalidEntityHandle), pawn.Position);
 		_nextAt = nowMs + 2500;
 		_edgeSeen = In.ParryEdges;
 		var eye = Aim.Eye(pawn);
@@ -165,8 +170,10 @@ sealed class ParryDrill : Drill {
 		var eye = Aim.Eye(pawn);
 
 		// All attackers stand in a ring around the player and look at him.
-		for (int i = 0; i < Actors.Count; i++)
+		for (int i = 0; i < Actors.Count; i++) {
+			if (_ph == Ph.Await && _realRound && i != _cur && _farSpot.HasValue) continue; // the others wait far away while one swings
 			PlaceActor(Actors[i], HomeFor(player, i), player, eye, TrainerConfig.CenterZ);
+		}
 
 		if (In.ParryEdges != _edgeSeen) {
 			_edgeSeen = In.ParryEdges;
@@ -238,6 +245,11 @@ sealed class ParryDrill : Drill {
 
 	private void Trigger(double nowMs) {
 		_ph = Ph.Await;
+		// The melee switch is global: only the attacker of this round may be near you.
+		_farSpot ??= BotPool.FarSpot(PlayerPawn?.Position ?? Vector3.Zero);
+		if (_realRound && _farSpot.HasValue)
+			for (int i = 0; i < Actors.Count; i++)
+				if (i != _cur) { try { Actors[i].Ent?.Teleport(position: _farSpot.Value + new Vector3(i * 40f, 0, 0), velocity: Vector3.Zero); } catch { } }
 		if (_realRound) {
 			var bot = Actors[_cur].Pawn;
 			int rc = -99;
@@ -300,7 +312,7 @@ sealed class ParryDrill : Drill {
 		if (parried) {
 			_ok++;
 			if (derived) _derived++;
-			string tail = derived ? " (inferred from your key press: the game sent no parry event)" : "";
+			string tail = derived ? $" (inferred; game events: swing={(_evStart >= 0 ? "yes" : "no")}, check={(_evCheck >= 0 ? "yes" : "no")}, melee={(_evMelee >= 0 ? "yes" : "no")})" : "";
 			if (before != null) {
 				double off = before.Value - tHit;
 				_offsets.Add(off);
@@ -315,6 +327,7 @@ sealed class ParryDrill : Drill {
 				// The game sent no damage: make the miss felt anyway (never lethal).
 				try { var pl = PlayerPawn; if (pl != null) pl.Health = Math.Max(2, pl.Health - (int)(pl.MaxHealth * 0.12f)); } catch { }
 			}
+			if (_evHit < 0) Say($"[Parry] no damage event from the game (swing={(_evStart >= 0 ? "yes" : "no")}, check={(_evCheck >= 0 ? "yes" : "no")}, melee={(_evMelee >= 0 ? "yes" : "no")}, your parry active at the check={_activeAtCheck}).");
 			if (before != null) {
 				_early++;
 				Say($"{head} HIT - too early: pressed {Fmt.Ms(tHit - before.Value)} before the hit, the window had already closed.");
@@ -405,6 +418,7 @@ sealed class ParryDrill : Drill {
 	private bool _rcSaid;
 
 	public override void Stop() {
+		BotPool.Recall(_away); _away.Clear();
 		if (_cheatsOn) { _cheatsOn = false; try { Server.ExecuteCommand("citadel_bot_melee 0"); Server.ExecuteCommand("sv_cheats 0"); } catch { } }
 		ClearCue();
 		base.Stop();
