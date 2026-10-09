@@ -322,11 +322,33 @@ public class TrainerPlugin : DeadworksPluginBase {
 	private CBaseEntity? _warmBody;
 
 	/// <summary>Spawn one stand-in body behind the player while the menu is open, so the client has streamed the model in by the time an exercise starts.</summary>
-	private void WarmUpBody(CCitadelPlayerPawn pawn) {
+	private void WarmUpBody(CCitadelPlayerPawn pawn, int attempt = 0) {
 		if (!TrainerConfig.NoBots || Actor.BodyReadyAt > 0) return;
-		try { var m = pawn.ModelName; if (!string.IsNullOrEmpty(m)) Actor.PlayerModel = m; } catch { }
+		string m = "";
+		try { m = pawn.ModelName ?? ""; } catch { }
+		if (string.IsNullOrEmpty(m)) {
+			Console.WriteLine($"[Trainer] Warm-up body: the hero has no model yet (attempt {attempt}).");
+			if (attempt < 8) Timer.Once(2.Seconds(), () => { try { if (pawn.IsValid) WarmUpBody(pawn, attempt + 1); } catch { } });
+			return;
+		}
+		Actor.PlayerModel = m;
 		_warmBody = Actor.MakeBody(pawn.Position - Aim.Forward(0f, pawn.EyeAngles.Y) * 350f);
-		Timer.Once(30.Seconds(), () => { try { if (_warmBody != null && _warmBody.IsValid) _warmBody.Remove(); } catch { } _warmBody = null; });
+		Console.WriteLine($"[Trainer] Warm-up body created: model '{m}', entity {(_warmBody != null ? _warmBody.EntityIndex.ToString() : "none")}");
+		Timer.Once(60.Seconds(), () => { try { if (_warmBody != null && _warmBody.IsValid) _warmBody.Remove(); } catch { } _warmBody = null; });
+	}
+
+	[Command("tbody", Description = "Spawn a stand-in hero model 350 units behind you (diagnostic for the target models)")]
+	public void CmdBody(CCitadelPlayerController caller) {
+		var pawn = caller.GetHeroPawn();
+		if (pawn == null) { Chat.PrintToChat(caller, "[Training] You need a hero."); return; }
+		string m = "";
+		try { m = pawn.ModelName ?? ""; } catch { }
+		Chat.PrintToChat(caller, $"[Training] Hero model: '{(m.Length > 0 ? m : "(empty)")}'");
+		if (m.Length == 0) return;
+		Actor.PlayerModel = m;
+		var b = Actor.MakeBody(pawn.Position - Aim.Forward(0f, pawn.EyeAngles.Y) * 350f);
+		Chat.PrintToChat(caller, b != null ? "[Training] Body spawned behind you. It may take ~10 s to become visible." : "[Training] Could not create the body (see the server window).");
+		if (b != null) Timer.Once(60.Seconds(), () => { try { if (b.IsValid) b.Remove(); } catch { } });
 	}
 
 	private void CloseMenu(CCitadelPlayerController c, string? message = "[Training] Menu switched off. !train brings it back.") {
