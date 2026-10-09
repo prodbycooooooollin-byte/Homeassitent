@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Deadworks-Plugin: Trainingsmodus fuer Deadlock.
+
+    Bauen (Windows, aus diesem Ordner):
+      dotnet build -c Release -p:DeadlockDir="C:\Program Files (x86)\Steam\steamapps\common\Deadlock\game\bin\win64"
+
+    DeadlockDir ist der Ordner, in dem deadworks.exe liegt. Das Plugin referenziert die
+    DeadworksManaged.Api.dll aus <DeadlockDir>\managed und kopiert sich nach <DeadlockDir>\managed\plugins.
+    Alternativ kann der Pfad zur API-DLL direkt mit -p:DeadworksApiDll=... gesetzt werden.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>DeadlockTrainer</RootNamespace>
+    <AssemblyName>DeadlockTrainer</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(DeadlockDir)' != ''">
+    <DeadlockManagedDir>$(DeadlockDir)\managed</DeadlockManagedDir>
+    <DeadworksApiDll Condition="'$(DeadworksApiDll)' == ''">$(DeadlockManagedDir)\DeadworksManaged.Api.dll</DeadworksApiDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="DeadworksManaged.Api">
+      <HintPath>$(DeadworksApiDll)</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Google.Protobuf" Condition="'$(ProtobufDll)' != ''">
+      <HintPath>$(ProtobufDll)</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Google.Protobuf" Condition="'$(ProtobufDll)' == '' And '$(DeadlockManagedDir)' != '' And Exists('$(DeadlockManagedDir)\Google.Protobuf.dll')">
+      <HintPath>$(DeadlockManagedDir)\Google.Protobuf.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(DeadlockManagedDir)' != ''">
+    <ItemGroup>
+      <DeployFiles Include="$(OutputPath)DeadlockTrainer.dll;$(OutputPath)DeadlockTrainer.pdb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DeployFiles)" DestinationFolder="$(DeadlockManagedDir)\plugins" SkipUnchangedFiles="false" Retries="0" ContinueOnError="WarnAndContinue" />
+  </Target>
+
+</Project>
