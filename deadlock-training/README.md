@@ -123,3 +123,14 @@ cd $HOME\DeadlockTrainerRepo\deadlock-training
 .\update.ps1            # git pull + build (the server hot-reloads the plugin)
 .\update.ps1 -Restart   # same, plus restarts deadworks.exe
 ```
+
+
+## Everything by menu (no commands needed)
+
+Shoot an entry to select it. Main menu: PARRY, AIM (Flick / Switch / Long Range, "Head only" toggle), TRACK, MORE (Reaction, Routes), difficulty, SETTINGS.
+
+- **Routes**: list of your recorded routes (shoot one to practice it with the ghost). `+ RECORD NEW ROUTE` starts recording where you stand, run the route, press the PARRY key at the end, then choose SAVE / TRY AGAIN / DISCARD in the popup. `DELETE A ROUTE` removes one.
+- **Spots**: type `!spot` where you want to train. A popup lets you set the training spot, the long-range standing spot and the long-range bot spot, or reset them.
+- **Settings**: head-only and automatic bots toggles.
+
+Removed from the menu: Deny Souls and Last Hit (they used fake text orbs; real soul orbs are not supported yet).

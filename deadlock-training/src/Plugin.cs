@@ -326,7 +326,8 @@ public class TrainerPlugin : DeadworksPluginBase {
 			if (drill.Finished && _drills.TryGetValue(slot, out var cur) && ReferenceEquals(cur, drill)) {
 				_drills.Remove(slot);
 				drill.Stop();
-				if (drill is not MenuDrill) ScheduleReturn(c, slot);
+				try { drill.OnFinished?.Invoke(); } catch (Exception ex) { Console.WriteLine($"[Trainer] OnFinished failed: {ex.Message}"); }
+				if (drill is not MenuDrill && drill.ReturnsToMenu) ScheduleReturn(c, slot);
 			}
 		}
 	}
@@ -348,21 +349,58 @@ public class TrainerPlugin : DeadworksPluginBase {
 	}
 
 	/// <summary>Zeigt das Menue vor dem Spieler. placeHere = Menue-Ort auf die aktuelle Position setzen.</summary>
-	private void OpenMenu(CCitadelPlayerController c, bool placeHere) {
+	private readonly Dictionary<int, string> _page = new();
+
+	private void OpenMenu(CCitadelPlayerController c, bool placeHere) => OpenPage(c, "main", placeHere);
+
+	/// <summary>Shows a menu page. Pages other than the popups stand at the hub (where the menu always was); popups appear where you stand.</summary>
+	private void OpenPage(CCitadelPlayerController c, string page, bool placeHere = false) {
 		var pawn = c.GetHeroPawn();
 		if (pawn == null || !pawn.IsAlive) {
 			Chat.PrintToChat(c, "[Training] You need a living hero. Pick a hero and spawn first.");
 			return;
 		}
 		int slot = c.EntityIndex - 1;
-		WarmUpBody(pawn);
-		if (placeHere || !_hubs.ContainsKey(slot))
-			_hubs[slot] = new Hub { Feet = pawn.Position, Yaw = pawn.EyeAngles.Y };
-		_noAutoMenu.Remove(slot);
-		var hub = _hubs[slot];
-		Begin(c, input => new MenuDrill(c, input, LevelOf(slot), l => _levels[slot] = l, id => OnMenuSelect(c, slot, id),
-			hub.Feet + new Vector3(0, 0, 64), hub.Yaw));
+		string map = Server.MapName;
+		bool popup = page is "attempt" or "spots";
+		if (!popup) {
+			WarmUpBody(pawn);
+			if (placeHere || !_hubs.ContainsKey(slot))
+				_hubs[slot] = new Hub { Feet = pawn.Position, Yaw = pawn.EyeAngles.Y };
+			_noAutoMenu.Remove(slot);
+		}
+		_page[slot] = page;
+		var hub = _hubs.TryGetValue(slot, out var h0) ? h0 : new Hub { Feet = pawn.Position, Yaw = pawn.EyeAngles.Y };
+		Vector3 anchor = popup ? pawn.Position + new Vector3(0, 0, 64) : hub.Feet + new Vector3(0, 0, 64);
+		float yaw = popup ? pawn.EyeAngles.Y : hub.Yaw;
+
+		var routes = RouteStore.Names(map).Select(n => (n, RouteStore.Info(map, n))).ToList();
+		string status = "";
+		List<MenuItem> items;
+		switch (page) {
+			case "routes": items = MenuPages.Routes(routes); status = "Shoot a route to practice it with the ghost"; break;
+			case "routes_del": items = MenuPages.RoutesDelete(routes); status = "Shoot the route you want to delete"; break;
+			case "settings": items = MenuPages.Settings(); status = "Settings"; break;
+			case "attempt": items = MenuPages.Attempt(_attempts.TryGetValue(slot, out var at) ? at.DurationMs / 1000.0 : 0); status = "Happy with this run?"; break;
+			case "spots": items = MenuPages.Spots(); status = "The spot is the place where you stand now"; break;
+			default: items = MenuPages.Main(); break;
+		}
+		Begin(c, input => new MenuDrill(c, input, LevelOf(slot), items, status, l => _levels[slot] = l, id => OnToggle(id), id => OnMenuSelect(c, slot, id), anchor, yaw));
 	}
+
+	private string? OnToggle(string id) {
+		switch (id) {
+			case "tg_head": TrainerConfig.FlickHeadOnly = !TrainerConfig.FlickHeadOnly; return MenuPages.HeadLabel();
+			case "tg_pool":
+				TrainerConfig.AutoSpawn = !TrainerConfig.AutoSpawn;
+				if (TrainerConfig.AutoSpawn) { BotPool.GuardClear(); BotPool.ResetAuto(); }
+				return TrainerConfig.AutoSpawn ? "Automatic bots: ON" : "Automatic bots: OFF";
+		}
+		return null;
+	}
+
+	private void ReopenPage(CCitadelPlayerController c, int slot, string page, bool placeHere = false, int delayMs = 450) =>
+		Timer.Once(delayMs.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenPage(c, page, placeHere); });
 
 	private CBaseEntity? _warmBody;
 
@@ -511,47 +549,121 @@ public class TrainerPlugin : DeadworksPluginBase {
 
 	private void OnMenuSelect(CCitadelPlayerController c, int slot, string id) {
 		var lvl = LevelOf(slot);
+		string map = Server.MapName;
 		switch (id) {
-			case "p_single": GoToArenaThen(c, slot, () => StartParry(c, ParryMode.Single, 10, lvl)); break;
-			case "p_multi": GoToArenaThen(c, slot, () => StartParry(c, ParryMode.Multi, 10, lvl)); break;
-			case "p_burst": GoToArenaThen(c, slot, () => StartParry(c, ParryMode.Burst, 4, lvl)); break;
-			case "f_flick": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Flick, 0, lvl)); break;
-			case "f_switch": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Switch, 0, lvl)); break;
-			case "f_long": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Long, 0, lvl), longRange: true); break;
-			case "t_strafe": GoToArenaThen(c, slot, () => StartTrack(c, false, 0, lvl)); break;
-			case "t_random": GoToArenaThen(c, slot, () => StartTrack(c, true, 0, lvl)); break;
-			case "o_reaction": GoToArenaThen(c, slot, () => StartReaction(c, 0, lvl)); break;
-			case "o_deny": GoToArenaThen(c, slot, () => StartOrb(c, OrbMode.Deny, 0, lvl)); break;
-			case "o_lasthit": GoToArenaThen(c, slot, () => StartOrb(c, OrbMode.LastHit, 0, lvl)); break;
-			case "o_routes": StartRouteFromMenu(c, slot, null); break;
-			case "sp_arena":
-			case "sp_long":
-			case "sp_reset": SetSpot(c, slot, id); break;
-			default: CloseMenu(c); break;
+			case "p_single": GoToArenaThen(c, slot, () => StartParry(c, ParryMode.Single, 10, lvl)); return;
+			case "p_multi": GoToArenaThen(c, slot, () => StartParry(c, ParryMode.Multi, 10, lvl)); return;
+			case "p_burst": GoToArenaThen(c, slot, () => StartParry(c, ParryMode.Burst, 4, lvl)); return;
+			case "f_flick": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Flick, 0, lvl)); return;
+			case "f_switch": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Switch, 0, lvl)); return;
+			case "f_long": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Long, 0, lvl), longRange: true); return;
+			case "t_strafe": GoToArenaThen(c, slot, () => StartTrack(c, false, 0, lvl)); return;
+			case "t_random": GoToArenaThen(c, slot, () => StartTrack(c, true, 0, lvl)); return;
+			case "o_reaction": GoToArenaThen(c, slot, () => StartReaction(c, 0, lvl)); return;
+
+			case "pg_main": ReopenPage(c, slot, "main"); return;
+			case "pg_routes": ReopenPage(c, slot, "routes"); return;
+			case "pg_routes_del": ReopenPage(c, slot, "routes_del"); return;
+			case "pg_settings": ReopenPage(c, slot, "settings"); return;
+
+			case "rec_new": StartRecording(c, slot, RouteStore.NextName(map), null); return;
+			case "att_save": {
+				if (_attempts.Remove(slot, out var att)) {
+					RouteStore.Put(map, att.Name, att.Points);
+					Chat.PrintToChat(c, $"[Training] Route '{att.Name}' saved. Pick it in the list to practice it with the ghost.");
+				}
+				ReturnToHubThen(c, slot, "routes");
+				return;
+			}
+			case "att_redo": {
+				if (_attempts.Remove(slot, out var old)) StartRecording(c, slot, old.Name, old);
+				return;
+			}
+			case "att_discard":
+				_attempts.Remove(slot);
+				ReturnToHubThen(c, slot, "routes");
+				return;
+
+			case "sp_arena": case "sp_long_me": case "sp_long_target": case "sp_reset": SetSpot(c, slot, id); return;
+			case "off_popup": ReturnToHubThen(c, slot, "main"); return;
 		}
+		if (id.StartsWith("rt:")) { StartRouteFromMenu(c, slot, id[3..]); return; }
+		if (id.StartsWith("del:")) {
+			RouteStore.Delete(map, id[4..]);
+			Chat.PrintToChat(c, $"[Training] Route '{id[4..]}' deleted.");
+			ReopenPage(c, slot, "routes_del");
+			return;
+		}
+		CloseMenu(c);
 	}
 
-	/// <summary>Menu entries to choose training spots: the spot is where you stood when the menu was opened (!train opens it where you are).</summary>
+	/// <summary>Teleport back to the menu spot and show a page there.</summary>
+	private void ReturnToHubThen(CCitadelPlayerController c, int slot, string page) {
+		var pawn = c.GetHeroPawn();
+		if (pawn != null && pawn.IsAlive && _hubs.TryGetValue(slot, out var hub))
+			try { pawn.TeleportWithView(hub.Feet + new Vector3(0, 0, 8), new Vector3(0f, hub.Yaw, 0f)); } catch { }
+		ReopenPage(c, slot, page, false, 900);
+	}
+
+	/// <summary>Start recording a route from where the player stands (from the menu: no typing; the PARRY key ends the run).</summary>
+	private void StartRecording(CCitadelPlayerController c, int slot, string name, RouteRecorder? previous) {
+		var pawn = c.GetHeroPawn();
+		if (pawn == null || !pawn.IsAlive) return;
+		Vector3 startPos = previous?.StartPos ?? pawn.Position;
+		float startYaw = previous?.StartYaw ?? pawn.EyeAngles.Y;
+		if (previous != null) { try { pawn.TeleportWithView(startPos, new Vector3(0f, startYaw, 0f)); } catch { } }
+		var rec = new RouteRecorder { Name = name, StartPos = startPos, StartYaw = startYaw };
+		Timer.Once((previous != null ? 900 : 450).Milliseconds(), () => {
+			if (_drills.ContainsKey(slot)) return;
+			Begin(c, input => {
+				var d = new RecordDrill(c, input, LevelOf(slot), rec);
+				d.OnFinished = () => {
+					if (rec.Points.Count < 3) { Chat.PrintToChat(c, "[Training] That was too short - nothing recorded."); ReturnToHubThen(c, slot, "routes"); return; }
+					_attempts[slot] = rec;
+					Timer.Once(500.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenPage(c, "attempt"); });
+				};
+				return d;
+			});
+		});
+	}
+
+	/// <summary>Spot popup (opened with !spot where you stand): the spot is your current position and view direction.</summary>
 	private void SetSpot(CCitadelPlayerController c, int slot, string id) {
 		string map = Server.MapName;
-		if (!_hubs.TryGetValue(slot, out var hub)) { Timer.Once(500.Milliseconds(), () => OpenMenu(c, true)); return; }
-		var pos = hub.Feet + new Vector3(0, 0, 8);
+		var pawn = c.GetHeroPawn();
+		if (pawn == null || !pawn.IsAlive) return;
+		var pos = pawn.Position + new Vector3(0, 0, 8);
+		float yaw = pawn.EyeAngles.Y;
 		switch (id) {
 			case "sp_arena":
-				Arena.SetWithYaw(map, pos, hub.Yaw);
-				Chat.PrintToChat(c, "[Training] Training spot saved: all exercises now start where this menu stands, looking the way you looked.");
+				Arena.SetWithYaw(map, pos, yaw);
+				Chat.PrintToChat(c, "[Training] Training spot saved: all exercises now start here, looking the way you look now.");
 				break;
-			case "sp_long":
-				Arena.SetWithYaw(map + "#long", pos, hub.Yaw);
-				Chat.PrintToChat(c, "[Training] Long-range spot saved: Long Range now starts here and the targets appear in the direction you were looking.");
+			case "sp_long_me":
+				Arena.SetWithYaw(map + "#long", pos, yaw);
+				Chat.PrintToChat(c, "[Training] Long Range: your standing spot saved. Now go to where the bots should appear and open !spot again.");
+				break;
+			case "sp_long_target":
+				Arena.Set(map + "#longtarget", pos);
+				Chat.PrintToChat(c, "[Training] Long Range: the bots will appear around here.");
 				break;
 			default:
-				Arena.Reset(map); Arena.Reset(map + "#long"); Arena.Reset(map + "#auto"); Arena.Reset(map + "#autolong");
+				Arena.Reset(map); Arena.Reset(map + "#long"); Arena.Reset(map + "#longtarget"); Arena.Reset(map + "#auto"); Arena.Reset(map + "#autolong");
 				_autoArena.Remove(map); _scanned.Remove(map);
-				Chat.PrintToChat(c, "[Training] Spots reset.");
+				Chat.PrintToChat(c, "[Training] All spots reset.");
 				break;
 		}
-		Timer.Once(500.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenMenu(c, false); });
+		// Long Range: stay here so the second spot can be set right away; otherwise go back to the menu.
+		if (id == "sp_long_me") ReopenPage(c, slot, "spots", false, 700);
+		else ReturnToHubThen(c, slot, "main");
+	}
+
+	[Command("spot", Description = "Open the spot menu where you stand (set the training / long-range spots by shooting an entry)")]
+	public void CmdSpot(CCitadelPlayerController caller) {
+		int slot = caller.EntityIndex - 1;
+		if (!_hubs.ContainsKey(slot)) { var pw = caller.GetHeroPawn(); if (pw != null) _hubs[slot] = new Hub { Feet = pw.Position, Yaw = pw.EyeAngles.Y }; }
+		StopDrill(slot);
+		Timer.Once(300.Milliseconds(), () => OpenPage(caller, "spots"));
 	}
 
 	private bool StartParry(CCitadelPlayerController c, ParryMode mode, int rounds, Level lvl) =>
@@ -855,8 +967,8 @@ public class TrainerPlugin : DeadworksPluginBase {
 		var names = RouteStore.Names(map);
 		if (name == null) name = _routeSel.TryGetValue(slot, out var s) && names.Contains(s) ? s : names.FirstOrDefault();
 		if (name == null) {
-			Chat.PrintToChat(c, "[Training] No routes yet. Record one: walk to the start, type !troute rec <name>, walk your route, type !troute stop. Then pick Routes again.");
-			Timer.Once(500.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) OpenMenu(c, false); });
+			Chat.PrintToChat(c, "[Training] No routes yet - use + RECORD NEW ROUTE in the Routes menu.");
+			ReopenPage(c, slot, "routes");
 			return;
 		}
 		var pts = RouteStore.Get(map, name);

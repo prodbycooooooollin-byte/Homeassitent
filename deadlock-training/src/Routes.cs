@@ -65,6 +65,20 @@ static class RouteStore {
 		return ok;
 	}
 
+	/// <summary>"54.2 s" or "54.2 s  best 51.0 s" for the route list.</summary>
+	public static string Info(string map, string name) {
+		var pts = Get(map, name);
+		string dur = pts != null && pts.Count > 0 ? $"{pts[^1].T / 1000:0.0} s" : "?";
+		var best = BestTime(map, name);
+		return best.HasValue ? $"{dur}  (best {best.Value / 1000:0.0})" : dur;
+	}
+
+	public static string NextName(string map) {
+		var names = Names(map);
+		for (int i = 1; i < 100; i++) if (!names.Contains($"route-{i}")) return $"route-{i}";
+		return "route-x";
+	}
+
 	public static double? BestTime(string map, string name) { Ensure(); return _d.Best.TryGetValue(Key(map, name), out var v) ? v : null; }
 
 	public static bool SubmitTime(string map, string name, double ms) {
@@ -223,5 +237,47 @@ sealed class RouteDrill : Drill {
 		try { if (_ghost != null && _ghost.IsValid) _ghost.Remove(); } catch { }
 		_ghost = null;
 		base.Stop();
+	}
+}
+
+
+/// <summary>Records the player's run. Press the PARRY key to finish. The plugin then shows the "save / try again / discard" menu.</summary>
+sealed class RecordDrill : Drill {
+	public readonly RouteRecorder Rec;
+	private readonly int _edges0;
+	private double _t0 = -1;
+	private (string, byte, byte, byte)[]? _hud;
+	private double _hudAt;
+
+	public override string Name => "Record route";
+	public override bool ReturnsToMenu => false;
+
+	public RecordDrill(CCitadelPlayerController ctl, PlayerInput input, Level lvl, RouteRecorder rec) : base(ctl, input, lvl) {
+		Rec = rec;
+		_edges0 = input.ParryEdges;
+	}
+
+	protected override void Begin(CCitadelPlayerPawn pawn, double nowMs) { }
+
+	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) =>
+		Say($"[Route] RECORDING '{Rec.Name}' - the start is here. Run your route. At the end, press your PARRY key to finish.");
+
+	protected override void Tick(CCitadelPlayerPawn pawn, double nowMs) {
+		Rec.Update(pawn.Position, nowMs);
+		if (_t0 < 0) _t0 = nowMs;
+		if (In.ParryEdges > _edges0 && nowMs - _t0 > 1500) {
+			Rec.Finish(pawn.Position, nowMs);
+			Finished = true;
+			return;
+		}
+		if (nowMs >= _hudAt || _hud == null) {
+			_hudAt = nowMs + 200;
+			_hud = new (string, byte, byte, byte)[] {
+				($"RECORDING  {Rec.Name}", 255, 90, 90),
+				($"Time   {(nowMs - _t0) / 1000:0.0} s", 255, 255, 255),
+				("Press PARRY at the end point", 255, 200, 120),
+			};
+		}
+		SetHud(pawn, _hud);
 	}
 }

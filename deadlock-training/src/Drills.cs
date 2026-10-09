@@ -22,6 +22,10 @@ abstract class Drill {
 	protected bool RealBots { get; private set; }
 
 	public bool Finished { get; set; }
+	/// <summary>Called once by the plugin when the exercise has finished (before it is removed).</summary>
+	public Action? OnFinished { get; set; }
+	/// <summary>After finishing, bring the player back to the menu (false for exercises that open their own follow-up menu).</summary>
+	public virtual bool ReturnsToMenu => true;
 	public abstract string Name { get; }
 
 	protected Drill(CCitadelPlayerController ctl, PlayerInput input, Level lvl) {
@@ -299,15 +303,16 @@ abstract class Drill {
 // Menu: permanent in the world, in categories. Shoot an entry to choose it. Stays until "CLOSE MENU".
 // ---------------------------------------------------------------------------------------------------------------------
 sealed class MenuDrill : Drill {
-	private sealed record Item(string Id, string Label, float Yaw, float Pitch, float Size, bool Selectable, byte R, byte G, byte B);
-
 	private readonly Action<string> _onSelect;
 	private readonly Action<Level> _onLevel;
+	private readonly Func<string, string?> _onToggle;
 	private readonly Vector3 _anchorEye;
 	private readonly float _anchorYaw;
+	private readonly string _statusBase;
+	private readonly List<MenuItem> _layout;
 	private Level _level;
 
-	private readonly List<(Item Item, CPointWorldText? Text, Vector3 Pos)> _items = new();
+	private readonly List<(MenuItem Item, CPointWorldText? Text, Vector3 Pos)> _items = new();
 	private CPointWorldText? _status;
 	private const float Dist = 430f;
 	private const float HitDeg = 3.4f;
@@ -317,53 +322,23 @@ sealed class MenuDrill : Drill {
 
 	public override string Name => "Menu";
 
-	public MenuDrill(CCitadelPlayerController ctl, PlayerInput input, Level level, Action<Level> onLevel, Action<string> onSelect,
-		Vector3 anchorEye, float anchorYaw) : base(ctl, input, level) {
+	public MenuDrill(CCitadelPlayerController ctl, PlayerInput input, Level level, List<MenuItem> layout, string status,
+		Action<Level> onLevel, Func<string, string?> onToggle, Action<string> onSelect, Vector3 anchorEye, float anchorYaw) : base(ctl, input, level) {
 		_level = level;
+		_layout = layout;
+		_statusBase = status;
 		_onLevel = onLevel;
+		_onToggle = onToggle;
 		_onSelect = onSelect;
 		_anchorEye = anchorEye;
 		_anchorYaw = anchorYaw;
-	}
-
-	private static string HeadLabel() => TrainerConfig.FlickHeadOnly ? "Head only: ON" : "Head only: OFF";
-
-	private static IEnumerable<Item> Layout() {
-		yield return new("title", "DEADLOCK TRAINER", 0f, -24f, 15f, false, 255, 200, 0);
-
-		// Four columns: PARRY | FLICK | TRACK | OTHER
-		yield return new("hdr_parry", "PARRY", -33f, -13f, 12f, false, 255, 140, 40);
-		yield return new("p_single", "Single", -33f, -8f, 9f, true, 255, 255, 255);
-		yield return new("p_multi", "Multiple", -33f, -3.5f, 9f, true, 255, 255, 255);
-		yield return new("p_burst", "Burst", -33f, 1f, 9f, true, 255, 255, 255);
-
-		yield return new("hdr_flick", "FLICK", -11f, -13f, 12f, false, 255, 140, 40);
-		yield return new("f_flick", "Flick", -11f, -8f, 9f, true, 255, 255, 255);
-		yield return new("f_switch", "Switch", -11f, -3.5f, 9f, true, 255, 255, 255);
-		yield return new("f_long", "Long Range", -11f, 1f, 9f, true, 255, 255, 255);
-		yield return new("f_head", HeadLabel(), -11f, 5.2f, 7f, true, 255, 190, 120);
-
-		yield return new("hdr_track", "TRACK", 11f, -13f, 12f, false, 255, 140, 40);
-		yield return new("t_strafe", "Strafe", 11f, -8f, 9f, true, 255, 255, 255);
-		yield return new("t_random", "Random", 11f, -3.5f, 9f, true, 255, 255, 255);
-
-		yield return new("hdr_other", "OTHER", 33f, -13f, 12f, false, 255, 140, 40);
-		yield return new("o_reaction", "Reaction", 33f, -8f, 9f, true, 255, 255, 255);
-		yield return new("o_deny", "Deny Souls", 33f, -3.5f, 9f, true, 255, 255, 255);
-		yield return new("o_routes", "Routes", 33f, 1f, 9f, true, 255, 255, 255);
-
-		yield return new("lv_easy", "EASY", -12f, 9f, 9f, true, 255, 255, 255);
-		yield return new("lv_normal", "NORMAL", 0f, 9f, 9f, true, 255, 255, 255);
-		yield return new("lv_hard", "HARD", 12f, 9f, 9f, true, 255, 255, 255);
-
-		yield return new("off", "CLOSE MENU", 0f, 14.5f, 6.5f, true, 170, 170, 170);
 	}
 
 	private static string LevelId(Level l) => l switch { Level.Easy => "lv_easy", Level.Hard => "lv_hard", _ => "lv_normal" };
 
 	protected override void Begin(CCitadelPlayerPawn pawn, double nowMs) {
 		var eye = Aim.Eye(pawn);
-		foreach (var it in Layout()) {
+		foreach (var it in _layout) {
 			var pos = _anchorEye + Aim.Forward(it.Pitch, _anchorYaw + it.Yaw) * Dist;
 			var t = SpawnText(it.Label, pos, eye, it.Size, it.R, it.G, it.B);
 			_items.Add((it, t, pos));
@@ -376,9 +351,9 @@ sealed class MenuDrill : Drill {
 	private Vector3 StatusPos() => _anchorEye + Aim.Forward(StatusPitch, _anchorYaw) * Dist;
 
 	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) =>
-		Say("[Training] Menu is up: aim at an exercise (it turns yellow) and shoot it. Choose the difficulty at the bottom. (!train off closes it)");
+		Say("[Training] Menu: aim at an entry (it turns yellow) and shoot it.");
 
-	private string StatusText() => $"Difficulty: {LevelParse.Label(_level).ToUpperInvariant()}  -  shoot an exercise to start";
+	private string StatusText() => _statusBase.Length > 0 ? _statusBase : $"Difficulty: {LevelParse.Label(_level).ToUpperInvariant()}  -  shoot an exercise to start";
 
 	private void RefreshColors(int hover) {
 		string lv = LevelId(_level);
@@ -422,10 +397,9 @@ sealed class MenuDrill : Drill {
 			RefreshColors(_hover);
 			return;
 		}
-		if (id == "f_head") {
-			TrainerConfig.FlickHeadOnly = !TrainerConfig.FlickHeadOnly;
-			for (int i = 0; i < _items.Count; i++) if (_items[i].Item.Id == "f_head") _items[i].Text?.SetMessage(HeadLabel());
-			Say($"[Training] Flick / Long Range: {(TrainerConfig.FlickHeadOnly ? "only HEADSHOTS count" : "any hit counts")}.");
+		if (id.StartsWith("tg_")) {
+			var label = _onToggle(id);
+			if (label != null) _items[chosen].Text?.SetMessage(label);
 			return;
 		}
 		Finished = true;
