@@ -572,6 +572,9 @@ public class TrainerPlugin : DeadworksPluginBase {
 		new[] { "citadel_create_unit hero_wraith 3" },
 		new[] { "citadel_bot_practice_opponent hero_wraith", "citadel_spawn_practice_bots_count 1", "citadel_spawn_practice_bots 1" },
 		new[] { "citadel_spawn_all_heroes_in_a_line" },
+		new[] { "citadel_spawn_practice_bots 0", "citadel_spawn_practice_bots_count 1", "citadel_spawn_practice_bots 1" },
+		new[] { "spawn_hero_testing_controller" },
+		new[] { "citadel_spawn_practice_bots 0", "citadel_bot_practice_opponent hero_wraith", "citadel_bot_practice_teammate hero_wraith", "citadel_spawn_practice_bots_count 1", "citadel_spawn_practice_bots 1" },
 	};
 
 	/// <summary>Diagnostic: run one candidate bot-spawn command (with cheats), capture its output, report what spawned.</summary>
