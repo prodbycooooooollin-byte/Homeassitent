@@ -195,6 +195,8 @@ public class TrainerPlugin : DeadworksPluginBase {
 		}
 		inp.AttackHeld = attackHeld;
 		if ((e.HeldButtons & InputButton.Reload) != 0 && (e.ChangedButtons & InputButton.Reload) != 0) inp.ReloadEdges++;
+		const InputButton items = InputButton.Item1 | InputButton.Item2 | InputButton.Item3 | InputButton.Item4 | InputButton.Item5;
+		if ((e.HeldButtons & items & e.ChangedButtons) != 0) { inp.LastItemPressMs = Clock.Ms; inp.ItemPresses++; }
 
 		if (_parryMask != 0) {
 			bool held = ((ulong)e.HeldButtons & _parryMask) != 0;
@@ -381,6 +383,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 		switch (page) {
 			case "routes": items = MenuPages.Routes(routes); status = "Shoot a route to practice it with the ghost"; break;
 			case "routes_del": items = MenuPages.RoutesDelete(routes); status = "Shoot the route you want to delete"; break;
+			case "scen": items = MenuPages.Scenarios(); status = "Scenarios - the bots fight back"; break;
 			case "settings": items = MenuPages.Settings(); status = "Settings"; break;
 			case "attempt": items = MenuPages.Attempt(_attempts.TryGetValue(slot, out var at) ? at.DurationMs / 1000.0 : 0); status = "Happy with this run?"; break;
 			case "spots": items = MenuPages.Spots(); status = "The spot is the place where you stand now"; break;
@@ -560,6 +563,10 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "f_long": GoToArenaThen(c, slot, () => StartFlick(c, FlickMode.Long, 0, lvl), longRange: true); return;
 			case "t_strafe": GoToArenaThen(c, slot, () => StartTrack(c, false, 0, lvl)); return;
 			case "t_random": GoToArenaThen(c, slot, () => StartTrack(c, true, 0, lvl)); return;
+			case "c_counter": GoToArenaThen(c, slot, () => Begin(c, input => new CounterspellDrill(c, input, lvl, 6))); return;
+			case "sc_fof": GoToArenaThen(c, slot, () => Begin(c, input => new ScenarioDrill(c, input, lvl, ScenarioMode.FightOrFlight, 6))); return;
+			case "sc_duel": GoToArenaThen(c, slot, () => Begin(c, input => new ScenarioDrill(c, input, lvl, ScenarioMode.Duel, 4))); return;
+			case "pg_scen": ReopenPage(c, slot, "scen"); return;
 			case "o_reaction": GoToArenaThen(c, slot, () => StartReaction(c, 0, lvl)); return;
 
 			case "pg_main": ReopenPage(c, slot, "main"); return;

@@ -134,3 +134,10 @@ Shoot an entry to select it. Main menu: PARRY, AIM (Flick / Switch / Long Range,
 - **Settings**: head-only and automatic bots toggles.
 
 Removed from the menu: Deny Souls and Last Hit (they used fake text orbs; real soul orbs are not supported yet).
+
+## Scenarios & Counterspell (menu)
+- **MORE > Scenarios > Fight or Flight**: bots fight back. Either kill the lone weakened enemy before the group arrives, or run to the safe zone behind you.
+- **MORE > Scenarios > Duel 1v1**: a real fighting bot; win within 45 s.
+- **PARRY > Counterspell**: an enemy hero casts an ability at you; counter it with your item (needs the Counterspell item; the plugin tries to give it).
+- Routes: during the countdown you are frozen; hold W and you run instantly at GO, in sync with the ghost.
+- Heavy melee is now ~65% of parry swings.

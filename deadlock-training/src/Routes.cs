@@ -164,9 +164,13 @@ sealed class RouteDrill : Drill {
 		var best = RouteStore.BestTime(_map, _name);
 		_goMs = nowMs + 4000;
 		_lastMs = nowMs;
+		Freeze(pawn, true);
 		Say($"[Route '{_name}'] recorded run {_pts[^1].T / 1000:0.0} s." + (best.HasValue ? $" Your best: {best.Value / 1000:0.0} s." : "") +
 			" The ghost starts in 4 s. You need not follow it exactly - find faster lines! PARRY or R restarts. Abort: !tstop");
 	}
+
+	/// <summary>Hold the player still during the countdown (movement keys can stay pressed): everybody starts at the same instant as the ghost.</summary>
+	private void Freeze(CCitadelPlayerPawn pawn, bool on) { try { pawn.SetMoveType(on ? MoveType.None : MoveType.Walk); } catch { } }
 
 	private float StartYaw => _pts.Count > 3 ? Aim.YawTo(_pts[0].P, _pts[3].P) : 0f;
 
@@ -174,6 +178,7 @@ sealed class RouteDrill : Drill {
 		try { pawn.TeleportWithView(_pts[0].P + new Vector3(0, 0, 8), new Vector3(0f, StartYaw, 0f)); } catch { }
 		_go = false; _done = false; _next = 0; _progress = 0;
 		_goMs = nowMs + 3000;
+		Freeze(pawn, true);
 		_run = new RouteRecorder();
 		_lastSplit = "";
 		Kill(_marker); _marker = null;
@@ -208,7 +213,7 @@ sealed class RouteDrill : Drill {
 			if (_count == null) _count = SpawnText(c, cpos, eye, 26f, 255, 220, 60);
 			else _count.SetMessage(c);
 			if (_count != null) Face(_count, cpos, eye);
-			if (left <= 0) { _go = true; Kill(_count); _count = null; _run = new RouteRecorder(); }
+			if (left <= 0) { _go = true; Kill(_count); _count = null; _run = new RouteRecorder(); Freeze(pawn, false); }
 		}
 		double ms = _go ? nowMs - _goMs : 0;
 		var gp = GhostAt(ms, out var gyaw);
@@ -276,6 +281,7 @@ sealed class RouteDrill : Drill {
 	}
 
 	public override void Stop() {
+		try { PlayerPawn?.SetMoveType(MoveType.Walk); } catch { }
 		Kill(_marker); Kill(_count);
 		try { if (_ghost != null && _ghost.IsValid) _ghost.Remove(); } catch { }
 		_ghost = null;

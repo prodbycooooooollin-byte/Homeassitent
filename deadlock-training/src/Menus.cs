@@ -18,6 +18,7 @@ static class MenuPages {
 		Title("DEADLOCK TRAINER"),
 		Hdr("hp", "PARRY", -33f),
 		Btn("p_single", "Single", -33f, -8f), Btn("p_multi", "Multiple", -33f, -3.5f), Btn("p_burst", "Burst", -33f, 1f),
+		Btn("c_counter", "Counterspell", -33f, 5.2f, 8f, 140, 200, 255),
 		Hdr("hf", "AIM", -11f),
 		Btn("f_flick", "Flick", -11f, -8f), Btn("f_switch", "Switch", -11f, -3.5f), Btn("f_long", "Long Range", -11f, 1f),
 		Btn("tg_head", HeadLabel(), -11f, 5.2f, 7f, 255, 190, 120),
@@ -25,9 +26,17 @@ static class MenuPages {
 		Btn("t_strafe", "Strafe", 11f, -8f), Btn("t_random", "Random", 11f, -3.5f),
 		Hdr("ho", "MORE", 33f),
 		Btn("o_reaction", "Reaction", 33f, -8f), Btn("pg_routes", "Routes", 33f, -3.5f),
+		Btn("pg_scen", "Scenarios", 33f, 1f, 9f, 255, 160, 160),
 		Btn("lv_easy", "EASY", -12f, 9f), Btn("lv_normal", "NORMAL", 0f, 9f), Btn("lv_hard", "HARD", 12f, 9f),
 		Btn("pg_settings", "SETTINGS", -10f, 14.5f, 6.5f, 170, 170, 170),
 		Btn("off", "CLOSE MENU", 10f, 14.5f, 6.5f, 170, 170, 170),
+	};
+
+	public static List<MenuItem> Scenarios() => new() {
+		Title("SCENARIOS"),
+		Btn("sc_fof", "Fight or Flight", 0f, -8f, 10f),
+		Btn("sc_duel", "Duel 1v1", 0f, -2f, 10f),
+		Btn("pg_main", "BACK", 0f, 16.5f, 6.5f, 170, 170, 170),
 	};
 
 	public static List<MenuItem> Routes(List<(string Name, string Info)> routes) {

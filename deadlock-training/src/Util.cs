@@ -78,6 +78,9 @@ sealed class PlayerInput {
 	public int ParryEdges;
 	/// <summary>Presses of the RELOAD key (R); with unlimited ammo it is free to use as a control key (route recording).</summary>
 	public int ReloadEdges;
+	/// <summary>Last press of an item key (Counterspell etc.), Clock.Ms.</summary>
+	public double LastItemPressMs = -1;
+	public int ItemPresses;
 	public int KeyEdges => ParryEdges + ReloadEdges;
 	public double LastParryEdgeMs = -1;
 	/// <summary>Zeitpunkte der letzten Parry-Ausloesungen (steigende Flanken), aelteste zuerst.</summary>

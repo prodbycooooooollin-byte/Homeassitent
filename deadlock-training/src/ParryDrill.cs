@@ -213,7 +213,7 @@ sealed class ParryDrill : Drill {
 		_sampled = false;
 		_activeAtStrike = false;
 
-		_heavy = Rng.NextDouble() < 0.4; // random mix of light and heavy (charged) melee, never a fixed pattern
+		_heavy = Rng.NextDouble() < 0.65; // random mix of light and heavy (charged) melee, never a fixed pattern
 		if (_realRound) {
 			double tg = Tuning.ParryTelegraphMs(Lvl);
 			_triggerAt = nowMs + Math.Max(tg, 200) + (_heavy ? 250 : 0);

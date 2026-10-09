@@ -212,6 +212,8 @@ static class BotPool {
 		return list;
 	}
 
+	/// <summary>Bots an exercise controls itself (fights): the pool must not refill or revive them.</summary>
+	public static readonly HashSet<uint> Exempt = new();
 	public static bool Contains(uint handle) => _all.Contains(handle);
 	public static Vector3 ParkPos => _park;
 
@@ -299,6 +301,7 @@ static class BotPool {
 			try {
 				var e = CBaseEntity.FromHandle(h);
 				if (e == null || !e.IsValid) { _all.Remove(h); _free.Remove(h); continue; }
+				if (Exempt.Contains(h)) continue;
 				if (e.Health <= 0 || !e.IsAlive) {
 					if (nowMs - _lastReviveAt > 1500) {
 						_lastReviveAt = nowMs;
