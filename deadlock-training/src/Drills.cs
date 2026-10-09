@@ -292,6 +292,11 @@ abstract class Drill {
 		}
 	}
 
+	/// <summary>Remove the HUD lines (they are created again by the next SetHud).</summary>
+	protected void ClearHud() {
+		for (int i = 0; i < _hud.Count; i++) { Kill(_hud[i]); _hud[i] = null; _hudLast[i] = ""; }
+	}
+
 	protected void Kill(CPointWorldText? t) {
 		if (t == null) return;
 		_texts.Remove(t);

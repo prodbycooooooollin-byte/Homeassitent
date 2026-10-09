@@ -247,7 +247,7 @@ sealed class ScenarioDrill : Drill {
 				(_status, hit ? (byte)255 : (byte)200, hit ? (byte)90 : (byte)200, hit ? (byte)90 : (byte)200),
 			};
 		}
-		SetHud(pawn, _hud);
+		if (_ph == Ph.Read) ClearHud(); else SetHud(pawn, _hud);
 	}
 
 	private ScenKind NextKind() {
@@ -367,28 +367,45 @@ sealed class ScenarioDrill : Drill {
 	private readonly List<CPointWorldText> _read = new();
 	private Vector3 _readBase;
 
-	/// <summary>The situation as big text in front of you. You are held still and can read as long as you like; one shot starts the round.</summary>
+	private static List<string> Wrap(string text, int width) {
+		var lines = new List<string>();
+		var cur = "";
+		foreach (var w in text.Split(' ', StringSplitOptions.RemoveEmptyEntries)) {
+			if (cur.Length + w.Length + 1 > width && cur.Length > 0) { lines.Add(cur); cur = w; }
+			else cur = cur.Length == 0 ? w : cur + " " + w;
+		}
+		if (cur.Length > 0) lines.Add(cur);
+		return lines;
+	}
+
+	/// <summary>The situation as readable text well in front of you (the HUD is hidden meanwhile). You are held still, read as long as you like, one shot starts the round.</summary>
 	private void ShowBriefing(CCitadelPlayerPawn pawn) {
 		ClearBriefing();
 		while (In.Shots.Count > 0) In.Shots.Dequeue();
 		try { pawn.SetMoveType(MoveType.None); } catch { }
 		var eye = Aim.Eye(pawn);
 		float yaw = pawn.EyeAngles.Y;
-		_readBase = eye + Aim.Forward(0f, yaw) * 150f;
-		var lines = new List<(string, float, byte, byte, byte)> {
-			($"SCENARIO {_round}/{_rounds}", 7f, 255, 220, 60),
-			(_b1, 4.2f, 255, 255, 255),
-			(_b2, 4.2f, 150, 210, 255),
-			(FleeKind ? "Think: can you win this? If not, get away." : "Think: is this a fight you should take?", 4.2f, 255, 200, 120),
-			("FIGHT = kill them     RETREAT = far away + out of sight", 4.2f, 255, 200, 120),
-			(">>>  SHOOT TO START  <<<", 6f, 120, 255, 140),
-		};
-		float pitch = -12f;
-		foreach (var (text, size, r, g, b) in lines) {
-			var pos = eye + Aim.Forward(pitch, yaw) * 150f;
-			var t = SpawnText(text, pos, eye, size, r, g, b);
-			if (t != null) _read.Add(t);
-			pitch += size >= 6f ? 6.5f : 5.2f;
+		const float dist = 380f;
+
+		var rows = new List<(string Text, float Size, float Step, byte R, byte G, byte B)>();
+		rows.Add(($"SCENARIO {_round}/{_rounds}", 10f, 5.5f, 255, 220, 60));
+		foreach (var l in Wrap(_b1, 52)) rows.Add((l, 6f, 3.4f, 255, 255, 255));
+		rows.Add(("", 6f, 1.6f, 255, 255, 255));
+		foreach (var l in Wrap(_b2, 52)) rows.Add((l, 6f, 3.4f, 150, 210, 255));
+		rows.Add(("", 6f, 1.6f, 255, 255, 255));
+		rows.Add((FleeKind ? "Can you win this? If not, get away." : "Is this a fight you should take?", 6f, 3.4f, 255, 200, 120));
+		rows.Add(("FIGHT = kill them      RETREAT = far away, out of sight", 6f, 5f, 255, 200, 120));
+		rows.Add((">>>  SHOOT TO START  <<<", 8f, 4f, 120, 255, 140));
+
+		float total = rows.Sum(r => r.Step);
+		float pitch = -total / 2f - 2f; // block centred slightly above the crosshair
+		foreach (var r in rows) {
+			if (r.Text.Length > 0) {
+				var pos = eye + Aim.Forward(pitch, yaw) * dist;
+				var t = SpawnText(r.Text, pos, eye, r.Size, r.R, r.G, r.B);
+				if (t != null) _read.Add(t);
+			}
+			pitch += r.Step;
 		}
 	}
 
