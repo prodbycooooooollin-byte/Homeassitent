@@ -604,7 +604,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "pg_scen": ReopenPage(c, slot, "scen"); return;
 			case "sc_start":
 				if (!ScenarioSet.Any()) { Chat.PrintToChat(c, "[Training] Tick at least one scenario first."); ReopenPage(c, slot, "scen"); return; }
-				GoToArenaThen(c, slot, () => Begin(c, input => new ScenarioDrill(c, input, lvl, 8)));
+				{ _fromHub.Add(slot); Timer.Once(600.Milliseconds(), () => { if (!_drills.ContainsKey(slot)) Begin(c, input => new ScenarioDrill(c, input, lvl, 8)); }); }
 				return;
 			case "sc_quiz": _quiz[slot] = new QuizState(); ReopenPage(c, slot, "quiz"); return;
 			case "sc_quiz_end": _quiz.Remove(slot); ReopenPage(c, slot, "scen"); return;

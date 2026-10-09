@@ -8,8 +8,8 @@ sealed record MenuItem(string Id, string Label, float Yaw, float Pitch, float Si
 
 /// <summary>The layouts of all menu pages. Ids: pg_* = go to a page, tg_* = toggle in place, lv_* = difficulty, everything else = an action.</summary>
 static class MenuPages {
-	private static MenuItem Title(string t) => new("title", t, 0f, -24f, 15f, false, 255, 200, 0);
-	private static MenuItem Hdr(string id, string t, float yaw) => new(id, t, yaw, -13f, 12f, false, 255, 140, 40);
+	private static MenuItem Title(string t) => new("title", t, 0f, -25f, 16f, false, 255, 200, 0);
+	private static MenuItem Hdr(string id, string t, float yaw, byte r = 255, byte g = 140, byte b = 40) => new(id, t + "\n- - - - - - -", yaw, -13.5f, 10f, false, r, g, b);
 	private static MenuItem Btn(string id, string t, float yaw, float pitch, float size = 9f, byte r = 255, byte g = 255, byte b = 255, string d = "") => new(id, t, yaw, pitch, size, true, r, g, b, d);
 
 	public static string BotsLabel() => $"Enemy bots: {(BotPool.Target <= 4 ? "normal (7)" : BotPool.Target <= 8 ? "more (11)" : "many (15)")}";
@@ -18,20 +18,20 @@ static class MenuPages {
 
 	public static List<MenuItem> Main() => new() {
 		Title("DEADLOCK TRAINER"),
-		Hdr("hp", "REFLEX", -33f),
+		Hdr("hp", "REFLEX", -33f, 255, 120, 90),
 		Btn("p_single", "Parry", -33f, -8f, d: "Parry ONE melee swing. Heavy and light melee are mixed - heavy is more common."),
 		Btn("p_multi", "Parry x3", -33f, -3.5f, d: "Three bots swing at different times. Parry each one."),
 		Btn("p_burst", "Parry Burst", -33f, 1f, d: "Short bursts of swings in a row."),
 		Btn("c_counter", "Counterspell", -33f, 5.2f, 8f, 140, 200, 255, "A real enemy hero casts an ability at you. Counter it with your item at the right moment."),
-		Hdr("hf", "AIM", -11f),
+		Hdr("hf", "AIM", -11f, 255, 200, 60),
 		Btn("f_flick", "Flick", -11f, -8f, d: "Bots appear around you - flick onto each one."),
 		Btn("f_switch", "Target Switch", -11f, -3.5f, d: "Several bots at once - switch between them fast."),
 		Btn("f_long", "Long Range", -11f, 1f, d: "Bots far away. Needs the long-range spots (!spot)."),
 		Btn("tg_head", HeadLabel(), -11f, 5.2f, 7f, 255, 190, 120, "Only headshots count in the aim exercises."),
-		Hdr("ht", "TRACK", 11f),
+		Hdr("ht", "TRACK", 11f, 110, 200, 255),
 		Btn("t_strafe", "Strafing Target", 11f, -8f, d: "Keep your crosshair on a bot that strafes left and right."),
 		Btn("t_random", "Random Target", 11f, -3.5f, d: "A bot with unpredictable movement."),
-		Hdr("ho", "GAME SENSE", 33f),
+		Hdr("ho", "GAME SENSE", 33f, 150, 255, 150),
 		Btn("o_reaction", "Reaction", 33f, -8f, d: "Shoot as fast as you can when the signal appears."),
 		Btn("pg_scen", "Scenarios", 33f, -3.5f, 9f, 255, 160, 160, "Realistic situations: fight, flee, or play around a missing enemy. Includes a shop quiz."),
 		Btn("pg_routes", "Routes", 33f, 1f, d: "Record a path and race a ghost of yourself."),

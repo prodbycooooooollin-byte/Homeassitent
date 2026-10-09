@@ -141,7 +141,9 @@ sealed class ParryDrill : Drill {
 				_outcomeAt = _outcomeAt < 0 ? now : _outcomeAt;
 				Touch(now);
 			}
-			return HookResult.Stop;
+			// A missed parry really hurts (so you feel it), but you cannot die here.
+			if (e.Entity is { } pl && pl.Health - e.Info.Damage <= 1) e.Info.Damage = 0;
+			return HookResult.Continue;
 		}
 		// Bots should not die.
 		if (ActorOf(e.Entity) is { } bot && bot.Ent is { } be && be.Health - e.Info.Damage <= 50)
@@ -205,6 +207,7 @@ sealed class ParryDrill : Drill {
 		do { _cur = Rng.Next(Actors.Count); } while (Actors.Count > 1 && _cur == _last);
 		_last = _cur;
 
+		try { var pl = PlayerPawn; if (pl != null) pl.Health = pl.MaxHealth; } catch { }
 		_realRound = RealBots && !_realBroken && Actors[_cur].BotReady;
 		_roundStart = nowMs;
 		_evParry = _evHit = _evMelee = _evStart = _firstEv = _outcomeAt = -1;
@@ -275,9 +278,11 @@ sealed class ParryDrill : Drill {
 		_noAttackStreak = 0;
 
 		string head = $"[Parry {_done + 1}/{_total} {(_heavy ? "HEAVY" : "light")}]";
-		bool parried = _evParry >= 0 || (_evHit < 0);
 		double tHit = _evParry >= 0 ? _evParry : _evHit >= 0 ? _evHit : _evMelee >= 0 ? _evMelee : _evStart + 300;
 		bool derived = _evParry < 0 && _evHit < 0;
+		// Neither a ParrySuccess nor a damage event arrived: judge by your own parry press near the swing (not "no hit = parried").
+		bool pressedNear = In.ParryEdgeTimes.Any(t => t >= tHit - 450 && t <= tHit + 40);
+		bool parried = _evParry >= 0 || (_evHit < 0 && pressedNear);
 
 		double? before = null, after = null;
 		foreach (var t in In.ParryEdgeTimes) {
@@ -289,7 +294,7 @@ sealed class ParryDrill : Drill {
 		if (parried) {
 			_ok++;
 			if (derived) _derived++;
-			string tail = derived ? " (inferred: the bot swung and you were not hit)" : "";
+			string tail = derived ? " (inferred from your key press: the game sent no parry event)" : "";
 			if (before != null) {
 				double off = before.Value - tHit;
 				_offsets.Add(off);

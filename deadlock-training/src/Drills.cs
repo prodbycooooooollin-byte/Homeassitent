@@ -355,14 +355,24 @@ sealed class MenuDrill : Drill {
 
 	private string StatusText() => _statusBase.Length > 0 ? _statusBase : $"Difficulty: {LevelParse.Label(_level).ToUpperInvariant()}  -  shoot an exercise to start";
 
+	private readonly Dictionary<int, string> _labels = new();
+	private readonly Dictionary<int, string> _shown = new();
+
+	private void Show(int i, string text) {
+		if (_shown.TryGetValue(i, out var cur) && cur == text) return;
+		_shown[i] = text;
+		_items[i].Text?.SetMessage(text);
+	}
+
 	private void RefreshColors(int hover) {
 		string lv = LevelId(_level);
 		for (int i = 0; i < _items.Count; i++) {
 			var (it, text, _) = _items[i];
 			if (!it.Selectable || text == null) continue;
-			if (i == hover) text.SetColor(255, 220, 0);
-			else if (it.Id == lv) text.SetColor(70, 255, 110);
-			else text.SetColor(it.R, it.G, it.B);
+			string label = _labels.TryGetValue(i, out var l) ? l : it.Label;
+			if (i == hover) { text.SetColor(255, 220, 0); Show(i, "> " + label + " <"); }
+			else if (it.Id == lv) { text.SetColor(70, 255, 110); Show(i, "[ " + label + " ]"); }
+			else { text.SetColor(it.R, it.G, it.B); Show(i, label); }
 		}
 	}
 
@@ -400,7 +410,7 @@ sealed class MenuDrill : Drill {
 		}
 		if (id.StartsWith("tg_")) {
 			var label = _onToggle(id);
-			if (label != null) _items[chosen].Text?.SetMessage(label);
+			if (label != null) { _labels[chosen] = label; RefreshColors(_hover); }
 			return;
 		}
 		Finished = true;

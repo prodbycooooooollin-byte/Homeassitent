@@ -199,4 +199,71 @@ static class Arena {
 		p = default; yaw = 0;
 		return false;
 	}
+
+	private static readonly Dictionary<string, List<(Vector3 Pos, float Yaw)>> _spots = new();
+
+	/// <summary>
+	/// A random open street-level spot anywhere on the map (not roofed, flat, with a long clear view in at least one direction).
+	/// Used by the scenarios, which should happen all over the map instead of at the training spot. The candidate list is built once per map.
+	/// </summary>
+	public static (Vector3 Pos, float Yaw)? RandomSpot(string map, CBaseEntity? ignore, Vector3? avoid = null) {
+		if (!_spots.TryGetValue(map, out var list)) {
+			list = new();
+			_spots[map] = list;
+			try { BuildSpots(list, ignore); } catch (Exception ex) { Console.WriteLine($"[Trainer] Spot scan failed: {ex.Message}"); }
+			Console.WriteLine($"[Trainer] Scenario spots on {map}: {list.Count}");
+		}
+		if (list.Count == 0) return null;
+		for (int i = 0; i < 6; i++) {
+			var c = list[Random.Shared.Next(list.Count)];
+			if (!avoid.HasValue || Vector3.Distance(c.Pos, avoid.Value) > 1500f) return c;
+		}
+		return list[Random.Shared.Next(list.Count)];
+	}
+
+	private static void BuildSpots(List<(Vector3 Pos, float Yaw)> list, CBaseEntity? ignore) {
+		var zs = new List<float>();
+		for (float gx = -7000f; gx <= 7000f; gx += 700f)
+			for (float gy = -7000f; gy <= 7000f; gy += 700f) {
+				try {
+					var t = Trace.Ray(new Vector3(gx, gy, 2500f), new Vector3(gx, gy, -1500f), InteractionLayer.Solid, ignore);
+					if (t.DidHit && !t.Trace.StartInSolid) zs.Add(t.HitPosition.Z);
+				} catch { }
+			}
+		if (zs.Count == 0) return;
+		zs.Sort();
+		float level = zs[zs.Count / 2];
+		foreach (float want in new[] { 1500f, 1000f }) {
+			for (float gx = -7000f; gx <= 7000f; gx += 500f) {
+				for (float gy = -7000f; gy <= 7000f; gy += 500f) {
+					try {
+						var down = Trace.Ray(new Vector3(gx, gy, level + 300f), new Vector3(gx, gy, level - 500f), InteractionLayer.Solid, ignore);
+						if (!down.DidHit || down.Trace.StartInSolid) continue;
+						var ground = down.HitPosition;
+						if (MathF.Abs(ground.Z - level) > 250f) continue;
+						var up = Trace.Ray(ground + new Vector3(0, 0, 10), ground + new Vector3(0, 0, 450), InteractionLayer.Solid, ignore);
+						if (up.DidHit) continue;
+						bool flat = true;
+						for (int k = 0; k < 4 && flat; k++) {
+							float bb = k * (MathF.PI / 2f);
+							var g = Trace.Ray(new Vector3(ground.X + MathF.Cos(bb) * 150f, ground.Y + MathF.Sin(bb) * 150f, ground.Z + 60f),
+								new Vector3(ground.X + MathF.Cos(bb) * 150f, ground.Y + MathF.Sin(bb) * 150f, ground.Z - 120f), InteractionLayer.Solid, ignore);
+							if (!g.DidHit || MathF.Abs(g.HitPosition.Z - ground.Z) > 40f) flat = false;
+						}
+						if (!flat) continue;
+						var chest = ground + new Vector3(0, 0, 60);
+						float bestLen = 0f, bestYaw = 0f;
+						for (int k = 0; k < 24; k++) {
+							float bb = k * (MathF.PI / 12f);
+							var h = Trace.Ray(chest, chest + new Vector3(MathF.Cos(bb), MathF.Sin(bb), 0f) * 2200f, InteractionLayer.Solid, ignore);
+							float len = h.Fraction * 2200f;
+							if (len > bestLen) { bestLen = len; bestYaw = bb * 180f / MathF.PI; }
+						}
+						if (bestLen >= want) list.Add((ground + new Vector3(0, 0, 12), bestYaw));
+					} catch { }
+				}
+			}
+			if (list.Count >= 12) break;
+		}
+	}
 }
