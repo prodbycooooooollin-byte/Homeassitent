@@ -123,7 +123,6 @@ static class TrainerBots {
 
 	/// <summary>The engine already removed the slot; only clean up our bookkeeping.</summary>
 	public static void Forget(int slot) {
-		BotPool.Forget(slot);
 		_slots.Remove(slot);
 		_wanted.Remove(slot);
 		_configured.Remove(slot);
@@ -136,79 +135,78 @@ static class TrainerBots {
 
 
 /// <summary>
-/// Bots are created while the player stands still in the menu (spawning them during an exercise, right after the teleport,
-/// crashed the client) and are then lent to the exercises. After an exercise they are parked again.
+/// Bot units the player spawned once with their own key (citadel_create_unit cannot be run by the server). The plugin keeps
+/// them for the whole session: they are lent to the exercises and parked in the hub in between.
 /// </summary>
 static class BotPool {
 	public static int Target = 4;
-	/// <summary>True while the menu is open (a calm moment to spawn).</summary>
 	public static bool Active;
 
-	private static readonly List<int> _all = new();
-	private static readonly List<int> _free = new();
-	private static readonly HashSet<int> _knownSlots = new();
-	private static int _pending;
-	private static double _requestAt, _nextSpawnAt;
+	private static readonly List<uint> _all = new();
+	private static readonly List<uint> _free = new();
+	private static double _lastScanAt, _lastPromptAt;
+	private static Vector3 _park;
 
 	public static int Count => _all.Count;
 	public static int FreeCount => _free.Count;
 
-	public static bool Take(out int slot) {
-		slot = -1;
+	public static bool Take(out uint handle) {
+		handle = CBaseEntity.InvalidEntityHandle;
 		while (_free.Count > 0) {
-			int s = _free[0];
+			uint h = _free[0];
 			_free.RemoveAt(0);
-			var ctl = Players.FromSlot(s);
-			if (ctl?.GetHeroPawn() == null) { Forget(s); continue; }
-			slot = s;
+			var e = CBaseEntity.FromHandle(h);
+			if (e == null || !e.IsValid || e.Health <= 0) { _all.Remove(h); continue; }
+			handle = h;
 			return true;
 		}
 		return false;
 	}
 
-	public static void Release(int slot) {
-		if (!_all.Contains(slot)) return;
-		try { Players.FromSlot(slot)?.GetHeroPawn()?.Teleport(position: Vector3.Zero); } catch { }
-		if (!_free.Contains(slot)) _free.Add(slot);
+	public static void Release(uint handle) {
+		if (!_all.Contains(handle)) return;
+		try {
+			var e = CBaseEntity.FromHandle(handle);
+			if (e != null && e.IsValid) e.Teleport(position: _park, velocity: Vector3.Zero);
+		} catch { }
+		if (!_free.Contains(handle)) _free.Add(handle);
 	}
 
-	public static void Forget(int slot) {
-		_all.Remove(slot);
-		_free.Remove(slot);
-	}
-
-	public static void Clear() {
-		_all.Clear(); _free.Clear(); _pending = 0;
-	}
+	public static void Clear() { _all.Clear(); _free.Clear(); }
 
 	/// <summary>Called every frame with the human player's controller.</summary>
 	public static void Update(double nowMs, CCitadelPlayerController? human) {
-		if (human == null) return;
+		if (human == null || !TrainerConfig.UsePool) return;
 		var pawn = human.GetHeroPawn();
 		if (pawn == null || !pawn.IsAlive) return;
+		if (Active) _park = pawn.Position - Aim.Forward(0f, pawn.EyeAngles.Y) * 450f;
 
-		if (_pending > 0) {
-			foreach (var c in Players.GetAllControllers()) {
-				int s = c.EntityIndex - 1;
-				if (_knownSlots.Contains(s) || _all.Contains(s)) continue;
-				_knownSlots.Add(s);
-				TrainerBots.Adopt(s);
-				_all.Add(s);
-				_free.Add(s);
-				_pending = Math.Max(0, _pending - 1);
-				try { if (c.GetHeroPawn() is { } bp && bp.TeamNum == pawn.TeamNum) c.ChangeTeam(pawn.TeamNum == 2 ? 3 : 2); } catch { }
-				Console.WriteLine($"[Trainer] Pool bot ready in slot {s} ({_all.Count}/{Target}).");
-			}
-			if (_pending > 0 && nowMs - _requestAt > 8000) { _pending = 0; Console.WriteLine("[Trainer] Pool: no bot appeared after a spawn request."); }
+		// New units the player spawned: a hero pawn without a human controller, near the player.
+		foreach (var seen in SpawnWatch.Since(nowMs - 11000)) {
+			var e = seen.Entity;
+			try {
+				if (!e.IsValid || e.EntityHandle == pawn.EntityHandle || _all.Contains(e.EntityHandle)) continue;
+				if (!e.Is<CCitadelPlayerPawn>() || e.Health <= 0) continue;
+				var p = e.As<CCitadelPlayerPawn>();
+				var ctl = p?.Controller;
+				if (ctl != null && !ctl.IsBot) continue;
+				if (Vector3.Distance(e.Position, pawn.Position) > 2500f) continue;
+				e.TeamNum = pawn.TeamNum == 2 ? 3 : 2;
+				_all.Add(e.EntityHandle);
+				_free.Add(e.EntityHandle);
+				Console.WriteLine($"[Trainer] Pool: bot {_all.Count}/{Target} adopted (entity {e.EntityIndex}, model '{e.ModelName}').");
+				Chat.PrintToChat(human, $"[Training] Bot {_all.Count}/{Target} ready." + (_all.Count >= Target ? " That is enough - the exercises use them now." : ""));
+				if (_all.Count >= Target) { try { Server.ExecuteCommand("sv_cheats 0"); } catch { } TrainerBots.CheatsOffAt = -1; }
+			} catch { }
 		}
+		_lastScanAt = nowMs;
 
-		if (Active && _pending == 0 && _all.Count < Target && nowMs >= _nextSpawnAt && TrainerConfig.UsePool) {
-			_knownSlots.Clear();
-			foreach (var c in Players.GetAllControllers()) _knownSlots.Add(c.EntityIndex - 1);
-			_pending = 1;
-			_requestAt = nowMs;
-			_nextSpawnAt = nowMs + 7000;
-			TrainerBots.RequestUnit(human, pawn.HeroID);
+		if (Active && _all.Count < Target && nowMs - _lastPromptAt > 25000) {
+			_lastPromptAt = nowMs;
+			try { Server.ExecuteCommand("sv_cheats 1"); } catch { }
+			TrainerBots.CheatsOffAt = -1;
+			SpawnWatch.Log = true;
+			Chat.PrintToChat(human, $"[Training] Bots: press NUMPAD + {Target - _all.Count} time(s) to spawn them (once per session; setup in the console: bind kp_plus \"citadel_create_unit my_hero\"). Without bots the exercises use static models.");
 		}
 	}
 }
@@ -250,12 +248,15 @@ sealed class Actor {
 			_enemyTeam = player.TeamNum == 2 ? 3 : 2,
 			_playerPawn = player.EntityHandle,
 		};
-		if (TrainerConfig.UsePool && BotPool.Take(out int pooled)) {
-			a.Slot = pooled;
-			a.Pooled = true;
-			a.Method = BotMethod.Unit;
-			a.Wants = true;
-			return a;
+		if (TrainerConfig.UsePool) {
+			if (BotPool.Take(out uint pooled)) {
+				a._raw = pooled;
+				a.Pooled = true;
+				a.Method = BotMethod.Unit;
+				a.Wants = true;
+				return a;
+			}
+			return a; // no pooled bot: the exercise uses static stand-ins
 		}
 		if (TrainerConfig.NoBots) {
 			if (TrainerConfig.UseTroopers && a.TryAdoptTrooper(a._enemyTeam, player.Position)) a.Wants = true;
@@ -457,7 +458,7 @@ sealed class Actor {
 
 	/// <summary>Give up the bot (e.g. it never appeared) and continue with a marker only.</summary>
 	public void DropBot() {
-		if (Pooled && Slot >= 0) { BotPool.Release(Slot); Slot = -1; Wants = false; Pooled = false; return; }
+		if (Pooled) { BotPool.Release(_raw); _raw = CBaseEntity.InvalidEntityHandle; Wants = false; Pooled = false; return; }
 		if (Method == BotMethod.Npc) { ReleaseNpc(); Wants = false; return; }
 		if (Slot >= 0) TrainerBots.Remove(Slot);
 		else if (_raw != CBaseEntity.InvalidEntityHandle) {

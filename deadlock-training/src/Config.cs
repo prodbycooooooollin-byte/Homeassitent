@@ -26,7 +26,7 @@ static class TrainerConfig {
 	/// <summary>Without game bots: borrow the map's trooper NPCs as targets (real health bar, damage numbers, animation).</summary>
 	public static bool UseTroopers = false;
 	/// <summary>Spawn game bots in the calm menu and lend them to the exercises (instead of spawning during an exercise).</summary>
-	public static bool UsePool = false;
+	public static bool UsePool = true;
 	/// <summary>Write the bots' view direction into memory so their melee swings point at the player.</summary>
 	public static bool WriteViewAngles = true;
 	/// <summary>Always draw a visible aim marker ('O') on bots, even if their model is visible.</summary>
