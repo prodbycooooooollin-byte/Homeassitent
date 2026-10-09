@@ -356,6 +356,21 @@ public class TrainerPlugin : DeadworksPluginBase {
 		Timer.Once(60.Seconds(), () => { try { if (_warmBody != null && _warmBody.IsValid) _warmBody.Remove(); } catch { } _warmBody = null; });
 	}
 
+	[Command("tbothero", Description = "Experimental: switch the pooled bots to a hero: tbothero <name> [number]  (e.g. tbothero haze 1). Only heroes from the precached list work.")]
+	public void CmdBotHero(CCitadelPlayerController caller, string name = "", string which = "") {
+		if (!Enum.TryParse<Heroes>(name.Trim(), ignoreCase: true, out var hero) || !TrainerConfig.PrecachedHeroes.Contains(hero)) {
+			Chat.PrintToChat(caller, "[Training] Heroes: " + string.Join(", ", TrainerConfig.PrecachedHeroes));
+			return;
+		}
+		var list = BotPool.Controllers();
+		if (list.Count == 0) { Chat.PrintToChat(caller, "[Training] No pooled bots yet."); return; }
+		int idx = int.TryParse(which.Trim(), out var n) ? Math.Clamp(n, 1, list.Count) - 1 : 0;
+		try {
+			list[idx].SelectHero(hero);
+			Chat.PrintToChat(caller, $"[Training] Bot {idx + 1}/{list.Count} -> {hero}. Check the top bar and whether the bot changed. (experimental)");
+		} catch (Exception ex) { Chat.PrintToChat(caller, $"[Training] Could not change the hero: {ex.Message}"); }
+	}
+
 	[Command("tbotz", Description = "Raise (or lower) the bots if they stand in the ground: tbotz 30")]
 	public void CmdBotZ(CCitadelPlayerController caller, string v = "") {
 		if (float.TryParse(v.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f)) TrainerConfig.BotZOffset = Math.Clamp(f, -100f, 150f);

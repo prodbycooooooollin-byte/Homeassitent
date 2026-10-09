@@ -203,6 +203,15 @@ static class BotPool {
 		try { File.WriteAllText(StatePath, "spawning"); } catch { }
 	}
 
+	/// <summary>Controllers of the pooled bots (for hero changes).</summary>
+	public static List<CCitadelPlayerController> Controllers() {
+		var list = new List<CCitadelPlayerController>();
+		foreach (var h in _all) {
+			try { var p = CBaseEntity.FromHandle(h)?.As<CCitadelPlayerPawn>(); if (p?.Controller is { } c) list.Add(c); } catch { }
+		}
+		return list;
+	}
+
 	public static int Count => _all.Count;
 	public static int FreeCount => _free.Count;
 
