@@ -52,22 +52,22 @@ static class TrainerBots {
 
 	/// <summary>Ask the game to spawn a hero dummy in front of the player (needs cheats, switched on briefly).</summary>
 	private static readonly List<(double At, int Slot, string Cmd)> _queue = new();
+	private static double _lastPrompt;
 
 	/// <summary>
-	/// Spawn a hero dummy in front of the player with the game's own command. It works only when it runs as the player
-	/// (like typing it in the console) AND sv_cheats is already on: so cheats are switched on first and the command is
-	/// sent to the player's client a moment later. (From the server console it does nothing; run in the same frame as
-	/// the cheats switch it is rejected.)
+	/// citadel_create_unit only works when the PLAYER runs it from their own console (the server cannot send it: the client
+	/// rejects commands from the server that lack the right flag, and from the server console it spawns nothing).
+	/// So the plugin keeps cheats on and tells the player to press a key bound to the command; the new unit is adopted.
 	/// </summary>
-	public static void RequestUnit(int playerSlot, Heroes hero, string teamArg) {
+	public static void RequestUnit(CCitadelPlayerController ctl, Heroes hero) {
 		SpawnWatch.Log = true;
-		string cmd = $"citadel_create_unit {hero.ToHeroName()}";
-		Console.WriteLine($"[Trainer] Requesting unit: {cmd}");
 		try {
 			Server.ExecuteCommand("sv_cheats 1");
-			double at = Clock.Ms + 700 + 400 * _queue.Count;
-			_queue.Add((at, playerSlot, cmd));
-			CheatsOffAt = at + 4000;
+			CheatsOffAt = Clock.Ms + 120000;
+			if (Clock.Ms - _lastPrompt > 4000) {
+				_lastPrompt = Clock.Ms;
+				Chat.PrintToChat(ctl, "[Training] Press F6 to spawn each target bot. (One-time setup in the console: bind f6 \"citadel_create_unit my_hero\")");
+			}
 		} catch (Exception ex) {
 			LastError = ex.Message;
 		}
@@ -208,7 +208,7 @@ static class BotPool {
 			_pending = 1;
 			_requestAt = nowMs;
 			_nextSpawnAt = nowMs + 7000;
-			TrainerBots.RequestUnit(human.EntityIndex - 1, pawn.HeroID, "");
+			TrainerBots.RequestUnit(human, pawn.HeroID);
 		}
 	}
 }
@@ -268,7 +268,7 @@ sealed class Actor {
 			foreach (var c in Players.GetAllControllers()) a._known.Add(c.EntityIndex - 1);
 			a._requestAt = nowMs;
 			// Team argument: the game's own names; if the unit lands on our team, the team is corrected after adoption.
-			TrainerBots.RequestUnit(a._playerSlot, hero, player.TeamNum == 2 ? "combine" : "rebel");
+			TrainerBots.RequestUnit(playerCtl, hero);
 		} else {
 			if (TrainerConfig.BotMethod == BotMethod.Unit) Console.WriteLine("[Trainer] citadel_create_unit is not available on this server; using fake clients.");
 			a.StartFake();
@@ -383,10 +383,10 @@ sealed class Actor {
 
 		if (Method == BotMethod.Unit && Slot < 0 && _raw == CBaseEntity.InvalidEntityHandle) {
 			TryAdoptUnit();
-			if (Slot < 0 && _raw == CBaseEntity.InvalidEntityHandle && nowMs - _requestAt > 7000 && !_fellBack) {
+			if (Slot < 0 && _raw == CBaseEntity.InvalidEntityHandle && nowMs - _requestAt > 60000 && !_fellBack) {
 				_fellBack = true;
 				Console.WriteLine("[Trainer] The unit command produced no unit; using model props instead.");
-				var seen = SpawnWatch.Since(_requestAt - 50).Select(s => s.Designer).Where(d => d.Length > 0).Distinct().Take(15);
+				var seen = SpawnWatch.Since(_requestAt - 4000).Select(s => s.Designer).Where(d => d.Length > 0).Distinct().Take(15);
 				Console.WriteLine($"[Trainer] Entities spawned meanwhile: {string.Join(", ", seen)}");
 				Wants = false;
 			}
@@ -416,7 +416,7 @@ sealed class Actor {
 		var player = CBaseEntity.FromHandle(_playerPawn);
 		if (player == null) return;
 		var ppos = player.Position;
-		foreach (var seen in SpawnWatch.Since(_requestAt - 50)) {
+		foreach (var seen in SpawnWatch.Since(_requestAt - 4000)) {
 			var e = seen.Entity;
 			try {
 				if (!e.IsValid || e.EntityHandle == _playerPawn) continue;

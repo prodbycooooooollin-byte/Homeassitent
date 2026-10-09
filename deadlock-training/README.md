@@ -57,6 +57,7 @@ a bot model does not render. Hits still register on the bot itself. `!tmarker of
 | `!tlevel easy\|normal\|hard` | Default difficulty |
 | `!tstop` | Abort the current exercise |
 | `!tcam` | Shows whether your client's camera data is received (aiming uses the third-person camera ray, not the head) |
+| *Bot setup* | Real bots need one console line (once): `bind f6 "citadel_create_unit my_hero"`. The plugin keeps cheats on during an exercise and asks you to press F6 once per target; it adopts the spawned unit |
 | `!tbot on` | Opt in to the game's own practice bots. **Off by default**: they crash the client on spawn (null pointer in client.dll). Default targets are hero-model props, hits are measured by geometry |
 | `!tbot test` | **Bot self-test**: creates a bot, lets it swing, reports in chat (hero, model, events) |
 | `!tbot method unit\|fake` | How bots are created (unit = game command, fake = fake client) |

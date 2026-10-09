@@ -48,7 +48,7 @@ abstract class Drill {
 			Console.WriteLine($"[Trainer] Bot creation failed: {TrainerBots.LastError}");
 		}
 		_gated = Actors.Any(a => a.Wants);
-		_gateDeadline = nowMs + 14000;
+		_gateDeadline = nowMs + (Actors.Any(a => a.Wants) ? 70000 : 14000);
 		if (!_gated) {
 			RealBots = false;
 			// Stand-in bodies (and bots) stay invisible on the client for several seconds after it arrives in a new area or the
