@@ -371,6 +371,17 @@ public class TrainerPlugin : DeadworksPluginBase {
 		} catch (Exception ex) { Chat.PrintToChat(caller, $"[Training] Could not change the hero: {ex.Message}"); }
 	}
 
+	[Command("tpos", Description = "Print your exact position and view direction (so good training spots can be built in as defaults)")]
+	public void CmdPos(CCitadelPlayerController caller, string label = "") {
+		var pawn = caller.GetHeroPawn();
+		if (pawn == null) { Chat.PrintToChat(caller, "[Training] You need a hero."); return; }
+		var p = pawn.Position;
+		float yaw = pawn.EyeAngles.Y;
+		string line = $"POS {label.Trim()} map={Server.MapName} x={p.X:0} y={p.Y:0} z={p.Z:0} yaw={yaw:0}";
+		Console.WriteLine("[Trainer] " + line);
+		Chat.PrintToChat(caller, "[Training] " + line);
+	}
+
 	[Command("tscan", Description = "Rescan the map for training spots and show what was found")]
 	public void CmdScan(CCitadelPlayerController caller) {
 		var pawn = caller.GetHeroPawn();
