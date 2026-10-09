@@ -340,6 +340,39 @@ sealed class Actor {
 		try { e.RenderColor = System.Drawing.Color.FromArgb(255, r, g, b); } catch { /* no model entity */ }
 	}
 
+	/// <summary>Model of the human player's hero (known to be loaded on the client); used for the stand-in body when there is no bot.</summary>
+	public static string PlayerModel = "";
+
+	/// <summary>A harmless model prop (no bot, no game AI) that looks like a hero. Hit tests are done by geometry.</summary>
+	public CBaseEntity? Body;
+
+	public void PlaceBody(Vector3 feet, Vector3 lookAt) {
+		if (string.IsNullOrEmpty(PlayerModel)) return;
+		try {
+			if (Body == null || !Body.IsValid) {
+				var ent = CBaseEntity.CreateByName("prop_dynamic");
+				if (ent == null) return;
+				ent.Teleport(position: feet);
+				var kv = new CEntityKeyValues();
+				kv.SetString("model", PlayerModel);
+				kv.SetInt("solid", 0);
+				ent.Spawn(kv);
+				try { ent.SetModel(PlayerModel); } catch { }
+				Body = ent;
+			}
+			Body.Teleport(position: feet, angles: new Vector3(0f, Aim.YawTo(feet, lookAt), 0f));
+		} catch (Exception ex) {
+			Console.WriteLine($"[Trainer] Stand-in body failed: {ex.Message}");
+			PlayerModel = "";
+		}
+	}
+
+	public void KillBody() {
+		var b = Body;
+		Body = null;
+		try { if (b != null && b.IsValid) b.Remove(); } catch { }
+	}
+
 	public void KillMarker() {
 		var m = Marker;
 		Marker = null;
@@ -349,6 +382,7 @@ sealed class Actor {
 
 	public void Dispose() {
 		KillMarker();
+		KillBody();
 		DropBot();
 	}
 }

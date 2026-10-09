@@ -138,6 +138,7 @@ abstract class Drill {
 	/// <summary>New figure at feet. First tries to get a real bot on the enemy team, playing the same hero as the player.</summary>
 	protected Actor AddActor(CCitadelPlayerPawn player, Vector3 feet, double nowMs) {
 		var hero = TrainerConfig.BotHero ?? (Enum.IsDefined(player.HeroID) ? player.HeroID : Heroes.Inferno);
+		try { var m = player.ModelName; if (!string.IsNullOrEmpty(m)) Actor.PlayerModel = m; } catch { }
 		var a = Actor.Create(Ctl, player, hero, feet, nowMs);
 		Actors.Add(a);
 		return a;
@@ -146,7 +147,7 @@ abstract class Drill {
 	/// <summary>Create the aim marker 'O' on an actor if it is needed (no bot, no model, or markers enabled).</summary>
 	protected void EnsureMarker(Actor a, Vector3 eye, float radius, byte r, byte g, byte b, string text = "O") {
 		if (a.Marker != null) return;
-		bool need = TrainerConfig.ShowMarkers || !a.Wants || !a.HasModel;
+		bool need = TrainerConfig.ShowMarkers || (!a.Wants && string.IsNullOrEmpty(Actor.PlayerModel)) || (a.Wants && !a.HasModel);
 		if (!need) return;
 		a.Marker = SpawnText(text, a.Center, eye, radius, r, g, b);
 	}
@@ -154,6 +155,7 @@ abstract class Drill {
 	protected void PlaceActor(Actor a, Vector3 feet, Vector3 lookAt, Vector3 eye, float markerHeight) {
 		a.Feet = feet;
 		if (a.Wants) a.Place(feet, lookAt);
+		else a.PlaceBody(feet, lookAt);
 		if (a.Marker != null) Face(a.Marker, feet + new Vector3(0, 0, markerHeight), eye);
 	}
 
