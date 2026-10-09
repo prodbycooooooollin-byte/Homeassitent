@@ -57,7 +57,7 @@ static class TrainerBots {
 		Console.WriteLine($"[Trainer] Requesting unit: {cmd}");
 		try {
 			Server.ExecuteCommand("sv_cheats 1");
-			Server.ClientCommand(playerSlot, cmd);
+			Server.ExecuteCommand(cmd); // client path is rejected: 'missing required FCVAR flag'
 			CheatsOffAt = Clock.Ms + 1500;
 		} catch (Exception ex) {
 			LastError = ex.Message;
