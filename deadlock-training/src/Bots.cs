@@ -52,14 +52,14 @@ static class TrainerBots {
 
 	/// <summary>Ask the game to spawn a hero dummy in front of the player (needs cheats, switched on briefly).</summary>
 	/// <summary>Spawn one game practice bot from the server (a real player-like bot). Experimental: it used to crash the client while it sat at the world origin.</summary>
-	public static void RequestPractice(Heroes hero) {
+	public static void RequestPractice(int count) {
 		SpawnWatch.Log = true;
-		Console.WriteLine("[Trainer] Requesting practice bot (automatic mode)");
+		Console.WriteLine($"[Trainer] Requesting {count} practice bot(s) (automatic mode)");
 		try {
 			Server.ExecuteCommand("sv_cheats 1");
 			Server.ExecuteCommand("citadel_bot_test_mode 1");
 			Server.ExecuteCommand("citadel_spawn_practice_bots 0");
-			Server.ExecuteCommand("citadel_spawn_practice_bots_count 1");
+			Server.ExecuteCommand($"citadel_spawn_practice_bots_count {Math.Clamp(count, 1, 8)}");
 			Server.ExecuteCommand("citadel_spawn_practice_bots 1");
 			CheatsOffAt = Clock.Ms + 2500;
 		} catch (Exception ex) { LastError = ex.Message; }
@@ -171,6 +171,7 @@ static class BotPool {
 	private static readonly HashSet<int> _knownSlots = new();
 	private static readonly List<int> _pendingCtl = new();
 	private static bool _autoWaiting;
+	private static int _autoTries;
 	private static Vector3 _park;
 
 	// ---- crash guard: if the game client crashed while bots were being spawned, automatic spawning stays off until re-enabled ----
@@ -227,7 +228,8 @@ static class BotPool {
 		if (!_free.Contains(handle)) _free.Add(handle);
 	}
 
-	public static void Clear() { _all.Clear(); _free.Clear(); }
+	public static void Clear() { _all.Clear(); _free.Clear(); _autoTries = 0; _autoWaiting = false; _pendingCtl.Clear(); }
+	public static void ResetAuto() { _autoTries = 0; _autoNextAt = 0; }
 
 	/// <summary>Called every frame with the human player's controller.</summary>
 	public static void Update(double nowMs, CCitadelPlayerController? human) {
@@ -249,10 +251,9 @@ static class BotPool {
 					_knownSlots.Add(sl);
 					TrainerBots.Adopt(sl);
 					_pendingCtl.Add(sl);
-					_autoWaiting = false;
 					Console.WriteLine($"[Trainer] Auto bot controller in slot {sl}; moving its pawn next to you.");
 				}
-				if (_autoWaiting && nowMs - _autoRequestAt > 8000) { _autoWaiting = false; Console.WriteLine("[Trainer] Auto mode: no bot appeared."); }
+				if (_autoWaiting && nowMs - _autoRequestAt > 10000) { _autoWaiting = false; Console.WriteLine($"[Trainer] Auto mode: request finished, {_all.Count}/{Target} bots ready."); }
 			}
 			foreach (var sl in _pendingCtl.ToArray()) {
 				var c = Players.FromSlot(sl);
@@ -269,14 +270,15 @@ static class BotPool {
 					Chat.PrintToChat(human, $"[Training] Bot {_all.Count}/{Target} ready.");
 				} catch { }
 			}
-			if (Active && !_autoWaiting && _pendingCtl.Count == 0 && _all.Count < Target && nowMs >= _autoNextAt) {
+			if (Active && !_autoWaiting && _pendingCtl.Count == 0 && _all.Count < Target && nowMs >= _autoNextAt && _autoTries < 3) {
+				_autoTries++;
 				_knownSlots.Clear();
 				foreach (var c in Players.GetAllControllers()) _knownSlots.Add(c.EntityIndex - 1);
 				_autoWaiting = true;
 				_autoRequestAt = nowMs;
-				_autoNextAt = nowMs + 6000;
+				_autoNextAt = nowMs + 12000;
 				GuardArm(nowMs);
-				TrainerBots.RequestPractice(pawn.HeroID);
+				TrainerBots.RequestPractice(Target - _all.Count);
 			}
 		}
 

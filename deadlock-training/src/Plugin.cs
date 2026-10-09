@@ -644,7 +644,7 @@ public class TrainerPlugin : DeadworksPluginBase {
 			case "auto":
 				TrainerConfig.AutoSpawn = arg.Trim().ToLowerInvariant() is not ("off" or "0" or "aus");
 				TrainerConfig.UsePool = true;
-				if (TrainerConfig.AutoSpawn) BotPool.GuardClear();
+				if (TrainerConfig.AutoSpawn) { BotPool.GuardClear(); BotPool.ResetAuto(); }
 				Chat.PrintToChat(caller, $"[Training] Automatic bot spawn: {(TrainerConfig.AutoSpawn ? "ON (experimental - may crash your game; tell me what happens)" : "off (use your key)")}. Open the menu (!train) to start.");
 				return;
 			case "troopers":
