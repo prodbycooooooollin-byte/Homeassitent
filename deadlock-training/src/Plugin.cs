@@ -872,7 +872,23 @@ public class TrainerPlugin : DeadworksPluginBase {
 	private readonly Dictionary<int, RouteRecorder> _attempts = new();
 
 	[Command("troute", Description = "Route trainer: troute rec <name> | stop | save | redo | play [name] | list | del <name>")]
-	public void CmdRoute(CCitadelPlayerController caller, string sub = "", string name = "") {
+	public void CmdRoute(CCitadelPlayerController caller, string sub = "", string n1 = "", string n2 = "", string n3 = "") {
+		string name = string.Join("-", new[] { n1, n2, n3 }.Where(x => !string.IsNullOrWhiteSpace(x)));
+		RouteCommand(caller, sub, name);
+	}
+
+	[Command("trec", Description = "Start recording a route: trec <name>")]
+	public void CmdTrec(CCitadelPlayerController caller, string n1 = "", string n2 = "", string n3 = "") => RouteCommand(caller, "rec", string.Join("-", new[] { n1, n2, n3 }.Where(x => !string.IsNullOrWhiteSpace(x))));
+	[Command("trstop", Description = "Finish the route attempt")]
+	public void CmdTrStop(CCitadelPlayerController caller) => RouteCommand(caller, "stop", "");
+	[Command("trsave", Description = "Save the finished route attempt")]
+	public void CmdTrSave(CCitadelPlayerController caller) => RouteCommand(caller, "save", "");
+	[Command("trredo", Description = "Discard the attempt and record again from the start")]
+	public void CmdTrRedo(CCitadelPlayerController caller) => RouteCommand(caller, "redo", "");
+	[Command("trplay", Description = "Practice a route with the ghost: trplay [name]")]
+	public void CmdTrPlay(CCitadelPlayerController caller, string n1 = "", string n2 = "", string n3 = "") => RouteCommand(caller, "play", string.Join("-", new[] { n1, n2, n3 }.Where(x => !string.IsNullOrWhiteSpace(x))));
+
+	private void RouteCommand(CCitadelPlayerController caller, string sub, string name) {
 		int slot = caller.EntityIndex - 1;
 		var pawn = caller.GetHeroPawn();
 		string map = Server.MapName;

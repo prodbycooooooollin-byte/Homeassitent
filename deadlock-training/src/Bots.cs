@@ -638,7 +638,7 @@ sealed class Actor {
 				float dz = _groundZ - cur.Z;
 				if (MathF.Abs(dz) > 220f) e.Teleport(position: new Vector3(cur.X, cur.Y, _groundZ + 2f));
 				else vz = MathF.Abs(dz) > 8f ? Math.Clamp(dz * 5f, -250f, 250f) : MathF.Min(vz, 0f);
-				e.Teleport(velocity: new Vector3(v.X, v.Y, vz));
+				e.Teleport(angles: new Vector3(0f, yaw, 0f), velocity: new Vector3(v.X, v.Y, vz)); // body faces the target too
 			}
 			if (e.Is<CCitadelPlayerPawn>()) SetView(e.As<CCitadelPlayerPawn>()!, yaw);
 			if (e.Health < e.MaxHealth) e.Health = e.MaxHealth;
