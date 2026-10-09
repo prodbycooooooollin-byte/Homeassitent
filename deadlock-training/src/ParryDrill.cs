@@ -37,6 +37,7 @@ sealed class ParryDrill : Drill {
 	private readonly List<double> _simEdges = new();
 	private int _edgeSeen;
 
+	private bool _heavy;
 	private bool _realBroken;
 	private int _noAttackStreak;
 
@@ -117,6 +118,10 @@ sealed class ParryDrill : Drill {
 				Touch(now);
 				break;
 			case EModifierEvent.MeleeAttack when botCaster:
+				if (_evMelee < 0) _evMelee = now;
+				Touch(now);
+				break;
+			case EModifierEvent.CheckForParry when botCaster || playerInvolved:
 				if (_evMelee < 0) _evMelee = now;
 				Touch(now);
 				break;
@@ -208,12 +213,13 @@ sealed class ParryDrill : Drill {
 		_sampled = false;
 		_activeAtStrike = false;
 
+		_heavy = Rng.NextDouble() < 0.4; // random mix of light and heavy (charged) melee, never a fixed pattern
 		if (_realRound) {
 			double tg = Tuning.ParryTelegraphMs(Lvl);
-			_triggerAt = nowMs + Math.Max(tg, 200);
-			if (tg > 0) SetCue(">>", 255, 50, 50, eye);
+			_triggerAt = nowMs + Math.Max(tg, 200) + (_heavy ? 250 : 0);
+			if (tg > 0) { if (_heavy) SetCue(">>> HEAVY", 255, 150, 30, eye); else SetCue(">> light", 255, 50, 50, eye); }
 		} else {
-			double wind = Tuning.ParrySimWindupMs(Lvl, Rng);
+			double wind = Tuning.ParrySimWindupMs(Lvl, Rng) + (_heavy ? 350 : 0);
 			_triggerAt = nowMs;
 			_strikeAt = nowMs + wind;
 			SetCue(">>   <<", 255, 50, 50, eye);
@@ -226,18 +232,15 @@ sealed class ParryDrill : Drill {
 		if (_realRound) {
 			var bot = Actors[_cur].Pawn;
 			int rc = -99;
-			try { if (bot != null) rc = bot.ExecuteAbilityBySlot(EAbilitySlot.WeaponMelee); }
+			try { if (bot != null && !_heavy) rc = bot.ExecuteAbilityBySlot(EAbilitySlot.WeaponMelee); }
 			catch (Exception ex) { Console.WriteLine($"[Trainer] Bot melee failed: {ex.Message}"); }
 			Console.WriteLine($"[Trainer] Parry swing {_done + 1}: bot melee rc={rc}");
 			if (!_rcSaid) { _rcSaid = true; Say($"[Parry debug] bot swing call returned {rc} ({(bot == null ? "the target has no hero pawn" : bot.GetType().Name)}, model '{Actors[_cur].ModelName}')."); }
-			if (true) {
-				// The ability call returned 0 and no swing was seen: always also use the game's own "bots melee" switch: use the game's own "bots melee" switch for a moment
-				// (cheats are already on for the whole drill, see Begin).
-				try {
-					Server.ExecuteCommand("citadel_bot_melee 1");
-					TrainerBots.Schedule(170, "citadel_bot_melee 0");
-				} catch { }
-			}
+			// Light or heavy swing with the game's own bot-melee switch (1 = light, 2 = heavy; cheats are on for the whole drill).
+			try {
+				Server.ExecuteCommand(_heavy ? "citadel_bot_melee 2" : "citadel_bot_melee 1");
+				TrainerBots.Schedule(_heavy ? 700 : 170, "citadel_bot_melee 0");
+			} catch { }
 			_deadline = nowMs + 1700;
 		} else {
 			_deadline = _strikeAt + 450;
@@ -271,7 +274,7 @@ sealed class ParryDrill : Drill {
 		}
 		_noAttackStreak = 0;
 
-		string head = $"[Parry {_done + 1}/{_total}]";
+		string head = $"[Parry {_done + 1}/{_total} {(_heavy ? "HEAVY" : "light")}]";
 		bool parried = _evParry >= 0 || (_evHit < 0);
 		double tHit = _evParry >= 0 ? _evParry : _evHit >= 0 ? _evHit : _evMelee >= 0 ? _evMelee : _evStart + 300;
 		bool derived = _evParry < 0 && _evHit < 0;
@@ -326,7 +329,7 @@ sealed class ParryDrill : Drill {
 	private void FinishSim(double nowMs) {
 		ClearCue();
 		double t = _strikeAt;
-		string head = $"[Parry {_done + 1}/{_total}]";
+		string head = $"[Parry {_done + 1}/{_total} {(_heavy ? "HEAVY" : "light")}]";
 		bool success = _activeAtStrike || _simEdges.Any(e => e >= t && e <= t + 40);
 		if (success) {
 			_ok++;
@@ -365,7 +368,7 @@ sealed class ParryDrill : Drill {
 				return;
 			}
 		}
-		_nextAt = nowMs + Tuning.ParryGapMs(Lvl, Rng);
+		_nextAt = nowMs + 700 + Rng.NextDouble() * 4200; // irregular gaps
 		_ph = Ph.Gap;
 	}
 

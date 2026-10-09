@@ -115,54 +115,74 @@ sealed class RouteRecorder {
 }
 
 /// <summary>
-/// Route trainer (movement / pathing): a ghost - an exact replay of the recorded run, with its real timing - runs ahead of you;
-/// follow it. Checkpoints on the way tell you how far ahead or behind the recording you are. The finish time is saved.
+/// Route trainer (movement / pathing): a ghost - an exact replay of the recorded run with its real timing - runs ahead of you.
+/// You do not have to hit the checkpoints exactly: progress is measured along the recorded path (stay within a wide corridor of it),
+/// so you can look for faster lines. PARRY or R restarts the run. If you beat the recorded time, your run becomes the new route.
 /// </summary>
 sealed class RouteDrill : Drill {
 	private readonly string _name;
 	private readonly string _map;
-	private readonly List<RoutePoint> _pts;
+	private List<RoutePoint> _pts;
 	private readonly List<int> _cps = new(); // indices of the checkpoint samples
-	private int _next;
-	private double _goMs;
-	private bool _go;
+	private int _next, _progress;
+	private double _goMs, _lastMs;
+	private bool _go, _done;
+	private int _edges;
 	private CBaseEntity? _ghost;
 	private CPointWorldText? _marker, _count;
 	private (string, byte, byte, byte)[]? _hudCache;
 	private double _hudAt;
 	private string _lastSplit = "";
-	private bool _modelWarned;
+	private RouteRecorder _run = new();
+	private const float Corridor = 800f;
 
 	public override string Name => "Route";
 
 	public RouteDrill(CCitadelPlayerController ctl, PlayerInput input, Level lvl, string name, string map, List<RoutePoint> pts) : base(ctl, input, lvl) {
 		_name = name; _map = map; _pts = pts;
-		float acc = 0; Vector3 last = pts[0].P;
-		for (int i = 1; i < pts.Count; i++) {
-			acc += Vector3.Distance(last, pts[i].P); last = pts[i].P;
-			if (acc >= 450f && i < pts.Count - 1) { _cps.Add(i); acc = 0; }
+		BuildCheckpoints();
+	}
+
+	private void BuildCheckpoints() {
+		_cps.Clear();
+		float acc = 0; Vector3 last = _pts[0].P;
+		for (int i = 1; i < _pts.Count; i++) {
+			acc += Vector3.Distance(last, _pts[i].P); last = _pts[i].P;
+			if (acc >= 500f && i < _pts.Count - 1) { _cps.Add(i); acc = 0; }
 		}
-		_cps.Add(pts.Count - 1);
+		_cps.Add(_pts.Count - 1);
 	}
 
 	protected override void Begin(CCitadelPlayerPawn pawn, double nowMs) {
 		try { var m = pawn.ModelName; if (!string.IsNullOrEmpty(m)) Actor.PlayerModel = m; } catch { }
 		_ghost = Actor.MakeBody(_pts[0].P);
-		if (_ghost == null && !_modelWarned) { _modelWarned = true; Say("[Route] No ghost model available - using markers only."); }
 		try { if (_ghost != null) _ghost.RenderColor = System.Drawing.Color.FromArgb(255, 120, 190, 255); } catch { }
+		_edges = In.KeyEdges;
 	}
 
 	protected override void Ready(CCitadelPlayerPawn pawn, double nowMs) {
 		var best = RouteStore.BestTime(_map, _name);
 		_goMs = nowMs + 4000;
-		Say($"[Route '{_name}'] {_pts[^1].T / 1000:0.0} s recorded run. Stand at the start; the ghost starts running in 4 s - follow it!" + (best.HasValue ? $" Your best: {best.Value / 1000:0.0} s." : "") + " Abort: !tstop");
+		_lastMs = nowMs;
+		Say($"[Route '{_name}'] recorded run {_pts[^1].T / 1000:0.0} s." + (best.HasValue ? $" Your best: {best.Value / 1000:0.0} s." : "") +
+			" The ghost starts in 4 s. You need not follow it exactly - find faster lines! PARRY or R restarts. Abort: !tstop");
 	}
 
-	private float Radius => Lvl switch { Level.Easy => 200f, Level.Hard => 100f, _ => 140f };
+	private float StartYaw => _pts.Count > 3 ? Aim.YawTo(_pts[0].P, _pts[3].P) : 0f;
+
+	private void Restart(CCitadelPlayerPawn pawn, double nowMs) {
+		try { pawn.TeleportWithView(_pts[0].P + new Vector3(0, 0, 8), new Vector3(0f, StartYaw, 0f)); } catch { }
+		_go = false; _done = false; _next = 0; _progress = 0;
+		_goMs = nowMs + 3000;
+		_run = new RouteRecorder();
+		_lastSplit = "";
+		Kill(_marker); _marker = null;
+		Say("[Route] Restarted - the ghost starts in 3 s.");
+	}
 
 	private Vector3 GhostAt(double ms, out float yaw) {
-		yaw = 0;
-		if (ms <= 0) { if (_pts.Count > 1) yaw = Aim.YawTo(_pts[0].P, _pts[1].P); return _pts[0].P; }
+		yaw = StartYaw;
+		if (ms <= 0) return _pts[0].P;
 		for (int i = 1; i < _pts.Count; i++) {
 			if (ms <= _pts[i].T) {
 				var a = _pts[i - 1]; var b = _pts[i];
@@ -177,8 +197,10 @@ sealed class RouteDrill : Drill {
 
 	protected override void Tick(CCitadelPlayerPawn pawn, double nowMs) {
 		var eye = Aim.Eye(pawn);
+		if (_done) return;
 
-		// Countdown and ghost.
+		if (In.KeyEdges > _edges) { _edges = In.KeyEdges; Restart(pawn, nowMs); return; }
+
 		if (!_go) {
 			double left = _goMs - nowMs;
 			string c = left > 0 ? $"{Math.Ceiling(left / 1000):0}" : "GO!";
@@ -186,27 +208,38 @@ sealed class RouteDrill : Drill {
 			if (_count == null) _count = SpawnText(c, cpos, eye, 26f, 255, 220, 60);
 			else _count.SetMessage(c);
 			if (_count != null) Face(_count, cpos, eye);
-			if (left <= 0) { _go = true; Kill(_count); _count = null; }
+			if (left <= 0) { _go = true; Kill(_count); _count = null; _run = new RouteRecorder(); }
 		}
 		double ms = _go ? nowMs - _goMs : 0;
 		var gp = GhostAt(ms, out var gyaw);
 		try { _ghost?.Teleport(position: gp, angles: new Vector3(0f, gyaw, 0f)); } catch { }
 
 		if (_go) {
-			// Checkpoint reached?
+			_run.Update(pawn.Position, nowMs);
 			var p = pawn.Position;
-			var cp = _pts[_cps[_next]].P;
-			float flat = Vector2.Distance(new Vector2(p.X, p.Y), new Vector2(cp.X, cp.Y));
-			if (flat <= Radius && MathF.Abs(p.Z - cp.Z) < 250f) {
+
+			// Progress along the recorded path: the nearest sample just ahead of the current progress, inside a wide corridor.
+			int hi = Math.Min(_pts.Count - 1, _progress + 60);
+			int bestI = _progress; float bestD = float.MaxValue;
+			for (int i = _progress; i <= hi; i++) {
+				float d = Vector3.Distance(new Vector3(p.X, p.Y, 0), new Vector3(_pts[i].P.X, _pts[i].P.Y, 0));
+				if (d < bestD) { bestD = d; bestI = i; }
+			}
+			if (bestD <= Corridor && MathF.Abs(p.Z - _pts[bestI].P.Z) < 400f) _progress = Math.Max(_progress, bestI);
+
+			while (_next < _cps.Count - 1 && _progress >= _cps[_next]) {
 				double delta = ms - _pts[_cps[_next]].T;
-				_lastSplit = delta <= 0 ? $"{-delta / 1000:0.00} s AHEAD of the ghost" : $"{delta / 1000:0.00} s behind the ghost";
-				Say($"[Route] Checkpoint {_next + 1}/{_cps.Count}: {_lastSplit}");
+				_lastSplit = delta <= 0 ? $"{-delta / 1000:0.0} s ahead of the ghost" : $"{delta / 1000:0.0} s behind the ghost";
 				_next++;
 				Kill(_marker); _marker = null;
-				if (_next >= _cps.Count) { Finish(ms); return; }
 			}
-			var mp = _pts[_cps[_next]].P + new Vector3(0, 0, 110f);
-			string text = _next == _cps.Count - 1 ? "FINISH" : $"> {_next + 1} / {_cps.Count}";
+
+			var end = _pts[^1].P;
+			float toEnd = Vector2.Distance(new Vector2(p.X, p.Y), new Vector2(end.X, end.Y));
+			if (toEnd <= 280f && _progress >= (int)(_pts.Count * 0.8f)) { Finish(ms, pawn, nowMs); return; }
+
+			var mp = _pts[_cps[Math.Min(_next, _cps.Count - 1)]].P + new Vector3(0, 0, 110f);
+			string text = _next >= _cps.Count - 1 ? "FINISH" : $"> {_next + 1} / {_cps.Count}";
 			if (_marker == null) _marker = SpawnText(text, mp, eye, 14f, 255, 220, 60);
 			if (_marker != null) Face(_marker, mp, eye);
 		}
@@ -216,19 +249,28 @@ sealed class RouteDrill : Drill {
 			var best = RouteStore.BestTime(_map, _name);
 			_hudCache = new (string, byte, byte, byte)[] {
 				($"ROUTE  {_name}", 255, 220, 60),
-				($"Checkpoint   {Math.Min(_next + 1, _cps.Count)} / {_cps.Count}", 255, 255, 255),
 				($"Time   {Math.Max(0, ms) / 1000:0.0} s" + (best.HasValue ? $"   (best {best.Value / 1000:0.0})" : ""), 255, 160, 60),
-				(_lastSplit.Length > 0 ? _lastSplit : "follow the blue ghost", 150, 210, 255),
+				(_lastSplit.Length > 0 ? _lastSplit : "follow the blue ghost - or find a faster way", 150, 210, 255),
+				("PARRY or R = restart", 170, 170, 170),
 			};
 		}
 		SetHud(pawn, _hudCache);
 	}
 
-	private void Finish(double totalMs) {
-		bool best = RouteStore.SubmitTime(_map, _name, totalMs);
+	private void Finish(double totalMs, CCitadelPlayerPawn pawn, double nowMs) {
+		_done = true;
 		double rec = _pts[^1].T;
 		Say($"=== Route '{_name}' finished: {totalMs / 1000:0.00} s (recorded run: {rec / 1000:0.00} s) ===");
-		Say(best ? "New personal best!" : $"Your best: {(RouteStore.BestTime(_map, _name) ?? totalMs) / 1000:0.00} s");
+		if (totalMs < rec - 50 && _run.Points.Count > 3) {
+			_run.Finish(pawn.Position, nowMs);
+			var faster = _run.Points.Select(q => new RoutePoint(q.P, q.T)).ToList();
+			RouteStore.Put(_map, _name, faster);
+			RouteStore.SubmitTime(_map, _name, totalMs);
+			Say($"NEW RECORD! You were {(rec - totalMs) / 1000:0.00} s faster than the recording - your run is now the route (the ghost will run it next time).");
+		} else {
+			bool best = RouteStore.SubmitTime(_map, _name, totalMs);
+			Say(best ? "New personal best!" : $"Your best: {(RouteStore.BestTime(_map, _name) ?? totalMs) / 1000:0.00} s");
+		}
 		Ctl.HudAnnounce("ROUTE DONE", $"{totalMs / 1000:0.0} s");
 		Finished = true;
 	}
@@ -240,7 +282,6 @@ sealed class RouteDrill : Drill {
 		base.Stop();
 	}
 }
-
 
 /// <summary>
 /// Records the player's run. Position yourself anywhere first; the first press of PARRY (or RELOAD) starts the recording, the next one
