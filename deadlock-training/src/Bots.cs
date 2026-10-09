@@ -151,7 +151,10 @@ sealed class Actor {
 			_enemyTeam = player.TeamNum == 2 ? 3 : 2,
 			_playerPawn = player.EntityHandle,
 		};
-		if (TrainerConfig.NoBots) return a;
+		if (TrainerConfig.NoBots) {
+			if (TrainerConfig.UseTroopers && a.TryAdoptTrooper(a._enemyTeam, player.Position)) a.Wants = true;
+			return a;
+		}
 		a.Wants = true;
 
 		if (TrainerConfig.BotMethod == BotMethod.Unit) {
@@ -165,6 +168,53 @@ sealed class Actor {
 			a.StartFake();
 		}
 		return a;
+	}
+
+	// ---- borrowed trooper NPCs --------------------------------------------------------------------------------------
+
+	private static readonly HashSet<uint> _usedNpcs = new();
+	private Vector3 _npcOrigin;
+	private int _npcTeam;
+
+	/// <summary>Take a living trooper NPC of the map as target: it has a health bar, damage numbers and animations. Returns false if none exists.</summary>
+	private bool TryAdoptTrooper(int enemyTeam, Vector3 near) {
+		try {
+			CBaseEntity? best = null;
+			float bestD = float.MaxValue;
+			foreach (var e in Entities.All) {
+				string d;
+				try { d = e.DesignerName ?? ""; } catch { continue; }
+				if (!d.StartsWith("npc_trooper") || _usedNpcs.Contains(e.EntityHandle)) continue;
+				if (!e.IsValid || e.Health <= 0) continue;
+				float dist = Vector3.Distance(e.Position, near);
+				if (dist < bestD) { bestD = dist; best = e; }
+			}
+			if (best == null) return false;
+			_raw = best.EntityHandle;
+			_usedNpcs.Add(_raw);
+			_npcOrigin = best.Position;
+			_npcTeam = best.TeamNum;
+			best.TeamNum = enemyTeam;
+			Method = BotMethod.Npc;
+			Console.WriteLine($"[Trainer] Borrowed trooper idx {best.EntityIndex} as target (model '{best.ModelName}').");
+			return true;
+		} catch (Exception ex) {
+			Console.WriteLine($"[Trainer] Could not borrow a trooper: {ex.Message}");
+			return false;
+		}
+	}
+
+	private void ReleaseNpc() {
+		if (Method != BotMethod.Npc || _raw == CBaseEntity.InvalidEntityHandle) return;
+		try {
+			var e = CBaseEntity.FromHandle(_raw);
+			if (e != null && e.IsValid) {
+				e.TeamNum = _npcTeam;
+				e.Teleport(position: _npcOrigin);
+			}
+		} catch { }
+		_usedNpcs.Remove(_raw);
+		_raw = CBaseEntity.InvalidEntityHandle;
 	}
 
 	private void StartFake() {
@@ -300,6 +350,7 @@ sealed class Actor {
 
 	/// <summary>Give up the bot (e.g. it never appeared) and continue with a marker only.</summary>
 	public void DropBot() {
+		if (Method == BotMethod.Npc) { ReleaseNpc(); Wants = false; return; }
 		if (Slot >= 0) TrainerBots.Remove(Slot);
 		else if (_raw != CBaseEntity.InvalidEntityHandle) {
 			try { CBaseEntity.FromHandle(_raw)?.Remove(); } catch { }

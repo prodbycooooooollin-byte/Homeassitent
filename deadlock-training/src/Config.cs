@@ -23,6 +23,8 @@ static class TrainerConfig {
 	/// <summary>true = no bots, only text targets (emergency mode if bots do not work on this server).</summary>
 	/// <summary>Default: no game bots (the game's bot spawn crashes the client); targets are hero-model props measured by geometry. Opt in with !tbot on.</summary>
 	public static bool NoBots = true;
+	/// <summary>Without game bots: borrow the map's trooper NPCs as targets (real health bar, damage numbers, animation).</summary>
+	public static bool UseTroopers = true;
 	/// <summary>Write the bots' view direction into memory so their melee swings point at the player.</summary>
 	public static bool WriteViewAngles = true;
 	/// <summary>Always draw a visible aim marker ('O') on bots, even if their model is visible.</summary>
@@ -47,7 +49,7 @@ static class TrainerConfig {
 	];
 }
 
-enum BotMethod { Unit, Fake }
+enum BotMethod { Unit, Fake, Npc }
 
 enum Level { Easy, Normal, Hard }
 

@@ -582,6 +582,10 @@ public class TrainerPlugin : DeadworksPluginBase {
 				TrainerConfig.BotHero = h;
 				Chat.PrintToChat(caller, $"[Training] Bot hero: {h}");
 				return;
+			case "troopers":
+				TrainerConfig.UseTroopers = arg.Trim().ToLowerInvariant() is not ("off" or "0" or "aus");
+				Chat.PrintToChat(caller, $"[Training] Borrowed trooper targets: {(TrainerConfig.UseTroopers ? "on (health bar, damage numbers, animation)" : "off (hero-model props)")}");
+				return;
 			case "try":
 				TryBotVariant(caller, arg.Trim());
 				return;
