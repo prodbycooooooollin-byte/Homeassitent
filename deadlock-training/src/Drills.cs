@@ -223,6 +223,7 @@ abstract class Drill {
 		var ent = CBaseEntity.CreateByName("point_worldtext");
 		if (ent == null) return null;
 		ent.Teleport(position: pos);
+		if (string.IsNullOrEmpty(msg)) msg = " "; // an empty string reaches native code as a null pointer and crashes the server
 		var kv = new CEntityKeyValues();
 		kv.SetString("message_text", msg);
 		kv.SetBool("enabled", true);
