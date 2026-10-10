@@ -172,6 +172,7 @@ sealed class RouteDrill : Drill {
 		try { var m = pawn.ModelName; if (!string.IsNullOrEmpty(m)) Actor.PlayerModel = m; } catch { }
 		_ghost = Actor.MakeBody(_pts[0].P);
 		try { if (_ghost != null) _ghost.RenderColor = System.Drawing.Color.FromArgb(255, 120, 190, 255); } catch { }
+		NoCollide(_ghost, pawn);
 		_edges = In.KeyEdges;
 	}
 
@@ -186,6 +187,13 @@ sealed class RouteDrill : Drill {
 
 	/// <summary>Hold the player still during the countdown (movement keys can stay pressed): everybody starts at the same instant as the ghost.</summary>
 	private void Freeze(CCitadelPlayerPawn pawn, bool on) { try { pawn.SetMoveType(on ? MoveType.None : MoveType.Walk); } catch { } }
+
+	/// <summary>The ghost must never push or block you.</summary>
+	private void NoCollide(CBaseEntity? ghost, CCitadelPlayerPawn pawn) {
+		if (ghost == null) return;
+		try { ghost.DisableCollisionsWith(pawn); } catch { }
+		try { ghost.AcceptInput("DisableCollision"); } catch { }
+	}
 
 	private float StartYaw => _pts.Count > 3 ? Aim.YawTo(_pts[0].P, _pts[3].P) : 0f;
 
@@ -238,7 +246,7 @@ sealed class RouteDrill : Drill {
 		double ms = _go ? nowMs - _goMs : 0;
 		var gp = GhostAt(ms, out var gyaw);
 		try {
-			if (_ghost == null || !_ghost.IsValid) { _ghost = Actor.MakeBody(gp); if (_ghost != null) _ghost.RenderColor = System.Drawing.Color.FromArgb(255, 120, 190, 255); }
+			if (_ghost == null || !_ghost.IsValid) { _ghost = Actor.MakeBody(gp); if (_ghost != null) _ghost.RenderColor = System.Drawing.Color.FromArgb(255, 120, 190, 255); NoCollide(_ghost, pawn); }
 			_ghost?.Teleport(position: gp, angles: new Vector3(0f, gyaw, 0f));
 		} catch { }
 		// A label above the ghost: even while the client is still streaming the hero model in, you see where the ghost is.
