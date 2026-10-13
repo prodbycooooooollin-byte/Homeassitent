@@ -18,6 +18,10 @@ Aim Range length) live in the game's mod settings.
 
 ## Run it
 
+**Windows, automatisch:** Doppelklick auf `Start-Lanelab.cmd`. Es lädt Modlock selbst herunter, baut den Mod, startet den Server und öffnet Deadlock über Steam.
+
+**Manuell:**
+
 1. Download `modlock` from the [releases](https://github.com/paralin/modlock/releases).
 2. `cd lanelab && modlock dev`
 
