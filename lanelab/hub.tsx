@@ -114,7 +114,10 @@ export class Hub {
     log(`notify slot ${player.slot}: ${text}`)
     const d = this.displayOf(s)
     if (d !== 'text') panelToast(player, text, seconds)
-    if (d !== 'panel') s.notice = { text, until: this.now + seconds }
+    if (d !== 'panel') {
+      s.notice = { text, until: this.now + seconds }
+      player.announce('LANELAB', text)
+    }
   }
 
   setDisplay(player: Player, arg: string): void {

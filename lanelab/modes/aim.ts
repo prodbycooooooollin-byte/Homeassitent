@@ -8,6 +8,7 @@ import { polar, yawOf } from '../lib/math'
 import {
   expired, respawnAway, type Scenario, spawn, step, type TargetState,
 } from '../lib/scenarios'
+import { clearBetween, groundAt } from '../lib/world'
 import { enemyTeam, type HudModel, Mode, recordBest, bestOf } from './mode'
 
 const targetHero = 'hero_wraith'
@@ -18,6 +19,8 @@ interface Target {
   bot: Player
   state: TargetState
   entity: number
+  /** z is the floor height under the target's spot. */
+  z: number
 }
 
 export class AimMode extends Mode {
@@ -53,19 +56,43 @@ export class AimMode extends Mode {
     this.endsAt = this.armedAt + this.seconds
     const team = enemyTeam(pawn.team)
     for (let i = 0; i < this.scenario.targets; i++) {
-      const bot = addBot({ name: 'Target', team, hero: targetHero, position: this.world(spawn(this.scenario, now, i)) })
+      const state = this.place(spawn(this.scenario, now, i), now, i)
+      const bot = addBot({ name: 'Target', team, hero: targetHero, position: this.world(state, this.floor(state)) })
       if (!bot) {
         this.stop()
         return false
       }
-      this.targets.push({ bot, state: spawn(this.scenario, now, i), entity: 0 })
+      this.targets.push({ bot, state, entity: 0, z: this.floor(state) })
     }
     this.spawnedAt = this.armedAt
     return true
   }
 
-  private world(t: TargetState) {
-    return polar(this.origin, this.yaw, t.f, t.l)
+  private world(t: TargetState, z = this.origin.z) {
+    const p = polar(this.origin, this.yaw, t.f, t.l)
+    return { x: p.x, y: p.y, z }
+  }
+
+  /** floor is the ground height under a spot, or the shooter's own height. */
+  private floor(t: TargetState): number {
+    const p = this.world(t)
+    return groundAt(p)?.z ?? this.origin.z
+  }
+
+  /**
+   * place keeps a spot only if it stands on floor near the shooter's height
+   * with open air between the shooter and it; otherwise it draws new spots.
+   */
+  private place(first: TargetState, now: number, index: number, old?: TargetState): TargetState {
+    let state = first
+    const eye = { x: this.origin.x, y: this.origin.y, z: this.origin.z }
+    for (let i = 0; i < 14; i++) {
+      const p = this.world(state)
+      const ground = groundAt(p)
+      if (ground && Math.abs(ground.z - this.origin.z) < 130 && clearBetween(eye, { ...p, z: ground.z }, 80)) return state
+      state = old ? respawnAway(this.scenario, now, old, index) : spawn(this.scenario, now, index)
+    }
+    return state
   }
 
   frame(now: number): void {
@@ -82,14 +109,15 @@ export class AimMode extends Mode {
           this.misses++
           this.expiredCount++
           this.combo.drop()
-          t.state = respawnAway(this.scenario, now, t.state, i)
+          t.state = this.place(respawnAway(this.scenario, now, t.state, i), now, i, t.state)
           this.say('Too slow', 'bad')
         }
       }
       const pawn = t.bot.pawn()
       if (pawn === undefined) continue
       t.entity = pawn.entity
-      const pos = this.world(t.state)
+      t.z = groundAt(this.world(t.state))?.z ?? t.z
+      const pos = this.world(t.state, t.z)
       t.bot.teleport(pos, { pitch: 0, yaw: yawOf(pos, this.origin), roll: 0 })
     }
   }
@@ -114,7 +142,7 @@ export class AimMode extends Mode {
       this.say(`${head ? 'HEADSHOT' : 'Hit'}  +${points}`, head ? 'good' : 'info')
       if (head) this.player.sound('Damage.Send.Crit')
       const i = this.targets.indexOf(target)
-      target.state = respawnAway(s, this.now, target.state, i)
+      target.state = this.place(respawnAway(s, this.now, target.state, i), this.now, i, target.state)
       this.spawnedAt = this.now
     }
     return { block: true }

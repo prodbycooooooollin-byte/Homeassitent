@@ -5,6 +5,7 @@ import { type DamagedEvent, type Npc, type Player, spawnNpc } from 'modlock'
 
 import { clock, pct } from '../lib/format'
 import { between, polar, yawOf } from '../lib/math'
+import { clearBetween, groundAt } from '../lib/world'
 import { enemyTeam, type HudModel, Mode, recordBest, bestOf } from './mode'
 
 const maxHp = 320
@@ -66,7 +67,15 @@ export class LastHitMode extends Mode {
 
   private spawnTroop(now: number): void {
     const ally = this.o.deny && Math.random() < 0.3
-    const pos = polar(this.origin, this.yaw, between(420, 760), between(-340, 340))
+    let pos = polar(this.origin, this.yaw, between(420, 760), between(-340, 340))
+    for (let i = 0; i < 14; i++) {
+      const ground = groundAt(pos)
+      if (ground && Math.abs(ground.z - this.origin.z) < 130 && clearBetween(this.origin, ground, 80)) {
+        pos = ground
+        break
+      }
+      pos = polar(this.origin, this.yaw + between(-60, 60), between(300, 650), 0)
+    }
     const npc = spawnNpc({
       className: 'npc_trooper',
       unit: 'trooper_normal',
