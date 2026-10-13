@@ -28,6 +28,8 @@ export class FakePlayer {
   metrics: Array<[string, number, string | undefined]> = []
   announces: string[] = []
   sounds: string[] = []
+  centers: string[] = []
+  chats: string[] = []
   teleports: Vector[] = []
   frozen = false
   removedBot = false
@@ -42,6 +44,9 @@ export class FakePlayer {
     }
   }
   setting(k: string) { return this.settings[k] }
+  setSetting(k: string, v: string) { this.settings[k] = v; return true }
+  centerText(t: string) { this.centers.push(t); return true }
+  chat(t: string) { this.chats.push(t); return true }
   sound(s: string) { this.sounds.push(s); return true }
   announce(t: string, x: string) { this.announces.push(`${t}: ${x}`); return true }
   addMetric(n: string, v: number, l?: string) { this.metrics.push([n, v, l]); return true }

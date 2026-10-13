@@ -1,10 +1,9 @@
 // Lanelab: solo training modes for Deadlock. Aim Range, Last-Hit Lab,
 // Checkpoint Rush, Flow Meter, Route Studio, Duel Ladder and sandbox tools.
 // Everything also works from chat: type /help.
-import { command as rawCommand, log, onDamage, onDamaged, onFrame, onStart, onWorld, type Player, toast } from 'modlock'
+import { command as rawCommand, log, onDamage, onDamaged, onFrame, onStart, onWorld, type Player } from 'modlock'
 
 import { Hub } from './hub'
-import { SCENARIOS } from './lib/scenarios'
 
 const hub = new Hub()
 
@@ -12,7 +11,6 @@ const hub = new Hub()
 function command(name: string, handler: (player: Player, args: string) => void): void {
   rawCommand(name, (player, args) => {
     log(`command /${name} ${args} from slot ${player.slot}`)
-    player.chat(`Lanelab: /${name} received`)
     handler(player, args)
   })
 }
@@ -45,7 +43,5 @@ command('souls', (player, args) => hub.tool(player, 'souls', args.trim()))
 command('bot', (player, args) => hub.tool(player, 'bot', args))
 command('nobots', (player) => hub.tool(player, 'nobots'))
 command('clean', (player) => hub.tool(player, 'clean'))
-command('help', (player) => {
-  toast(player, '/menu · /aim [' + SCENARIOS.map((s) => s.id).join('|') + '] · /lasthit · /rush · /flow · /duel · /hero <name> · /stop', 12)
-  toast(player, '/route add|undo|clear|run · /dps · /refill · /souls [n] · /bot [hero] [fight] · /nobots', 12)
-})
+command('help', (player) => hub.help(player))
+command('ui', (player, args) => hub.setDisplay(player, args))

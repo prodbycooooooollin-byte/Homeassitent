@@ -3,11 +3,11 @@
 // commands, and draws the screen.
 import {
   addBot, log, type DamageEvent, type DamageResult, type DamagedEvent, hide,
-  type Player, players, removeEntities, serverCommand, show, toast,
+  type Player, players, removeEntities, serverCommand, show, toast as panelToast,
 } from 'modlock'
 
 import {
-  AIM_LENGTHS, BLEED, defaultSel, DUEL_REACTION, FLOW_LINE, RUSH_SIZE, type Sel,
+  AIM_LENGTHS, BLEED, defaultSel, DUEL_REACTION, FLOW_LINE, RUSH_COUNT, RUSH_SIZE, type Sel,
 } from './lib/catalog'
 import { polar } from './lib/math'
 import { SCENARIOS, scenarioById } from './lib/scenarios'
@@ -22,6 +22,7 @@ import { DpsBadge, Hud } from './ui/hud'
 import { Menu, type MenuActions } from './ui/menu'
 import { ResultCard } from './ui/result'
 import { accentOf, C } from './ui/theme'
+import { type Display, MENU_TEXT, modeText, parseDisplay, resultText } from './ui/text'
 
 /** serverConfig keeps frames running on an empty server and the lanes quiet. */
 export const serverConfig = [
@@ -62,6 +63,13 @@ interface Session {
   /** joinedAt is when the player first showed up; heroTried marks the automatic pick. */
   joinedAt: number
   heroTried: boolean
+  /** display overrides the player's setting for this session. */
+  display?: Display
+  /** notice is a short message for the text screen. */
+  notice?: { text: string; until: number }
+  lastText: string
+  menuAt: number
+  lenChosen: boolean
 }
 
 export class Hub {
@@ -87,11 +95,45 @@ export class Hub {
     if (!s) {
       s = {
         player, menu: false, sel: defaultSel(), book: new RouteBook(), resultAt: 0,
-        dpsOn: false, hits: [], peak: 0, total: 0, bots: [], botProfile: 'none', welcomed: false, joinedAt: this.now, heroTried: false,
+        dpsOn: false, hits: [], peak: 0, total: 0, bots: [], botProfile: 'none', welcomed: false, joinedAt: this.now, heroTried: false, lastText: '', menuAt: 0, lenChosen: false,
       }
       this.sessions.set(player.slot, s)
     }
     return s
+  }
+
+  // ---------- display ----------
+
+  displayOf(s: Session): Display {
+    return s.display ?? parseDisplay(s.player.setting('display'))
+  }
+
+  /** notify tells a player something short, on the panel, as text, or both. */
+  notify(player: Player, text: string, seconds = 5): void {
+    const s = this.session(player)
+    log(`notify slot ${player.slot}: ${text}`)
+    const d = this.displayOf(s)
+    if (d !== 'text') panelToast(player, text, seconds)
+    if (d !== 'panel') s.notice = { text, until: this.now + seconds }
+  }
+
+  setDisplay(player: Player, arg: string): void {
+    const s = this.session(player)
+    const v = arg.trim()
+    if (v !== 'text' && v !== 'panel' && v !== 'both') {
+      return this.notify(player, `Display is "${this.displayOf(s)}". Use /ui text, /ui panel or /ui both.`, 7)
+    }
+    s.display = v
+    player.setSetting('display', v)
+    if (v === 'text') hide(player)
+    s.lastText = ''
+    this.notify(player, `Display: ${v}.`)
+  }
+
+  help(player: Player): void {
+    const s = this.session(player)
+    s.menu = true
+    s.menuAt = this.now
   }
 
   // ---------- frames and hits ----------
@@ -114,6 +156,7 @@ export class Hub {
       if (!s.welcomed) {
         s.welcomed = true
         s.menu = true
+        s.menuAt = this.now
         log(`Lanelab: player in slot ${c.player.slot} joined, hero ${s.player.pawn() ? 'yes' : 'not yet'}`)
       }
       // A player who joined without a hero gets one after a few seconds.
@@ -157,7 +200,7 @@ export class Hub {
   stopMode(player: Player): void {
     const s = this.session(player)
     if (!s.mode) {
-      toast(player, 'No mode is running.')
+      this.notify(player, 'No mode is running.')
       return
     }
     this.end(s)
@@ -173,6 +216,7 @@ export class Hub {
       s.result = mode.result
       s.resultAt = this.now
       s.player.announce(mode.result.title, mode.result.headline)
+      if (this.displayOf(s) !== 'panel') s.lastText = ''
     }
     this.applyBots()
   }
@@ -199,7 +243,7 @@ export class Hub {
     if (profile === 'none') return true
     const others = this.wantedProfile(s)
     if (others.some((o) => o !== profile)) {
-      toast(s.player, 'Another player is using bots that behave differently. Try again when they finish.', 6)
+      this.notify(s.player, 'Another player is using bots that behave differently. Try again when they finish.', 6)
       return false
     }
     return true
@@ -210,7 +254,7 @@ export class Hub {
     s.result = undefined
     if (!this.claim(s, mode.bots)) return false
     if (!mode.start(this.now)) {
-      toast(s.player, 'You need a living hero to start this.')
+      this.notify(s.player, 'You need a living hero to start this.')
       mode.stop()
       return false
     }
@@ -223,33 +267,52 @@ export class Hub {
   startById(player: Player, id: string, arg = ''): void {
     const s = this.session(player)
     const sel = s.sel
+    const words = arg.trim().split(/\s+/).filter(Boolean)
+    const num = (list: readonly number[]) => Number(words.find((w) => list.includes(Number(w))))
+    const word = <T extends string>(list: readonly T[]) => words.find((w): w is T => (list as readonly string[]).includes(w))
     const keep = (make: () => Mode) => {
       s.again = () => { this.begin(s, make()) }
       this.begin(s, make())
     }
     switch (id) {
       case 'aim': {
-        const sc = scenarioById(arg) ?? scenarioById(sel.aim) ?? (SCENARIOS[0] as (typeof SCENARIOS)[number])
+        const sc = scenarioById(words[0] ?? '') ?? scenarioById(sel.aim) ?? (SCENARIOS[0] as (typeof SCENARIOS)[number])
         sel.aim = sc.id
-        const len = Number(player.setting('length')) || sel.len
-        keep(() => new AimMode(player, sc, AIM_LENGTHS.includes(len as never) ? len : sel.len))
+        const given = num(AIM_LENGTHS)
+        if (given) sel.len = given
+        else if (!s.lenChosen) sel.len = AIM_LENGTHS.includes(Number(player.setting('length')) as never) ? Number(player.setting('length')) : sel.len
+        keep(() => new AimMode(player, sc, sel.len))
         break
       }
-      case 'lasthit':
+      case 'lasthit': {
+        const b = word(['slow', 'normal', 'fast'] as const)
+        if (b) sel.bleed = b
         keep(() => new LastHitMode(player, { seconds: 90, bleed: BLEED[sel.bleed], deny: sel.deny }))
         break
-      case 'rush':
+      }
+      case 'rush': {
+        const n = num(RUSH_COUNT)
+        if (n) sel.rushCount = n
+        const z = word(['tight', 'medium', 'wide'] as const)
+        if (z) sel.rushSize = z
         keep(() => new RushMode(player, sel.rushCount, RUSH_SIZE[sel.rushSize]))
         break
-      case 'flow':
+      }
+      case 'flow': {
+        const l = word(['easy', 'normal', 'hard'] as const)
+        if (l) sel.flow = l
         keep(() => new FlowMode(player, { seconds: 60, line: FLOW_LINE[sel.flow], label: sel.flow }))
         break
-      case 'duel':
+      }
+      case 'duel': {
+        const l = word(['easy', 'normal', 'hard'] as const)
+        if (l) sel.duel = l
         keep(() => new DuelMode(player, { reaction: DUEL_REACTION[sel.duel], label: sel.duel, seconds: 420 }))
         break
+      }
       case 'route':
         if (s.book.points.length < 2) {
-          toast(player, 'Add at least two checkpoints first: stand somewhere and use /route add.', 6)
+          this.notify(player, 'Add at least two checkpoints first: stand somewhere and use /route add.', 6)
           return
         }
         keep(() => new RouteRunMode(player, s.book))
@@ -261,9 +324,9 @@ export class Hub {
   pickHero(player: Player, name: string, auto = false): void {
     const id = name.startsWith('hero_') ? name : `hero_${name || 'wraith'}`
     const team = player.pawn()?.team ?? 2
-    if (this.session(player).mode) return void toast(player, 'Stop the running mode first (/stop).')
+    if (this.session(player).mode) return void this.notify(player, 'Stop the running mode first (/stop).')
     const ok = player.selectHero(id, team)
-    toast(player, ok === undefined ? `The hero ${id} is not available.` : auto ? `You play ${id.replace('hero_', '')}. Change it with /hero <name>.` : `Hero: ${id.replace('hero_', '')}.`, 6)
+    this.notify(player, ok === undefined ? `The hero ${id} is not available.` : auto ? `You play ${id.replace('hero_', '')}. Change it with /hero <name>.` : `Hero: ${id.replace('hero_', '')}.`, 6)
   }
 
   // ---------- sandbox ----------
@@ -275,23 +338,23 @@ export class Hub {
       case 'dps':
         s.dpsOn = !s.dpsOn
         if (s.dpsOn) { s.peak = 0; s.total = 0; s.hits = [] }
-        toast(player, s.dpsOn ? 'DPS meter on.' : 'DPS meter off.')
+        this.notify(player, s.dpsOn ? 'DPS meter on.' : 'DPS meter off.')
         break
       case 'refill':
-        if (!pawn || pawn.health <= 0) return void toast(player, 'You need a living hero.')
+        if (!pawn || pawn.health <= 0) return void this.notify(player, 'You need a living hero.')
         player.heal(100000)
         player.restoreStamina()
         for (const a of player.abilities()) player.refreshAbility(a.name)
-        toast(player, 'Health, stamina and abilities refilled.')
+        this.notify(player, 'Health, stamina and abilities refilled.')
         break
       case 'souls': {
         const n = Math.max(1, Math.min(500000, Number(arg) || 50000))
         player.adjustSouls(n)
-        toast(player, `+${n} souls.`)
+        this.notify(player, `+${n} souls.`)
         break
       }
       case 'bot': {
-        if (!pawn || pawn.health <= 0) return void toast(player, 'You need a living hero.')
+        if (!pawn || pawn.health <= 0) return void this.notify(player, 'You need a living hero.')
         const [heroArg, mode] = arg.trim().split(/\s+/)
         const fight = mode === 'fight' || heroArg === 'fight'
         const profile: Bots = fight ? 'hostile' : 'passive'
@@ -302,23 +365,23 @@ export class Hub {
           team: enemyTeam(pawn.team), hero,
           position: polar(pawn.position, pawn.eyeAngles.yaw, 700, 0),
         })
-        if (!bot) return void toast(player, 'The bot could not join. Check the hero name.')
+        if (!bot) return void this.notify(player, 'The bot could not join. Check the hero name.')
         s.bots.push(bot)
         s.botProfile = profile
         this.applyBots()
-        toast(player, fight ? 'A sparring bot joins and fights back.' : 'A practice dummy joins.')
+        this.notify(player, fight ? 'A sparring bot joins and fights back.' : 'A practice dummy joins.')
         break
       }
       case 'nobots':
         for (const b of s.bots) b.removeBot()
-        toast(player, s.bots.length ? 'Bots removed.' : 'You have no bots.')
+        this.notify(player, s.bots.length ? 'Bots removed.' : 'You have no bots.')
         s.bots = []
         s.botProfile = 'none'
         this.applyBots()
         break
       case 'clean': {
         const n = removeEntities('npc_trooper') ?? 0
-        toast(player, `${n} troopers removed.`)
+        this.notify(player, `${n} troopers removed.`)
         break
       }
     }
@@ -329,23 +392,23 @@ export class Hub {
     const pawn = player.pawn()
     switch (op) {
       case 'add': {
-        if (!pawn || pawn.health <= 0) return void toast(player, 'You need a living hero.')
+        if (!pawn || pawn.health <= 0) return void this.notify(player, 'You need a living hero.')
         const n = s.book.add(pawn.position)
-        toast(player, n < 0 ? 'A route holds at most 24 checkpoints.' : n === 1 ? 'START set. Add more with /route add.' : `Checkpoint ${n} set.`)
+        this.notify(player, n < 0 ? 'A route holds at most 24 checkpoints.' : n === 1 ? 'START set. Add more with /route add.' : `Checkpoint ${n} set.`)
         break
       }
       case 'undo':
-        toast(player, s.book.undo() ? 'Last checkpoint removed.' : 'Nothing to undo.')
+        this.notify(player, s.book.undo() ? 'Last checkpoint removed.' : 'Nothing to undo.')
         break
       case 'clear':
         s.book.clear()
-        toast(player, 'Route cleared.')
+        this.notify(player, 'Route cleared.')
         break
       case 'run':
         this.startById(player, 'route')
         break
       case 'list':
-        toast(player, `${s.book.points.length} checkpoint${s.book.points.length === 1 ? '' : 's'} set.`)
+        this.notify(player, `${s.book.points.length} checkpoint${s.book.points.length === 1 ? '' : 's'} set.`)
         break
     }
   }
@@ -353,13 +416,14 @@ export class Hub {
   setMenu(player: Player, open: boolean | 'toggle'): void {
     const s = this.session(player)
     s.menu = open === 'toggle' ? !s.menu : open
-    if (s.menu) s.result = undefined
+    if (s.menu) { s.result = undefined; s.menuAt = this.now }
+    s.lastText = ''
   }
 
   // ---------- drawing ----------
 
   private readonly actions: MenuActions = {
-    set: (player, key, value) => { this.session(player).sel[key] = value },
+    set: (player, key, value) => { const s = this.session(player); s.sel[key] = value; if (key === 'len') s.lenChosen = true },
     start: (player, id) => this.startById(player, id),
     close: (player) => this.setMenu(player, false),
     route: (player, op) => this.route(player, op),
@@ -367,7 +431,33 @@ export class Hub {
     stop: (player) => this.stopMode(player),
   }
 
+  /** drawText sends the plain-text screen, only when it changed. */
+  private drawText(s: Session): void {
+    const lines: string[] = []
+    if (s.notice && this.now < s.notice.until) lines.push(`* ${s.notice.text}`)
+    if (s.mode) {
+      lines.push(modeText(s.mode.hud(this.now), s.mode.feed, this.now))
+    } else if (s.menu) {
+      if (this.now - s.menuAt > 25) s.menu = false
+      else lines.push(MENU_TEXT)
+    } else if (s.result) {
+      lines.push(resultText(s.result))
+    }
+    if (s.dpsOn) {
+      const dps = s.hits.reduce((a, h) => a + h.dealt, 0) / dpsWindow
+      lines.push(`DPS ${Math.round(dps)}  peak ${Math.round(s.peak)}  total ${Math.round(s.total)}`)
+    }
+    const text = lines.join('\n')
+    if (text !== s.lastText) {
+      s.lastText = text
+      s.player.centerText(text)
+    }
+  }
+
   private draw(s: Session): void {
+    const d = this.displayOf(s)
+    if (d !== 'panel') this.drawText(s)
+    if (d === 'text') return
     const accent = accentOf(s.player.setting('accent'))
     const compact = s.player.setting('hud') === 'compact'
     const dps = s.dpsOn

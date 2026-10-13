@@ -17,6 +17,17 @@
       "default": "coral"
     },
     {
+      "key": "display",
+      "label": "Display",
+      "kind": "KIND_CHOICE",
+      "choices": [
+        { "value": "text", "label": "Text (always works)" },
+        { "value": "panel", "label": "Panels" },
+        { "value": "both", "label": "Text and panels" }
+      ],
+      "default": "text"
+    },
+    {
       "key": "hud",
       "label": "HUD size",
       "kind": "KIND_CHOICE",

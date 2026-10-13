@@ -45,6 +45,7 @@ beforeEach(() => {
   traceMode = 'floor'
   hub = new Hub()
   me = game.human()
+  me.settings.display = 'both'
   me.pos = { x: 100, y: 200, z: 10 }
   t = 0
   hub.start()
@@ -308,6 +309,7 @@ describe('sandbox and conflicts', () => {
   })
   test('hostile and passive bots cannot mix across players', () => {
     const other = game.human()
+    other.settings.display = 'both'
     other.pos = { x: 0, y: 0, z: 0 }
     tick(0.1)
     hub.startById(me as any, 'aim', 'click')
@@ -326,5 +328,46 @@ describe('sandbox and conflicts', () => {
     expect(game.bots.length).toBe(1)
     hub.tool(me as any, 'nobots')
     expect(game.bots[0]!.removedBot).toBe(true)
+  })
+})
+
+describe('text display', () => {
+  test('text mode shows the menu and the mode as center text and uses no panels', () => {
+    me.settings.display = 'text'
+    game.screens.clear()
+    tick(0.2)
+    expect(me.centers.at(-1)).toContain('/aim')
+    hub.startById(me as any, 'aim', 'strafe 30')
+    tick(3.3)
+    const last = me.centers.at(-1)!
+    expect(last).toContain('AIM RANGE')
+    expect(last).toContain('STRAFE FLICK')
+    expect(game.screens.size).toBe(0)
+    hub.startById(me as any, 'aim', 'strafe 30')
+    tick(40)
+    expect(me.centers.at(-1)).toContain('points')
+    expect(me.announces.length).toBeGreaterThan(0)
+  })
+  test('arguments choose options', () => {
+    me.settings.display = 'text'
+    hub.startById(me as any, 'rush', '6 wide')
+    tick(3.2)
+    expect(me.centers.at(-1)).toContain('of 6')
+    hub.stopMode(me as any)
+    hub.startById(me as any, 'flow', 'hard')
+    tick(3.2)
+    expect(me.centers.at(-1)).toContain('HARD')
+    hub.stopMode(me as any)
+  })
+  test('notices show as text and /ui switches', () => {
+    me.settings.display = 'text'
+    hub.route(me as any, 'add')
+    tick(0.2)
+    expect(me.centers.at(-1)).toContain('START set')
+    hub.setDisplay(me as any, 'both')
+    expect(me.settings.display).toBe('both')
+    hub.setDisplay(me as any, 'nonsense')
+    tick(0.2)
+    expect(me.centers.at(-1)).toContain('Display is')
   })
 })
