@@ -18,7 +18,7 @@ Aim Range length) live in the game's mod settings.
 
 ## Run it
 
-**Windows, automatisch:** Doppelklick auf `Start-Lanelab.cmd`. Es lädt Modlock selbst herunter, baut den Mod, startet den Server und öffnet Deadlock über Steam.
+**Windows, automatisch:** Nur `Start-Lanelab.cmd` herunterladen, in einen leeren Ordner legen und doppelklicken. Bei jedem Start holt es die neueste Lanelab-Version von GitHub (Branch steht oben in der Datei), aktualisiert Modlock bei Bedarf, findet Deadlock selbst, baut den Mod, startet den Server und öffnet das Spiel.
 
 **Manuell:**
 
