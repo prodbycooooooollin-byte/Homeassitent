@@ -38,13 +38,15 @@ $tools = Join-Path $here '.modlock'
 $exe = Join-Path $tools 'modlock.exe'
 
 try {
+  # Ein früher falsch geladenes Programm erkennen und löschen.
+  if ((Test-Path $exe) -and ((Get-Item $exe).Length -lt 5MB)) { Remove-Item $exe -Force }
   if (-not (Test-Path $exe)) {
     Write-Host 'Lade Modlock herunter (nur beim ersten Start)...'
     New-Item -ItemType Directory -Force -Path $tools | Out-Null
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/paralin/modlock/releases/latest' -Headers @{ 'User-Agent' = 'lanelab' }
-    $asset = $release.assets | Where-Object { $_.name -match 'windows' -and $_.name -match '\.(exe|zip)$' } | Select-Object -First 1
-    if (-not $asset) { throw 'Keine Windows-Datei im neuesten Modlock-Release gefunden: https://github.com/paralin/modlock/releases' }
+    $asset = $release.assets | Where-Object { $_.name -eq 'modlock-windows-amd64.exe' } | Select-Object -First 1
+    if (-not $asset) { throw 'modlock-windows-amd64.exe fehlt im neuesten Modlock-Release: https://github.com/paralin/modlock/releases' }
     $file = Join-Path $tools $asset.name
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $file -UseBasicParsing
     if ($asset.name -match '\.zip$') {
