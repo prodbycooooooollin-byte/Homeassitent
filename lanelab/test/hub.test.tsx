@@ -281,6 +281,24 @@ describe('duel ladder', () => {
   })
 })
 
+describe('hero', () => {
+  test('a player without a hero gets one after a few seconds', () => {
+    me.hasPawn = false
+    const before = me.hero
+    me.hero = 'none'
+    tick(5)
+    expect(me.hero).toBe('hero_wraith')
+    expect(game.toasts.join(' ')).toContain('wraith')
+    me.hero = before
+  })
+  test('/hero picks one, and says when the hero is missing', () => {
+    hub.pickHero(me as any, 'haze')
+    expect(me.hero).toBe('hero_haze')
+    hub.pickHero(me as any, 'missing')
+    expect(game.toasts.join(' ')).toContain('not available')
+  })
+})
+
 describe('sandbox and conflicts', () => {
   test('dps meter counts damage', () => {
     hub.tool(me as any, 'dps')

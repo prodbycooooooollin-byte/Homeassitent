@@ -59,6 +59,9 @@ interface Session {
   bots: Player[]
   botProfile: Bots
   welcomed: boolean
+  /** joinedAt is when the player first showed up; heroTried marks the automatic pick. */
+  joinedAt: number
+  heroTried: boolean
 }
 
 export class Hub {
@@ -84,7 +87,7 @@ export class Hub {
     if (!s) {
       s = {
         player, menu: false, sel: defaultSel(), book: new RouteBook(), resultAt: 0,
-        dpsOn: false, hits: [], peak: 0, total: 0, bots: [], botProfile: 'none', welcomed: false,
+        dpsOn: false, hits: [], peak: 0, total: 0, bots: [], botProfile: 'none', welcomed: false, joinedAt: this.now, heroTried: false,
       }
       this.sessions.set(player.slot, s)
     }
@@ -111,6 +114,11 @@ export class Hub {
       if (!s.welcomed) {
         s.welcomed = true
         s.menu = true
+      }
+      // A player who joined without a hero gets one after a few seconds.
+      if (!s.heroTried && s.player.pawn() === undefined && now - s.joinedAt > 4) {
+        s.heroTried = true
+        this.pickHero(s.player, 'wraith', true)
       }
       s.hits = s.hits.filter((h) => now - h.t < dpsWindow)
       if (s.mode) {
@@ -246,6 +254,15 @@ export class Hub {
         keep(() => new RouteRunMode(player, s.book))
         break
     }
+  }
+
+  /** pickHero puts a player on a hero, on team 2 unless they already stand on one. */
+  pickHero(player: Player, name: string, auto = false): void {
+    const id = name.startsWith('hero_') ? name : `hero_${name || 'wraith'}`
+    const team = player.pawn()?.team ?? 2
+    if (this.session(player).mode) return void toast(player, 'Stop the running mode first (/stop).')
+    const ok = player.selectHero(id, team)
+    toast(player, ok === undefined ? `The hero ${id} is not available.` : auto ? `You play ${id.replace('hero_', '')}. Change it with /hero <name>.` : `Hero: ${id.replace('hero_', '')}.`, 6)
   }
 
   // ---------- sandbox ----------
