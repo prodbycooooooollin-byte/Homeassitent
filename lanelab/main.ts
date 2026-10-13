@@ -1,15 +1,30 @@
 // Lanelab: solo training modes for Deadlock. Aim Range, Last-Hit Lab,
 // Checkpoint Rush, Flow Meter, Route Studio, Duel Ladder and sandbox tools.
 // Everything also works from chat: type /help.
-import { command, onDamage, onDamaged, onFrame, onStart, onWorld, toast } from 'modlock'
+import { command as rawCommand, log, onDamage, onDamaged, onFrame, onStart, onWorld, type Player, toast } from 'modlock'
 
 import { Hub } from './hub'
 import { SCENARIOS } from './lib/scenarios'
 
 const hub = new Hub()
 
-onStart(() => hub.start())
-onWorld(() => hub.world())
+/** command registers a chat command and logs every use, so the terminal shows what arrived. */
+function command(name: string, handler: (player: Player, args: string) => void): void {
+  rawCommand(name, (player, args) => {
+    log(`command /${name} ${args} from slot ${player.slot}`)
+    player.chat(`Lanelab: /${name} received`)
+    handler(player, args)
+  })
+}
+
+onStart(() => {
+  log('Lanelab started')
+  hub.start()
+})
+onWorld((map) => {
+  log(`Lanelab world loaded: ${map}`)
+  hub.world()
+})
 onDamage((hit) => hub.hit(hit))
 onDamaged((hit) => hub.damaged(hit))
 onFrame((frame) => hub.frame(frame.timeSeconds))

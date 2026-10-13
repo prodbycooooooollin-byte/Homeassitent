@@ -2,7 +2,7 @@
 // result, the player's route and sandbox tools. It routes frames, hits and
 // commands, and draws the screen.
 import {
-  addBot, type DamageEvent, type DamageResult, type DamagedEvent, hide,
+  addBot, log, type DamageEvent, type DamageResult, type DamagedEvent, hide,
   type Player, players, removeEntities, serverCommand, show, toast,
 } from 'modlock'
 
@@ -114,6 +114,7 @@ export class Hub {
       if (!s.welcomed) {
         s.welcomed = true
         s.menu = true
+        log(`Lanelab: player in slot ${c.player.slot} joined, hero ${s.player.pawn() ? 'yes' : 'not yet'}`)
       }
       // A player who joined without a hero gets one after a few seconds.
       if (!s.heroTried && s.player.pawn() === undefined && now - s.joinedAt > 4) {
