@@ -2,6 +2,7 @@
 
 ## 0.2.0
 
+- Behoben: Nach einigen Stunden Stream konnte der Bot verstummen, obwohl alle Verbindungen grün angezeigt wurden – Twitch kann den Chat-Empfang beenden, ohne die Verbindung zu trennen. ON AIR prüft jetzt alle 5 Minuten bei Twitch, ob der Chat-Empfang noch aktiv ist, und verbindet sich sonst selbst neu. Fehlgeschlagene Chatantworten stehen jetzt im Aktivitätsprotokoll.
 - Anleitung korrigiert: Als OAuth Redirect URL der Twitch-App `https://localhost` eintragen (Twitch verlangt `https://`).
 - Behoben: Beim gemeinsamen Streamen (Twitch Shared Chat / „Stream Together“) konnten Zuschauer und Streamer der anderen Kanäle Songs wünschen, skippen oder Befehle auslösen. Jetzt reagiert ON AIR nur auf Nachrichten aus dem eigenen Chat.
 - Universal Request: Wünsche als Spotify-, YouTube-/YouTube-Music-, Apple-Music- und SoundCloud-Link oder „Künstler – Titel“; Kurzlinks, regionale Links und Tracking-Parameter werden erkannt; Zuordnung zur passenden Spotify-Version mit Versionserkennung (Remix, Live, Acoustic, sped up …); bei Mehrdeutigkeit kleine Auswahl im Chat (`!auswahl N`, `!abbrechen`) bzw. in der App. Einrichtung optionaler Zugangsdaten unter *Einstellungen → Musikquellen* (siehe `docs/QUELLEN.md`).

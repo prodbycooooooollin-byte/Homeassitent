@@ -243,6 +243,7 @@ impl Runtime {
             activity: activity.clone(),
             bus: bus.clone(),
             clock: cfg.clock.clone(),
+            health_interval: crate::twitch::service::HEALTH_INTERVAL,
         });
         queue.set_notifier(tw_handle.notifier());
 

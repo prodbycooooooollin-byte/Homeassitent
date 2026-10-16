@@ -141,6 +141,37 @@ impl Helix {
         }
     }
 
+    /// Typen der aktiven (`enabled`) Abos einer WebSocket-Session laut Twitch. Dient der
+    /// Selbstprüfung: Ein still beendetes Abo fällt sonst nicht auf, weil die Verbindung
+    /// selbst (Keepalives) weiterläuft.
+    pub async fn session_subscription_types(&self, session_id: &str) -> Result<Vec<String>, ApiError> {
+        let mut out = vec![];
+        let mut cursor: Option<String> = None;
+        for _ in 0..5 {
+            let mut path = "/eventsub/subscriptions?status=enabled".to_string();
+            if let Some(c) = &cursor {
+                path.push_str(&format!("&after={}", urlencoding::encode(c)));
+            }
+            let resp = self.call(Method::Get, &path, None).await?;
+            if !(200..300).contains(&resp.status) {
+                return Err(Self::classify(&resp));
+            }
+            let v = resp.json_body().unwrap_or_default();
+            if let Some(list) = v["data"].as_array() {
+                out.extend(
+                    list.iter()
+                        .filter(|s| s["transport"]["session_id"].as_str() == Some(session_id))
+                        .filter_map(|s| s["type"].as_str().map(str::to_string)),
+                );
+            }
+            cursor = v["pagination"]["cursor"].as_str().filter(|c| !c.is_empty()).map(str::to_string);
+            if cursor.is_none() {
+                break;
+            }
+        }
+        Ok(out)
+    }
+
     pub async fn subscribe_chat(&self, session_id: &str, broadcaster_id: &str, user_id: &str) -> Result<SubscribeResult, ApiError> {
         self.subscribe("channel.chat.message", json!({ "broadcaster_user_id": broadcaster_id, "user_id": user_id }), session_id).await
     }

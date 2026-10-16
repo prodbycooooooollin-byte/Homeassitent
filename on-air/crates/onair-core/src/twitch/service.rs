@@ -79,6 +79,31 @@ pub struct TwitchDeps {
     pub cp_reward: watch::Receiver<Option<String>>,
     /// Weiterleitung von Einlösungen an den Kanalpunkte-Dienst.
     pub redemptions_tx: mpsc::UnboundedSender<(bool, super::helix::RedemptionInfo)>,
+    /// Abstand der Selbstprüfung, ob Twitch die Abos der Session noch aktiv führt.
+    pub health_interval: Duration,
+}
+
+const CHAT_SUBSCRIPTION: &str = "channel.chat.message";
+const REDEMPTION_SUBSCRIPTIONS: [&str; 2] =
+    ["channel.channel_points_custom_reward_redemption.add", "channel.channel_points_custom_reward_redemption.update"];
+
+/// Standardabstand der Abo-Selbstprüfung.
+pub const HEALTH_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
+/// Abo-Typen, die erwartet, aber laut Twitch nicht (mehr) aktiv sind.
+pub fn missing_subscriptions(expected: &[&str], present: &[String]) -> Vec<String> {
+    expected.iter().filter(|e| !present.iter().any(|p| p == *e)).map(|e| e.to_string()).collect()
+}
+
+/// Selbstprüfung einer verbundenen Session.
+struct Health {
+    timer: tokio::time::Interval,
+    session_id: String,
+    expected: Vec<&'static str>,
+    /// Abos wurden bei einer Prüfung schon einmal als aktiv gesehen. Erst danach gilt ihr
+    /// Fehlen als Verlust – so führt eine abweichende Antwort von Twitch nie zu einer
+    /// Schleife aus Neuverbindungen.
+    seen: bool,
 }
 
 struct Shared {
@@ -242,8 +267,23 @@ impl TwitchService {
         let mut auth_rx = sh.deps.tokens.subscribe();
         let mut reward_rx = sh.deps.cp_reward.clone();
         reward_rx.borrow_and_update();
+        let mut health: Option<Health> = None;
         loop {
             let next = tokio::select! {
+                _ = async {
+                    match health.as_mut() {
+                        Some(h) => { h.timer.tick().await; }
+                        None => std::future::pending::<()>().await,
+                    }
+                } => {
+                    if let Some(h) = health.as_mut() {
+                        if let Some(d) = sh.check_health(h).await {
+                            let _ = ws.close(None).await;
+                            return d;
+                        }
+                    }
+                    continue;
+                }
                 r = reward_rx.changed() => {
                     // Andere Belohnung → frische Verbindung mit passenden Abos.
                     let _ = ws.close(None).await;
@@ -273,7 +313,15 @@ impl TwitchService {
                         watchdog = Duration::from_secs(keepalive_s + 5);
                         match sh.helix.subscribe_chat(&session_id, &identity.user_id, &identity.user_id).await {
                             Ok(_) => {
-                                sh.subscribe_redemptions(&session_id, identity).await;
+                                let mut expected = vec![CHAT_SUBSCRIPTION];
+                                if sh.subscribe_redemptions(&session_id, identity).await {
+                                    expected.extend(REDEMPTION_SUBSCRIPTIONS);
+                                }
+                                let every = sh.deps.health_interval;
+                                let first = tokio::time::Instant::now() + every.min(Duration::from_secs(60));
+                                let mut timer = tokio::time::interval_at(first, every);
+                                timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                                health = Some(Health { timer, session_id: session_id.clone(), expected, seen: false });
                                 backoff.reset();
                                 let now = sh.deps.clock.now_ms();
                                 sh.update(|s| {
@@ -296,6 +344,14 @@ impl TwitchService {
                                 let _ = ws.close(None).await;
                                 ws = new_ws;
                                 watchdog = Duration::from_secs(ka + 5);
+                                // Abos ziehen mit um; falls die Session-ID wechselt, die
+                                // Selbstprüfung neu ansetzen statt Verlust zu melden.
+                                if let (Some(h), Some(id)) = (health.as_mut(), proto.session_id.as_ref()) {
+                                    if *id != h.session_id {
+                                        h.session_id = id.clone();
+                                        h.seen = false;
+                                    }
+                                }
                                 sh.deps.activity.info("twitch.reconnected", "Twitch-Verbindung planmäßig gewechselt", json!({}));
                             }
                             Err(e) => return Disconnect::Transient(format!("Reconnect: {e}")),
@@ -416,19 +472,55 @@ impl Shared {
     /// Alle Einlösungen des Kanals abonnieren (nur mit passender Berechtigung). Bewusst ohne
     /// Filter auf die verwaltete Belohnung: Einlösungen fremder Belohnungen werden so sichtbar
     /// gemeldet statt still verschluckt, und eine bestehende Belohnung kann verwendet werden.
-    async fn subscribe_redemptions(&self, session_id: &str, identity: &Identity) {
+    /// `true`, wenn beide Abos angelegt wurden.
+    async fn subscribe_redemptions(&self, session_id: &str, identity: &Identity) -> bool {
         if self.deps.cp_reward.borrow().is_none() {
-            return;
+            return false;
         }
         if !identity.scopes.iter().any(|s| s == super::CHANNEL_POINTS_SCOPE) {
             self.deps.activity.warn("channel_points.subscribe_failed", "Kanalpunkte: Twitch-Berechtigung fehlt – bitte Twitch neu verbinden", json!({}));
-            return;
+            return false;
         }
-        for kind in ["channel.channel_points_custom_reward_redemption.add", "channel.channel_points_custom_reward_redemption.update"] {
+        let mut all = true;
+        for kind in REDEMPTION_SUBSCRIPTIONS {
             let cond = json!({ "broadcaster_user_id": identity.user_id });
             if let Err(e) = self.helix.subscribe(kind, cond, session_id).await {
+                all = false;
                 tracing::warn!(target: "twitch", code = e.code(), kind, "Kanalpunkte-Abo fehlgeschlagen");
                 self.deps.activity.warn("channel_points.subscribe_failed", "Kanalpunkte-Einlösungen konnten nicht abonniert werden", json!({ "code": e.code() }));
+            }
+        }
+        all
+    }
+
+    /// Selbstprüfung: Führt Twitch die Abos dieser Session noch als aktiv? Twitch kann ein
+    /// Abo beenden, ohne die WebSocket-Verbindung zu schließen – die Keepalives laufen dann
+    /// weiter, die Anzeige bleibt grün, aber es kommen keine Chatnachrichten mehr an.
+    /// Liefert `Some(..)`, wenn die Verbindung neu aufgebaut werden muss.
+    async fn check_health(&self, h: &mut Health) -> Option<Disconnect> {
+        match self.helix.session_subscription_types(&h.session_id).await {
+            Ok(present) => {
+                let missing = missing_subscriptions(&h.expected, &present);
+                if missing.is_empty() {
+                    h.seen = true;
+                    None
+                } else if h.seen {
+                    tracing::warn!(target: "twitch", ?missing, "Abo von Twitch beendet – neu verbinden");
+                    self.deps.activity.warn(
+                        "twitch.subscription_lost",
+                        "Twitch hat den Chat-Empfang beendet – Verbindung wird neu aufgebaut",
+                        json!({ "missing": missing }),
+                    );
+                    Some(Disconnect::Recover)
+                } else {
+                    tracing::debug!(target: "twitch", ?missing, "Abos noch nicht bestätigt");
+                    None
+                }
+            }
+            Err(ApiError::ReauthRequired { reason }) => Some(Disconnect::Auth(reason)),
+            Err(e) => {
+                tracing::info!(target: "twitch", code = e.code(), "Abo-Prüfung verschoben");
+                None
             }
         }
     }
@@ -696,6 +788,8 @@ impl Shared {
 /// Einziger Sender für Chatnachrichten: Mindestabstand, Längenbegrenzung, kein Stau.
 async fn chat_sender(sh: Arc<Shared>, mut rx: mpsc::Receiver<(String, Option<String>)>) {
     let mut last = tokio::time::Instant::now() - Duration::from_secs(60);
+    // Nur den ersten Fehler einer Serie melden, damit das Protokoll nicht vollläuft.
+    let mut failing = false;
     while let Some((text, reply_to)) = rx.recv().await {
         let min = Duration::from_millis(cfg::read(&sh.deps.settings).commands.min_reply_interval_ms);
         let wait = (last + min).saturating_duration_since(tokio::time::Instant::now());
@@ -704,15 +798,22 @@ async fn chat_sender(sh: Arc<Shared>, mut rx: mpsc::Receiver<(String, Option<Str
         }
         let Some(id) = sh.identity.lock().unwrap().clone() else { continue };
         match sh.helix.send_chat(&id.user_id, &id.user_id, &text, reply_to.as_deref()).await {
-            Ok(Some(mid)) => {
-                let mut s = sh.sent_ids.lock().unwrap();
-                s.push_back(mid);
-                if s.len() > 200 {
-                    s.pop_front();
+            Ok(mid) => {
+                failing = false;
+                if let Some(mid) = mid {
+                    let mut s = sh.sent_ids.lock().unwrap();
+                    s.push_back(mid);
+                    if s.len() > 200 {
+                        s.pop_front();
+                    }
                 }
             }
-            Ok(None) => {}
-            Err(e) => tracing::info!(target: "twitch", code = e.code(), "Chatantwort nicht gesendet"),
+            Err(e) => {
+                tracing::info!(target: "twitch", code = e.code(), "Chatantwort nicht gesendet");
+                if !std::mem::replace(&mut failing, true) {
+                    sh.deps.activity.warn("twitch.chat_send_failed", "Antwort im Chat konnte nicht gesendet werden", json!({ "code": e.code() }));
+                }
+            }
         }
         last = tokio::time::Instant::now();
     }

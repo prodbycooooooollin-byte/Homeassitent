@@ -78,6 +78,7 @@ received ─► pending_review ─(Freigabe / Spotify wieder erreichbar)─► a
 - Frische Verbindung: Welcome → Abo `channel.chat.message` (409 = existiert bereits, kein Duplikat).
 - `session_reconnect`: neue Verbindung zur `reconnect_url`, Welcome abwarten, dann alte schließen; **kein** neues Abo.
 - Watchdog: keine Nachricht innerhalb `keepalive_timeout_seconds + 5 s` → frische Verbindung mit Backoff.
+- Abo-Selbstprüfung alle 5 Minuten (`GET /eventsub/subscriptions?status=enabled`): Fehlt ein Abo der eigenen Session, das vorher schon als aktiv bestätigt war, wird frisch verbunden und neu abonniert. Twitch kann Abos beenden, während Keepalives weiterlaufen – der Watchdog allein bemerkt das nicht. Solange ein Abo nie als aktiv gesehen wurde, löst sein Fehlen nichts aus (keine Schleife bei abweichender Antwort).
 - `revocation`: `authorization_revoked` → Abmeldung und gezielte Loginaufforderung; sonst `blocked`.
 - Doppelte Zustellungen: `metadata.message_id` im Speicher, Chat-Message-ID dauerhaft in SQLite.
 - Eigene Chatantworten werden anhand ihrer Message-ID ignoriert (keine Schleifen).
