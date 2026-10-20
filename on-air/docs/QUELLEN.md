@@ -88,6 +88,7 @@ anderer Anbieter als Suchfilter, wenn vorhanden).
 | `!abbrechen` (`!cancel`) | Offene Auswahl verwerfen (Kanalpunkte werden erstattet) | `!abbrechen` |
 | `!ersetzen <…>` (`!replace`) | Eigenen noch nicht übergebenen Wunsch austauschen, Platz bleibt | `!ersetzen Daft Punk – One More Time` |
 | `!letztersong` (`!lastsong`, `!letzter song`, `!last song`) | Die letzten fünf in dieser Sitzung gespielten Songs | `!letzter song` |
+| `!topsongs` (`!top songs`) / `!topkuenstler` (`!top artists`) / `!topalben` (`!top alben`) / `!topwuenscher` | Top 5 der meistgespielten Songs, Künstler, Alben bzw. Wünscher, optional `stream`, `woche`, `monat` | `!topsongs woche` |
 
 Beispielablauf:
 ```
@@ -124,6 +125,18 @@ Regeln der Auswahl:
 - Wünschender wird nur genannt, wenn der Song wirklich ein Wunsch war; kein Zugriff auf den
   privaten Spotify-Verlauf.
 - Cooldowns: pro Zuschauer 30 s, global 10 s; Antworten bleiben unter 450 Zeichen.
+
+`!topsongs`, `!topkuenstler`, `!topalben`, `!topwuenscher`:
+- Grundlage ist derselbe gespeicherte Verlauf (tatsächlich beobachtete Wiedergaben, 180 Tage); ohne
+  Zeitraum zählt alles davon. `stream` = laufende Sitzung, `woche` = letzte 7 Tage, `monat` = letzte
+  30 Tage (gleitend). Ohne Daten im Zeitraum kommt eine Hinweisantwort.
+- Songs zählen je Titel; bei Künstlern zählt jeder genannte Künstler eines Titels; Alben je Album
+  und Hauptkünstler; Wünscher nur über Wiedergaben, die ein Wunsch waren (Schreibweise egal).
+  Gleichstand: zuletzt Gespielter zuerst.
+- Eine Nachricht (unter 450 Zeichen): zuerst werden lange Namen gekürzt, erst dann Plätze
+  weggelassen. Cooldowns: pro Zuschauer 30 s, zusätzlich kanalweit 15 s je Befehl.
+- Eigene Befehle mit gleichem Namen verlieren gegen die eingebauten (wie bei allen eingebauten
+  Befehlen); die Namen sind in den Einstellungen änderbar.
 
 ## In der App
 - **Song hinzufügen** erkennt Links automatisch; jede Option zeigt das Ergebnis der

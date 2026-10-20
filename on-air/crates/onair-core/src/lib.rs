@@ -35,6 +35,7 @@ pub mod runtime;
 pub mod secrets;
 pub mod settings;
 pub mod spotify;
+pub mod stats;
 pub mod storage;
 pub mod twitch;
 pub mod update_direct;

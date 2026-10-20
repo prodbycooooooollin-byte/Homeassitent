@@ -654,6 +654,19 @@ impl Shared {
                     self.reply(m, (i == 0 && n > 0).then(|| ev.message_id.clone()));
                 }
             }
+            CommandKind::TopSongs | CommandKind::TopArtists | CommandKind::TopAlbums | CommandKind::TopRequesters => {
+                let Some(subject) = kind.stats_subject() else { return };
+                // Je Statistik zusätzlich zur Sperre pro Person eine kanalweite Sperre gegen Chatspam.
+                let key = format!("{kind:?}:global");
+                if self.cooldowns.lock().unwrap().check(&key, "*", Role::Everyone, settings.stats_global_cooldown_s, now).is_err() {
+                    return;
+                }
+                let period = crate::stats::Period::parse(&args);
+                let ranked = self.deps.queue.top(subject, period, 5);
+                if let Some(text) = commands::render_top(&replies, subject, &period.label(), &ranked) {
+                    self.reply(text, Some(ev.message_id));
+                }
+            }
             CommandKind::Song => {
                 let st = self.deps.spotify_state.borrow().clone();
                 let text = match (&st.playback, st.is_online()) {

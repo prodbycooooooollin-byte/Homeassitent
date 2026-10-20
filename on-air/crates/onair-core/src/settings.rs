@@ -150,6 +150,13 @@ pub struct Replies {
     /// `!letztersong`: `{list}`.
     pub last_songs: String,
     pub last_songs_empty: String,
+    /// `!topsongs` u. a.: `{n}` = Zahl der gezeigten Einträge, `{period}` = Zeitraum, `{list}`.
+    pub top_songs: String,
+    pub top_artists: String,
+    pub top_albums: String,
+    pub top_requesters: String,
+    /// Noch keine Daten im Zeitraum: `{period}`.
+    pub top_empty: String,
     /// Angehängt, wenn ein YouTube-Link auch eine Playlist enthält: `{url}`.
     pub playlist_hint: String,
 }
@@ -193,6 +200,11 @@ impl Default for Replies {
             replace_failed: "@{user} Nicht geändert – dein bisheriger Wunsch bleibt: {reason}".into(),
             last_songs: "Zuletzt gespielt: {list}".into(),
             last_songs_empty: "In dieser Session wurde noch nichts anderes gespielt.".into(),
+            top_songs: "Top {n} Songs ({period}): {list}".into(),
+            top_artists: "Top {n} Künstler ({period}): {list}".into(),
+            top_albums: "Top {n} Alben ({period}): {list}".into(),
+            top_requesters: "Top {n} Wünscher ({period}): {list}".into(),
+            top_empty: "Für „{period}“ gibt es noch keine Daten.".into(),
             playlist_hint: " Lieber einen Song aus der Playlist? !sr {url}".into(),
         }
     }
@@ -227,6 +239,14 @@ pub struct CommandSettings {
     pub last_songs: CommandCfg,
     /// Globale Sperrzeit für `!letztersong` (gegen Chatspam), zusätzlich zur Sperre pro Person.
     pub last_songs_global_cooldown_s: u32,
+    /// Chat-Statistiken: meistgespielte Songs, Künstler, Alben und Wünscher. Zeitraum als
+    /// Argument: `stream`, `woche`, `monat` (ohne Argument: alles Gespeicherte).
+    pub top_songs: CommandCfg,
+    pub top_artists: CommandCfg,
+    pub top_albums: CommandCfg,
+    pub top_requesters: CommandCfg,
+    /// Kanalweite Sperrzeit je Statistik-Befehl (gegen Chatspam), zusätzlich zur Sperre pro Person.
+    pub stats_global_cooldown_s: u32,
     pub replies: Replies,
     /// Max. eine Chatnachricht pro Intervall (ms); darüber hinaus wird verworfen.
     pub min_reply_interval_ms: u64,
@@ -285,6 +305,17 @@ impl Default for CommandSettings {
             replace: CommandCfg { aliases: vec!["replace".into()], ..CommandCfg::new("ersetzen", Role::Everyone, 20) },
             last_songs: CommandCfg { aliases: vec!["lastsong".into(), "letzter song".into(), "last song".into()], ..CommandCfg::new("letztersong", Role::Everyone, 30) },
             last_songs_global_cooldown_s: 10,
+            top_songs: CommandCfg { aliases: vec!["topsong".into(), "top songs".into(), "top song".into()], ..CommandCfg::new("topsongs", Role::Everyone, 30) },
+            top_artists: CommandCfg {
+                aliases: vec!["topkünstler".into(), "topartists".into(), "topartist".into(), "top künstler".into(), "top artists".into()],
+                ..CommandCfg::new("topkuenstler", Role::Everyone, 30)
+            },
+            top_albums: CommandCfg { aliases: vec!["topalbums".into(), "topalbum".into(), "top alben".into(), "top albums".into()], ..CommandCfg::new("topalben", Role::Everyone, 30) },
+            top_requesters: CommandCfg {
+                aliases: vec!["topwünscher".into(), "toprequester".into(), "toprequesters".into(), "top wünscher".into(), "top requester".into()],
+                ..CommandCfg::new("topwuenscher", Role::Everyone, 30)
+            },
+            stats_global_cooldown_s: 15,
             replies: Replies::default(),
             min_reply_interval_ms: 1_200,
             custom: vec![],
@@ -626,6 +657,7 @@ impl Settings {
         src.chat_page_size = src.chat_page_size.clamp(3, 8);
         src.max_options = src.max_options.clamp(2, 5);
         self.commands.last_songs_global_cooldown_s = self.commands.last_songs_global_cooldown_s.min(600);
+        self.commands.stats_global_cooldown_s = self.commands.stats_global_cooldown_s.min(600);
         let prefix = self.commands.prefix.clone();
         let mut seen = std::collections::HashSet::new();
         self.commands.custom.truncate(MAX_CUSTOM_COMMANDS);

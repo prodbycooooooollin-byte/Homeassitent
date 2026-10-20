@@ -738,6 +738,23 @@ impl QueueService {
         list.truncate(n);
         list
     }
+
+    /// Rangliste aus dem Verlauf für `!topsongs` & Co. Ohne laufende Session ist „dieser Stream“
+    /// leer.
+    pub fn top(&self, subject: crate::stats::Subject, period: crate::stats::Period, limit: usize) -> Vec<crate::stats::Ranked> {
+        use crate::stats::{Period, PlayScope};
+        let channel = self.channel();
+        let now = self.clock_now();
+        let scope = match period {
+            Period::Stream => match self.store.current_session(&channel, now, SESSION_GAP_MS) {
+                Some((sid, _)) => PlayScope::Session(sid),
+                None => return vec![],
+            },
+            Period::Days(d) => PlayScope::Since(now - i64::from(d) * 86_400_000),
+            Period::All => PlayScope::Since(0),
+        };
+        crate::stats::rank(&self.store.play_rows(&channel, scope), subject, limit)
+    }
 }
 
 fn capitalize(s: &str) -> String {

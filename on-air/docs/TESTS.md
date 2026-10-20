@@ -104,6 +104,9 @@ EventSub-Protokoll inkl. Reconnect ohne Neuabo, Migrationen, atomare Textdatei, 
 | Ersetzen gleichzeitig mit Übergabe sendet nie zwei Songs / nie den falschen | `replace_racing_the_handoff_never_sends_two_songs` (schlug vor der Korrektur fehl) |
 | Einlösung bleibt, Streamplan rechnet mit neuer Dauer | `replace_keeps_redemption_and_respects_budget` |
 | `!letztersong` nur beobachtete Wiedergaben, ohne Doppelungen, nach Neustart | `last_played_lists_observed_plays_only` |
+| `!topsongs` & Co.: Zeiträume, leere Antwort, kanalweite Sperre je Befehl, keine Daten anderer Kanäle | `stats_commands_answer_from_history` |
+| Rangfolge, Gleichstand, Künstler/Alben/Wünscher-Zählung, Zeitraum-Argumente | `stats::tests::*` |
+| Statistik-Antwort passt in eine Chatnachricht, Namen werden nicht als Platzhalter gelesen | `twitch::commands::tests::top_list_is_formatted_and_fits_one_message`, `song_names_are_not_scanned_for_placeholders` |
 | Playlist nie komplett, nur explizit gewählter Titel | `playlist_needs_explicit_single_choice` |
 | Vorabprüfung ohne Nebenwirkung, endgültige Prüfung verhindert Doppelannahme | `precheck_is_side_effect_free_and_final_check_prevents_races` |
 | Wiederholung, Ablauf, Neustart erzeugen keine zusätzlichen Songs | `repeats_expiry_and_restart_create_no_extra_songs` |

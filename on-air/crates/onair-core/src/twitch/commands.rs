@@ -19,6 +19,10 @@ pub enum CommandKind {
     Cancel,
     Replace,
     LastSongs,
+    TopSongs,
+    TopArtists,
+    TopAlbums,
+    TopRequesters,
 }
 
 impl CommandKind {
@@ -37,9 +41,25 @@ impl CommandKind {
             CommandKind::Cancel => &s.cancel,
             CommandKind::Replace => &s.replace,
             CommandKind::LastSongs => &s.last_songs,
+            CommandKind::TopSongs => &s.top_songs,
+            CommandKind::TopArtists => &s.top_artists,
+            CommandKind::TopAlbums => &s.top_albums,
+            CommandKind::TopRequesters => &s.top_requesters,
         }
     }
-    const ALL: [CommandKind; 13] = [
+
+    /// Statistik-Befehle: wonach gerankt wird.
+    pub fn stats_subject(self) -> Option<crate::stats::Subject> {
+        use crate::stats::Subject;
+        match self {
+            CommandKind::TopSongs => Some(Subject::Songs),
+            CommandKind::TopArtists => Some(Subject::Artists),
+            CommandKind::TopAlbums => Some(Subject::Albums),
+            CommandKind::TopRequesters => Some(Subject::Requesters),
+            _ => None,
+        }
+    }
+    const ALL: [CommandKind; 17] = [
         CommandKind::Sr,
         CommandKind::Song,
         CommandKind::Queue,
@@ -53,6 +73,10 @@ impl CommandKind {
         CommandKind::Cancel,
         CommandKind::Replace,
         CommandKind::LastSongs,
+        CommandKind::TopSongs,
+        CommandKind::TopArtists,
+        CommandKind::TopAlbums,
+        CommandKind::TopRequesters,
     ];
 }
 
@@ -419,6 +443,48 @@ pub fn last_songs_messages(r: &Replies, entries: &[crate::queue::store::HistoryE
         .collect()
 }
 
+/// Kürzt auf höchstens `max` Zeichen (mit „…“).
+fn shorten(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        format!("{}…", s.chars().take(max.saturating_sub(1)).collect::<String>())
+    }
+}
+
+/// `!topsongs` & Co.: Rangliste in einer Chatnachricht (≤ 450 Zeichen). Passt sie nicht, werden
+/// zuerst die Namen gekürzt und erst dann Plätze weggelassen – `{n}` nennt immer die tatsächlich
+/// gezeigte Zahl. Ohne Daten kommt `top_empty`.
+pub fn render_top(r: &Replies, subject: crate::stats::Subject, period: &str, ranked: &[crate::stats::Ranked]) -> Option<String> {
+    use crate::stats::Subject;
+    if ranked.is_empty() {
+        return (!r.top_empty.trim().is_empty()).then(|| sanitize_chat(&fill(&r.top_empty, &[("period", period.to_string())])));
+    }
+    let tmpl = match subject {
+        Subject::Songs => &r.top_songs,
+        Subject::Artists => &r.top_artists,
+        Subject::Albums => &r.top_albums,
+        Subject::Requesters => &r.top_requesters,
+    };
+    if tmpl.trim().is_empty() {
+        return None;
+    }
+    let build = |n: usize, max: usize| {
+        let list = ranked.iter().take(n).enumerate().map(|(i, e)| format!("{}) {} ({}×)", i + 1, shorten(&e.label, max), e.count)).collect::<Vec<_>>().join(" · ");
+        // `{list}` zuletzt: Namen aus Spotify werden nicht erneut nach Platzhaltern durchsucht.
+        fill(tmpl, &[("n", n.to_string()), ("period", period.to_string()), ("list", list)])
+    };
+    for n in (1..=ranked.len()).rev() {
+        for max in [60usize, 45, 32, 24] {
+            let text = build(n, max);
+            if text.chars().count() <= 450 {
+                return Some(sanitize_chat(&text));
+            }
+        }
+    }
+    Some(sanitize_chat(&build(1, 24)))
+}
+
 /// Chat-Antwort auf eine Kanalpunkte-Einlösung: dieselben Texte wie bei `!sr`, immer mit
 /// Nennung der Person; bei Ablehnung mit Hinweis auf die Erstattung.
 /// `refund`: Punkte werden bei Ablehnung automatisch erstattet (nur verwaltete Belohnung).
@@ -461,6 +527,70 @@ mod tests {
         assert_eq!(parse("!auswahl 2", &s), Some((CommandKind::Choose, "2".into())));
         assert_eq!(parse("!replace https://youtu.be/x", &s), Some((CommandKind::Replace, "https://youtu.be/x".into())));
         assert_eq!(parse("!zurück", &s).map(|(k, _)| k), Some(CommandKind::PrevPage));
+    }
+
+    #[test]
+    fn stats_commands_parse_with_period_argument() {
+        let s = CommandSettings::default();
+        assert_eq!(parse("!topsongs", &s), Some((CommandKind::TopSongs, "".into())));
+        assert_eq!(parse("!TopSongs Woche", &s), Some((CommandKind::TopSongs, "Woche".into())));
+        assert_eq!(parse("!top songs monat", &s), Some((CommandKind::TopSongs, "monat".into())));
+        assert_eq!(parse("!topkünstler", &s).map(|(k, _)| k), Some(CommandKind::TopArtists));
+        assert_eq!(parse("!topkuenstler stream", &s), Some((CommandKind::TopArtists, "stream".into())));
+        assert_eq!(parse("!top artists", &s).map(|(k, _)| k), Some(CommandKind::TopArtists));
+        assert_eq!(parse("!topalben", &s).map(|(k, _)| k), Some(CommandKind::TopAlbums));
+        assert_eq!(parse("!topalbums week", &s), Some((CommandKind::TopAlbums, "week".into())));
+        assert_eq!(parse("!topwuenscher", &s).map(|(k, _)| k), Some(CommandKind::TopRequesters));
+        assert_eq!(parse("!topwünscher", &s).map(|(k, _)| k), Some(CommandKind::TopRequesters));
+        // „!top“ allein bleibt für eigene Befehle frei.
+        assert_eq!(parse("!top", &s), None);
+        // Kein Namenskonflikt mit den bisherigen Befehlen.
+        assert_eq!(parse("!song", &s).map(|(k, _)| k), Some(CommandKind::Song));
+        let mut off = s.clone();
+        off.top_songs.enabled = false;
+        assert_eq!(parse("!topsongs", &off), None);
+    }
+
+    fn ranked(n: usize, label_len: usize) -> Vec<crate::stats::Ranked> {
+        (0..n).map(|i| crate::stats::Ranked { label: format!("{}{i}", "x".repeat(label_len)), count: (n - i) as u32 }).collect()
+    }
+
+    #[test]
+    fn top_list_is_formatted_and_fits_one_message() {
+        use crate::stats::Subject;
+        let r = Replies::default();
+        let list = vec![
+            crate::stats::Ranked { label: "Alpha – A".into(), count: 12 },
+            crate::stats::Ranked { label: "Beta – B".into(), count: 7 },
+        ];
+        assert_eq!(render_top(&r, Subject::Songs, "dieser Stream", &list).unwrap(), "Top 2 Songs (dieser Stream): 1) Alpha – A (12×) · 2) Beta – B (7×)");
+        assert_eq!(render_top(&r, Subject::Artists, "letzte 7 Tage", &list[..1]).unwrap(), "Top 1 Künstler (letzte 7 Tage): 1) Alpha – A (12×)");
+        assert!(render_top(&r, Subject::Albums, "x", &list).unwrap().starts_with("Top 2 Alben (x): "));
+        assert!(render_top(&r, Subject::Requesters, "x", &list).unwrap().starts_with("Top 2 Wünscher (x): "));
+        // Keine Daten.
+        assert_eq!(render_top(&r, Subject::Songs, "dieser Stream", &[]).unwrap(), "Für „dieser Stream“ gibt es noch keine Daten.");
+        let mut quiet = r.clone();
+        quiet.top_empty = String::new();
+        assert_eq!(render_top(&quiet, Subject::Songs, "x", &[]), None);
+        let mut off = r.clone();
+        off.top_songs = " ".into();
+        assert_eq!(render_top(&off, Subject::Songs, "x", &list), None);
+        // Sehr lange Namen: zuerst kürzen, `{n}` nennt die tatsächlich gezeigte Zahl, ≤ 450 Zeichen.
+        for len in [10, 60, 200, 1000] {
+            let text = render_top(&r, Subject::Songs, "letzte 180 Tage", &ranked(5, len)).unwrap();
+            assert!(text.chars().count() <= 450, "{len}: {}", text.chars().count());
+            let shown = text.matches("×)").count();
+            assert!(text.starts_with(&format!("Top {shown} Songs")), "{text}");
+        }
+        assert_eq!(render_top(&r, Subject::Songs, "x", &ranked(5, 10)).unwrap().matches("×)").count(), 5, "kurze Namen: alle fünf");
+    }
+
+    #[test]
+    fn song_names_are_not_scanned_for_placeholders() {
+        use crate::stats::{Ranked, Subject};
+        let list = vec![Ranked { label: "{period} {n} {list}".into(), count: 1 }];
+        let text = render_top(&Replies::default(), Subject::Songs, "dieser Stream", &list).unwrap();
+        assert!(text.contains("1) {period} {n} {list} (1×)"), "{text}");
     }
 
     #[test]

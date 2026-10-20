@@ -928,3 +928,163 @@ async fn silently_ended_subscription_triggers_reconnect() {
     tokio::time::sleep(Duration::from_secs(2)).await;
     assert_eq!(connections.load(SeqCst), 2);
 }
+
+// Chat-Statistiken: !topsongs, !topkuenstler, !topalben, !topwuenscher aus dem gespeicherten
+// Verlauf – mit Zeitraum, ohne Daten, mit kanalweiter Sperre und ohne die Daten anderer Kanäle.
+#[tokio::test(start_paused = true)]
+async fn stats_commands_answer_from_history() {
+    use onair_core::model::{Provider, Track};
+    use onair_core::twitch::eventsub::ChatEvent;
+    use onair_core::twitch::service::{handle_chat_for_test, TwitchDeps, TwitchService};
+    let h = Harness::new();
+    h.fake.lock().unwrap().no_session = true; // nichts läuft: der Verlauf enthält nur die Testdaten
+    let mut s = open_settings();
+    s.commands.min_reply_interval_ms = 0;
+    s.commands.stats_global_cooldown_s = 0;
+    for c in [&mut s.commands.top_songs, &mut s.commands.top_artists, &mut s.commands.top_albums, &mut s.commands.top_requesters] {
+        c.cooldown_s = 0;
+    }
+    let rt = start_runtime(&h, Db::in_memory().unwrap(), s).await;
+    wait_for("online", || rt.spotify_state.borrow().is_online(), Duration::from_secs(10)).await;
+
+    let sent = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let sent2 = sent.clone();
+    let twitch_http = onair_core::http::FakeTransport::new(move |r| {
+        if r.url.ends_with("/chat/messages") {
+            if let onair_core::http::Body::Json(v) = &r.body {
+                sent2.lock().unwrap().push(v["message"].as_str().unwrap_or("").to_string());
+            }
+            return Ok(onair_core::http::HttpResponse::json(200, serde_json::json!({"data": [{"message_id": "sent", "is_sent": true}]})));
+        }
+        Ok(onair_core::http::HttpResponse::new(404))
+    });
+    let tw_tokens = onair_core::auth::TokenManager::load(
+        "tw",
+        Arc::new(onair_core::twitch::auth::TwitchTokenEndpoint { http: twitch_http.clone(), client_id: Arc::new(|| "c".into()), id_base: "http://x".into() }),
+        Arc::new(onair_core::secrets::MemorySecretStore::default()),
+        h.clock.clone(),
+    );
+    tw_tokens
+        .install(onair_core::auth::TokenSet { access_token: "tw".into(), refresh_token: Some("r".into()), expires_at_ms: h.clock.now_ms() + 3_600_000, scope: "user:read:chat user:write:chat".into(), authorized_at_ms: 0 })
+        .unwrap();
+    let (mut svc, _handle) = TwitchService::new(TwitchDeps {
+        http: twitch_http.clone(),
+        tokens: tw_tokens,
+        client_id: Arc::new(|| "c".into()),
+        id_base: "http://x".into(),
+        helix_base: "http://helix".into(),
+        ws_url: "ws://127.0.0.1:9".into(),
+        queue: rt.queue.clone(),
+        spotify: rt.spotify.clone(),
+        spotify_state: rt.spotify_state.clone(),
+        spotify_cmd: rt.spotify_cmd.clone(),
+        settings: rt.settings.clone(),
+        activity: rt.activity.clone(),
+        bus: rt.bus.clone(),
+        clock: h.clock.clone(),
+        cp_reward: tokio::sync::watch::channel(None).1,
+        redemptions_tx: tokio::sync::mpsc::unbounded_channel().0,
+        health_interval: onair_core::twitch::service::HEALTH_INTERVAL,
+    });
+    svc.set_identity_for_test(onair_core::twitch::auth::Identity { user_id: "100".into(), login: "streamer".into(), scopes: vec![] });
+    svc.spawn_chat_sender_for_test();
+    let mut n = 0;
+    let mut ask = |text: &str| {
+        n += 1;
+        ChatEvent { message_id: format!("m{n}"), broadcaster_id: "100".into(), user_id: format!("u{n}"), user_login: "fan".into(), user_name: "Fan".into(), text: text.into(), badges: vec![], reward_id: None, source_broadcaster_id: None }
+    };
+    // Ohne Daten: freundliche Antwort statt Schweigen.
+    handle_chat_for_test(&svc, ask("!topsongs stream")).await;
+    wait_for("leer", || sent.lock().unwrap().len() == 1, Duration::from_secs(10)).await;
+    assert_eq!(sent.lock().unwrap()[0], "Für „dieser Stream“ gibt es noch keine Daten.");
+
+    // Verlauf: vor 10 Tagen eine Session mit „Oldie“ (3×, Wünscher Opa), jetzt „Hit“ (2×, Mia) und „Remix“ (1×).
+    let channel = rt.queue.channel();
+    let store = &rt.queue.store;
+    let gap = 6 * 3_600_000;
+    let track = |id: &str, title: &str, artists: &[&str], album: &str| Track {
+        provider: Provider::Spotify,
+        id: id.into(),
+        uri: format!("spotify:track:{id}"),
+        title: title.into(),
+        artists: artists.iter().map(|a| a.to_string()).collect(),
+        album: Some(album.into()),
+        image_url: None,
+        duration_ms: 180_000,
+        explicit: false,
+        external_url: None,
+    };
+    let req = |who: &str| onair_core::queue::SongRequest {
+        id: format!("r-{who}"),
+        track: None,
+        query: String::new(),
+        requester: Requester { id: format!("twitch:{who}"), name: who.into(), role: Role::Everyone },
+        source: Source::Chat,
+        source_event: None,
+        received_at: 0,
+        status: RequestStatus::Completed,
+        pending_reason: None,
+        reason: None,
+        reason_text: None,
+        position: 0.0,
+        priority: false,
+        updated_at: 0,
+        handoff_at: None,
+        observed_at: None,
+        finished_at: None,
+        chat_message_id: None,
+        redemption: None,
+        origin: None,
+        rev: 0,
+    };
+    let now = h.clock.now_ms();
+    let old = now - 10 * 86_400_000;
+    let oldie = track("old1", "Oldie", &["Old Band"], "Oldie Album");
+    let sid = store.session_for(&channel, old, gap).unwrap();
+    for i in 0..3 {
+        store.add_session_history(&oldie, old + i * 300_000, Some(&req("Opa")), sid, &channel).unwrap();
+    }
+    let sid = store.session_for(&channel, now, gap).unwrap();
+    let hit = track("hit1", "Hit", &["Star"], "Hit Album");
+    let remix = track("rmx1", "Remix", &["Star", "Guest"], "Hit Album");
+    store.add_session_history(&hit, now - 3_000, Some(&req("Mia")), sid, &channel).unwrap();
+    store.add_session_history(&remix, now - 2_000, None, sid, &channel).unwrap();
+    store.add_session_history(&hit, now - 1_000, Some(&req("mia")), sid, &channel).unwrap();
+    // Anderer Kanal: darf nicht mitzählen.
+    store.add_session_history(&oldie, now - 500, None, 999, "other-channel").unwrap();
+
+    let cases: Vec<(&str, &str)> = vec![
+        ("!topsongs", "Top 3 Songs (letzte 180 Tage): 1) Oldie – Old Band (3×) · 2) Hit – Star (2×) · 3) Remix – Star, Guest (1×)"),
+        ("!topsongs stream", "Top 2 Songs (dieser Stream): 1) Hit – Star (2×) · 2) Remix – Star, Guest (1×)"),
+        ("!TopSongs Woche", "Top 2 Songs (letzte 7 Tage): 1) Hit – Star (2×) · 2) Remix – Star, Guest (1×)"),
+        ("!top songs monat", "Top 3 Songs (letzte 30 Tage): 1) Oldie – Old Band (3×) · 2) Hit – Star (2×) · 3) Remix – Star, Guest (1×)"),
+        ("!topkuenstler", "Top 3 Künstler (letzte 180 Tage): 1) Star (3×) · 2) Old Band (3×) · 3) Guest (1×)"),
+        ("!topalben stream", "Top 1 Alben (dieser Stream): 1) Hit Album – Star (3×)"),
+        ("!topwuenscher", "Top 2 Wünscher (letzte 180 Tage): 1) Opa (3×) · 2) mia (2×)"),
+    ];
+    for (i, (cmd, want)) in cases.iter().enumerate() {
+        handle_chat_for_test(&svc, ask(cmd)).await;
+        wait_for(cmd, || sent.lock().unwrap().len() == i + 2, Duration::from_secs(10)).await;
+        let got = sent.lock().unwrap()[i + 1].clone();
+        assert_eq!(&got, want, "{cmd}");
+    }
+
+    // Kanalweite Sperre: die zweite Anfrage innerhalb der Sperrzeit bleibt unbeantwortet.
+    let mut s = rt.settings.read().unwrap().clone();
+    s.commands.stats_global_cooldown_s = 60;
+    rt.update_settings(s).await.unwrap();
+    let total = sent.lock().unwrap().len();
+    handle_chat_for_test(&svc, ask("!topalben")).await;
+    wait_for("erste", || sent.lock().unwrap().len() == total + 1, Duration::from_secs(10)).await;
+    handle_chat_for_test(&svc, ask("!topalben")).await;
+    handle_chat_for_test(&svc, ask("!topalben stream")).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert_eq!(sent.lock().unwrap().len(), total + 1, "innerhalb der Sperre keine weitere Antwort");
+    // Eine andere Statistik hat ihre eigene Sperre.
+    handle_chat_for_test(&svc, ask("!topsongs")).await;
+    wait_for("andere Statistik", || sent.lock().unwrap().len() == total + 2, Duration::from_secs(10)).await;
+    // Nach Ablauf der Sperre wieder.
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    handle_chat_for_test(&svc, ask("!topalben")).await;
+    wait_for("nach Ablauf", || sent.lock().unwrap().len() == total + 3, Duration::from_secs(10)).await;
+}

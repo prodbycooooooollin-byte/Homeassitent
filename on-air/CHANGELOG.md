@@ -2,6 +2,7 @@
 
 ## 0.2.0
 
+- Chat-Statistiken: `!topsongs`, `!topkuenstler`, `!topalben` und `!topwuenscher` nennen die fünf meistgespielten Songs, Künstler, Alben bzw. Zuschauer mit den meisten gespielten Wünschen. Optional mit Zeitraum: `!topsongs stream` (aktuelle Sitzung), `woche` (7 Tage), `monat` (30 Tage); ohne Angabe zählt der gesamte gespeicherte Verlauf (180 Tage). Je Befehl und kanalweit mit Sperrzeit gegen Chatspam; Antworttexte, Namen, Aliase, Rollen und Sperrzeiten sind einstellbar.
 - Behoben: Nach einigen Stunden Stream konnte der Bot verstummen, obwohl alle Verbindungen grün angezeigt wurden – Twitch kann den Chat-Empfang beenden, ohne die Verbindung zu trennen. ON AIR prüft jetzt alle 5 Minuten bei Twitch, ob der Chat-Empfang noch aktiv ist, und verbindet sich sonst selbst neu. Fehlgeschlagene Chatantworten stehen jetzt im Aktivitätsprotokoll.
 - Anleitung korrigiert: Als OAuth Redirect URL der Twitch-App `https://localhost` eintragen (Twitch verlangt `https://`).
 - Behoben: Beim gemeinsamen Streamen (Twitch Shared Chat / „Stream Together“) konnten Zuschauer und Streamer der anderen Kanäle Songs wünschen, skippen oder Befehle auslösen. Jetzt reagiert ON AIR nur auf Nachrichten aus dem eigenen Chat.

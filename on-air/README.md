@@ -23,7 +23,7 @@ Weitere Ansichten (Browser-Vorschau mit Beispieldaten): [docs/screenshots](docs/
 - Eigene, dauerhafte Request-Warteschlange (SQLite) mit Moderation, fairer Reihenfolge,
   Limits, Cooldowns, Sperrlisten, Explicit-Filter und sparsamer Übergabe an Spotify
 - Wünsche als Spotify-, YouTube-, Apple-Music- oder SoundCloud-Link oder „Künstler – Titel“ – mit Versionsauswahl, Playlist-Auswahl und Vorabprüfung ([Musikquellen](docs/QUELLEN.md))
-- Twitch-Chatbefehle `!sr`, `!song`, `!queue`, `!remove`, `!skip`, `!voteskip`, `!playlist`, `!auswahl`, `!ersetzen`, `!letztersong` (konfigurierbar) plus **eigene Befehle** mit Vorlagen und Platzhaltern
+- Twitch-Chatbefehle `!sr`, `!song`, `!queue`, `!remove`, `!skip`, `!voteskip`, `!playlist`, `!auswahl`, `!ersetzen`, `!letztersong`, Statistiken `!topsongs` / `!topkuenstler` / `!topalben` / `!topwuenscher` (konfigurierbar) plus **eigene Befehle** mit Vorlagen und Platzhaltern
 - **OBS-Dock**: ON AIR direkt in OBS steuern (Now Playing, Requests pausieren, Skip, Freigeben/Ablehnen)
 - Optional **Kanalpunkte-Requests** über eine eigene, von ON AIR verwaltete Belohnung –
   Erfüllen erst nach beobachtetem Start, Ablehnen erstattet die Punkte

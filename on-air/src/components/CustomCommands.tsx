@@ -7,7 +7,7 @@ import type { CustomCommand, Role, Settings } from "../lib/types";
 type Update = (fn: (s: Settings) => Settings) => void;
 
 const ROLES: Role[] = ["everyone", "subscriber", "vip", "moderator", "broadcaster"];
-const BUILTIN = ["sr", "song", "queue", "remove", "skip", "voteskip", "playlist"] as const;
+const BUILTIN = ["sr", "song", "queue", "remove", "skip", "voteskip", "playlist", "choose", "next_page", "prev_page", "cancel", "replace", "last_songs", "top_songs", "top_artists", "top_albums", "top_requesters"] as const;
 export const PLACEHOLDERS = ["user", "touser", "args", "channel", "song", "title", "artist", "link", "requester", "queue_count", "next", "playlist", "random:1-100", "pick:a|b|c"];
 const MAX = 50;
 

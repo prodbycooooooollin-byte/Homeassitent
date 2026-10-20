@@ -275,7 +275,7 @@ function Rules({ draft, update }: { draft: Settings; update: Update }) {
   );
 }
 
-const CMDS = ["sr", "song", "queue", "remove", "skip", "voteskip", "playlist", "replace", "last_songs", "choose", "next_page", "prev_page", "cancel"] as const;
+const CMDS = ["sr", "song", "queue", "remove", "skip", "voteskip", "playlist", "replace", "last_songs", "top_songs", "top_artists", "top_albums", "top_requesters", "choose", "next_page", "prev_page", "cancel"] as const;
 
 const PROVIDERS: { id: SourceProvider; name: string; cred?: { label: string; placeholder: string } }[] = [
   { id: "spotify", name: "Spotify" },
@@ -365,6 +365,7 @@ function Commands({ draft, update }: { draft: Settings; update: Update }) {
         <SettingRow title={t("s.cmd.voteskip_needed")}><Num label={t("s.cmd.voteskip_needed")} value={c.voteskip_needed} min={1} max={100} onChange={(v) => update((s) => ({ ...s, commands: { ...s.commands, voteskip_needed: v } }))} /></SettingRow>
         <SettingRow title={t("s.cmd.interval")}><Num label={t("s.cmd.interval")} value={c.min_reply_interval_ms} min={500} max={10000} onChange={(v) => update((s) => ({ ...s, commands: { ...s.commands, min_reply_interval_ms: v } }))} /></SettingRow>
         <SettingRow title={t("s.cmd.last_songs_global")}><Num label={t("s.cmd.last_songs_global")} value={c.last_songs_global_cooldown_s} min={0} max={600} onChange={(v) => update((s) => ({ ...s, commands: { ...s.commands, last_songs_global_cooldown_s: v } }))} /></SettingRow>
+        <SettingRow title={t("s.cmd.stats_global")} desc={t("s.cmd.stats_hint")}><Num label={t("s.cmd.stats_global")} value={c.stats_global_cooldown_s} min={0} max={600} onChange={(v) => update((s) => ({ ...s, commands: { ...s.commands, stats_global_cooldown_s: v } }))} /></SettingRow>
       </section>
       <section className="card">
         <div className="list">

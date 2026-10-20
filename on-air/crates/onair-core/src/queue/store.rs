@@ -552,6 +552,32 @@ impl QueueStore {
         self.history_where("WHERE session_id = ?1 ORDER BY played_at DESC, id DESC LIMIT ?2", params![session_id, limit])
     }
 
+    /// Gespielte Titel für die Chat-Statistiken. Einträge aus der Zeit vor der Kanalzuordnung
+    /// (`channel IS NULL`) gehören zum einzigen Kanal dieser Installation.
+    pub fn play_rows(&self, channel: &str, scope: crate::stats::PlayScope) -> Vec<crate::stats::PlayRow> {
+        use crate::stats::{PlayRow, PlayScope};
+        let (cond, arg) = match scope {
+            PlayScope::Session(id) => ("session_id = ?2", id),
+            PlayScope::Since(ms) => ("played_at >= ?2", ms),
+        };
+        let c = self.db.conn();
+        let sql = format!("SELECT track_uri, title, artists, album, requester_name, played_at FROM history WHERE (channel = ?1 OR channel IS NULL) AND {cond}");
+        let Ok(mut st) = c.prepare(&sql) else { return vec![] };
+        st.query_map(params![channel, arg], |r| {
+            let artists: String = r.get(2)?;
+            Ok(PlayRow {
+                uri: r.get(0)?,
+                title: r.get(1)?,
+                artists: serde_json::from_str(&artists).unwrap_or_default(),
+                album: r.get(3)?,
+                requester: r.get(4)?,
+                played_at: r.get(5)?,
+            })
+        })
+        .map(|rows| rows.filter_map(Result::ok).collect())
+        .unwrap_or_default()
+    }
+
     fn history_where(&self, where_sql: &str, p: impl rusqlite::Params) -> Vec<HistoryEntry> {
         let c = self.db.conn();
         let mut st = match c.prepare(&format!(

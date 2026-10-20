@@ -8,6 +8,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 pub type DbResult<T> = Result<T, String>;
 
+/// So lange bleibt der Verlauf gespeichert (Grundlage von `!letztersong` und den Chat-Statistiken).
+pub const HISTORY_RETENTION_DAYS: i64 = 180;
+
 const MIGRATIONS: &[&str] = &[
     // v1
     r#"
@@ -246,7 +249,7 @@ impl Db {
             [],
         )
         .map_err(|e| e.to_string())?;
-        c.execute("DELETE FROM history WHERE played_at < ?1", params![now_ms - 180 * day])
+        c.execute("DELETE FROM history WHERE played_at < ?1", params![now_ms - HISTORY_RETENTION_DAYS * day])
             .map_err(|e| e.to_string())?;
         c.execute("DELETE FROM selections WHERE state != 'open' AND updated_at < ?1", params![now_ms - day])
             .map_err(|e| e.to_string())?;

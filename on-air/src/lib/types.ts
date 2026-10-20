@@ -359,6 +359,11 @@ export interface Replies {
   replace_failed: string;
   last_songs: string;
   last_songs_empty: string;
+  top_songs: string;
+  top_artists: string;
+  top_albums: string;
+  top_requesters: string;
+  top_empty: string;
   playlist_hint: string;
 }
 
@@ -400,6 +405,11 @@ export interface Settings {
     replace: CommandCfg;
     last_songs: CommandCfg;
     last_songs_global_cooldown_s: number;
+    top_songs: CommandCfg;
+    top_artists: CommandCfg;
+    top_albums: CommandCfg;
+    top_requesters: CommandCfg;
+    stats_global_cooldown_s: number;
     replies: Replies;
     min_reply_interval_ms: number;
     custom: CustomCommand[];
