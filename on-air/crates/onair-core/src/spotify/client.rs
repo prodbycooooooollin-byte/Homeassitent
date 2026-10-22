@@ -6,6 +6,7 @@
 //! - Schreibende Operationen werden bei unklarem Ausgang nicht wiederholt.
 //! - Ergebnisse einer beendeten Sitzung (Abmelden) werden verworfen.
 
+use crate::lock::LockExt;
 use super::parse;
 use crate::auth::TokenManager;
 use crate::clock::SharedClock;
@@ -110,7 +111,7 @@ impl SpotifyClient {
     /// Aktive Rate-Limit-Pause (für Status und Scheduler).
     pub fn suspended_for_ms(&self) -> Option<(u64, bool)> {
         let now = self.clock.now_ms();
-        let g = self.gate.lock().unwrap();
+        let g = self.gate.lock_safe();
         g.and_then(|g| (g.until_ms > now).then(|| ((g.until_ms - now) as u64, g.quota)))
     }
 
@@ -128,7 +129,7 @@ impl SpotifyClient {
     fn set_gate(&self, retry_after_ms: u64) -> ApiError {
         let quota = retry_after_ms >= QUOTA_THRESHOLD_MS;
         let until = self.clock.now_ms() + retry_after_ms as i64;
-        let mut g = self.gate.lock().unwrap();
+        let mut g = self.gate.lock_safe();
         let merged = match *g {
             Some(old) if old.until_ms > until => old,
             _ => Gate { until_ms: until, quota },

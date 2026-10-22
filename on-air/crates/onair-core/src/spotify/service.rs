@@ -106,6 +106,8 @@ pub struct SpotifyService {
     breaker: CircuitBreaker,
     backoff: Backoff,
     offline_since: Option<i64>,
+    /// Meldet Abstürze der Hauptaufgabe (siehe `supervise`).
+    crash: Option<crate::supervise::CrashSink>,
 }
 
 pub struct SpotifyHandle {
@@ -130,8 +132,15 @@ impl SpotifyService {
             breaker: CircuitBreaker::new(4, Duration::from_secs(30)),
             backoff: Backoff::new(Duration::from_secs(2), Duration::from_secs(120)),
             offline_since: None,
+            crash: None,
         };
         (svc, SpotifyHandle { state: state_rx, cmd: cmd_tx })
+    }
+
+    /// Absturzmeldungen der Hauptaufgabe weiterreichen (Aktivitätsprotokoll).
+    pub fn with_crash_sink(mut self, sink: crate::supervise::CrashSink) -> Self {
+        self.crash = Some(sink);
+        self
     }
 
     fn update(&self, f: impl FnOnce(&mut SpotifyState)) {
@@ -142,8 +151,31 @@ impl SpotifyService {
         });
     }
 
-    /// Hauptschleife. Endet, wenn alle Command-Sender verworfen wurden.
+    /// Hauptschleife mit Neustart nach einem Programmfehler: Die Anzeige bliebe sonst auf dem
+    /// letzten Stand stehen, obwohl Spotify nicht mehr abgefragt wird.
     pub async fn run(mut self) {
+        use futures_util::FutureExt;
+        let mut restarts = crate::supervise::Restarts::default();
+        loop {
+            let started = tokio::time::Instant::now();
+            match std::panic::AssertUnwindSafe(self.run_loop()).catch_unwind().await {
+                Ok(()) => return,
+                Err(p) => {
+                    self.update(|s| s.link = LinkState::Unknown);
+                    match self.crash.clone() {
+                        Some(sink) => restarts.after_panic("Spotify", &sink, started, p).await,
+                        None => {
+                            tracing::error!(target: "spotify", detail = %crate::supervise::panic_text(&*p), "Hauptaufgabe abgestürzt – Neustart");
+                            tokio::time::sleep(Duration::from_secs(5)).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Hauptschleife. Endet, wenn alle Command-Sender verworfen wurden.
+    async fn run_loop(&mut self) {
         let mut auth_rx = self.client.tokens().subscribe();
         loop {
             let auth = self.client.tokens().status();

@@ -9,6 +9,7 @@
 //!   wird automatisch „… · Teil 2“ angelegt; wurde sie gelöscht, wird sie neu angelegt.
 //! - Titel werden in Blöcken bis 100 übertragen; Fehler werden angezeigt und später erneut versucht.
 
+use crate::lock::LockExt;
 use crate::activity::ActivityLog;
 use crate::auth::AuthStatus;
 use crate::backoff::Backoff;
@@ -124,7 +125,7 @@ impl ArchiveService {
     }
 
     fn save(&self) {
-        let st = self.state.lock().unwrap().clone();
+        let st = self.state.lock_safe().clone();
         if let Ok(raw) = serde_json::to_string(&st) {
             let _ = self.d.db.set_setting(ArchiveState::KEY, &raw);
         }
@@ -132,22 +133,22 @@ impl ArchiveService {
 
     pub fn status(&self) -> ArchiveStatus {
         let s = cfg::read(&self.d.settings).request_playlist.clone();
-        let st = self.state.lock().unwrap().clone();
+        let st = self.state.lock_safe().clone();
         let total = self.d.db.conn().query_row("SELECT COUNT(*) FROM archive_tracks", [], |r| r.get::<_, i64>(0)).unwrap_or(0) as usize;
         ArchiveStatus {
             enabled: s.enabled,
             scope_ok: has_playlist_scope(&self.d.spotify_state.borrow().auth),
             playlists: st.playlists,
             total,
-            pending: *self.pending.lock().unwrap(),
-            last_added_ms: *self.last_added_ms.lock().unwrap(),
-            last_error: self.last_error.lock().unwrap().clone(),
+            pending: *self.pending.lock_safe(),
+            last_added_ms: *self.last_added_ms.lock_safe(),
+            last_error: self.last_error.lock_safe().clone(),
         }
     }
 
     fn set_error(&self, e: Option<(&str, String)>) {
         let new = e.map(|(code, details)| ErrorInfo { code: code.into(), details, at_ms: self.now() });
-        let mut g = self.last_error.lock().unwrap();
+        let mut g = self.last_error.lock_safe();
         if g.as_ref().map(|x| (&x.code, &x.details)) != new.as_ref().map(|x| (&x.code, &x.details)) {
             *g = new;
             drop(g);
@@ -181,7 +182,7 @@ impl ArchiveService {
             return Ok(());
         }
         {
-            let mut st = self.state.lock().unwrap();
+            let mut st = self.state.lock_safe();
             if st.since_ms.is_none() {
                 st.since_ms = Some(self.now());
                 drop(st);
@@ -212,7 +213,7 @@ impl ArchiveService {
 
     /// Neue, angenommene Wünsche als offen vormerken (bzw. als Duplikat abhaken).
     fn collect(&self, s: &RequestPlaylistSettings) {
-        let since = self.state.lock().unwrap().since_ms.unwrap_or(i64::MAX);
+        let since = self.state.lock_safe().since_ms.unwrap_or(i64::MAX);
         let now = self.now();
         let conn = self.d.db.conn();
         let rows: Vec<(String, String)> = conn
@@ -235,7 +236,7 @@ impl ArchiveService {
             );
         }
         let n: i64 = conn.query_row("SELECT COUNT(DISTINCT track_uri) FROM archive_requests WHERE state = 'pending'", [], |r| r.get(0)).unwrap_or(0);
-        *self.pending.lock().unwrap() = n as usize;
+        *self.pending.lock_safe() = n as usize;
     }
 
     /// Nächste bis zu 100 verschiedene, noch nicht enthaltene Titel.
@@ -254,7 +255,7 @@ impl ArchiveService {
     /// Aktuelle Playlist mit Platz für `n` Titel – legt bei Bedarf eine (weitere) an.
     async fn target(&self, s: &RequestPlaylistSettings, n: usize, force_new: bool) -> Result<ArchivePlaylist, ApiError> {
         let (current, parts) = {
-            let st = self.state.lock().unwrap();
+            let st = self.state.lock_safe();
             (st.playlists.last().cloned(), st.playlists.len())
         };
         if let Some(p) = current.filter(|p| !force_new && p.count + n <= PLAYLIST_LIMIT) {
@@ -265,7 +266,7 @@ impl ArchiveService {
         let name = part_name(&s.name, number, english);
         let (id, url) = self.d.spotify.create_playlist(&name, s.public, "Alle Songwünsche aus dem Stream – automatisch gesammelt von ON AIR.").await?;
         let p = ArchivePlaylist { id, url, name: name.clone(), count: 0 };
-        self.state.lock().unwrap().playlists.push(p.clone());
+        self.state.lock_safe().playlists.push(p.clone());
         self.save();
         self.d.activity.success("archive.created", format!("Sammel-Playlist „{name}“ auf Spotify angelegt"), json!({ "name": name }));
         self.d.bus.changed(Topic::Settings);
@@ -318,7 +319,7 @@ impl ArchiveService {
             };
         }
         let name = {
-            let mut st = self.state.lock().unwrap();
+            let mut st = self.state.lock_safe();
             let p = st.playlists.iter_mut().find(|p| p.id == playlist_id);
             p.map(|p| {
                 p.count += uris.len();
@@ -327,9 +328,9 @@ impl ArchiveService {
             .unwrap_or_default()
         };
         self.save();
-        *self.last_added_ms.lock().unwrap() = Some(now);
+        *self.last_added_ms.lock_safe() = Some(now);
         {
-            let mut n = self.pending.lock().unwrap();
+            let mut n = self.pending.lock_safe();
             *n = n.saturating_sub(uris.len());
         }
         self.set_error(None);

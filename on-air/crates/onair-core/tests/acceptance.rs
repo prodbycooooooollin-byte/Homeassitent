@@ -319,6 +319,7 @@ async fn duplicate_twitch_event_creates_one_request_and_one_reply() {
         cp_reward: tokio::sync::watch::channel(None).1,
         redemptions_tx: tokio::sync::mpsc::unbounded_channel().0,
         health_interval: onair_core::twitch::service::HEALTH_INTERVAL,
+        idle_recycle: onair_core::twitch::service::IDLE_RECYCLE,
     });
     svc.set_identity_for_test(onair_core::twitch::auth::Identity { user_id: "100".into(), login: "streamer".into(), scopes: vec![] });
     svc.spawn_chat_sender_for_test();
@@ -386,6 +387,7 @@ async fn shared_chat_messages_from_other_channels_are_ignored() {
         cp_reward: tokio::sync::watch::channel(None).1,
         redemptions_tx: tokio::sync::mpsc::unbounded_channel().0,
         health_interval: onair_core::twitch::service::HEALTH_INTERVAL,
+        idle_recycle: onair_core::twitch::service::IDLE_RECYCLE,
     });
     svc.set_identity_for_test(onair_core::twitch::auth::Identity { user_id: "100".into(), login: "streamer".into(), scopes: vec![] });
     svc.spawn_chat_sender_for_test();
@@ -724,6 +726,7 @@ async fn playlist_command_shares_current_playlist() {
         cp_reward: tokio::sync::watch::channel(None).1,
         redemptions_tx: tokio::sync::mpsc::unbounded_channel().0,
         health_interval: onair_core::twitch::service::HEALTH_INTERVAL,
+        idle_recycle: onair_core::twitch::service::IDLE_RECYCLE,
     });
     svc.set_identity_for_test(onair_core::twitch::auth::Identity { user_id: "100".into(), login: "streamer".into(), scopes: vec![] });
     svc.spawn_chat_sender_for_test();
@@ -821,19 +824,12 @@ async fn tokens_are_reloaded_when_secret_store_was_unavailable() {
     assert!(matches!(tm.status(), onair_core::auth::AuthStatus::SignedIn { .. }), "nachgeladen");
 }
 
-// Twitch beendet ein Abo, ohne die WebSocket-Verbindung zu schließen: Keepalives laufen
-// weiter, die Anzeige bleibt grün, aber es kommen keine Chatnachrichten mehr an (gemeldet
-// nach mehreren Stunden Stream). Die Selbstprüfung erkennt das und verbindet neu.
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn silently_ended_subscription_triggers_reconnect() {
+// Fake-EventSub: jede Verbindung erhält eine eigene Session (s1, s2, …) und regelmäßig Keepalives,
+// aber keine Chatnachrichten. Liefert die Adresse und die Zahl der bisherigen Verbindungen.
+async fn fake_eventsub() -> (String, Arc<std::sync::atomic::AtomicUsize>) {
     use futures_util::{SinkExt, StreamExt};
-    use onair_core::twitch::service::{TwitchDeps, TwitchLink, TwitchService};
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
     use tokio_tungstenite::tungstenite::Message;
-    let h = Harness::new();
-    let rt = start_runtime(&h, Db::in_memory().unwrap(), open_settings()).await;
-
-    // Fake-EventSub: jede Verbindung erhält eine eigene Session (s1, s2, …) und Keepalives.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let ws_url = format!("ws://{}/ws", listener.local_addr().unwrap());
     let connections = Arc::new(AtomicUsize::new(0));
@@ -861,8 +857,28 @@ async fn silently_ended_subscription_triggers_reconnect() {
             });
         }
     });
+    (ws_url, connections)
+}
 
-    // Helix: Abo von s1 ist zunächst aktiv und verschwindet dann still; s2 bleibt aktiv.
+/// Twitch-Dienst gegen `fake_eventsub` und ein Fake-Helix. `sessions` liefert für „GET
+/// /eventsub/subscriptions“ die Session-IDs, deren Chat-Abo Twitch als aktiv meldet.
+struct Rig {
+    handle: onair_core::twitch::service::TwitchHandle,
+    connections: Arc<std::sync::atomic::AtomicUsize>,
+    posts: Arc<std::sync::atomic::AtomicUsize>,
+    _reward_tx: tokio::sync::watch::Sender<Option<String>>,
+}
+
+async fn twitch_rig(
+    h: &Harness,
+    rt: &Arc<Runtime>,
+    health_interval: Duration,
+    idle_recycle: Duration,
+    sessions: impl Fn(usize) -> Vec<String> + Send + Sync + 'static,
+) -> Rig {
+    use onair_core::twitch::service::{TwitchDeps, TwitchService};
+    use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+    let (ws_url, connections) = fake_eventsub().await;
     let posts = Arc::new(AtomicUsize::new(0));
     let checks = Arc::new(AtomicUsize::new(0));
     let (p, c) = (posts.clone(), checks.clone());
@@ -879,10 +895,7 @@ async fn silently_ended_subscription_triggers_reconnect() {
                 Ok(onair_core::http::HttpResponse::json(202, serde_json::json!({"data": []})))
             }
             (Method::Get, "/eventsub/subscriptions") => {
-                let mut data = vec![sub("s2")];
-                if c.fetch_add(1, SeqCst) < 2 {
-                    data.push(sub("s1"));
-                }
+                let data: Vec<_> = sessions(c.fetch_add(1, SeqCst)).iter().map(|s| sub(s)).collect();
                 Ok(onair_core::http::HttpResponse::json(200, serde_json::json!({"data": data, "pagination": {}})))
             }
             _ => Ok(onair_core::http::HttpResponse::new(404)),
@@ -898,7 +911,7 @@ async fn silently_ended_subscription_triggers_reconnect() {
         .install(onair_core::auth::TokenSet { access_token: "tw".into(), refresh_token: Some("r".into()), expires_at_ms: h.clock.now_ms() + 3_600_000, scope: "user:read:chat user:write:chat".into(), authorized_at_ms: 0 })
         .unwrap();
     // Sender am Leben halten: ein geschlossener Kanal beendet den Dienst.
-    let (_reward_tx, reward_rx) = tokio::sync::watch::channel(None);
+    let (reward_tx, reward_rx) = tokio::sync::watch::channel(None);
     let (svc, handle) = TwitchService::new(TwitchDeps {
         http: twitch_http.clone(),
         tokens: tw_tokens,
@@ -916,17 +929,64 @@ async fn silently_ended_subscription_triggers_reconnect() {
         clock: h.clock.clone(),
         cp_reward: reward_rx,
         redemptions_tx: tokio::sync::mpsc::unbounded_channel().0,
-        health_interval: Duration::from_millis(300),
+        health_interval,
+        idle_recycle,
     });
     tokio::spawn(svc.run());
+    Rig { handle, connections, posts, _reward_tx: reward_tx }
+}
 
-    wait_for("Neuverbindung", || connections.load(SeqCst) >= 2, Duration::from_secs(20)).await;
-    wait_for("wieder verbunden", || handle.state.borrow().link == TwitchLink::Connected, Duration::from_secs(10)).await;
-    assert!(posts.load(SeqCst) >= 2, "Chat-Abo nach der Neuverbindung neu angelegt");
+// Twitch beendet ein Abo, ohne die WebSocket-Verbindung zu schließen: Keepalives laufen
+// weiter, die Anzeige bleibt grün, aber es kommen keine Chatnachrichten mehr an (gemeldet
+// nach mehreren Stunden Stream). Die Selbstprüfung erkennt das und verbindet neu.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn silently_ended_subscription_triggers_reconnect() {
+    use onair_core::twitch::service::{TwitchLink, IDLE_RECYCLE};
+    use std::sync::atomic::Ordering::SeqCst;
+    let h = Harness::new();
+    let rt = start_runtime(&h, Db::in_memory().unwrap(), open_settings()).await;
+    // Das Abo von s1 ist zunächst aktiv und verschwindet dann still; s2 bleibt aktiv.
+    let rig = twitch_rig(&h, &rt, Duration::from_millis(300), IDLE_RECYCLE, |n| if n < 2 { vec!["s1".into(), "s2".into()] } else { vec!["s2".into()] }).await;
+
+    wait_for("Neuverbindung", || rig.connections.load(SeqCst) >= 2, Duration::from_secs(20)).await;
+    wait_for("wieder verbunden", || rig.handle.state.borrow().link == TwitchLink::Connected, Duration::from_secs(10)).await;
+    assert!(rig.posts.load(SeqCst) >= 2, "Chat-Abo nach der Neuverbindung neu angelegt");
     assert!(rt.activity.recent(100).iter().any(|a| a.kind == "twitch.subscription_lost"), "Verlust im Aktivitätsprotokoll");
     // Die gesunde Session bleibt bestehen – keine Schleife aus Neuverbindungen.
     tokio::time::sleep(Duration::from_secs(2)).await;
-    assert_eq!(connections.load(SeqCst), 2);
+    assert_eq!(rig.connections.load(SeqCst), 2);
+}
+
+// Auch wenn die Twitch-API alles für in Ordnung hält: Kommt lange keine Chatnachricht an, wird die
+// Verbindung still erneuert – ohne Statuswechsel, ohne Meldungsflut, mit weiterlaufender Dauer.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn silent_connection_is_renewed_quietly() {
+    use onair_core::twitch::service::TwitchLink;
+    use std::sync::atomic::Ordering::SeqCst;
+    let h = Harness::new();
+    let rt = start_runtime(&h, Db::in_memory().unwrap(), open_settings()).await;
+    // Twitch meldet für jede Session ein aktives Abo.
+    let rig = twitch_rig(&h, &rt, Duration::from_millis(200), Duration::from_millis(700), |_| (1..=20).map(|n| format!("s{n}")).collect()).await;
+
+    wait_for("verbunden", || rig.handle.state.borrow().link == TwitchLink::Connected, Duration::from_secs(10)).await;
+    let since = rig.handle.state.borrow().connected_since_ms;
+    assert!(since.is_some());
+    let seen_links = Arc::new(std::sync::Mutex::new(Vec::<TwitchLink>::new()));
+    let (mut rx, sl) = (rig.handle.state.clone(), seen_links.clone());
+    tokio::spawn(async move {
+        while rx.changed().await.is_ok() {
+            let l = rx.borrow_and_update().link.clone();
+            sl.lock().unwrap().push(l);
+        }
+    });
+    wait_for("mehrfach erneuert", || rig.connections.load(SeqCst) >= 3, Duration::from_secs(30)).await;
+    wait_for("verbunden", || rig.handle.state.borrow().link == TwitchLink::Connected, Duration::from_secs(10)).await;
+    assert!(rig.posts.load(SeqCst) >= 3, "jede neue Verbindung abonniert neu");
+    assert_eq!(rig.handle.state.borrow().connected_since_ms, since, "Verbindungsdauer läuft weiter");
+    assert!(seen_links.lock().unwrap().iter().all(|l| *l == TwitchLink::Connected), "kein Flackern: {:?}", seen_links.lock().unwrap());
+    let acts = rt.activity.recent(100);
+    assert_eq!(acts.iter().filter(|a| a.kind == "twitch.connected").count(), 1, "nur die erste Verbindung wird gemeldet");
+    assert!(!acts.iter().any(|a| a.kind == "twitch.subscription_lost"));
 }
 
 // Chat-Statistiken: !topsongs, !topkuenstler, !topalben, !topwuenscher aus dem gespeicherten
@@ -985,6 +1045,7 @@ async fn stats_commands_answer_from_history() {
         cp_reward: tokio::sync::watch::channel(None).1,
         redemptions_tx: tokio::sync::mpsc::unbounded_channel().0,
         health_interval: onair_core::twitch::service::HEALTH_INTERVAL,
+        idle_recycle: onair_core::twitch::service::IDLE_RECYCLE,
     });
     svc.set_identity_for_test(onair_core::twitch::auth::Identity { user_id: "100".into(), login: "streamer".into(), scopes: vec![] });
     svc.spawn_chat_sender_for_test();

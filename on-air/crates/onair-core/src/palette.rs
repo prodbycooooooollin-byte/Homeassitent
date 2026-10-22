@@ -5,6 +5,7 @@
 //! Vorschau auf 48×48 verkleinern, Pixel nach Farbton bündeln, gewichtet nach Sättigung und
 //! Helligkeit; der stärkste Farbton wird die Akzentfarbe, der Durchschnitt die Grundtönung.
 
+use crate::lock::LockExt;
 use crate::http::{HttpRequest, Method, SharedTransport};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -107,7 +108,7 @@ impl PaletteCache {
         if !allowed_url(url) {
             return Err("Bildquelle nicht erlaubt".into());
         }
-        if let Some(c) = self.map.lock().unwrap().get(url) {
+        if let Some(c) = self.map.lock_safe().get(url) {
             return Ok(*c);
         }
         let resp = http.send(HttpRequest::new(Method::Get, url.to_string())).await.map_err(|e| e.to_string())?;
@@ -116,7 +117,7 @@ impl PaletteCache {
         }
         let body = resp.body;
         let colors = tokio::task::spawn_blocking(move || analyze(&body)).await.map_err(|e| e.to_string())?.ok_or("Cover nicht lesbar")?;
-        let mut m = self.map.lock().unwrap();
+        let mut m = self.map.lock_safe();
         if m.len() >= CACHE {
             m.clear();
         }

@@ -1,5 +1,6 @@
 //! Twitch-Dienst: genau eine EventSub-Verbindung, Chatbefehle, gedrosselte Antworten.
 
+use crate::lock::LockExt;
 use super::auth::{self, Identity};
 use super::commands::{self, CommandKind, Cooldowns, VoteSkip};
 use super::eventsub::{ChatEvent, EventSubProtocol, WsAction};
@@ -17,6 +18,9 @@ use crate::queue::{Requester, Source};
 use crate::settings::{self as cfg, Role, SharedSettings};
 use crate::spotify::service::{SpotifyState, SyncCmd};
 use crate::spotify::SpotifyClient;
+use crate::supervise::{CrashSink, Restarts};
+use futures_util::FutureExt;
+use std::panic::AssertUnwindSafe;
 use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
 use serde_json::json;
@@ -81,6 +85,8 @@ pub struct TwitchDeps {
     pub redemptions_tx: mpsc::UnboundedSender<(bool, super::helix::RedemptionInfo)>,
     /// Abstand der Selbstprüfung, ob Twitch die Abos der Session noch aktiv führt.
     pub health_interval: Duration,
+    /// So lange darf keine Chatnachricht ankommen, bevor die Verbindung vorsorglich erneuert wird.
+    pub idle_recycle: Duration,
 }
 
 const CHAT_SUBSCRIPTION: &str = "channel.chat.message";
@@ -89,6 +95,11 @@ const REDEMPTION_SUBSCRIPTIONS: [&str; 2] =
 
 /// Standardabstand der Abo-Selbstprüfung.
 pub const HEALTH_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
+/// Standard für `TwitchDeps::idle_recycle`. Zuverlässigster Schutz gegen eine Verbindung, die zwar
+/// lebt (Keepalives kommen), über die aber keine Chatnachrichten mehr ankommen: unabhängig davon,
+/// was die Twitch-API über Abos meldet, ist eine frische Verbindung mit frischem Abo immer gut.
+pub const IDLE_RECYCLE: Duration = Duration::from_secs(20 * 60);
 
 /// Abo-Typen, die erwartet, aber laut Twitch nicht (mehr) aktiv sind.
 pub fn missing_subscriptions(expected: &[&str], present: &[String]) -> Vec<String> {
@@ -104,6 +115,8 @@ struct Health {
     /// Fehlen als Verlust – so führt eine abweichende Antwort von Twitch nie zu einer
     /// Schleife aus Neuverbindungen.
     seen: bool,
+    /// Aufeinanderfolgende fehlgeschlagene Prüfungen (Twitch-API oder Token nicht erreichbar).
+    fails: u32,
 }
 
 struct Shared {
@@ -115,6 +128,8 @@ struct Shared {
     voteskip: Mutex<VoteSkip>,
     chat_tx: mpsc::Sender<(String, Option<String>)>,
     sent_ids: Mutex<VecDeque<String>>,
+    /// Meldet Abstürze von Hintergrundaufgaben im Aktivitätsprotokoll.
+    crash: CrashSink,
 }
 
 pub struct TwitchHandle {
@@ -142,6 +157,9 @@ pub struct TwitchService {
     shared: Arc<Shared>,
     cmd_rx: mpsc::UnboundedReceiver<TwitchCmd>,
     chat_rx: Option<mpsc::Receiver<(String, Option<String>)>>,
+    /// Die nächste Verbindung ersetzt still eine untätige: keine Statusanzeige „Verbinde …“, keine
+    /// Meldung im Aktivitätsprotokoll, Verbindungsdauer läuft weiter.
+    quiet_next: bool,
 }
 
 impl TwitchService {
@@ -161,6 +179,7 @@ impl TwitchService {
         });
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
         let (chat_tx, chat_rx) = mpsc::channel(5);
+        let crash = crate::supervise::activity_sink(deps.activity.clone());
         let shared = Arc::new(Shared {
             deps,
             helix,
@@ -170,15 +189,29 @@ impl TwitchService {
             voteskip: Mutex::new(VoteSkip::default()),
             chat_tx: chat_tx.clone(),
             sent_ids: Mutex::new(VecDeque::new()),
+            crash,
         });
         let handle = TwitchHandle { state: state_rx, cmd: cmd_tx, notifier: Arc::new(Notifier(chat_tx)) };
-        (Self { shared, cmd_rx, chat_rx: Some(chat_rx) }, handle)
+        (Self { shared, cmd_rx, chat_rx: Some(chat_rx), quiet_next: false }, handle)
     }
 
+    /// Hauptaufgabe. Ein Programmfehler beendet sie nicht still: er wird gemeldet, danach läuft
+    /// sie weiter (sonst bliebe die Anzeige „verbunden“ stehen, obwohl nichts mehr passiert).
     pub async fn run(mut self) {
         let chat_rx = self.chat_rx.take().expect("chat rx");
-        let sender = tokio::spawn(chat_sender(self.shared.clone(), chat_rx));
-        self.main_loop().await;
+        let sender = tokio::spawn(chat_sender_supervised(self.shared.clone(), chat_rx));
+        let crash = self.shared.crash.clone();
+        let mut restarts = Restarts::default();
+        loop {
+            let started = tokio::time::Instant::now();
+            match AssertUnwindSafe(self.main_loop()).catch_unwind().await {
+                Ok(()) => break,
+                Err(p) => {
+                    self.shared.update(|s| s.link = TwitchLink::Reconnecting { attempt: 0, next_retry_ms: 0 });
+                    restarts.after_panic("Twitch", &crash, started, p).await;
+                }
+            }
+        }
         sender.abort();
     }
 
@@ -201,16 +234,21 @@ impl TwitchService {
                 }
                 continue;
             }
-            sh.update(|s| s.link = TwitchLink::Connecting);
+            let quiet = std::mem::take(&mut self.quiet_next);
+            if !quiet {
+                sh.update(|s| s.link = TwitchLink::Connecting);
+            }
             let outcome = match sh.ensure_identity(true).await {
-                Ok(identity) => self.session(&mut proto, &identity, &mut backoff).await,
+                Ok(identity) => self.session(&mut proto, &identity, &mut backoff, quiet).await,
                 Err(ApiError::ReauthRequired { reason }) => Disconnect::Auth(reason),
                 Err(ApiError::NotSignedIn) | Err(ApiError::SessionEnded) => continue,
                 Err(e @ (ApiError::Forbidden { .. } | ApiError::Config { .. })) => Disconnect::Blocked(e.code().into()),
                 Err(e) => Disconnect::Transient(e.to_string()),
             };
             let now = sh.deps.clock.now_ms();
-            sh.update(|s| s.connected_since_ms = None);
+            if !self.quiet_next {
+                sh.update(|s| s.connected_since_ms = None);
+            }
             match outcome {
                 Disconnect::Stop => return,
                 Disconnect::Recover => {
@@ -252,7 +290,7 @@ impl TwitchService {
     }
 
     /// Eine vollständige Verbindung inkl. dokumentierter Reconnects.
-    async fn session(&mut self, proto: &mut EventSubProtocol, identity: &Identity, backoff: &mut Backoff) -> Disconnect {
+    async fn session(&mut self, proto: &mut EventSubProtocol, identity: &Identity, backoff: &mut Backoff, quiet: bool) -> Disconnect {
         let sh = self.shared.clone();
         proto.reset_for_fresh_connection();
         let url = format!("{}?keepalive_timeout_seconds=30", sh.deps.ws_url);
@@ -268,6 +306,8 @@ impl TwitchService {
         let mut reward_rx = sh.deps.cp_reward.clone();
         reward_rx.borrow_and_update();
         let mut health: Option<Health> = None;
+        // Letzte Chatnachricht bzw. Einlösung (Keepalives zählen nicht).
+        let mut last_event = tokio::time::Instant::now();
         loop {
             let next = tokio::select! {
                 _ = async {
@@ -281,6 +321,14 @@ impl TwitchService {
                             let _ = ws.close(None).await;
                             return d;
                         }
+                    }
+                    if last_event.elapsed() >= sh.deps.idle_recycle {
+                        // Lange still: tote Abos erkennt man von außen nicht sicher. Eine frische
+                        // Verbindung mit neuem Abo kostet Sekunden und ist immer richtig.
+                        tracing::info!(target: "twitch", idle_s = last_event.elapsed().as_secs(), "Lange keine Chatnachricht – Verbindung wird erneuert");
+                        self.quiet_next = true;
+                        let _ = ws.close(None).await;
+                        return Disconnect::Recover;
                     }
                     continue;
                 }
@@ -321,15 +369,21 @@ impl TwitchService {
                                 let first = tokio::time::Instant::now() + every.min(Duration::from_secs(60));
                                 let mut timer = tokio::time::interval_at(first, every);
                                 timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-                                health = Some(Health { timer, session_id: session_id.clone(), expected, seen: false });
+                                health = Some(Health { timer, session_id: session_id.clone(), expected, seen: false, fails: 0 });
                                 backoff.reset();
+                                last_event = tokio::time::Instant::now();
                                 let now = sh.deps.clock.now_ms();
+                                let since = if quiet { sh.state_tx.borrow().connected_since_ms.unwrap_or(now) } else { now };
                                 sh.update(|s| {
                                     s.link = TwitchLink::Connected;
                                     s.last_error = None;
-                                    s.connected_since_ms = Some(now);
+                                    s.connected_since_ms = Some(since);
                                 });
-                                sh.deps.activity.success("twitch.connected", format!("Twitch-Chat verbunden ({})", identity.login), json!({ "login": identity.login }));
+                                if quiet {
+                                    tracing::debug!(target: "twitch", "Verbindung still erneuert");
+                                } else {
+                                    sh.deps.activity.success("twitch.connected", format!("Twitch-Chat verbunden ({})", identity.login), json!({ "login": identity.login }));
+                                }
                             }
                             Err(ApiError::ReauthRequired { reason }) => return Disconnect::Auth(reason),
                             Err(e @ ApiError::Forbidden { .. }) => return Disconnect::Blocked(e.code().into()),
@@ -358,11 +412,18 @@ impl TwitchService {
                         }
                     }
                     WsAction::Redemption { update, event } => {
+                        last_event = tokio::time::Instant::now();
                         let _ = sh.deps.redemptions_tx.send((update, event));
                     }
                     WsAction::Chat(ev) => {
+                        last_event = tokio::time::Instant::now();
                         let sh2 = sh.clone();
-                        tokio::spawn(async move { sh2.handle_chat(ev).await });
+                        tokio::spawn(async move {
+                            // Ein Fehler bei einer einzelnen Nachricht darf nie unbemerkt bleiben.
+                            if let Err(p) = AssertUnwindSafe(sh2.clone().handle_chat(ev)).catch_unwind().await {
+                                (sh2.crash)("Chatbefehl", 1, crate::supervise::panic_text(&*p));
+                            }
+                        });
                     }
                     WsAction::Revoked { status, sub_type } => {
                         tracing::warn!(target: "twitch", status, sub_type, "Abo widerrufen");
@@ -452,7 +513,7 @@ impl Shared {
                 if !missing.is_empty() {
                     return Err(ApiError::Forbidden { reason: Some("missing_scope".into()), message: format!("{missing:?}") });
                 }
-                *self.identity.lock().unwrap() = Some(id.clone());
+                *self.identity.lock_safe() = Some(id.clone());
                 self.deps.queue.set_channel(&id.user_id);
                 self.update(|s| s.identity = Some(id.clone()));
                 Ok(id)
@@ -500,6 +561,7 @@ impl Shared {
     async fn check_health(&self, h: &mut Health) -> Option<Disconnect> {
         match self.helix.session_subscription_types(&h.session_id).await {
             Ok(present) => {
+                h.fails = 0;
                 let missing = missing_subscriptions(&h.expected, &present);
                 if missing.is_empty() {
                     h.seen = true;
@@ -519,8 +581,12 @@ impl Shared {
             }
             Err(ApiError::ReauthRequired { reason }) => Some(Disconnect::Auth(reason)),
             Err(e) => {
-                tracing::info!(target: "twitch", code = e.code(), "Abo-Prüfung verschoben");
-                None
+                // Kann die App Twitch dauerhaft nicht erreichen (z. B. Token nicht erneuerbar), wäre
+                // Antworten im Chat unmöglich, obwohl die Verbindung selbst „grün“ aussieht. Nach drei
+                // Fehlversuchen in Folge wird das sichtbar und die Verbindung neu aufgebaut.
+                h.fails += 1;
+                tracing::info!(target: "twitch", code = e.code(), fails = h.fails, "Abo-Prüfung fehlgeschlagen");
+                (h.fails >= 3).then(|| Disconnect::Transient(format!("Twitch-API nicht erreichbar: {e}")))
             }
         }
     }
@@ -556,7 +622,7 @@ impl Shared {
     }
 
     async fn handle_chat(self: Arc<Self>, ev: ChatEvent) {
-        if self.sent_ids.lock().unwrap().contains(&ev.message_id) {
+        if self.sent_ids.lock_safe().contains(&ev.message_id) {
             return;
         }
         // Gemeinsam streamen (Shared Chat): Twitch liefert auch Nachrichten aus den Chats der
@@ -589,7 +655,7 @@ impl Shared {
             return;
         }
         let now = self.deps.clock.now_ms();
-        if self.cooldowns.lock().unwrap().check(&format!("{kind:?}"), &ev.user_id, role, c.cooldown_s, now).is_err() {
+        if self.cooldowns.lock_safe().check(&format!("{kind:?}"), &ev.user_id, role, c.cooldown_s, now).is_err() {
             return; // Still ignorieren – Cooldown-Hinweise würden den Chat fluten.
         }
         let requester = Requester { id: format!("twitch:{}", ev.user_id), name: ev.user_name.clone(), role };
@@ -644,7 +710,7 @@ impl Shared {
             }
             CommandKind::LastSongs => {
                 // Zusätzlich zur Sperre pro Person eine kanalweite Sperre gegen Chatspam.
-                if self.cooldowns.lock().unwrap().check("LastSongs:global", "*", Role::Everyone, settings.last_songs_global_cooldown_s, now).is_err() {
+                if self.cooldowns.lock_safe().check("LastSongs:global", "*", Role::Everyone, settings.last_songs_global_cooldown_s, now).is_err() {
                     return;
                 }
                 let entries = self.deps.queue.last_played(5);
@@ -658,7 +724,7 @@ impl Shared {
                 let Some(subject) = kind.stats_subject() else { return };
                 // Je Statistik zusätzlich zur Sperre pro Person eine kanalweite Sperre gegen Chatspam.
                 let key = format!("{kind:?}:global");
-                if self.cooldowns.lock().unwrap().check(&key, "*", Role::Everyone, settings.stats_global_cooldown_s, now).is_err() {
+                if self.cooldowns.lock_safe().check(&key, "*", Role::Everyone, settings.stats_global_cooldown_s, now).is_err() {
                     return;
                 }
                 let period = crate::stats::Period::parse(&args);
@@ -725,7 +791,7 @@ impl Shared {
                     return;
                 };
                 let needed = settings.voteskip_needed;
-                let (votes, reached) = self.voteskip.lock().unwrap().vote(&uri, &ev.user_id, needed);
+                let (votes, reached) = self.voteskip.lock_safe().vote(&uri, &ev.user_id, needed);
                 if reached {
                     if self.skip().await {
                         self.deps.activity.info("chat.voteskip", "Skip per Abstimmung", json!({ "votes": votes }));
@@ -750,7 +816,7 @@ impl Shared {
             return;
         }
         let now = self.deps.clock.now_ms();
-        if self.cooldowns.lock().unwrap().check(&format!("custom:{}", c.id), &ev.user_id, role, c.cooldown_s, now).is_err() {
+        if self.cooldowns.lock_safe().check(&format!("custom:{}", c.id), &ev.user_id, role, c.cooldown_s, now).is_err() {
             return;
         }
         let ctx = self.custom_ctx(&ev.user_name, args, settings);
@@ -769,7 +835,7 @@ impl Shared {
         commands::CustomCtx {
             user: user.to_string(),
             args,
-            channel: self.identity.lock().unwrap().as_ref().map(|i| i.login.clone()).unwrap_or_default(),
+            channel: self.identity.lock_safe().as_ref().map(|i| i.login.clone()).unwrap_or_default(),
             title: track.as_ref().map(|t| t.title.clone()),
             artist: track.as_ref().map(|t| t.artist_line()),
             link: track.as_ref().and_then(|t| t.external_url.clone().filter(|u| u.starts_with("https://open.spotify.com/")).or_else(|| (!t.id.is_empty()).then(|| format!("https://open.spotify.com/track/{}", t.id)))),
@@ -798,8 +864,20 @@ impl Shared {
     }
 }
 
+/// Chat-Sender mit Neustart nach einem Programmfehler (die Warteschlange bleibt erhalten).
+async fn chat_sender_supervised(sh: Arc<Shared>, mut rx: mpsc::Receiver<(String, Option<String>)>) {
+    let mut restarts = Restarts::default();
+    loop {
+        let started = tokio::time::Instant::now();
+        match AssertUnwindSafe(chat_sender(&sh, &mut rx)).catch_unwind().await {
+            Ok(()) => return,
+            Err(p) => restarts.after_panic("Chat-Antworten", &sh.crash, started, p).await,
+        }
+    }
+}
+
 /// Einziger Sender für Chatnachrichten: Mindestabstand, Längenbegrenzung, kein Stau.
-async fn chat_sender(sh: Arc<Shared>, mut rx: mpsc::Receiver<(String, Option<String>)>) {
+async fn chat_sender(sh: &Arc<Shared>, rx: &mut mpsc::Receiver<(String, Option<String>)>) {
     let mut last = tokio::time::Instant::now() - Duration::from_secs(60);
     // Nur den ersten Fehler einer Serie melden, damit das Protokoll nicht vollläuft.
     let mut failing = false;
@@ -809,12 +887,12 @@ async fn chat_sender(sh: Arc<Shared>, mut rx: mpsc::Receiver<(String, Option<Str
         if !wait.is_zero() {
             tokio::time::sleep(wait).await;
         }
-        let Some(id) = sh.identity.lock().unwrap().clone() else { continue };
+        let Some(id) = sh.identity.lock_safe().clone() else { continue };
         match sh.helix.send_chat(&id.user_id, &id.user_id, &text, reply_to.as_deref()).await {
             Ok(mid) => {
                 failing = false;
                 if let Some(mid) = mid {
-                    let mut s = sh.sent_ids.lock().unwrap();
+                    let mut s = sh.sent_ids.lock_safe();
                     s.push_back(mid);
                     if s.len() > 200 {
                         s.pop_front();
@@ -841,12 +919,12 @@ impl TwitchService {
     /// Setzt eine Identität (Tests ohne Validate-Endpunkt).
     pub fn set_identity_for_test(&self, id: Identity) {
         self.shared.deps.queue.set_channel(&id.user_id);
-        *self.shared.identity.lock().unwrap() = Some(id);
+        *self.shared.identity.lock_safe() = Some(id);
     }
     /// Startet nur den Chat-Sender (Tests ohne WebSocket).
     pub fn spawn_chat_sender_for_test(&mut self) {
         if let Some(rx) = self.chat_rx.take() {
-            tokio::spawn(chat_sender(self.shared.clone(), rx));
+            tokio::spawn(chat_sender_supervised(self.shared.clone(), rx));
         }
     }
     pub fn role_for_test(badges: &[String]) -> Role {

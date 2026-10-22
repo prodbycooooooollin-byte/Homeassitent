@@ -12,6 +12,7 @@
 //!   bei Ablehnung. „Erstattet“ zeigt die UI erst nach bestätigter Twitch-Antwort.
 //! - Nach dem Start bleibt die Belohnung pausiert, bis offene Einlösungen abgeglichen sind.
 
+use crate::lock::LockExt;
 use super::helix::{Helix, RedemptionInfo, RedemptionUpdate, RewardInfo};
 use super::service::TwitchState;
 use crate::activity::ActivityLog;
@@ -227,7 +228,7 @@ impl ChannelPointsService {
     }
 
     fn save_state(&self) {
-        let st = self.state.lock().unwrap().clone();
+        let st = self.state.lock_safe().clone();
         if let Ok(raw) = serde_json::to_string(&st) {
             let _ = self.d.db.set_setting(RewardState::KEY, &raw);
         }
@@ -252,7 +253,7 @@ impl ChannelPointsService {
     }
 
     fn set_error(&self, e: Option<(&str, String)>) {
-        *self.last_error.lock().unwrap() = e.map(|(code, details)| ErrorInfo { code: code.into(), details, at_ms: self.now() });
+        *self.last_error.lock_safe() = e.map(|(code, details)| ErrorInfo { code: code.into(), details, at_ms: self.now() });
     }
 
     /// Aktueller technischer Sperrgrund, frisch berechnet (nicht aus dem letzten Snapshot).
@@ -262,7 +263,7 @@ impl ChannelPointsService {
 
     fn compute_status(&self) -> ChannelPointsStatus {
         let (enabled, paused, c) = self.desired();
-        let st = self.state.lock().unwrap().clone();
+        let st = self.state.lock_safe().clone();
         let scope_ok = self.identity().map(|(_, s)| s).unwrap_or(false);
         let open = self.d.queue.store.open_redemptions();
         let needs_review = open
@@ -282,20 +283,20 @@ impl ChannelPointsService {
             confirmed_enabled: st.confirmed_enabled,
             confirmed_paused: st.confirmed_paused,
             in_sync,
-            last_error: self.last_error.lock().unwrap().clone(),
+            last_error: self.last_error.lock_safe().clone(),
             reconciled: self.is_reconciled(),
             open: open.len(),
             needs_review,
             external: c.enabled && c.external_reward.is_some(),
-            last_redemption_ms: *self.last_redemption_ms.lock().unwrap(),
-            foreign_reward: self.foreign.lock().unwrap().clone(),
+            last_redemption_ms: *self.last_redemption_ms.lock_safe(),
+            foreign_reward: self.foreign.lock_safe().clone(),
         }
     }
 
     fn publish(&self) {
         let status = self.compute_status();
         let scope_ok = status.scope_ok;
-        let st = self.state.lock().unwrap().clone();
+        let st = self.state.lock_safe().clone();
         let changed = self.status_tx.send_if_modified(|s| {
             if *s != status {
                 *s = status;
@@ -357,7 +358,7 @@ impl ChannelPointsService {
             return true;
         };
         let (enabled, _, _) = self.desired();
-        let has_reward = self.state.lock().unwrap().reward_id.is_some();
+        let has_reward = self.state.lock_safe().reward_id.is_some();
         if !scope_ok {
             if enabled || has_reward {
                 self.set_error(Some(("missing_scope", "Twitch-Berechtigung channel:manage:redemptions fehlt".into())));
@@ -365,7 +366,7 @@ impl ChannelPointsService {
             return true;
         }
         let mut ok = self.sync_reward(&broadcaster).await;
-        if ok && self.state.lock().unwrap().reward_id.is_some() && !self.is_reconciled() {
+        if ok && self.state.lock_safe().reward_id.is_some() && !self.is_reconciled() {
             ok = self.reconcile(&broadcaster).await;
             if !ok {
                 let n = self.reconcile_failures.fetch_add(1, Ordering::SeqCst) + 1;
@@ -395,7 +396,7 @@ impl ChannelPointsService {
     async fn sync_reward(&self, broadcaster: &str) -> bool {
         for _ in 0..3 {
             let (enabled, paused, c) = self.desired();
-            let st = self.state.lock().unwrap().clone();
+            let st = self.state.lock_safe().clone();
             match st.reward_id.clone() {
                 None if !enabled => return true,
                 None => {
@@ -456,13 +457,13 @@ impl ChannelPointsService {
                                 "Die bisherige Kanalpunkte-Belohnung gehört zu einer anderen Twitch-App-ID und kann nicht mehr verwaltet werden",
                                 json!({}),
                             );
-                            *self.state.lock().unwrap() = RewardState::default();
+                            *self.state.lock_safe() = RewardState::default();
                             self.save_state();
                         }
                         Ok(None) => {
                             // Extern gelöscht: Verwaltung beenden, ggf. neu anlegen.
                             self.d.activity.warn("channel_points.reward_gone", "Die Kanalpunkte-Belohnung existiert auf Twitch nicht mehr", json!({}));
-                            let mut s = self.state.lock().unwrap();
+                            let mut s = self.state.lock_safe();
                             *s = RewardState::default();
                             drop(s);
                             self.save_state();
@@ -477,7 +478,7 @@ impl ChannelPointsService {
 
     fn confirm(&self, info: &RewardInfo, applied: Option<String>) {
         let now = self.now();
-        let mut s = self.state.lock().unwrap();
+        let mut s = self.state.lock_safe();
         s.reward_id = Some(info.id.clone());
         s.confirmed_enabled = Some(info.is_enabled);
         s.confirmed_paused = Some(info.is_paused);
@@ -501,7 +502,7 @@ impl ChannelPointsService {
 
     /// Nach Start/Unterbrechung: verpasste Einlösungen übernehmen, extern geänderte Zustände übernehmen.
     async fn reconcile(&self, broadcaster: &str) -> bool {
-        let Some(reward_id) = self.state.lock().unwrap().reward_id.clone() else { return true };
+        let Some(reward_id) = self.state.lock_safe().reward_id.clone() else { return true };
         let open = match self.d.helix.redemptions(broadcaster, &reward_id, Some("UNFULFILLED"), &[]).await {
             Ok(l) => l,
             Err(e) => return self.fail(&e),
@@ -621,8 +622,8 @@ impl ChannelPointsService {
 
     pub async fn on_add(&self, e: RedemptionInfo) {
         let now = self.now();
-        *self.last_redemption_ms.lock().unwrap() = Some(now);
-        let ours = self.state.lock().unwrap().reward_id.clone();
+        *self.last_redemption_ms.lock_safe() = Some(now);
+        let ours = self.state.lock_safe().reward_id.clone();
         let c = cfg::read(&self.d.settings).channel_points.clone();
         let managed = ours.as_deref() == Some(e.reward_id.as_str());
         let external = c.enabled && c.external_reward.as_ref().is_some_and(|x| x.id == e.reward_id);
@@ -682,7 +683,7 @@ impl ChannelPointsService {
         if e.user_input.trim().is_empty() || !c.enabled {
             return;
         }
-        let mut f = self.foreign.lock().unwrap();
+        let mut f = self.foreign.lock_safe();
         let first = f.as_ref().is_none_or(|x| x.id != e.reward_id);
         *f = Some(ForeignReward { id: e.reward_id.clone(), title: e.reward_title.clone(), user: e.user_name.clone(), at_ms: self.now() });
         drop(f);
@@ -722,7 +723,7 @@ impl ChannelPointsService {
         let fut = async {
             let Some((b, true)) = self.identity() else { return !cfg::read(&self.d.settings).channel_points.enabled };
             let _ = self.sync_reward(&b).await;
-            let st = self.state.lock().unwrap().clone();
+            let st = self.state.lock_safe().clone();
             st.reward_id.is_none() || st.confirmed_paused == Some(true) || st.confirmed_enabled == Some(false)
         };
         tokio::time::timeout(timeout, fut).await.unwrap_or(false)

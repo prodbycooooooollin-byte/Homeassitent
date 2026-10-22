@@ -9,6 +9,7 @@
 //!   `invalid_grant` (bzw. widerrufene Autorisierung) führt zur Loginaufforderung.
 //! - Abmelden erhöht die Epoche; verspätete Antworten älterer Epochen werden verworfen.
 
+use crate::lock::LockExt;
 use crate::clock::SharedClock;
 use crate::error::ApiError;
 use crate::secrets::SecretStore;
@@ -131,7 +132,7 @@ impl TokenManager {
     }
 
     pub fn status(&self) -> AuthStatus {
-        let s = self.inner.lock().unwrap();
+        let s = self.inner.lock_safe();
         Self::status_of(&s)
     }
 
@@ -156,7 +157,7 @@ impl TokenManager {
     }
 
     pub fn epoch(&self) -> u64 {
-        self.inner.lock().unwrap().epoch
+        self.inner.lock_safe().epoch
     }
 
     pub fn refresh_count(&self) -> u64 {
@@ -164,7 +165,7 @@ impl TokenManager {
     }
 
     pub fn expires_at_ms(&self) -> Option<i64> {
-        self.inner.lock().unwrap().tokens.as_ref().map(|t| t.expires_at_ms)
+        self.inner.lock_safe().tokens.as_ref().map(|t| t.expires_at_ms)
     }
 
     /// Übernimmt Tokens nach erfolgreicher Anmeldung. Beginnt eine neue Epoche.
@@ -172,7 +173,7 @@ impl TokenManager {
         let raw = serde_json::to_string(&set).map_err(|e| e.to_string())?;
         self.store.save(&self.key, &raw)?;
         {
-            let mut s = self.inner.lock().unwrap();
+            let mut s = self.inner.lock_safe();
             s.epoch += 1;
             s.tokens = Some(set);
             s.reauth_reason = None;
@@ -185,7 +186,7 @@ impl TokenManager {
     /// verwerfen ihre Ergebnisse, weil ihre Epoche nicht mehr stimmt.
     pub fn sign_out(&self) {
         {
-            let mut s = self.inner.lock().unwrap();
+            let mut s = self.inner.lock_safe();
             s.epoch += 1;
             s.tokens = None;
             s.reauth_reason = None;
@@ -205,7 +206,7 @@ impl TokenManager {
     pub async fn access_token(&self) -> Result<AccessToken, ApiError> {
         self.retry_load();
         {
-            let s = self.inner.lock().unwrap();
+            let s = self.inner.lock_safe();
             match &s.tokens {
                 None => return Err(Self::missing_error(&s)),
                 Some(t) if t.expires_at_ms - self.clock.now_ms() > self.skew_ms => {
@@ -225,7 +226,7 @@ impl TokenManager {
 
     /// Beim Start nicht lesbarer Secret Store: bei Bedarf erneut laden.
     pub fn retry_load(&self) {
-        let mut s = self.inner.lock().unwrap();
+        let mut s = self.inner.lock_safe();
         if !s.load_failed || s.tokens.is_some() {
             return;
         }
@@ -250,7 +251,7 @@ impl TokenManager {
     async fn refresh_if_needed(&self, rejected: Option<&AccessToken>) -> Result<AccessToken, ApiError> {
         let _guard = self.refresh_lock.lock().await;
         let (refresh_token, epoch, prev) = {
-            let s = self.inner.lock().unwrap();
+            let s = self.inner.lock_safe();
             let t = match &s.tokens {
                 None => return Err(Self::missing_error(&s)),
                 Some(t) => t,
@@ -287,7 +288,7 @@ impl TokenManager {
                     scope: resp.scope.unwrap_or(prev.scope),
                     authorized_at_ms: prev.authorized_at_ms,
                 };
-                let mut s = self.inner.lock().unwrap();
+                let mut s = self.inner.lock_safe();
                 if s.epoch != epoch {
                     // Abgemeldet oder neu angemeldet, während der Refresh lief.
                     return Err(ApiError::SessionEnded);
@@ -327,7 +328,7 @@ impl TokenManager {
 
     fn fail_reauth(&self, reason: &str) -> ApiError {
         {
-            let mut s = self.inner.lock().unwrap();
+            let mut s = self.inner.lock_safe();
             s.tokens = None;
             s.reauth_reason = Some(reason.to_string());
         }

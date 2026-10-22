@@ -2,6 +2,7 @@
 //! Desktop-Hülle erzwingt zusätzlich eine Einzelinstanz). Fensterwechsel oder
 //! Neuladen der UI starten keine weiteren Worker.
 
+use crate::lock::LockExt;
 use crate::acceptance::{self, Acceptance, Block};
 use crate::activity::{Activity, ActivityLog};
 use crate::plan::{PlanConfig, PlanStatus};
@@ -192,6 +193,7 @@ impl Runtime {
         let poll_cfg = PollConfig { playing_ms: cfg::read(&settings).spotify.poll_playing_ms, ..Default::default() };
         let (poll_tx, poll_rx) = watch::channel(poll_cfg);
         let (sp_service, sp_handle) = SpotifyService::new(spotify.clone(), cfg.clock.clone(), poll_rx);
+        let sp_service = sp_service.with_crash_sink(crate::supervise::activity_sink(activity.clone()));
 
         let resolver = crate::resolve::Resolver::new(crate::resolve::ResolverDeps {
             http: cfg.http.clone(),
@@ -244,6 +246,7 @@ impl Runtime {
             bus: bus.clone(),
             clock: cfg.clock.clone(),
             health_interval: crate::twitch::service::HEALTH_INTERVAL,
+            idle_recycle: crate::twitch::service::IDLE_RECYCLE,
         });
         queue.set_notifier(tw_handle.notifier());
 
@@ -328,7 +331,7 @@ impl Runtime {
             start_overlay: cfg.start_overlay,
             self_ref: Mutex::new(Weak::new()),
         });
-        *rt.self_ref.lock().unwrap() = Arc::downgrade(&rt);
+        *rt.self_ref.lock_safe() = Arc::downgrade(&rt);
 
         // Annahme-Gate: getrennte Sperrgründe, gemeinsam ausgewertet.
         let weak = Arc::downgrade(&rt);
@@ -367,14 +370,17 @@ impl Runtime {
         rt.queue.sweep_selections().await;
         let _ = rt.db.prune(rt.clock.now_ms());
 
+        // Jede Hintergrundaufgabe läuft unter Aufsicht: Stürzt sie ab, steht das im Aktivitätsprotokoll
+        // und sie startet neu – statt dass die Oberfläche „verbunden“ zeigt und nichts mehr geschieht.
+        let sink = crate::supervise::activity_sink(rt.activity.clone());
         let mut tasks = vec![
             tokio::spawn(sp_service.run()),
             tokio::spawn(tw_service.run()),
-            tokio::spawn(observe_spotify(Arc::downgrade(&rt))),
-            tokio::spawn(overlay_feeder(Arc::downgrade(&rt))),
+            tokio::spawn(supervised(&rt, "Spotify-Beobachtung", &sink, observe_spotify)),
+            tokio::spawn(supervised(&rt, "Overlay", &sink, overlay_feeder)),
             tokio::spawn(rt.channel_points.clone().run(redemptions_rx)),
             tokio::spawn(rt.archive.clone().run()),
-            tokio::spawn(acceptance_watcher(Arc::downgrade(&rt))),
+            tokio::spawn(supervised(&rt, "Annahme-Überwachung", &sink, acceptance_watcher)),
         ];
         let weak = Arc::downgrade(&rt);
         let clock = rt.clock.clone();
@@ -398,7 +404,7 @@ impl Runtime {
                 let _ = rt.db.prune(rt.clock.now_ms());
             }
         }));
-        *rt.tasks.lock().unwrap() = tasks;
+        *rt.tasks.lock_safe() = tasks;
 
         if rt.start_overlay {
             rt.restart_overlay().await;
@@ -415,7 +421,7 @@ impl Runtime {
         if cfg::read(&self.settings).channel_points.enabled {
             let _ = self.channel_points.pause_before_exit(Duration::from_secs(4)).await;
         }
-        for t in self.tasks.lock().unwrap().drain(..) {
+        for t in self.tasks.lock_safe().drain(..) {
             t.abort();
         }
         if let Some(mut s) = self.overlay.lock().await.take() {
@@ -424,7 +430,7 @@ impl Runtime {
     }
 
     fn arc(&self) -> Option<Arc<Runtime>> {
-        self.self_ref.lock().unwrap().upgrade()
+        self.self_ref.lock_safe().upgrade()
     }
 
     /// Gezielte Wiederherstellung nach Standby oder „Verbindung prüfen“.
@@ -465,7 +471,7 @@ impl Runtime {
             OverlayInfo {
                 port: o.as_ref().map(|s| s.port).unwrap_or(cfg::read(&self.settings).overlay.port),
                 running: o.is_some(),
-                error: self.overlay_error.lock().unwrap().clone(),
+                error: self.overlay_error.lock_safe().clone(),
                 clients: o.as_ref().map(|s| s.connected_clients()).unwrap_or(0),
             }
         };
@@ -473,10 +479,10 @@ impl Runtime {
         AppSnapshot {
             app_version: self.app_version.clone(),
             spotify: self.spotify_state.borrow().clone(),
-            spotify_profile: self.spotify_profile.lock().unwrap().clone(),
+            spotify_profile: self.spotify_profile.lock_safe().clone(),
             spotify_redirect_uri: crate::spotify::redirect_uri(settings.spotify.redirect_port),
             twitch: self.twitch_state.borrow().clone(),
-            twitch_device_code: self.twitch_device_code.lock().unwrap().clone(),
+            twitch_device_code: self.twitch_device_code.lock_safe().clone(),
             queue: self.queue.store.pending(),
             recent: self.queue.store.recent_finished(30),
             activity: self.activity.recent(40),
@@ -502,7 +508,7 @@ impl Runtime {
 
     pub async fn spotify_login(&self, open_browser: impl FnOnce(&str) -> Result<(), String>) -> Result<(), LoginError> {
         let (tx, rx) = oneshot::channel();
-        if let Some(old) = self.spotify_login_cancel.lock().unwrap().replace(tx) {
+        if let Some(old) = self.spotify_login_cancel.lock_safe().replace(tx) {
             let _ = old.send(());
         }
         let s = cfg::read(&self.settings).spotify.clone();
@@ -512,7 +518,7 @@ impl Runtime {
             accounts_base: self.endpoints.spotify_accounts.clone(),
         };
         let res = crate::spotify::auth::login(&login_cfg, self.http.clone(), self.clock.now_ms(), open_browser, rx).await;
-        self.spotify_login_cancel.lock().unwrap().take();
+        self.spotify_login_cancel.lock_safe().take();
         match res {
             Ok(tokens) => {
                 self.spotify_tokens.install(tokens).map_err(|m| LoginError::Other { message: format!("Speichern fehlgeschlagen: {m}") })?;
@@ -531,7 +537,7 @@ impl Runtime {
     }
 
     pub fn cancel_spotify_login(&self) {
-        if let Some(tx) = self.spotify_login_cancel.lock().unwrap().take() {
+        if let Some(tx) = self.spotify_login_cancel.lock_safe().take() {
             let _ = tx.send(());
         }
     }
@@ -540,7 +546,7 @@ impl Runtime {
         let Some(rt) = self.arc() else { return };
         tokio::spawn(async move {
             if let Ok(p) = rt.spotify.me().await {
-                *rt.spotify_profile.lock().unwrap() = Some(p);
+                *rt.spotify_profile.lock_safe() = Some(p);
                 rt.bus.changed(Topic::Spotify);
             }
         });
@@ -550,7 +556,7 @@ impl Runtime {
     pub fn spotify_logout(&self) {
         self.cancel_spotify_login();
         self.spotify_tokens.sign_out();
-        *self.spotify_profile.lock().unwrap() = None;
+        *self.spotify_profile.lock_safe() = None;
         self.activity.info("spotify.signed_out", "Von Spotify abgemeldet – Warteschlange bleibt erhalten", json!({}));
         self.bus.changed(Topic::Spotify);
     }
@@ -667,9 +673,9 @@ impl Runtime {
             || self.twitch_state.borrow().identity.as_ref().map(|i| i.scopes.iter().any(|x| x == crate::twitch::CHANNEL_POINTS_SCOPE)).unwrap_or(false);
         let scopes = crate::twitch::scopes(with_cp);
         let dc = crate::twitch::auth::start_device_flow(&self.http, &self.endpoints.twitch_id, &client_id, &scopes).await?;
-        *self.twitch_device_code.lock().unwrap() = Some(dc.clone());
+        *self.twitch_device_code.lock_safe() = Some(dc.clone());
         let (tx, rx) = oneshot::channel();
-        if let Some(old) = self.twitch_login_cancel.lock().unwrap().replace(tx) {
+        if let Some(old) = self.twitch_login_cancel.lock_safe().replace(tx) {
             let _ = old.send(());
         }
         let Some(rt) = self.arc() else { return Ok(dc) };
@@ -677,7 +683,7 @@ impl Runtime {
         tokio::spawn(async move {
             let clock = rt.clock.clone();
             let res = crate::twitch::auth::poll_device_flow(&rt.http, &rt.endpoints.twitch_id, &client_id, &dc2, move || clock.now_ms(), rx).await;
-            *rt.twitch_device_code.lock().unwrap() = None;
+            *rt.twitch_device_code.lock_safe() = None;
             match res {
                 Ok(tokens) => {
                     if rt.twitch_tokens.install(tokens).is_ok() {
@@ -694,10 +700,10 @@ impl Runtime {
     }
 
     pub fn twitch_login_cancel(&self) {
-        if let Some(tx) = self.twitch_login_cancel.lock().unwrap().take() {
+        if let Some(tx) = self.twitch_login_cancel.lock_safe().take() {
             let _ = tx.send(());
         }
-        *self.twitch_device_code.lock().unwrap() = None;
+        *self.twitch_device_code.lock_safe() = None;
         self.bus.changed(Topic::Twitch);
     }
 
@@ -717,7 +723,7 @@ impl Runtime {
         if !self.update_pause.load(Ordering::SeqCst) {
             return false;
         }
-        let since = *self.update_pause_since.lock().unwrap();
+        let since = *self.update_pause_since.lock_safe();
         if since.is_some_and(|t| self.clock.now_ms() - t > UPDATE_PAUSE_MAX_MS) {
             self.activity.warn("update.pause_expired", "Update wurde nicht abgeschlossen – Requests sind wieder geöffnet", json!({}));
             self.cancel_update_pause();
@@ -846,7 +852,7 @@ impl Runtime {
     /// Übergaben abwarten, Datenbank sichern. Liefert einen ehrlichen Bericht.
     pub async fn prepare_for_update(&self) -> UpdatePrep {
         self.update_pause.store(true, Ordering::SeqCst);
-        *self.update_pause_since.lock().unwrap() = Some(self.clock.now_ms());
+        *self.update_pause_since.lock_safe() = Some(self.clock.now_ms());
         self.bus.changed(Topic::Queue);
         self.activity.info("update.preparing", "Update wird vorbereitet – neue Requests sind kurz pausiert", json!({}));
         let reward_paused = if cfg::read(&self.settings).channel_points.enabled {
@@ -861,7 +867,7 @@ impl Runtime {
 
     /// Update abgebrochen: Pause wieder aufheben.
     pub fn cancel_update_pause(&self) {
-        *self.update_pause_since.lock().unwrap() = None;
+        *self.update_pause_since.lock_safe() = None;
         if self.update_pause.swap(false, Ordering::SeqCst) {
             self.bus.changed(Topic::Queue);
             self.channel_points.kick();
@@ -1090,15 +1096,15 @@ impl Runtime {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
         let port = cfg::read(&self.settings).overlay.port;
-        let handler: Arc<dyn ControlHandler> = Arc::new(Control(self.self_ref.lock().unwrap().clone()));
+        let handler: Arc<dyn ControlHandler> = Arc::new(Control(self.self_ref.lock_safe().clone()));
         match overlay::start(port, self.overlay_tx.subscribe(), self.control_token.clone(), handler).await {
             Ok(s) => {
                 *guard = Some(s);
-                *self.overlay_error.lock().unwrap() = None;
+                *self.overlay_error.lock_safe() = None;
             }
             Err(e) => {
                 self.activity.error("overlay.failed", format!("Overlay-Server konnte nicht starten: {e}"), json!({ "port": port }));
-                *self.overlay_error.lock().unwrap() = Some(e);
+                *self.overlay_error.lock_safe() = Some(e);
             }
         }
         drop(guard);
@@ -1190,7 +1196,7 @@ async fn acceptance_watcher(weak: Weak<Runtime>) {
         // Abgelaufene Auswahlen beenden (wartende Wünsche freigeben, ggf. erstatten).
         rt.queue.sweep_selections().await;
         let a = rt.acceptance();
-        let prev = rt.last_acceptance.lock().unwrap().replace(a.clone());
+        let prev = rt.last_acceptance.lock_safe().replace(a.clone());
         let Some(prev) = prev else { continue };
         if prev != a {
             if a.paused_by_plan && !prev.paused_by_plan {
@@ -1244,6 +1250,16 @@ impl ControlHandler for Control {
             }
         })
     }
+}
+
+/// Startet `f` unter Aufsicht (siehe `supervise::keep_alive`).
+fn supervised<F, Fut>(rt: &Arc<Runtime>, name: &'static str, sink: &crate::supervise::CrashSink, f: F) -> impl std::future::Future<Output = ()>
+where
+    F: Fn(Weak<Runtime>) -> Fut,
+    Fut: std::future::Future<Output = ()>,
+{
+    let weak = Arc::downgrade(rt);
+    crate::supervise::keep_alive(name, sink.clone(), move || f(weak.clone()))
 }
 
 /// Beobachtet Spotify-Zustände: Queue-Abgleich, Aktivitätsmeldungen bei Statuswechseln.

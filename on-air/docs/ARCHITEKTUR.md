@@ -78,6 +78,8 @@ received ─► pending_review ─(Freigabe / Spotify wieder erreichbar)─► a
 - Frische Verbindung: Welcome → Abo `channel.chat.message` (409 = existiert bereits, kein Duplikat).
 - `session_reconnect`: neue Verbindung zur `reconnect_url`, Welcome abwarten, dann alte schließen; **kein** neues Abo.
 - Watchdog: keine Nachricht innerhalb `keepalive_timeout_seconds + 5 s` → frische Verbindung mit Backoff.
+- Stille Verbindung: Kommt 20 Minuten lang keine Chatnachricht und keine Einlösung an (Keepalives zählen nicht), wird die Verbindung erneuert – ohne Statuswechsel, ohne Protokolleintrag, die Verbindungsdauer läuft weiter. Das deckt auch ein von Twitch beendetes Abo ab, das sich von außen nicht sicher erkennen lässt.
+- Ist die Twitch-API (Token, Abo-Abfrage) drei Prüfungen in Folge nicht nutzbar, wird die Verbindung neu aufgebaut und der Fehler angezeigt.
 - Abo-Selbstprüfung alle 5 Minuten (`GET /eventsub/subscriptions?status=enabled`): Fehlt ein Abo der eigenen Session, das vorher schon als aktiv bestätigt war, wird frisch verbunden und neu abonniert. Twitch kann Abos beenden, während Keepalives weiterlaufen – der Watchdog allein bemerkt das nicht. Solange ein Abo nie als aktiv gesehen wurde, löst sein Fehlen nichts aus (keine Schleife bei abweichender Antwort).
 - `revocation`: `authorization_revoked` → Abmeldung und gezielte Loginaufforderung; sonst `blocked`.
 - Doppelte Zustellungen: `metadata.message_id` im Speicher, Chat-Message-ID dauerhaft in SQLite.
@@ -100,6 +102,8 @@ received ─► pending_review ─(Freigabe / Spotify wieder erreichbar)─► a
 | Einstellungen, Profile, Requests, Verlauf, Aktivität, Sperrliste | `%APPDATA%\app.onair.desktop\onair.db` (SQLite, WAL) |
 | Sicherungen vor Migrationen | `…\backups\onair-v{N}-{Zeit}.db` |
 | Logs | `%LOCALAPPDATA%\app.onair.desktop\logs\onair.*.log` (täglich, max. 7 Dateien) |
+
+Aufsicht (`supervise.rs`): Twitch-Dienst, Chat-Sender, Spotify-Dienst, Spotify-Beobachter, Overlay-Speisung und Annahme-Überwachung laufen unter `catch_unwind`. Ein Panic wird als „Interner Fehler in …“ im Aktivitätsprotokoll gemeldet (und im Log), die Aufgabe startet nach 1 s, 2 s, 4 s … (max. 60 s) neu; die Anzeige springt nicht auf „verbunden“ zurück, solange sie nicht wieder arbeitet. Gemeinsam genutzte Sperren (`lock_safe`) bleiben nach einem Panic nutzbar.
 
 Aufbewahrung: Aktivität max. 2000 Einträge, verarbeitete Event-IDs 7 Tage, Verlauf 180 Tage.
 

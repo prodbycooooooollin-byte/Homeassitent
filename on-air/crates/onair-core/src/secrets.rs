@@ -2,6 +2,7 @@
 //! (siehe `src-tauri/src/keyring_store.rs`). Secrets landen nie in SQLite,
 //! LocalStorage, Exportdateien oder Logs.
 
+use crate::lock::LockExt;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -21,17 +22,17 @@ pub struct MemorySecretStore {
 
 impl SecretStore for MemorySecretStore {
     fn load(&self, key: &str) -> Result<Option<String>, String> {
-        Ok(self.map.lock().unwrap().get(key).cloned())
+        Ok(self.map.lock_safe().get(key).cloned())
     }
     fn save(&self, key: &str, value: &str) -> Result<(), String> {
         if self.fail_writes.load(std::sync::atomic::Ordering::SeqCst) {
             return Err("simulierter Schreibfehler".into());
         }
-        self.map.lock().unwrap().insert(key.to_string(), value.to_string());
+        self.map.lock_safe().insert(key.to_string(), value.to_string());
         Ok(())
     }
     fn delete(&self, key: &str) -> Result<(), String> {
-        self.map.lock().unwrap().remove(key);
+        self.map.lock_safe().remove(key);
         Ok(())
     }
 }

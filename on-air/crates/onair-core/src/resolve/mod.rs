@@ -6,6 +6,7 @@ pub mod link;
 pub mod matching;
 pub mod providers;
 
+use crate::lock::LockExt;
 use crate::clock::SharedClock;
 use crate::error::ApiError;
 use crate::http::SharedTransport;
@@ -302,8 +303,8 @@ impl Resolver {
             SourceProvider::Soundcloud => SECRET_SOUNDCLOUD,
             SourceProvider::Spotify => return Err("Spotify nutzt die normale Anmeldung".into()),
         };
-        self.items.lock().unwrap().clear();
-        self.pages.lock().unwrap().clear();
+        self.items.lock_safe().clear();
+        self.pages.lock_safe().clear();
         match value.map(str::trim).filter(|v| !v.is_empty()) {
             None => self.d.secrets.delete(key),
             Some(v) => {
@@ -384,12 +385,12 @@ impl Resolver {
             };
         }
         let key = format!("{r:?}");
-        let cached = self.items.lock().unwrap().get(&key).filter(|(at, _)| self.now() - at < CACHE_MS).map(|(_, i)| i.clone());
+        let cached = self.items.lock_safe().get(&key).filter(|(at, _)| self.now() - at < CACHE_MS).map(|(_, i)| i.clone());
         let item = match cached {
             Some(i) => i,
             None => match providers::track_meta(self, r).await {
                 Ok(i) => {
-                    let mut c = self.items.lock().unwrap();
+                    let mut c = self.items.lock_safe();
                     if c.len() > CACHE_MAX {
                         c.clear();
                     }
@@ -481,12 +482,12 @@ impl Resolver {
     /// Eine Seite einer Sammlung laden (`cursor` = Wert aus `CollectionPage::next`).
     pub async fn page(&self, c: &CollectionRef, cursor: Option<&str>) -> Result<(CollectionInfo, CollectionPage), ResolveError> {
         let key = format!("{c:?}|{}", cursor.unwrap_or(""));
-        let hit = self.pages.lock().unwrap().get(&key).filter(|(at, ..)| self.now() - at < CACHE_MS).cloned();
+        let hit = self.pages.lock_safe().get(&key).filter(|(at, ..)| self.now() - at < CACHE_MS).cloned();
         if let Some((_, page, name, image)) = hit {
             return Ok((CollectionInfo { r: c.clone(), name, url: c.url(), image_url: image, total: page.total }, page));
         }
         let (page, name, image) = providers::collection_page(self, c, cursor).await?;
-        let mut m = self.pages.lock().unwrap();
+        let mut m = self.pages.lock_safe();
         if m.len() > CACHE_MAX {
             m.clear();
         }

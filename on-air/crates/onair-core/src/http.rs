@@ -2,6 +2,7 @@
 //! Antworten; das eigentliche Senden erledigt ein [`HttpTransport`]. So laufen die
 //! Tests gegen dieselbe Fehlerklassifikation wie der echte Betrieb.
 
+use crate::lock::LockExt;
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -234,27 +235,27 @@ impl FakeTransport {
         &self,
         handler: impl FnMut(&HttpRequest) -> Result<HttpResponse, TransportError> + Send + 'static,
     ) {
-        *self.handler.lock().unwrap() = Box::new(handler);
+        *self.handler.lock_safe() = Box::new(handler);
     }
     pub fn set_delay(&self, d: Duration) {
-        *self.delay.lock().unwrap() = d;
+        *self.delay.lock_safe() = d;
     }
     pub fn count(&self, pred: impl Fn(&HttpRequest) -> bool) -> usize {
-        self.log.lock().unwrap().iter().filter(|r| pred(r)).count()
+        self.log.lock_safe().iter().filter(|r| pred(r)).count()
     }
     pub fn clear_log(&self) {
-        self.log.lock().unwrap().clear();
+        self.log.lock_safe().clear();
     }
 }
 
 #[async_trait]
 impl HttpTransport for FakeTransport {
     async fn send(&self, req: HttpRequest) -> Result<HttpResponse, TransportError> {
-        let delay = *self.delay.lock().unwrap();
+        let delay = *self.delay.lock_safe();
         if !delay.is_zero() {
             tokio::time::sleep(delay).await;
         }
-        self.log.lock().unwrap().push(req.clone());
-        (self.handler.lock().unwrap())(&req)
+        self.log.lock_safe().push(req.clone());
+        (self.handler.lock_safe())(&req)
     }
 }

@@ -9,6 +9,7 @@
 //! Schreibende Übergaben werden vor dem Senden als `HandingOff` gespeichert. Bei
 //! unklarem Ausgang (Timeout, 5xx, Absturz) wird abgeglichen statt wiederholt.
 
+use crate::lock::LockExt;
 use super::rules::{self, Rejection};
 use super::store::QueueStore;
 use super::{PendingReason, RequestStatus, Requester, SongRequest, Source, SubmitOutcome};
@@ -137,12 +138,12 @@ impl QueueService {
     /// Verbundener Twitch-Kanal (Broadcaster-ID).
     pub fn set_channel(&self, broadcaster_id: &str) {
         if !broadcaster_id.is_empty() {
-            *self.channel.lock().unwrap() = format!("twitch:{broadcaster_id}");
+            *self.channel.lock_safe() = format!("twitch:{broadcaster_id}");
         }
     }
 
     pub fn channel(&self) -> String {
-        self.channel.lock().unwrap().clone()
+        self.channel.lock_safe().clone()
     }
 
     pub(crate) fn gate_check(&self, source: Source) -> Result<(), Rejection> {
@@ -856,7 +857,7 @@ impl QueueService {
         };
         let current_uri = current.as_ref().map(|t| t.uri.clone());
         let track_changed = {
-            let mut last = self.last_track_uri.lock().unwrap();
+            let mut last = self.last_track_uri.lock_safe();
             let changed = *last != current_uri;
             *last = current_uri.clone();
             changed
@@ -934,7 +935,7 @@ impl QueueService {
             return;
         }
         {
-            let mut last = self.last_sweep_ms.lock().unwrap();
+            let mut last = self.last_sweep_ms.lock_safe();
             if !track_changed && now - *last < HANDED_OFF_SWEEP_INTERVAL_MS {
                 return;
             }

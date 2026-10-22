@@ -104,6 +104,9 @@ EventSub-Protokoll inkl. Reconnect ohne Neuabo, Migrationen, atomare Textdatei, 
 | Ersetzen gleichzeitig mit Übergabe sendet nie zwei Songs / nie den falschen | `replace_racing_the_handoff_never_sends_two_songs` (schlug vor der Korrektur fehl) |
 | Einlösung bleibt, Streamplan rechnet mit neuer Dauer | `replace_keeps_redemption_and_respects_budget` |
 | `!letztersong` nur beobachtete Wiedergaben, ohne Doppelungen, nach Neustart | `last_played_lists_observed_plays_only` |
+| Von Twitch still beendetes Abo → Neuverbindung mit neuem Abo, keine Schleife | `silently_ended_subscription_triggers_reconnect` (echter lokaler WebSocket-Server) |
+| Lange keine Chatnachricht → Verbindung wird still erneuert (kein Flackern, keine Protokollflut) | `silent_connection_is_renewed_quietly` |
+| Abgestürzte Aufgabe wird gemeldet und neu gestartet; vergiftete Sperre bleibt nutzbar | `supervise::tests::restarts_after_panic_and_reports_each_crash`, `lock::tests::poisoned_mutex_stays_usable` |
 | `!topsongs` & Co.: Zeiträume, leere Antwort, kanalweite Sperre je Befehl, keine Daten anderer Kanäle | `stats_commands_answer_from_history` |
 | Rangfolge, Gleichstand, Künstler/Alben/Wünscher-Zählung, Zeitraum-Argumente | `stats::tests::*` |
 | Statistik-Antwort passt in eine Chatnachricht, Namen werden nicht als Platzhalter gelesen | `twitch::commands::tests::top_list_is_formatted_and_fits_one_message`, `song_names_are_not_scanned_for_placeholders` |
