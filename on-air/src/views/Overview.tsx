@@ -32,15 +32,14 @@ function StackCard({ r, i }: { r: SongRequest; i: number }) {
   const removable = r.status === "accepted" || r.status === "pending_review";
   const inSpotify = r.status === "handed_off";
   const tag = review || r.status === "uncertain" || inSpotify || r.redemption?.status === "review" ? b.label : null;
-  const tone = i === 0 ? "c1" : i === 1 ? "c2" : i === 2 ? "c3" : "";
   return (
-    <div className={`scard upnext-card ${tone} ${i === 0 ? "active" : ""} ${review ? "review" : ""}`} role="listitem">
+    <div className={`scard upnext-card ${i === 0 ? "active" : ""} ${review ? "review" : ""}`} role="listitem">
+      <span className="sc-n">{i + 1}</span>
       <Cover url={r.track?.image_url} className="sc-cover" />
       <div style={{ minWidth: 0 }}>
         <div className="sc-title ellipsis" title={title}>{title}</div>
         <div className="sc-sub ellipsis" title={artist}>{artist}</div>
         <div className="sc-meta">
-          <span className="sc-n">{String(i + 1).padStart(2, "0")}</span>
           {r.source === "channel_points" ? <Sparkles size={12} aria-label={t("rc.points")} /> : <MessageSquare size={12} aria-hidden="true" />}
           <span className="ellipsis">{r.requester.name}</span>
         </div>
@@ -69,8 +68,14 @@ function UpNextStack({ snap, go, onAdd }: { snap: AppSnapshot; go: (r: string) =
   return (
     <section className="tile stack upnext" aria-labelledby="next-h">
       <div className="stack-head upnext-head">
-        <h2 id="next-h">{t("np.up_next")}</h2>
-        <span className="count">{upcoming.length === 1 ? t("np.song_one") : t("np.songs", { n: upcoming.length })}</span>
+        <div className="col" style={{ gap: 2 }}>
+          <h2 id="next-h">{t("np.up_next")}</h2>
+          <span className="count">{upcoming.length === 1 ? t("np.song_one") : t("np.songs", { n: upcoming.length })}{total > 0 ? ` · ${duration(total)}` : ""}</span>
+        </div>
+        <div className="row" style={{ gap: 6 }}>
+          {upcoming.length > 0 && <button className="btn btn-ghost btn-sm" onClick={() => go("queue")}>{t("stack.show_all")}</button>}
+          <button className="btn btn-sm btn-primary" onClick={onAdd}><Plus size={15} /> {t("stack.add")}</button>
+        </div>
       </div>
       {upcoming.length === 0 ? (
         <div className="stack-empty">
@@ -86,13 +91,6 @@ function UpNextStack({ snap, go, onAdd }: { snap: AppSnapshot; go: (r: string) =
           )}
         </div>
       )}
-      <div className="stack-foot">
-        <div className="total">
-          <span>{t("stack.total")}</span>
-          <b>{duration(total)}</b>
-        </div>
-        <button className="fab" onClick={onAdd} aria-label={t("q.add")} title={t("q.add")}><Plus size={26} /></button>
-      </div>
     </section>
   );
 }

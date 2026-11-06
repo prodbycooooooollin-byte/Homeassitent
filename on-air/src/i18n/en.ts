@@ -816,4 +816,7 @@ export const en: Record<DictKey, string> = {
   "w.kicker": "OBS · Browser sources",
   "w.scene": "Scene",
   "set.kicker": "Settings",
+  "pb.progress": "Playback position",
+  "stack.show_all": "Show all",
+  "stack.add": "Add",
 };

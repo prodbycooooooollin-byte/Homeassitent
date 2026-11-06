@@ -814,6 +814,9 @@ export const de = {
   "w.kicker": "OBS · Browser-Quellen",
   "w.scene": "Szene",
   "set.kicker": "Einstellungen",
+  "pb.progress": "Wiedergabeposition",
+  "stack.show_all": "Alle anzeigen",
+  "stack.add": "Hinzufügen",
 } as const;
 
 export type DictKey = keyof typeof de;

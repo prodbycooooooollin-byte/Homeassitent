@@ -1,5 +1,5 @@
 import {
-  Bell, Coins, History, Layers, ListMusic, Music2, Pause, PictureInPicture2, Play, Plus, Radio, Search, Settings, SkipForward, Stethoscope, Timer, X,
+  Bell, Coins, History, Layers, ListMusic, Music2, Pause, PictureInPicture2, Play, Plus, Radio, Search, Settings, SkipBack, SkipForward, Stethoscope, Timer, X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityLog } from "../components/Activity";
@@ -8,10 +8,11 @@ import { CommandPalette, useCommandPaletteHotkey } from "../components/CommandPa
 import { DiagnosticsDialog, SearchDialog } from "../components/Dialogs";
 import { startSpotifyLogin, startTwitchLogin } from "../components/Login";
 import { WindowControls } from "../components/WindowControls";
-import { BrandMark, Dialog, toastError } from "../components/ui";
+import { playbackInfo } from "../components/NowPlaying";
+import { BrandMark, Cover, Dialog, toastError } from "../components/ui";
 import { effective } from "../lib/acceptance";
 import { api } from "../lib/api";
-import { clockTime, relative } from "../lib/format";
+import { clockTime, duration, relative } from "../lib/format";
 import { getLang, t } from "../lib/i18n";
 import { isSpotifyUsable, spotifyStatus, twitchStatus, type StatusDesc } from "../lib/status";
 import { refresh, useNow } from "../lib/store";
@@ -177,20 +178,9 @@ function TwitchGlyph() {
   );
 }
 
-/** App-Symbol im Dock (wie auf einem Startbildschirm). */
-function AppIcon({ label, children, onClick, tone, disabled, badge, pressed }: { label: string; children: ReactNode; onClick: () => void; tone?: "on" | "live" | "warn"; disabled?: boolean; badge?: number; pressed?: boolean }) {
-  return (
-    <button type="button" className={`app-ico ${tone ?? ""}`} onClick={onClick} disabled={disabled} aria-label={label} aria-pressed={pressed}>
-      {children}
-      {badge ? <span className="badge-n">{badge}</span> : null}
-      <span className="tip" aria-hidden="true">{label}</span>
-    </button>
-  );
-}
-
-/** Dock: Uhr, Schnellaktionen als App-Symbole, Request-Zustand und Dienste. */
-function Dock({ snap, go, onDiag, onAdd }: { snap: AppSnapshot; go: (r: NavRoute) => void; onDiag: (k: "spotify" | "twitch" | "all") => void; onAdd: () => void }) {
-  const now = useNow(5000);
+/** Player-Leiste unten (wie in Spotify): links der Song, Mitte ⏮ ⏯ ⏭ mit Fortschritt, rechts Requests und Schnellaktionen. */
+function PlayerBar({ snap, go, onDiag, onAdd }: { snap: AppSnapshot; go: (r: NavRoute) => void; onDiag: (k: "spotify" | "twitch" | "all") => void; onAdd: () => void }) {
+  const now = useNow();
   const [busy, setBusy] = useState(false);
   const e = effective(snap);
   const manualOpen = snap.settings.requests.open;
@@ -200,6 +190,7 @@ function Dock({ snap, go, onDiag, onAdd }: { snap: AppSnapshot; go: (r: NavRoute
   const usable = isSpotifyUsable(snap);
   const sp = spotifyStatus(snap, now);
   const tw = twitchStatus(snap, now);
+  const info = playbackInfo(snap, now);
   const run = async (f: () => Promise<unknown>) => {
     setBusy(true);
     try {
@@ -211,54 +202,68 @@ function Dock({ snap, go, onDiag, onAdd }: { snap: AppSnapshot; go: (r: NavRoute
       setBusy(false);
     }
   };
-  const date = new Date(now).toLocaleDateString(getLang() === "en" ? "en-GB" : "de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+  const pb = info?.pb;
+  const kind = info?.kind;
+  const controls = usable && !!info && kind !== "ad";
+  const title = kind === "track" ? pb!.track!.title : kind === "episode" ? pb!.episode!.title : kind === "ad" ? t("np.ad") : info ? t("np.unknown_title") : snap.spotify.auth.state === "signed_in" ? t("np.nothing") : t("sp.signed_out");
+  const sub = kind === "track" ? pb!.track!.artists.join(", ") : kind === "episode" ? pb!.episode!.show ?? "" : "";
+  const cover = pb?.track?.image_url ?? pb?.episode?.image_url ?? null;
+  const dur = info?.dur ?? 0;
+  const pct = info && dur > 0 ? Math.max(0, Math.min(1, info.progress / dur)) : 0;
+  const disabledReason = !usable ? t("np.disabled_offline") : t("np.disabled_action");
   return (
-    <footer className="dock statusbar" aria-label={t("sb.label")}>
-      <div className="dock-clock" aria-hidden="true">
-        <b>{clockTime(now, getLang())}</b>
-        <span>{date}</span>
+    <footer className="playerbar statusbar" aria-label={t("sb.label")}>
+      <div className="pb-now">
+        <div className="pb-cover"><Cover url={cover} /></div>
+        <div style={{ minWidth: 0 }}>
+          <div className="pb-title ellipsis" title={title}>{title}</div>
+          <div className="pb-sub ellipsis" title={sub}>{info?.requester ? <><span className="pb-req">{info.requester}</span>{sub ? ` · ${sub}` : ""}</> : sub || " "}</div>
+        </div>
       </div>
-      <span className="dock-sep" aria-hidden="true" />
-      <div className="dock-apps">
+      <div className="pb-center">
+        <div className="pb-transport">
+          <button className="icon-btn" aria-label={t("np.prev")} title={controls && pb!.actions.can_skip_prev ? t("np.prev") : disabledReason} disabled={!controls || !pb!.actions.can_skip_prev} onClick={() => void run(() => api.transport("previous"))}><SkipBack size={19} fill="currentColor" /></button>
+          {pb?.is_playing ? (
+            <button className="pb-play" aria-label={t("np.pause")} title={controls ? t("np.pause") : disabledReason} disabled={!controls || !pb.actions.can_pause} onClick={() => void run(() => api.transport("pause"))}><Pause size={19} fill="currentColor" /></button>
+          ) : (
+            <button className="pb-play" aria-label={t("np.play")} title={controls ? t("np.play") : disabledReason} disabled={!controls || !pb?.actions.can_resume} onClick={() => void run(() => api.transport("resume"))}><Play size={19} fill="currentColor" style={{ marginLeft: 2 }} /></button>
+          )}
+          <button className="icon-btn" aria-label={t("np.next")} title={controls && pb!.actions.can_skip_next ? t("np.next") : disabledReason} disabled={!controls || !pb!.actions.can_skip_next} onClick={() => void run(() => api.transport("next"))}><SkipForward size={19} fill="currentColor" /></button>
+        </div>
+        <div className="pb-progress">
+          <span className="num">{info && dur > 0 && !info.stale ? duration(info.progress) : "–:––"}</span>
+          <div className="bar" role="progressbar" aria-label={t("pb.progress")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct * 100)}>
+            <i style={{ transform: `scaleX(${info && !info.stale ? pct : 0})` }} />
+          </div>
+          <span className="num">{dur > 0 ? duration(dur) : "–:––"}</span>
+        </div>
+      </div>
+      <div className="pb-right">
         <button
           type="button"
-          className={`app-ico sb-req ${manualOpen ? (e.tone === "open" ? "live" : "warn") : ""}`}
+          className={`req-pill sb-req ${manualOpen ? e.tone : "paused"}`}
           aria-pressed={manualOpen}
-          aria-label={manualOpen ? t("acc.pause_btn") : t("acc.resume_btn")}
-          title={t("req.toggle_hint")}
+          title={`${e.label}${e.why ? ` – ${e.why}` : ""} · ${t("req.toggle_hint")}`}
           disabled={busy}
           onClick={() => void run(() => api.setRequestsOpen(!manualOpen))}
         >
-          {manualOpen ? <Pause size={21} /> : <Play size={21} />}
-          <span className="tip" aria-hidden="true">{manualOpen ? t("acc.pause_btn") : t("acc.resume_btn")}</span>
+          <span className={`lamp ${e.tone === "open" ? "on" : ""}`} aria-hidden="true" />
+          <span className="rp-text"><b>{e.label}</b><small>{e.why || (manualOpen ? t("acc.pause_btn") : t("acc.resume_btn"))}</small></span>
         </button>
-        <AppIcon label={t("np.next")} disabled={!usable} onClick={() => void run(() => api.transport("next"))}><SkipForward size={21} /></AppIcon>
-        <AppIcon label={t("q.add")} onClick={onAdd}><Plus size={22} /></AppIcon>
-        <AppIcon
-          label={`${t("sb.points")} · ${cp.cost.toLocaleString(getLang() === "en" ? "en" : "de")}`}
-          tone={cp.enabled ? "on" : undefined}
-          pressed={cp.enabled}
+        <button
+          className={`pb-chip ${cp.enabled ? "on" : ""}`}
+          aria-pressed={cp.enabled}
           disabled={busy || (!twitchIn && !cp.enabled)}
+          title={`${t("sb.points")} · ${cp.cost.toLocaleString(getLang() === "en" ? "en" : "de")}`}
           onClick={() => void run(() => api.updateSettings({ ...snap.settings, channel_points: { ...cp, enabled: !cp.enabled } }))}
         >
-          <Coins size={21} />
-        </AppIcon>
-        <AppIcon
-          label={plan.active && plan.end_at_ms ? `${t("sb.stream_end")} ${clockTime(plan.end_at_ms, getLang())} · +15 Min` : t("sb.plan")}
-          tone={plan.active ? "on" : undefined}
-          disabled={busy}
-          onClick={() => (plan.active ? void run(() => api.planExtend(15)) : go("settings"))}
-        >
-          <Timer size={21} />
-        </AppIcon>
-        <AppIcon label={t("nav.compact")} onClick={() => api.openCompact().catch(toastError)}><PictureInPicture2 size={20} /></AppIcon>
-      </div>
-      <span className="dock-sep" aria-hidden="true" />
-      <div className="dock-status" role="status" aria-live="polite">
-        <div className="ds-main" title={`${e.label}${e.why ? ` – ${e.why}` : ""}`}>
-          <b><span className={`lamp ${e.tone === "open" ? "on" : ""}`} aria-hidden="true" style={e.tone === "auto" ? { background: "var(--warn)" } : undefined} />{e.label}</b>
-          <span>{e.why || (plan.active && plan.end_at_ms ? `${t("sb.stream_end")} ${clockTime(plan.end_at_ms, getLang())}` : " ")}</span>
-        </div>
+          <Coins size={16} /> <span className="lbl">{t("sb.points")}</span>
+        </button>
+        <button className={`pb-chip ${plan.active ? "on" : ""}`} disabled={busy} title={plan.active && plan.end_at_ms ? `${t("sb.stream_end")} ${clockTime(plan.end_at_ms, getLang())}` : t("plan.intro")} onClick={() => (plan.active ? void run(() => api.planExtend(15)) : go("settings"))}>
+          <Timer size={16} /> <span className="lbl num">{plan.active && plan.end_at_ms ? `${clockTime(plan.end_at_ms, getLang())} · +15` : t("sb.plan")}</span>
+        </button>
+        <button className="icon-btn" aria-label={t("q.add")} title={t("q.add")} onClick={onAdd}><Plus size={19} /></button>
+        <button className="icon-btn" aria-label={t("nav.compact")} title={t("nav.compact")} onClick={() => api.openCompact().catch(toastError)}><PictureInPicture2 size={18} /></button>
         <button className={`svc tone-${sp.tone}`} title={`${t("sp.label")}: ${sp.short}`} aria-label={`${t("sp.label")}: ${sp.short}`} onClick={() => onDiag("spotify")}><SpotifyGlyph /></button>
         <button className={`svc tone-${tw.tone}`} title={`${t("tw.label")}: ${tw.short}`} aria-label={`${t("tw.label")}: ${tw.short}`} onClick={() => onDiag("twitch")}><TwitchGlyph /></button>
       </div>
@@ -367,7 +372,7 @@ export function Shell({ snap, route, go, children }: { snap: AppSnapshot; route:
           </div>
         </header>
         <main className="stagearea content" id="main" ref={stageRef}>{children}</main>
-        <Dock snap={snap} go={go} onDiag={(k) => setDiag(k)} onAdd={() => setAdding(true)} />
+        <PlayerBar snap={snap} go={go} onDiag={(k) => setDiag(k)} onAdd={() => setAdding(true)} />
       </div>
       {drawer && <ActivityDrawer snap={snap} onClose={() => setDrawer(false)} />}
       {diag && <DiagnosticsDialog target={diag} onClose={() => setDiag(null)} />}
