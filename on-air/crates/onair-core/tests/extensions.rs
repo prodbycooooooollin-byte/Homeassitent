@@ -1,0 +1,676 @@
+//! Tests der Erweiterungen: Request-Quellen, Kanalpunkte, Streamplanung, Update-Pause.
+//! SIMULIERT gegen Fake-Spotify und Fake-Twitch – keine echten Dienste.
+
+mod common;
+
+use common::*;
+use onair_core::acceptance::Block;
+use onair_core::http::Method;
+use onair_core::queue::{RedemptionStatus, RequestStatus, Requester, Source, SubmitOutcome};
+use onair_core::runtime::{Endpoints, Runtime, RuntimeConfig, SPOTIFY_SECRET_KEY};
+use onair_core::settings::{Role, Settings};
+use onair_core::storage::Db;
+use onair_core::twitch::helix::RedemptionInfo;
+use std::sync::Arc;
+use std::time::Duration;
+
+fn endpoints() -> Endpoints {
+    Endpoints {
+        spotify_accounts: ACCOUNTS.into(),
+        spotify_api: API.into(),
+        twitch_id: "http://fake-twitch-id".into(),
+        twitch_helix: "http://fake-helix".into(),
+        twitch_ws: "ws://127.0.0.1:9".into(),
+    }
+}
+
+fn settings(chat: bool, cp: bool) -> Settings {
+    let mut s = Settings::default();
+    s.spotify.client_id = "client".into();
+    s.twitch.client_id = "c".into();
+    s.requests.open = true;
+    s.requests.chat_enabled = chat;
+    s.requests.user_cooldown_s = 0;
+    s.requests.per_user_limit = 20;
+    s.channel_points.enabled = cp;
+    s
+}
+
+async fn start(h: &Harness, db: Db, s: Settings) -> Arc<Runtime> {
+    s.save(&db).unwrap();
+    let _ = h.tokens(SPOTIFY_SECRET_KEY, 3_600_000);
+    h.twitch_tokens();
+    Runtime::start(RuntimeConfig {
+        db,
+        data_dir: None,
+        secrets: h.secrets.clone(),
+        http: h.transport.clone(),
+        clock: h.clock.clone(),
+        endpoints: endpoints(),
+        start_overlay: false,
+        app_version: "test".into(),
+    })
+    .await
+}
+
+async fn wait_for(what: &str, mut cond: impl FnMut() -> bool, max: Duration) {
+    let start = tokio::time::Instant::now();
+    while !cond() {
+        if start.elapsed() > max {
+            panic!("Zeitüberschreitung beim Warten auf: {what}");
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+async fn ready(rt: &Runtime) {
+    wait_for("Spotify online", || rt.spotify_state.borrow().is_online(), Duration::from_secs(15)).await;
+    wait_for("Twitch-Identität", || rt.twitch_state.borrow().identity.is_some(), Duration::from_secs(15)).await;
+}
+
+async fn reward_ready(rt: &Runtime) -> String {
+    wait_for(
+        "Belohnung abgeglichen",
+        || {
+            let s = rt.channel_points.status();
+            s.reward_id.is_some() && s.reconciled && s.in_sync
+        },
+        Duration::from_secs(30),
+    )
+    .await;
+    rt.channel_points.status().reward_id.unwrap()
+}
+
+fn viewer(n: u32) -> Requester {
+    Requester { id: format!("twitch:{n}"), name: format!("viewer{n}"), role: Role::Everyone }
+}
+
+fn red(id: &str, reward: &str, user: &str, input: &str) -> RedemptionInfo {
+    RedemptionInfo {
+        id: id.into(),
+        reward_id: reward.into(),
+        reward_title: "Song wünschen".into(),
+        user_id: user.into(),
+        user_login: format!("u{user}"),
+        user_name: format!("User{user}"),
+        user_input: input.into(),
+        status: "UNFULFILLED".into(),
+    }
+}
+
+fn accepted(o: &SubmitOutcome) -> bool {
+    matches!(o, SubmitOutcome::Accepted { .. } | SubmitOutcome::PendingReview { .. })
+}
+
+fn rejected_code(o: &SubmitOutcome) -> String {
+    match o {
+        SubmitOutcome::Rejected { code, .. } => code.clone(),
+        other => format!("{other:?}"),
+    }
+}
+
+// Quellen: alle vier Kombinationen und die globale Pause.
+#[tokio::test(start_paused = true)]
+async fn four_source_combinations_and_global_pause() {
+    for (chat, cp) in [(true, false), (false, true), (true, true), (false, false)] {
+        let h = Harness::new();
+        let rt = start(&h, Db::in_memory().unwrap(), settings(chat, cp)).await;
+        ready(&rt).await;
+        let reward = if cp { reward_ready(&rt).await } else { "rw-x".into() };
+        let c = rt.queue.submit_query("chat song", viewer(1), Source::Chat, Some("e1"), None).await;
+        let p = rt.queue.submit_redemption("points song", viewer(2), &reward, "red-1").await;
+        assert_eq!(accepted(&c), chat, "chat={chat} cp={cp}: {c:?}");
+        assert_eq!(accepted(&p), cp, "chat={chat} cp={cp}: {p:?}");
+        if !chat {
+            assert_eq!(rejected_code(&c), "source_disabled");
+        }
+        if !cp {
+            assert_eq!(rejected_code(&p), "source_disabled");
+        }
+        // Globale Pause überlagert, ohne die Konfiguration zu ändern.
+        rt.set_requests_open(false).await.unwrap();
+        let c2 = rt.queue.submit_query("chat song 2", viewer(3), Source::Chat, Some("e2"), None).await;
+        let p2 = rt.queue.submit_redemption("points song 2", viewer(4), &reward, "red-2").await;
+        assert!(!accepted(&c2) && !accepted(&p2));
+        let s = onair_core::settings::read(&rt.settings).clone();
+        assert_eq!((s.requests.chat_enabled, s.channel_points.enabled), (chat, cp));
+        let a = rt.acceptance();
+        if chat {
+            assert_eq!(a.chat.blocks, vec![Block::ManualPause]);
+        }
+        rt.shutdown().await;
+    }
+}
+
+// Belohnung: Einschalten erzeugt keine Duplikate – auch nicht nach Neustart oder Absturz.
+#[tokio::test(start_paused = true)]
+async fn reward_is_created_once_and_adopted_after_crash() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("onair.db");
+    let h = Harness::new();
+    let rt = start(&h, Db::open(&path).unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    let id1 = reward_ready(&rt).await;
+    rt.shutdown().await;
+    drop(rt);
+    let rt = start(&h, Db::open(&path).unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    let id2 = reward_ready(&rt).await;
+    assert_eq!(id1, id2);
+    assert_eq!(h.twitch.lock().unwrap().creates, 1, "kein zweites Anlegen nach Neustart");
+    rt.shutdown().await;
+
+    // Absturz zwischen Anlegen auf Twitch und lokalem Speichern: neue DB ohne ID.
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    assert_eq!(reward_ready(&rt).await, id1, "vorhandene eigene Belohnung übernommen");
+    assert_eq!(h.twitch.lock().unwrap().creates, 1);
+    rt.shutdown().await;
+
+    // Fremde Belohnung mit gleichem Titel: nicht verwaltbar → verständlicher Fehler, kein Duplikat.
+    let h = Harness::new();
+    h.twitch.lock().unwrap().rewards.push(("foreign".into(), serde_json::json!({"id": "foreign", "title": "Song wünschen"}), false));
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    wait_for("Fehler", || rt.channel_points.status().last_error.is_some(), Duration::from_secs(20)).await;
+    assert_eq!(rt.channel_points.status().last_error.unwrap().code, "reward_title_taken");
+    assert_eq!(h.twitch.lock().unwrap().creates, 0);
+    assert!(!rt.acceptance().channel_points.open);
+    rt.shutdown().await;
+}
+
+// Ausschalten: Remote-Zustand erst nach Bestätigung; Belohnung wird deaktiviert, nicht gelöscht.
+#[tokio::test(start_paused = true)]
+async fn disabling_shows_pending_until_twitch_confirms() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    let id = reward_ready(&rt).await;
+    h.twitch.lock().unwrap().fail_patch = true;
+    let mut s = onair_core::settings::read(&rt.settings).clone();
+    s.channel_points.enabled = false;
+    rt.update_settings(s).await.unwrap();
+    rt.channel_points.kick();
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let st = rt.channel_points.status();
+    assert!(!st.desired_enabled);
+    assert_eq!(st.confirmed_enabled, Some(true), "noch nicht bestätigt");
+    assert!(!st.in_sync, "UI zeigt „Deaktivierung auf Twitch noch ausstehend“");
+    h.twitch.lock().unwrap().fail_patch = false;
+    rt.channel_points.kick();
+    wait_for("deaktiviert", || rt.channel_points.status().confirmed_enabled == Some(false), Duration::from_secs(400)).await;
+    let tw = h.twitch.lock().unwrap();
+    let r = tw.rewards.iter().find(|(i, _, _)| *i == id).expect("nicht gelöscht");
+    assert_eq!(r.1["is_enabled"], serde_json::json!(false));
+}
+
+// Einlösungen: doppelte Events → ein Wunsch; Erfüllen erst nach Wiedergabebeginn; Ablehnung storniert.
+#[tokio::test(start_paused = true)]
+async fn redemptions_are_deduplicated_and_settled() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    let reward = reward_ready(&rt).await;
+    h.twitch.lock().unwrap().add_redemption("red-a", &reward, "7", "good song");
+    let ev = red("red-a", &reward, "7", "good song");
+    rt.channel_points.on_add(ev.clone()).await;
+    rt.channel_points.on_add(ev).await; // doppelte Zustellung
+    let mine: Vec<_> = rt.queue.store.pending().into_iter().filter(|r| r.source == Source::ChannelPoints).collect();
+    assert_eq!(mine.len(), 1, "genau ein Wunsch");
+    // Rückmeldung im Chat – genau eine, obwohl die Einlösung doppelt zugestellt wurde.
+    wait_for("Chatantwort", || h.twitch.lock().unwrap().chat.iter().any(|m| m.starts_with("@User7") && m.contains("Platz")), Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert_eq!(h.twitch.lock().unwrap().chat.iter().filter(|m| m.starts_with("@User7")).count(), 1, "genau eine Chatantwort");
+    let rid = mine[0].id.clone();
+    // Übergeben, aber noch nicht gespielt → noch nicht erfüllt.
+    wait_for("übergeben", || rt.queue.store.get(&rid).map(|r| r.status == RequestStatus::HandedOff).unwrap_or(false), Duration::from_secs(20)).await;
+    rt.channel_points.kick();
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert_eq!(h.twitch.lock().unwrap().redemption_status("red-a").as_deref(), Some("UNFULFILLED"));
+    h.fake.lock().unwrap().advance();
+    wait_for("erfüllt", || h.twitch.lock().unwrap().redemption_status("red-a").as_deref() == Some("FULFILLED"), Duration::from_secs(60)).await;
+    wait_for("lokal bestätigt", || rt.queue.store.get(&rid).and_then(|r| r.redemption).map(|x| x.status) == Some(RedemptionStatus::Fulfilled), Duration::from_secs(10)).await;
+
+    // Ungültiger Wunsch → storniert (Punkte erstattet) – aber erst nach bestätigter Antwort.
+    h.twitch.lock().unwrap().fail_patch = true;
+    h.twitch.lock().unwrap().add_redemption("red-b", &reward, "8", "https://youtube.com/watch?v=x");
+    rt.channel_points.on_add(red("red-b", &reward, "8", "https://youtube.com/watch?v=x")).await;
+    let b = rt.queue.store.by_redemption("red-b").unwrap();
+    assert_eq!(b.status, RequestStatus::Rejected);
+    wait_for("Ablehnung im Chat", || h.twitch.lock().unwrap().chat.iter().any(|m| m.starts_with("@User8") && m.contains("erstattet")), Duration::from_secs(10)).await;
+    rt.channel_points.kick();
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert_eq!(rt.queue.store.by_redemption("red-b").unwrap().redemption.unwrap().status, RedemptionStatus::Unfulfilled, "nicht voreilig als erstattet anzeigen");
+    h.twitch.lock().unwrap().fail_patch = false;
+    rt.channel_points.kick();
+    wait_for("storniert", || h.twitch.lock().unwrap().redemption_status("red-b").as_deref() == Some("CANCELED"), Duration::from_secs(400)).await;
+    wait_for("lokal", || rt.queue.store.by_redemption("red-b").unwrap().redemption.unwrap().status == RedemptionStatus::Canceled, Duration::from_secs(10)).await;
+    let patches = h.twitch.lock().unwrap().redemption_patches.iter().filter(|(i, _)| i == "red-b").count();
+    assert_eq!(patches, 1, "genau eine erfolgreiche Abwicklung");
+}
+
+// Fremde Belohnung: nicht still verschluckt, sondern gemeldet; übernommen → Wünsche kommen an.
+#[tokio::test(start_paused = true)]
+async fn foreign_reward_is_reported_and_can_be_used() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    let _ours = reward_ready(&rt).await;
+    let mut ev = red("red-f1", "foreign-1", "7", "good song");
+    ev.reward_title = "Song Request".into();
+    rt.channel_points.on_add(ev).await;
+    assert!(rt.queue.store.by_source_event("cp:red-f1").is_none(), "fremde Einlösung nicht verarbeitet");
+    let st = rt.channel_points.status();
+    let f = st.foreign_reward.expect("Hinweis auf fremde Belohnung");
+    assert_eq!((f.id.as_str(), f.title.as_str()), ("foreign-1", "Song Request"));
+    assert!(st.last_redemption_ms.is_some());
+    assert!(rt.activity.recent(20).iter().any(|a| a.message.contains("„Song Request“") && a.message.contains("ignoriert")));
+    // Belohnungen ohne Texteingabe (z. B. „Hydrate“) lösen keinen Hinweis aus.
+    let mut hyd = red("red-h", "hydrate", "7", "");
+    hyd.reward_title = "Hydrate".into();
+    rt.channel_points.on_add(hyd).await;
+    assert_eq!(rt.channel_points.status().foreign_reward.unwrap().id, "foreign-1");
+
+    // Übernehmen: bestehende Belohnung verwenden.
+    let mut s = onair_core::settings::read(&rt.settings).clone();
+    s.channel_points.external_reward = Some(onair_core::settings::ExternalReward { id: "foreign-1".into(), title: "Song Request".into() });
+    rt.update_settings(s).await.unwrap();
+    wait_for("verwaltete Belohnung deaktiviert", || rt.channel_points.status().confirmed_enabled == Some(false), Duration::from_secs(30)).await;
+    assert!(rt.channel_points.status().external);
+    let mut ev = red("red-f2", "foreign-1", "8", "good song");
+    ev.reward_title = "Song Request".into();
+    rt.channel_points.on_add(ev).await;
+    let r = rt.queue.store.by_source_event("cp:red-f2").expect("Wunsch angekommen");
+    assert_ne!(r.status, RequestStatus::Rejected, "{:?}", r.reason);
+    assert!(r.redemption.is_none(), "fremde Einlösung wird nicht auf Twitch abgewickelt");
+    wait_for("Chatantwort", || h.twitch.lock().unwrap().chat.iter().any(|m| m.starts_with("@User8") && m.contains("Platz")), Duration::from_secs(10)).await;
+    // Ablehnung ohne falsches „erstattet“.
+    let mut bad = red("red-f3", "foreign-1", "9", "https://youtube.com/watch?v=x");
+    bad.reward_title = "Song Request".into();
+    rt.channel_points.on_add(bad).await;
+    wait_for("Ablehnung im Chat", || h.twitch.lock().unwrap().chat.iter().any(|m| m.starts_with("@User9")), Duration::from_secs(10)).await;
+    assert!(!h.twitch.lock().unwrap().chat.iter().any(|m| m.starts_with("@User9") && m.contains("erstattet")));
+    assert!(rt.activity.recent(20).iter().any(|a| a.message.contains("Erstattung nur manuell")));
+}
+
+// Wer als Streamer selbst einlöst, wird nicht durch das Pro-Person-Limit blockiert.
+#[tokio::test(start_paused = true)]
+async fn broadcaster_redemption_bypasses_user_limit() {
+    let h = Harness::new();
+    let mut s = settings(true, true);
+    s.requests.per_user_limit = 1;
+    let rt = start(&h, Db::in_memory().unwrap(), s).await;
+    ready(&rt).await;
+    let reward = reward_ready(&rt).await;
+    for (i, q) in ["good song", "good song 2", "points song"].iter().enumerate() {
+        let id = format!("red-own-{i}");
+        h.twitch.lock().unwrap().add_redemption(&id, &reward, "100", q);
+        rt.channel_points.on_add(red(&id, &reward, "100", q)).await;
+        let r = rt.queue.store.by_redemption(&id).unwrap();
+        assert_ne!(r.status, RequestStatus::Rejected, "{i}: {:?}", r.reason);
+    }
+}
+
+// Unterbrechung: Neustart verliert keine Zuordnung; verpasste Einlösungen werden übernommen.
+#[tokio::test(start_paused = true)]
+async fn restart_recovers_pending_redemptions() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("onair.db");
+    let h = Harness::new();
+    let reward;
+    {
+        let rt = start(&h, Db::open(&path).unwrap(), settings(true, true)).await;
+        ready(&rt).await;
+        reward = reward_ready(&rt).await;
+        // Abgelehnt, aber Twitch-Abwicklung scheitert vor dem Beenden.
+        h.twitch.lock().unwrap().fail_patch = true;
+        h.twitch.lock().unwrap().add_redemption("red-x", &reward, "9", "");
+        rt.channel_points.on_add(red("red-x", &reward, "9", "")).await;
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        rt.shutdown().await;
+    }
+    // Während die App aus war, wurde eine weitere Belohnung eingelöst.
+    h.twitch.lock().unwrap().add_redemption("red-y", &reward, "10", "late song");
+    h.twitch.lock().unwrap().fail_patch = false;
+    let rt = start(&h, Db::open(&path).unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    // Bis zum Abgleich keine neuen Kanalpunkte-Wünsche.
+    assert!(rt.acceptance().channel_points.blocks.iter().any(|b| matches!(b, Block::Reconciling)) || rt.channel_points.is_reconciled());
+    reward_ready(&rt).await;
+    wait_for("verpasste Einlösung übernommen", || rt.queue.store.by_redemption("red-y").is_some(), Duration::from_secs(20)).await;
+    wait_for("Abwicklung nachgeholt", || h.twitch.lock().unwrap().redemption_status("red-x").as_deref() == Some("CANCELED"), Duration::from_secs(60)).await;
+    let y = rt.queue.store.by_redemption("red-y").unwrap();
+    assert!(y.status.is_pending() || y.status == RequestStatus::Playing, "{:?} {:?} {:?}", y.status, y.reason, y.reason_text);
+}
+
+// Zeitbudget: zwei gleichzeitige Wünsche können denselben Restplatz nicht beide beanspruchen.
+#[tokio::test(start_paused = true)]
+async fn concurrent_requests_cannot_share_the_same_budget() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, false)).await;
+    ready(&rt).await;
+    // Aktueller Titel: 200 s, Fortschritt 10 s → 190 s Rest. Frei: 250 s, Suchtreffer je 200 s.
+    let now = h.clock.now_ms();
+    rt.plan_set_end(now + 190_000 + 250_000, Some(0)).unwrap();
+    let futs: Vec<_> = (0..2)
+        .map(|i| {
+            let q = rt.queue.clone();
+            tokio::spawn(async move { q.submit_query(&format!("parallel {i}"), viewer(20 + i), Source::Chat, Some(&format!("p{i}")), None).await })
+        })
+        .collect();
+    let mut ok = 0;
+    let mut codes = vec![];
+    for f in futs {
+        let o = f.await.unwrap();
+        if accepted(&o) {
+            ok += 1;
+        } else {
+            codes.push(rejected_code(&o));
+        }
+    }
+    assert_eq!(ok, 1, "{codes:?}");
+    assert!(codes[0] == "too_long_for_plan" || codes[0] == "budget_exhausted");
+}
+
+// Ablehnung nennt Songlänge und Restzeit.
+#[tokio::test(start_paused = true)]
+async fn too_long_request_gets_concrete_reason() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, false)).await;
+    ready(&rt).await;
+    let now = h.clock.now_ms();
+    rt.plan_set_end(now + 190_000 + 150_000, Some(0)).unwrap();
+    let o = rt.queue.submit_query("long one", viewer(1), Source::Chat, Some("l1"), None).await;
+    match o {
+        SubmitOutcome::Rejected { code, text, .. } => {
+            assert_eq!(code, "too_long_for_plan");
+            assert!(text.contains("dauert 3:20") && text.contains("noch 2:30"), "{text}");
+        }
+        other => panic!("{other:?}"),
+    }
+    // Ein zu langer Titel schließt die Annahme nicht insgesamt.
+    assert!(rt.acceptance().chat.open);
+}
+
+// Sperrgründe: +15 Minuten hebt keine manuelle Pause auf; Neustart setzt die Endzeit nicht zurück.
+#[tokio::test(start_paused = true)]
+async fn extension_keeps_manual_pause_and_restart_keeps_end() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("onair.db");
+    let h = Harness::new();
+    let end;
+    {
+        let rt = start(&h, Db::open(&path).unwrap(), settings(true, false)).await;
+        ready(&rt).await;
+        end = h.clock.now_ms() + 5 * 60_000;
+        rt.plan_set_end(end, Some(120_000)).unwrap();
+        rt.set_requests_open(false).await.unwrap();
+        rt.plan_extend(15).unwrap();
+        let a = rt.acceptance();
+        assert!(a.chat.blocks.contains(&Block::ManualPause), "manuelle Pause bleibt");
+        assert!(!a.chat.open);
+        assert_eq!(rt.queue.plan_config().end_at_ms, Some(end + 15 * 60_000));
+        rt.shutdown().await;
+    }
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    let mut s = settings(true, false);
+    s.requests.open = false;
+    let rt = start(&h, Db::open(&path).unwrap(), s).await;
+    assert_eq!(rt.queue.plan_config().end_at_ms, Some(end + 15 * 60_000), "fester Endzeitpunkt, kein erneutes „noch 20 Minuten“");
+    rt.set_requests_open(true).await.unwrap();
+    // Session läuft ab und bleibt nach Neustart geschlossen.
+    tokio::time::sleep(Duration::from_secs(25 * 60)).await;
+    assert!(rt.queue.plan_status().ended);
+    rt.shutdown().await;
+    drop(rt);
+    let rt = start(&h, Db::open(&path).unwrap(), settings(true, false)).await;
+    ready(&rt).await;
+    assert!(rt.acceptance().chat.blocks.contains(&Block::StreamEnded));
+    let o = rt.queue.submit_query("after end", viewer(3), Source::Chat, Some("x1"), None).await;
+    assert_eq!(rejected_code(&o), "stream_ended");
+    // Verlängerung hebt die reine Zeitsperre wieder auf.
+    rt.plan_extend(30).unwrap();
+    assert!(rt.acceptance().chat.open);
+}
+
+// Prognose: Pause verbraucht Streamzeit, Skip/Seek werden über den synchronisierten Zustand berücksichtigt.
+#[tokio::test(start_paused = true)]
+async fn plan_follows_pause_skip_and_seek() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, false)).await;
+    ready(&rt).await;
+    let now = h.clock.now_ms();
+    rt.plan_set_end(now + 30 * 60_000, Some(120_000)).unwrap();
+    let s0 = rt.queue.plan_status();
+    // Pause: Restlaufzeit bleibt, Zeit vergeht → Budget sinkt um die Pausendauer.
+    h.fake.lock().unwrap().is_playing = false;
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    let a = rt.queue.plan_status();
+    tokio::time::sleep(Duration::from_secs(120)).await;
+    let b = rt.queue.plan_status();
+    assert!((a.free_ms - b.free_ms - 120_000).abs() < 1_000, "{} {}", a.free_ms, b.free_ms);
+    assert_eq!(a.current_remaining_ms, b.current_remaining_ms);
+    assert!(b.uncertain.contains(&"paused".to_string()));
+    // Seek nach vorn → mehr Budget; Skip → neuer Titel mit voller Dauer.
+    {
+        let mut f = h.fake.lock().unwrap();
+        f.is_playing = true;
+        f.progress_ms = 190_000;
+    }
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    let c = rt.queue.plan_status();
+    assert!(c.current_remaining_ms <= 10_000, "{}", c.current_remaining_ms);
+    h.fake.lock().unwrap().advance();
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    let d = rt.queue.plan_status();
+    assert!(d.current_remaining_ms > 150_000);
+    assert!(s0.free_ms > d.free_ms);
+    let _ = h.count(Method::Get, "/me/player");
+}
+
+// Update-Pause: Annahme und Belohnung pausiert; Abbruch stellt den vorherigen Zustand her.
+#[tokio::test(start_paused = true)]
+async fn update_preparation_pauses_and_can_be_cancelled() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    reward_ready(&rt).await;
+    let prep = rt.prepare_for_update().await;
+    assert_eq!(prep.reward_paused, Some(true));
+    assert!(prep.queue_idle && prep.db_saved);
+    let o = rt.queue.submit_query("during update", viewer(1), Source::Chat, Some("u1"), None).await;
+    assert_eq!(rejected_code(&o), "update_pause");
+    rt.cancel_update_pause();
+    let o = rt.queue.submit_query("after cancel", viewer(1), Source::Chat, Some("u2"), None).await;
+    assert!(accepted(&o), "{o:?}");
+    rt.channel_points.kick();
+    wait_for("wieder aktiv", || rt.channel_points.status().confirmed_paused == Some(false), Duration::from_secs(60)).await;
+}
+
+// OBS-Dock: Zustand enthält Wiedergabe, Requests mit Aktionen und Annahmestatus – keine Tokens.
+#[tokio::test(start_paused = true)]
+async fn dock_state_lists_requests_without_secrets() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, false)).await;
+    ready(&rt).await;
+    let o = rt.queue.submit_query("dock song", viewer(3), Source::Chat, Some("d1"), None).await;
+    assert!(accepted(&o), "{o:?}");
+    let v = rt.dock_state();
+    assert_eq!(v["requests"]["open"], true);
+    assert_eq!(v["requests"]["manual_open"], true);
+    let q = v["queue"].as_array().unwrap();
+    assert!(q.iter().any(|i| i["requester"] == "viewer3" && i["removable"] == true), "{v}");
+    assert!(v["now"].is_object(), "Wiedergabe sichtbar: {v}");
+    let raw = v.to_string();
+    assert!(!raw.contains(rt.control_token()), "kein Schlüssel im Dock-Zustand");
+    assert!(!raw.to_lowercase().contains("access_token"));
+    // Manuelle Pause wird angezeigt, Grund benannt.
+    rt.set_requests_open(false).await.unwrap();
+    let v = rt.dock_state();
+    assert_eq!(v["requests"]["open"], false);
+    assert!(v["requests"]["blocks"].as_array().unwrap().iter().any(|b| b == "manual_pause"), "{v}");
+}
+
+// Sammel-Playlist: angenommene Wünsche landen genau einmal in einer von ON AIR angelegten
+// Playlist; abgelehnte und App-Wünsche nicht; gelöschte Playlist wird neu angelegt.
+#[tokio::test(start_paused = true)]
+async fn request_playlist_collects_each_song_once() {
+    let h = Harness::new();
+    let mut s = settings(true, false);
+    s.request_playlist.enabled = true;
+    s.request_playlist.name = "Wunsch-Archiv".into();
+    s.requests.allow_duplicates = true;
+    let rt = start(&h, Db::in_memory().unwrap(), s).await;
+    ready(&rt).await;
+    let items = |h: &Harness| -> Vec<String> { h.fake.lock().unwrap().playlist_items.get("pl1").cloned().unwrap_or_default() };
+
+    let a = rt.queue.submit_query("erster song", viewer(1), Source::Chat, Some("a1"), None).await;
+    assert!(accepted(&a), "{a:?}");
+    rt.archive.kick();
+    wait_for("Playlist angelegt und befüllt", || items(&h).len() == 1, Duration::from_secs(60)).await;
+    {
+        let f = h.fake.lock().unwrap();
+        assert_eq!(f.created_playlists, vec![("pl1".to_string(), "Wunsch-Archiv".to_string(), false)]);
+    }
+    // Derselbe Song nochmal, ein abgelehnter Wunsch und ein App-Wunsch → nichts Neues.
+    let again = rt.queue.submit_query("erster song", viewer(2), Source::Chat, Some("a2"), None).await;
+    assert!(accepted(&again), "{again:?}");
+    let bad = rt.queue.submit_query("https://www.deezer.com/track/123", viewer(3), Source::Chat, Some("a3"), None).await;
+    assert_eq!(rejected_code(&bad), "unsupported_content");
+    let app = rt.queue.submit_query("app song", viewer(4), Source::App, None, None).await;
+    assert!(accepted(&app), "{app:?}");
+    let b = rt.queue.submit_query("zweiter song", viewer(5), Source::Chat, Some("a4"), None).await;
+    assert!(accepted(&b), "{b:?}");
+    rt.archive.kick();
+    wait_for("zweiter Song", || items(&h).len() == 2, Duration::from_secs(60)).await;
+    tokio::time::sleep(Duration::from_secs(40)).await;
+    assert_eq!(items(&h).len(), 2, "keine Duplikate, keine abgelehnten oder App-Wünsche: {:?}", items(&h));
+    let st = rt.archive.status();
+    assert_eq!((st.total, st.pending, st.playlists.len(), st.playlists[0].count), (2, 0, 1, 2));
+    assert!(st.last_error.is_none());
+
+    // Playlist auf Spotify gelöscht → neue anlegen, Song landet dort.
+    h.fake.lock().unwrap().playlist_items.remove("pl1");
+    let c = rt.queue.submit_query("dritter song", viewer(6), Source::Chat, Some("a5"), None).await;
+    assert!(accepted(&c), "{c:?}");
+    rt.archive.kick();
+    wait_for("neue Playlist", || h.fake.lock().unwrap().playlist_items.get("pl2").map(|v| v.len()) == Some(1), Duration::from_secs(60)).await;
+    assert_eq!(h.fake.lock().unwrap().created_playlists[1].1, "Wunsch-Archiv · Teil 2");
+    assert!(rt.activity.recent(30).iter().any(|a| a.kind == "archive.gone"));
+}
+
+// Ältere Spotify-Anmeldung ohne Playlist-Rechte: klarer Hinweis statt stiller Fehler.
+#[tokio::test(start_paused = true)]
+async fn request_playlist_requires_playlist_scope() {
+    let h = Harness::new();
+    let mut s = settings(true, false);
+    s.request_playlist.enabled = true;
+    let db = Db::in_memory().unwrap();
+    s.save(&db).unwrap();
+    // Token ohne Playlist-Rechte installieren (wie bei einer Anmeldung vor dieser Version).
+    let _ = h.tokens(SPOTIFY_SECRET_KEY, 3_600_000);
+    h.twitch_tokens();
+    let tm = h.tokens(SPOTIFY_SECRET_KEY, 3_600_000);
+    tm.install(onair_core::auth::TokenSet {
+        access_token: "at-0".into(),
+        refresh_token: Some("rt".into()),
+        expires_at_ms: h.clock.now_ms() + 3_600_000,
+        scope: "user-read-playback-state user-modify-playback-state user-read-currently-playing".into(),
+        authorized_at_ms: 0,
+    })
+    .unwrap();
+    let rt = Runtime::start(RuntimeConfig {
+        db,
+        data_dir: None,
+        secrets: h.secrets.clone(),
+        http: h.transport.clone(),
+        clock: h.clock.clone(),
+        endpoints: endpoints(),
+        start_overlay: false,
+        app_version: "test".into(),
+    })
+    .await;
+    ready(&rt).await;
+    let a = rt.queue.submit_query("erster song", viewer(1), Source::Chat, Some("a1"), None).await;
+    assert!(accepted(&a));
+    rt.archive.kick();
+    wait_for("Hinweis", || rt.archive.status().last_error.map(|e| e.code) == Some("missing_scope".into()), Duration::from_secs(30)).await;
+    let st = rt.archive.status();
+    assert!(!st.scope_ok);
+    assert_eq!(st.pending, 1, "Wunsch bleibt vorgemerkt");
+    assert!(h.fake.lock().unwrap().created_playlists.is_empty());
+}
+
+// Volle Playlist (Spotify-Grenze 10.000) → automatisch „Teil 2“.
+#[tokio::test(start_paused = true)]
+async fn request_playlist_rolls_over_when_full() {
+    use onair_core::archive::{ArchivePlaylist, ArchiveState, PLAYLIST_LIMIT};
+    let h = Harness::new();
+    let mut s = settings(true, false);
+    s.request_playlist.enabled = true;
+    s.request_playlist.name = "Archiv".into();
+    let db = Db::in_memory().unwrap();
+    let full = ArchiveState { playlists: vec![ArchivePlaylist { id: "old1".into(), url: "https://open.spotify.com/playlist/old1".into(), name: "Archiv".into(), count: PLAYLIST_LIMIT }], since_ms: Some(0) };
+    db.set_setting(ArchiveState::KEY, &serde_json::to_string(&full).unwrap()).unwrap();
+    h.fake.lock().unwrap().playlist_items.insert("old1".into(), vec![]);
+    let rt = start(&h, db, s).await;
+    ready(&rt).await;
+    let a = rt.queue.submit_query("neuer song", viewer(1), Source::Chat, Some("a1"), None).await;
+    assert!(accepted(&a));
+    rt.archive.kick();
+    wait_for("Teil 2", || h.fake.lock().unwrap().playlist_items.get("pl1").map(|v| v.len()) == Some(1), Duration::from_secs(60)).await;
+    let f = h.fake.lock().unwrap();
+    assert_eq!(f.created_playlists[0].1, "Archiv · Teil 2");
+    assert!(f.playlist_items["old1"].is_empty(), "volle Playlist unangetastet");
+}
+
+// Gescheitertes Update: Läuft die App nach der Update-Pause weiter, öffnet sie Requests von selbst.
+#[tokio::test(start_paused = true)]
+async fn update_pause_expires_when_update_did_not_happen() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, false)).await;
+    ready(&rt).await;
+    let _ = rt.prepare_for_update().await;
+    let o = rt.queue.submit_query("during update", viewer(1), Source::Chat, Some("x1"), None).await;
+    assert_eq!(rejected_code(&o), "update_pause");
+    tokio::time::sleep(Duration::from_millis(onair_core::runtime::UPDATE_PAUSE_MAX_MS as u64 + 1_000)).await;
+    let o = rt.queue.submit_query("after expiry", viewer(1), Source::Chat, Some("x2"), None).await;
+    assert!(accepted(&o), "{o:?}");
+    assert!(rt.activity.recent(30).iter().any(|a| a.kind == "update.pause_expired"));
+}
+
+// Spotify nicht verbunden: Chat-Wünsche werden gespeichert statt mit „technisch nicht möglich“ verworfen.
+#[tokio::test(start_paused = true)]
+async fn requests_are_kept_while_spotify_is_signed_out() {
+    let h = Harness::new();
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, false)).await;
+    ready(&rt).await;
+    rt.spotify_logout();
+    let o = rt.queue.submit_query("while signed out", viewer(1), Source::Chat, Some("s1"), None).await;
+    assert!(matches!(o, SubmitOutcome::PendingOffline { .. }), "{o:?}");
+}
+
+// Kanalpunkte-Einrichtung unvollständig (z. B. Berechtigung fehlt): eine trotzdem eintreffende
+// Einlösung wird verarbeitet statt mit „technisch nicht möglich“ abgelehnt.
+#[tokio::test(start_paused = true)]
+async fn redemption_is_not_rejected_for_reward_sync_problems() {
+    let h = Harness::new();
+    h.twitch.lock().unwrap().scopes = vec!["user:read:chat".into(), "user:write:chat".into()];
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    wait_for("Sperrgrund", || rt.channel_points.technical_now().is_some(), Duration::from_secs(30)).await;
+    let o = rt.queue.submit_redemption("points song", viewer(2), "rw-x", "red-t1").await;
+    assert!(accepted(&o), "{o:?}");
+}
+
+// Abgleich offener Einlösungen scheitert dauerhaft: Die Belohnung darf nicht für immer
+// pausiert („nicht synchron“) bleiben.
+#[tokio::test(start_paused = true)]
+async fn reward_is_released_when_reconcile_keeps_failing() {
+    let h = Harness::new();
+    h.twitch.lock().unwrap().fail_redemption_list = true;
+    let rt = start(&h, Db::in_memory().unwrap(), settings(true, true)).await;
+    ready(&rt).await;
+    wait_for("freigegeben", || { let s = rt.channel_points.status(); s.reconciled && s.confirmed_paused == Some(false) }, Duration::from_secs(900)).await;
+    assert!(rt.activity.recent(50).iter().any(|a| a.kind == "channel_points.reconcile_skipped"));
+}

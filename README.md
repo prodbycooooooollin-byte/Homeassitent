@@ -1,5 +1,7 @@
 # Smart-Home-Center
 
+> Dieses Repository enthält außerdem **ON AIR** (Spotify/Twitch-Songrequests und OBS-Widgets für Windows) im Ordner [`on-air/`](on-air/README.md).
+
 Eine moderne, vollständig responsive Web-App zur Überwachung und Steuerung
 eines Zuhauses – als Ersatz-Dashboard für Home Assistant. Dunkles,
 futuristisches Design, abgerundete Karten, dezente Leuchteffekte und eine
