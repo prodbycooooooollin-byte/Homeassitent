@@ -7,7 +7,8 @@ import { getLang, t } from "../lib/i18n";
 import { isSpotifyUsable } from "../lib/status";
 import type { AppSnapshot, HistoryEntry } from "../lib/types";
 
-export function HistoryView({ snap, embedded }: { snap: AppSnapshot; embedded?: boolean }) {
+/** Verlauf als Bibliothek: Cover-Raster, Suche oben, „Erneut anfragen“ direkt auf dem Cover. */
+export function HistoryView({ snap }: { snap: AppSnapshot; embedded?: boolean }) {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<HistoryEntry[] | null>(null);
   const seq = useRef(0);
@@ -21,59 +22,60 @@ export function HistoryView({ snap, embedded }: { snap: AppSnapshot; embedded?: 
   const played = (s.completed ?? 0) + (s.playing ?? 0);
   const accepted = played + (s.accepted ?? 0) + (s.handed_off ?? 0) + (s.handing_off ?? 0);
   const usable = isSpotifyUsable(snap);
+  const again = async (h: HistoryEntry) => {
+    try {
+      const o = await api.addRequest(h.track);
+      if (o.outcome === "rejected") toast(`${t("st.rejected")}: ${o.text}`, "error");
+      else toast(t("q.added", { title: h.track.title }));
+    } catch (e) {
+      toastError(e);
+    }
+  };
   return (
-    <div className={embedded ? "col" : "page"} style={embedded ? { gap: 16 } : undefined}>
+    <div className="page">
       <div className="page-head">
-        {!embedded && <h1>{t("h.title")}</h1>}
-        <div className="muted small">
-          {t("h.session")} ({t("h.session_since", { time: clockTime(snap.session_started_ms, getLang()) })}): {t("q.stats.accepted")} {accepted} · {t("q.stats.rejected")} {s.rejected ?? 0} · {t("q.stats.played")} {played}
+        <div className="col" style={{ gap: 12 }}>
+          <span className="kicker">{t("h.kicker")}</span>
+          <h1>{t("h.title")}</h1>
+          <div className="chips-row">
+            <span className="stat-chip">{t("h.session_since", { time: clockTime(snap.session_started_ms, getLang()) })}</span>
+            <span className="stat-chip">{t("q.stats.played")} <b>{played}</b></span>
+            <span className="stat-chip">{t("q.stats.accepted")} <b>{accepted}</b></span>
+            <span className="stat-chip">{t("q.stats.rejected")} <b>{s.rejected ?? 0}</b></span>
+          </div>
         </div>
       </div>
-      <div className="row" style={{ position: "relative", maxWidth: 480 }}>
-        <Search size={16} className="subtle" style={{ position: "absolute", left: 12 }} aria-hidden="true" />
-        <input className="input" style={{ paddingLeft: 36 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("h.search")} aria-label={t("h.search")} />
+      <div className="lib-tools">
+        <label className="searchbox">
+          <Search size={18} aria-hidden="true" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("h.search")} aria-label={t("h.search")} />
+        </label>
+        {items && <span className="subtle small">{t("h.count", { n: items.length })}</span>}
       </div>
-      <section className="card">
-        {!items ? (
-          <div className="card-body"><div className="skeleton" style={{ height: 160 }} /></div>
-        ) : items.length === 0 ? (
-          <EmptyState icon={<HistoryIcon size={20} />} title={t("h.empty")} />
-        ) : (
-          <div className="list">
-            {items.map((h) => (
-              <div className="item" key={h.id}>
-                <Cover url={h.track.image_url} className="thumb" />
-                <div className="col" style={{ gap: 0 }}>
-                  <span className="t ellipsis" title={h.track.title}>{h.track.title}</span>
-                  <span className="s ellipsis">
-                    {h.track.artists.join(", ")} · {duration(h.track.duration_ms)}
-                    {h.requester_name ? <> · <span style={{ color: "var(--accent)" }}>{t("np.requested_by", { name: h.requester_name })}</span></> : null}
-                  </span>
-                </div>
-                <div className="actions">
-                  <span className="subtle small" style={{ fontVariantNumeric: "tabular-nums" }}>{dateTime(h.played_at, getLang())}</span>
-                  <button
-                    className="btn btn-sm"
-                    disabled={!usable}
-                    title={usable ? t("h.request_again") : t("np.disabled_offline")}
-                    onClick={async () => {
-                      try {
-                        const o = await api.addRequest(h.track);
-                        if (o.outcome === "rejected") toast(`${t("st.rejected")}: ${o.text}`, "error");
-                        else toast(t("q.added", { title: h.track.title }));
-                      } catch (e) {
-                        toastError(e);
-                      }
-                    }}
-                  >
-                    <Plus size={14} /> {t("h.request_again")}
-                  </button>
-                </div>
+      {!items ? (
+        <div className="library">{Array.from({ length: 10 }, (_, i) => <div key={i} className="skeleton" style={{ aspectRatio: "0.8", borderRadius: 24 }} />)}</div>
+      ) : items.length === 0 ? (
+        <div className="tile"><EmptyState icon={<HistoryIcon size={22} />} title={t("h.empty")} /></div>
+      ) : (
+        <div className="library" role="list">
+          {items.map((h) => (
+            <article className="album" key={h.id} role="listitem">
+              <div className="art">
+                <Cover url={h.track.image_url} />
+                <button className="again" disabled={!usable} aria-label={`${t("h.request_again")}: ${h.track.title}`} title={usable ? t("h.request_again") : t("np.disabled_offline")} onClick={() => void again(h)}>
+                  <Plus size={20} />
+                </button>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+              <div className="a-title ellipsis" title={h.track.title}>{h.track.title}</div>
+              <div className="a-sub ellipsis" title={h.track.artists.join(", ")}>{h.track.artists.join(", ")}</div>
+              <div className="a-meta">
+                <span className="num">{dateTime(h.played_at, getLang())} · {duration(h.track.duration_ms)}</span>
+              </div>
+              {h.requester_name && <div className="a-meta"><span className="req ellipsis">{t("np.requested_by", { name: h.requester_name })}</span></div>}
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

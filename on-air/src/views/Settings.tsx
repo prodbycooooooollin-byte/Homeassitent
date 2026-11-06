@@ -56,20 +56,27 @@ export function SettingsView({ snap, initial }: { snap: AppSnapshot; initial?: S
   const upd = useUpdateInfo();
   const updBadge = upd && (upd.state.state === "available" || upd.state.state === "ready");
   const current = SECTIONS.find((x) => x.id === sec)!;
+  const Icon = current.icon;
   return (
     <div className="page">
-      <div className="settings-layout">
-        <nav className="settings-nav" aria-label={t("s.title")}>
-          {SECTIONS.map(({ id, icon: Icon, label }) => (
-            <button key={id} aria-current={sec === id} onClick={() => setSec(id)}>
-              <Icon size={16} /> <span className="grow">{label()}</span>
-              {id === "updates" && updBadge && <span className="badge accent">{t("up.badge")}</span>}
-              {id === "channel_points" && snap.channel_points.needs_review > 0 && <span className="badge warn">{snap.channel_points.needs_review}</span>}
+      <div className="set-layout">
+        <nav className="set-hub settings-nav" aria-label={t("s.title")}>
+          {SECTIONS.map(({ id, icon: I, label }) => (
+            <button key={id} className="set-app" aria-current={sec === id} onClick={() => setSec(id)}>
+              <span className="ai"><I size={21} /></span>
+              <span>{label()}</span>
+              {((id === "updates" && updBadge) || (id === "channel_points" && snap.channel_points.needs_review > 0)) && <span className="dot" aria-hidden="true" />}
             </button>
           ))}
         </nav>
-        <div className="settings-section">
-          <h1>{sec === "updates" ? t("up.title") : current.label()}</h1>
+        <div className="set-panel settings-section">
+          <div className="set-hero">
+            <span className="ai"><Icon size={28} /></span>
+            <div className="col" style={{ gap: 6 }}>
+              <span className="kicker">{t("set.kicker")}</span>
+              <h1>{sec === "updates" ? t("up.title") : current.label()}</h1>
+            </div>
+          </div>
           {sec === "connections" && <Connections snap={snap} draft={draft} update={update} />}
           {sec === "playback" && <Playback draft={draft} update={update} />}
           {sec === "requests" && <div className="col" style={{ gap: 16 }}><Rules draft={draft} update={update} /><RequestPlaylistCard snap={snap} draft={draft} update={update} /></div>}

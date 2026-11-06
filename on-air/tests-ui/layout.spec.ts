@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 // Simuliert Windows-Skalierung 100/125/150/200 % über deviceScaleFactor und
 // verkleinert das Fenster auf die Mindestgröße der App (720×520).
 const SCALES = [1, 1.25, 1.5, 2];
-// Seit dem Signal-Design (0.3): Navigation in der Seitenleiste links, schwebendes Dock unten.
+// Seit „Studio OS“ (0.3): Pillen-Navigation oben, schwebendes Dock unten, Kino-Hintergrund.
 const ROUTES = ["overview", "queue", "widgets", "history", "settings"];
 
 async function noHorizontalOverflow(page: Page) {
@@ -36,7 +36,7 @@ for (const scale of SCALES) {
         await expect(page.locator(".statusbar")).toBeVisible();
         await noHorizontalOverflow(page);
         await inViewport(page, ".sb-req");
-        await inViewport(page, ".side [aria-current='page']");
+        await inViewport(page, ".topbar [aria-current='page']");
         expect(errors).toEqual([]);
       });
     }
@@ -52,7 +52,7 @@ test("Übersicht: Transport-Steuerung bei kleinem Fenster sichtbar", async ({ pa
 test("lange Titel und Namen werden gekürzt statt umzubrechen", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 700 });
   await page.goto("/#/queue");
-  const row = page.locator(".item", { hasText: "Ein sehr langer Songtitel" }).first();
+  const row = page.locator(".ticket", { hasText: "Ein sehr langer Songtitel" }).first();
   const title = row.locator(".t").first();
   const clipped = await title.evaluate((el) => el.scrollWidth > el.clientWidth);
   expect(clipped).toBe(true);
@@ -221,7 +221,7 @@ test("Werbung und veraltete Daten zeigen keine widersprüchlichen Zeiten", async
 test("Verbindungs-Popover liegt über dem Player (Stapelreihenfolge)", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/?state=full#/overview");
-  await page.locator(".conn-sum").click();
+  await page.locator(".conn-chip").click();
   const pop = page.locator(".popover");
   await expect(pop).toBeVisible();
   const box = (await pop.boundingBox())!;
@@ -234,7 +234,7 @@ test("Verbindungs-Popover liegt über dem Player (Stapelreihenfolge)", async ({ 
 
 test("Zusammenfassung sagt nie „Alles verbunden“, wenn Spotify fehlt", async ({ page }) => {
   await page.goto("/?state=reauth#/overview");
-  await expect(page.locator(".conn-sum")).not.toContainText("Alles verbunden");
+  await expect(page.locator(".conn-chip")).not.toContainText("Alles verbunden");
 });
 
 test("Automatisches Update: Countdown sichtbar, „Nicht jetzt“ setzt für die Sitzung aus", async ({ page }) => {
@@ -336,12 +336,13 @@ test("Befehlspalette: Strg+K, Filter und Enter führen den Befehl aus", async ({
   await expect(page.locator(".statusbar")).toContainText("Requests pausiert");
 });
 
-test("Session-Puls und Signal-Karte zeigen Werte", async ({ page }) => {
+test("Session-Puls und Verbindungswächter zeigen Werte", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/#/overview");
   await expect(page.locator(".pulse-value")).not.toHaveText("0");
-  await expect(page.locator(".health")).toContainText("Stabil seit");
-  await expect(page.locator(".health")).toContainText("automatische Reparaturen");
+  await page.locator(".conn-chip").click();
+  await expect(page.locator(".popover")).toContainText("Stabil seit");
+  await expect(page.locator(".popover")).toContainText("automatische Reparaturen");
 });
 
 test("Overlays: Neon-Stil ist Standard und einstellbar", async ({ page }) => {
@@ -393,7 +394,7 @@ test("Song hinzufügen: nicht unterstützter Dienst wird verständlich abgelehnt
 test("Song ändern über das Zeilenmenü behält den Platz", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/#/queue");
-  const menus = page.getByRole("button", { name: "…" });
+  const menus = page.getByRole("button", { name: "Weitere Aktionen" });
   let found = false;
   for (let i = 0; i < (await menus.count()) && !found; i++) {
     await menus.nth(i).click();

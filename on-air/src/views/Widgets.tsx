@@ -1,4 +1,4 @@
-import { Copy, Eye, FileText, KeyRound, PanelRight, RotateCcw } from "lucide-react";
+import { Check, Copy, Eye, FileText, KeyRound, PanelRight, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Field, Notice, Segmented, SettingRow, Toggle, toast, toastError } from "../components/ui";
 import { api, copyText, isTauri, pickNowPlayingPath } from "../lib/api";
@@ -56,65 +56,60 @@ export function WidgetsView({ snap }: { snap: AppSnapshot }) {
   return (
     <div className="page">
       <div className="page-head">
-        <div className="col" style={{ gap: 4 }}>
+        <div className="col" style={{ gap: 12 }}>
+          <span className="kicker">{t("w.kicker")}</span>
           <h1>{t("w.title")}</h1>
           <p className="muted" style={{ maxWidth: 720 }}>{t("w.subtitle")}</p>
         </div>
       </div>
 
-      <div className="tabs" role="tablist" aria-label={t("w.title")}>
+      <div className="w-gallery" role="tablist" aria-label={t("w.title")}>
         {(["neon", "glass", "minimal", "queue"] as Preset[]).map((p) => (
-          <button key={p} role="tab" aria-selected={preset === p} onClick={() => setPreset(p)}>
-            {t(`w.${p}` as const)}
+          <button key={p} type="button" role="tab" aria-selected={preset === p} aria-pressed={preset === p} className="w-card" onClick={() => setPreset(p)}>
+            <div className="w-thumb" aria-hidden="true"><MiniWidget preset={p} /></div>
+            {preset === p && <span className="w-check" aria-hidden="true"><Check size={15} /></span>}
+            <span className="w-name">{t(`w.${p}` as const)}</span>
+            <span className="w-desc">{t(`w.${p}_desc` as const)}</span>
           </button>
         ))}
       </div>
 
-      <div className="grid-2">
-        <div className="col" style={{ gap: 16 }}>
-          <div className="card card-pad col" style={{ gap: 14 }}>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <div className="col" style={{ gap: 2 }}>
-                <h2>{t(`w.${preset}` as const)}</h2>
-                <span className="muted small">{t(`w.${preset}_desc` as const)}</span>
-              </div>
-              <Segmented
-                label={t("w.preview")}
-                value={sample ? "sample" : "live"}
-                onChange={(v) => setSample(v === "sample")}
-                options={[
-                  { value: "sample", label: t("w.preview_sample") },
-                  { value: "live", label: t("w.preview_live") },
-                ]}
-              />
-            </div>
-            <div className="preview-stage">
-              {snap.overlay.running ? (
-                <iframe key={frameKey} title={t("w.preview")} src={`${url}${sample ? "?preview=1" : ""}`} style={{ height: Math.max(260, height + 40) }} />
-              ) : (
-                <div style={{ padding: 20 }}>
-                  <Notice tone="error" code="overlay_port" technical={snap.overlay.error ?? undefined}>{t("w.preview_unavailable")}</Notice>
-                </div>
-              )}
-            </div>
-            <Field label={t("w.url")} hint={t("w.obs_hint", { w: style.width + 24, h: height })}>
-              <div className="code-box">
-                <code>{url}</code>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={async () => {
-                    if (await copyText(url)) toast(t("common.copied"));
-                  }}
-                >
-                  <Copy size={14} /> {t("w.copy_url")}
-                </button>
-              </div>
-            </Field>
-            <p className="subtle small">{t("w.music_rights")}</p>
+      <div className="w-layout">
+        <section className="obs" aria-label={t("w.preview")}>
+          <div className="obs-bar">
+            <span className="dots" aria-hidden="true"><i /><i /><i /></span>
+            <span className="grow">{t("w.scene")} · <b style={{ color: "var(--text)" }}>{t(`w.${preset}` as const)}</b></span>
+            <Segmented
+              label={t("w.preview")}
+              value={sample ? "sample" : "live"}
+              onChange={(v) => setSample(v === "sample")}
+              options={[
+                { value: "sample", label: t("w.preview_sample") },
+                { value: "live", label: t("w.preview_live") },
+              ]}
+            />
           </div>
-        </div>
+          <div className="preview-stage">
+            <div className="safe" aria-hidden="true" />
+            {snap.overlay.running ? (
+              <iframe key={frameKey} title={t("w.preview")} src={`${url}${sample ? "?preview=1" : ""}`} style={{ height: Math.max(220, height + 40) }} />
+            ) : (
+              <Notice tone="error" code="overlay_port" technical={snap.overlay.error ?? undefined}>{t("w.preview_unavailable")}</Notice>
+            )}
+          </div>
+          <div className="obs-foot">
+            <div className="url-box">
+              <code>{url}</code>
+              <button className="btn btn-primary btn-sm" onClick={async () => { if (await copyText(url)) toast(t("common.copied")); }}>
+                <Copy size={14} /> {t("w.copy_url")}
+              </button>
+            </div>
+            <span className="subtle small">{t("w.obs_hint", { w: style.width + 24, h: height })}</span>
+          </div>
+          <p className="subtle small" style={{ padding: "0 16px 14px" }}>{t("w.music_rights")}</p>
+        </section>
 
-        <div className="card card-pad col" style={{ gap: 4, alignSelf: "start" }}>
+        <div className="tile card-pad col" style={{ gap: 4, alignSelf: "start", padding: 24 }}>
           <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
             <h2>{t("w.style")}</h2>
             <button className="btn btn-ghost btn-sm" onClick={() => setStyle({ ...BASE, ...PRESET_DEFAULTS[preset] })}>
@@ -231,6 +226,28 @@ export function WidgetsView({ snap }: { snap: AppSnapshot }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Miniatur des Widget-Stils für die Galerie. */
+function MiniWidget({ preset }: { preset: Preset }) {
+  if (preset === "queue")
+    return (
+      <div className="mw queue">
+        <div className="qr"><b style={{ background: "linear-gradient(135deg,#C3F53C,#3E6BFF)", width: 22, height: 22 }} /><i style={{ width: "60%" }} /></div>
+        <div className="qr"><b /><i style={{ width: "45%", opacity: 0.6 }} /></div>
+        <div className="qr"><b /><i style={{ width: "52%", opacity: 0.6 }} /></div>
+      </div>
+    );
+  return (
+    <div className={`mw ${preset}`}>
+      <span className="mc" />
+      <span className="lines">
+        <i style={{ width: "70%" }} />
+        <i style={{ width: "45%", opacity: 0.6 }} className={preset === "neon" ? "accent" : ""} />
+        {preset !== "minimal" && <i style={{ width: "100%", height: 3, opacity: 0.9 }} className="accent" />}
+      </span>
     </div>
   );
 }

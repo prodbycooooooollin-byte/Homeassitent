@@ -15,7 +15,7 @@ export function sourceIcon(r: SongRequest) {
   return <span className="src" title={t("q.src_app")}><User size={12} /></span>;
 }
 
-function RedemptionBadge({ r }: { r: SongRequest }) {
+export function RedemptionBadge({ r }: { r: SongRequest }) {
   const red = r.redemption;
   if (!red) return null;
   const pending = red.target !== null && red.status !== "fulfilled" && red.status !== "canceled";
@@ -63,7 +63,7 @@ export function statusBadge(r: SongRequest): { label: string; tone?: "accent" | 
 
 const act = (action: string, id: string, index?: number) => api.queueAction(action, id, index).catch(toastError);
 
-function RowMenu({ r }: { r: SongRequest }) {
+export function RowMenu({ r }: { r: SongRequest }) {
   const [open, setOpen] = useState(false);
   const [replacing, setReplacing] = useState(false);
   const replaceable = r.status === "accepted" || r.status === "pending_review";
@@ -93,12 +93,12 @@ function RowMenu({ r }: { r: SongRequest }) {
   };
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button className="icon-btn sm" aria-haspopup="menu" aria-expanded={open} aria-label="…" onClick={() => setOpen((o) => !o)}>
+      <button className="icon-btn sm" aria-haspopup="menu" aria-expanded={open} aria-label={t("q.more")} title={t("q.more")} onClick={() => setOpen((o) => !o)}>
         <MoreHorizontal size={16} />
       </button>
       {replacing && <AddSongDialog replace={r} onClose={() => setReplacing(false)} />}
       {open && (
-        <div role="menu" className="card" style={{ position: "absolute", right: 0, top: 34, zIndex: 20, padding: 6, minWidth: 200, display: "flex", flexDirection: "column" }}>
+        <div role="menu" className="popover" style={{ right: 0, top: 36, minWidth: 220, display: "flex", flexDirection: "column" }}>
           {replaceable && (
             <button role="menuitem" className="btn btn-ghost btn-sm" style={{ justifyContent: "flex-start" }} onClick={() => { setOpen(false); setReplacing(true); }}>
               <Replace size={14} /> {t("add.replace_menu")}

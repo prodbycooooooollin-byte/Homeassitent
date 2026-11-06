@@ -46,7 +46,7 @@ function live(plan: PlanStatus, now: number): PlanStatus {
 
 const run = (p: Promise<unknown>) => p.then(() => refresh(), toastError);
 
-export function PlanPanel({ snap, full }: { snap: AppSnapshot; full?: boolean }) {
+export function PlanPanel({ snap, full, className }: { snap: AppSnapshot; full?: boolean; className?: string }) {
   const now = useNow();
   const [editing, setEditing] = useState(false);
   const [endInput, setEndInput] = useState("");
@@ -65,7 +65,7 @@ export function PlanPanel({ snap, full }: { snap: AppSnapshot; full?: boolean })
 
   if (!active) {
     return (
-      <section className="card card-pad col" style={{ gap: 12 }} aria-labelledby="plan-h">
+      <section className={`card card-pad col ${className ?? ""}`} style={{ gap: 12 }} aria-labelledby="plan-h">
         <div className="row between">
           <div className="col" style={{ gap: 2 }}>
             <span className="eyebrow" id="plan-h">{t("plan.title")}</span>
@@ -113,7 +113,7 @@ export function PlanPanel({ snap, full }: { snap: AppSnapshot; full?: boolean })
   const uncertain = plan.uncertain;
 
   return (
-    <section className="card card-pad col" style={{ gap: 12 }} aria-labelledby="plan-h">
+    <section className={`card card-pad col ${className ?? ""}`} style={{ gap: 12 }} aria-labelledby="plan-h">
       <div className="row between wrap">
         <div className="col" style={{ gap: 2 }}>
           <span className="eyebrow" id="plan-h">{t("plan.title")}</span>

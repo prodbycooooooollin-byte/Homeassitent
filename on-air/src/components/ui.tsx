@@ -150,7 +150,7 @@ export function Dialog({ title, onClose, children, footer, wide }: { title: stri
     };
   }, [onClose]);
   return (
-    <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`dialog ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={id} ref={ref} tabIndex={-1}>
         <div className="dialog-head">
           <h2 id={id}>{title}</h2>

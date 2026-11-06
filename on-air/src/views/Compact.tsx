@@ -9,7 +9,7 @@ import { isSpotifyUsable, spotifyStatus, twitchStatus } from "../lib/status";
 import { useNow } from "../lib/store";
 import { useSettingsDraft } from "../lib/useSettings";
 import type { AppSnapshot } from "../lib/types";
-import { RequestSwitch } from "./Shell";
+import { Backdrop, RequestSwitch, currentCover } from "./Shell";
 import { WindowControls } from "../components/WindowControls";
 
 /** Kompaktmodus für einen zweiten Monitor: Titel, nächste Songs, Skip, Request-Schalter. */
@@ -32,6 +32,8 @@ export function CompactView({ snap }: { snap: AppSnapshot }) {
   const sub = kind === "track" ? track!.artists.join(", ") : kind === "episode" ? ep?.show ?? t("np.podcast") : kind === "ad" ? t("np.ad_hint") : "";
   const acc = snap.acceptance;
   return (
+    <>
+    <Backdrop url={currentCover(snap)} />
     <div className="compact">
       <div className="compact-top" data-tauri-drag-region>
         <span className={`status-dot tone-${sp.tone}`} title={`${t("sp.label")}: ${sp.short}`}><span className="dot" /></span>
@@ -81,5 +83,6 @@ export function CompactView({ snap }: { snap: AppSnapshot }) {
         {upcoming.length === 0 ? <div className="subtle small" style={{ padding: "4px 14px" }}>{t("q.empty")}</div> : <RequestList items={upcoming} compact />}
       </div>
     </div>
+    </>
   );
 }

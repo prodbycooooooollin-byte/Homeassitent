@@ -6,10 +6,10 @@ import type { AppSnapshot } from "../lib/types";
 
 const BUCKET_MS = 10 * 60_000;
 const W = 600;
-const H = 190;
+const H = 150;
 const PAD_X = 18;
-const TOP = 26;
-const BASE = H - 14;
+const TOP = 20;
+const BASE = H - 10;
 
 /** Glatte Kurve durch die Punkte (Catmull-Rom → kubische Bézier). */
 function smoothPath(pts: [number, number][]): string {
@@ -94,64 +94,49 @@ export function SessionPulse({ snap }: { snap: AppSnapshot }) {
   const top = topRequester(snap);
 
   return (
-    <section className="card pulse glow-card" aria-labelledby={`${gid}-h`}>
-      <div className="pulse-top">
-        <span className="eyebrow row" id={`${gid}-h`} style={{ gap: 8 }}><ActivityIcon size={14} /> {t("pulse.title")}</span>
-        <div className="pulse-seg" role="group" aria-label={t("pulse.title")}>
+    <section className="tile t-pulse" aria-labelledby={`${gid}-h`}>
+      <div className="tile-head">
+        <span className="tile-title" id={`${gid}-h`}><ActivityIcon size={14} /> {t("pulse.title")}</span>
+        <div className="mini-seg" role="group" aria-label={t("pulse.title")}>
           <button type="button" aria-pressed={range === "session"} onClick={() => setRange("session")}>{t("pulse.range_session")}</button>
           <button type="button" aria-pressed={range === "hour"} onClick={() => setRange("hour")}>{t("pulse.range_hour")}</button>
         </div>
       </div>
-      <div style={{ position: "relative" }}>
-      <svg className="pulse-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${t("pulse.total")}: ${data.total}`}>
-        <defs>
-          <linearGradient id={`${gid}-fill`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity=".28" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-          </linearGradient>
-          <filter id={`${gid}-glow`} x="-20%" y="-50%" width="140%" height="200%">
-            <feGaussianBlur stdDeviation="6" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-        </defs>
-        {/* Senkrechte Hilfslinien an jedem zweiten Messpunkt */}
-        {data.pts.map(([x, y], i) => (i % 2 === 1 || i === data.peak) && hasData ? (
-          <line key={i} x1={x} x2={x} y1={y} y2={H} stroke="var(--text-3)" strokeOpacity={i === data.peak ? 0.55 : 0.18} strokeWidth="1" vectorEffect="non-scaling-stroke" />
-        ) : null)}
-        {hasData ? (
-          <>
-            <path d={area} fill={`url(#${gid}-fill)`} />
-            <path d={line} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" filter={`url(#${gid}-glow)`} vectorEffect="non-scaling-stroke" />
-            {data.pts.map(([x, y], i) => (i % 2 === 1 && i !== data.peak ? <circle key={i} cx={x} cy={y} r="4" fill="var(--accent)" opacity=".9" /> : null))}
-          </>
-        ) : (
-          <path d={`M${PAD_X},${BASE} L${W - PAD_X},${BASE}`} stroke="var(--accent)" strokeOpacity=".35" strokeWidth="2" strokeDasharray="4 6" vectorEffect="non-scaling-stroke" />
-        )}
-      </svg>
-      {/* Höhepunkt als HTML-Kreis: bleibt rund, auch wenn das SVG gestreckt wird. */}
-      {hasData && peakPt && (
-        <span
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            left: `${(peakPt[0] / W) * 100}%`,
-            top: `${(peakPt[1] / H) * 100}%`,
-            width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: "50%",
-            background: "radial-gradient(circle at 35% 35%, #fff, var(--accent) 60%)",
-            boxShadow: "0 0 0 6px var(--accent-soft), 0 0 26px var(--accent)",
-          }}
-        />
-      )}
+      <div className="pulse-plot">
+        <svg className="pulse-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${t("pulse.total")}: ${data.total}`}>
+          <defs>
+            <linearGradient id={`${gid}-fill`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity=".3" />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+            </linearGradient>
+            <filter id={`${gid}-glow`} x="-20%" y="-50%" width="140%" height="200%">
+              <feGaussianBlur stdDeviation="6" result="b" />
+              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          </defs>
+          {hasData && data.pts.map(([x, y], i) => (i % 2 === 1 || i === data.peak ? (
+            <line key={i} x1={x} x2={x} y1={y} y2={H} stroke="var(--text-3)" strokeOpacity={i === data.peak ? 0.55 : 0.2} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+          ) : null))}
+          {hasData ? (
+            <>
+              <path d={area} fill={`url(#${gid}-fill)`} />
+              <path d={line} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" filter={`url(#${gid}-glow)`} vectorEffect="non-scaling-stroke" />
+              {data.pts.map(([x, y], i) => (i % 2 === 1 && i !== data.peak ? <circle key={i} cx={x} cy={y} r="4" fill="var(--accent)" /> : null))}
+            </>
+          ) : (
+            <path d={`M${PAD_X},${BASE} L${W - PAD_X},${BASE}`} stroke="var(--accent)" strokeOpacity=".35" strokeWidth="2" strokeDasharray="4 6" vectorEffect="non-scaling-stroke" />
+          )}
+        </svg>
+        {hasData && peakPt && <span className="pulse-peak" aria-hidden="true" style={{ left: `${(peakPt[0] / W) * 100}%`, top: `${(peakPt[1] / H) * 100}%` }} />}
       </div>
-      <div className="pulse-figure">
-        <span className="eyebrow">{t("pulse.total")}</span>
-        <div className="pulse-value num">{data.total}</div>
-        <div className="pulse-sub">{hasData ? (data.recent > 0 ? t("pulse.recent", { n: data.recent }) : t("pulse.recent_none")) : t("pulse.empty")}</div>
+      <div className="pulse-fig">
+        <div className="v pulse-value">{data.total}</div>
+        <div className="l">{t("pulse.total")} · {hasData ? (data.recent > 0 ? t("pulse.recent", { n: data.recent }) : t("pulse.recent_none")) : t("pulse.empty")}</div>
       </div>
-      <div className="pulse-stats">
+      <div className="pulse-row">
         <div><div className="v">{data.perHour}</div><div className="l">{t("pulse.rate")}</div></div>
         <div><div className="v">{data.peak10}</div><div className="l">{t("pulse.peak")}</div></div>
-        <div title={top ?? undefined}><div className="v ellipsis">{top ?? `${data.rejected}`}</div><div className="l">{top ? t("pulse.top") : t("pulse.rejected")}</div></div>
+        <div title={top ?? undefined}><div className="v">{top ?? `${data.rejected}`}</div><div className="l">{top ? t("pulse.top") : t("pulse.rejected")}</div></div>
       </div>
     </section>
   );

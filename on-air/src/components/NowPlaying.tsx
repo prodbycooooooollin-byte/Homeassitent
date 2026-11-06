@@ -6,8 +6,8 @@ import { getLang, t } from "../lib/i18n";
 import { isSpotifyUsable } from "../lib/status";
 import { useNow } from "../lib/store";
 import type { AppSnapshot, Device } from "../lib/types";
-import { Badge, Cover, Dialog, EmptyState, Notice, toastError } from "./ui";
 import { Avatar } from "./Avatar";
+import { Badge, Cover, Dialog, EmptyState, Notice, toastError } from "./ui";
 
 export const STALE_MS = 20_000;
 
@@ -22,133 +22,147 @@ export function playbackInfo(s: AppSnapshot, now: number) {
   const dur = pb.track?.duration_ms ?? pb.episode?.duration_ms ?? 0;
   let progress = pb.progress_ms + (pb.is_playing && !stale ? Math.max(0, age) : 0);
   if (dur > 0) progress = Math.min(progress, dur);
-  const requester = s.queue.find((r) => r.status === "playing" && r.track?.uri === pb.track?.uri)?.requester.name ?? null;
-  const requestSource = s.queue.find((r) => r.status === "playing" && r.track?.uri === pb.track?.uri)?.source ?? null;
-  return { pb, stale, progress, dur, requester, requestSource, kind };
+  const req = s.queue.find((r) => r.status === "playing" && r.track?.uri === pb.track?.uri);
+  return { pb, stale, progress, dur, requester: req?.requester.name ?? null, requestSource: req?.source ?? null, kind };
 }
 
-function HeroFrame({ cover, children }: { cover?: string | null; children: React.ReactNode }) {
+/** Längstes Wort (für die automatische Schriftgröße: lange Wörter werden kleiner statt umzubrechen). */
+const longest = (s: string) => Math.max(6, ...s.split(/\s+/).map((w) => w.length));
+
+function Frame({ art, children }: { art?: string | null; children: React.ReactNode }) {
   return (
-    <section className="hero stage" aria-label={t("np.title_region")}>
-      <div className={`hero-bg ${cover ? "" : "none"}`} style={cover ? { backgroundImage: `url("${cover}")` } : undefined} aria-hidden="true" />
+    <section className="hero" aria-label={t("np.title_region")}>
+      <div className={`hero-art ${art ? "" : "none"}`} style={art ? { backgroundImage: `url("${art}")` } : undefined} aria-hidden="true" />
       {children}
     </section>
   );
 }
 
+/** Bühne „Jetzt läuft“ im Filmplakat-Stil: riesiger Titel, Interpret als Konturschrift, Cover rechts. */
 export function NowPlayingCard({ snap, onConnect }: { snap: AppSnapshot; onConnect: () => void }) {
   const now = useNow();
   const [devicesOpen, setDevicesOpen] = useState(false);
   const info = playbackInfo(snap, now);
   const usable = isSpotifyUsable(snap);
+  const today = new Date(now).toLocaleDateString(getLang() === "en" ? "en-GB" : "de-DE", { weekday: "long", day: "numeric", month: "long" });
 
   if (snap.spotify.auth.state !== "signed_in") {
     const reauth = snap.spotify.auth.state === "reauth_required";
     return (
-      <HeroFrame>
-        <EmptyState
-          icon={<Music2 size={20} />}
-          title={reauth ? t("sp.reauth") : t("sp.signed_out")}
-          action={<button className="btn btn-primary btn-lg" onClick={onConnect}>{reauth ? t("sp.reconnect") : t("sp.connect")}</button>}
-        >
-          {reauth ? t("sp.detail.reauth") : t("sp.detail.signed_out")}
-        </EmptyState>
-      </HeroFrame>
+      <Frame>
+        <div className="hero-top"><span className="live-pill paused"><span className="lamp" /> ON AIR</span></div>
+        <div className="hero-empty">
+          <div className="hero-date"><i />{today}</div>
+          <h2>{reauth ? t("sp.reauth") : t("hero.connect_title")}</h2>
+          <p>{reauth ? t("sp.detail.reauth") : t("sp.detail.signed_out")}</p>
+          <button className="btn-white" onClick={onConnect}><Music2 size={18} /> {reauth ? t("sp.reconnect") : t("sp.connect")}</button>
+        </div>
+      </Frame>
     );
   }
   if (!info) {
     const unknown = snap.spotify.playback.state === "unknown";
     return (
-      <HeroFrame>
-        <div className="stage-body">
-          <div className="stage-text">
-            <span className="stage-kicker"><span className="lamp" aria-hidden="true" />{t("np.now_playing")}</span>
-            <h2 className="stage-title">{unknown ? t("np.unknown") : t("np.inactive")}</h2>
-            {!unknown && <span className="muted">{t("np.nothing_hint")}</span>}
-            {!unknown && (
-              <div className="transport">
-                <button className="btn" onClick={() => api.openExternal("https://open.spotify.com/").catch(toastError)}>{t("sp.open_spotify")}</button>
-                <button className="btn btn-ghost" onClick={() => setDevicesOpen(true)} disabled={!usable}><MonitorSpeaker size={16} /> {t("sp.choose_device")}</button>
-              </div>
-            )}
-          </div>
-          <div className="stage-cover"><div className="cover-ph"><MonitorSpeaker size={48} /></div></div>
+      <Frame>
+        <div className="hero-top"><span className="live-pill paused"><span className="lamp" /> {t("np.now_playing")}</span></div>
+        <div className="hero-empty">
+          <div className="hero-date"><i />{today}</div>
+          <h2>{unknown ? t("np.unknown") : t("np.inactive")}</h2>
+          {!unknown && <p>{t("np.nothing_hint")}</p>}
+          {!unknown && (
+            <div className="hero-actions">
+              <button className="btn-white" onClick={() => api.openExternal("https://open.spotify.com/").catch(toastError)}><Play size={18} /> {t("sp.open_spotify")}</button>
+              <button className="btn-outline" onClick={() => setDevicesOpen(true)} disabled={!usable}><MonitorSpeaker size={18} /> {t("sp.choose_device")}</button>
+            </div>
+          )}
         </div>
         {devicesOpen && <DevicesDialog onClose={() => setDevicesOpen(false)} />}
-      </HeroFrame>
+      </Frame>
     );
   }
+
   const { pb, stale, progress, dur, requester, requestSource, kind } = info;
   const track = pb.track;
   const ep = pb.episode;
   const cover = track?.image_url ?? ep?.image_url ?? null;
-  const pct = dur > 0 ? (100 * progress) / dur : 0;
+  const pct = dur > 0 ? Math.max(0, Math.min(1, progress / dur)) : 0;
   const disabledReason = !usable ? t("np.disabled_offline") : t("np.disabled_action");
   const controls = usable && kind !== "ad";
   const title = kind === "track" ? track!.title : kind === "episode" ? ep!.title : kind === "ad" ? t("np.ad") : t("np.unknown_title");
   const sub = kind === "track" ? track!.artists.join(", ") : kind === "episode" ? ep!.show ?? "" : kind === "ad" ? t("np.ad_hint") : "";
   const link = track?.external_url ?? ep?.external_url ?? null;
-  const kicker = kind === "episode" ? t("np.podcast") : !pb.is_playing && kind !== "ad" ? t("np.paused") : t("np.now_playing");
+  const playing = pb.is_playing && !stale;
+  const state = kind === "episode" ? t("np.podcast") : !pb.is_playing && kind !== "ad" ? t("np.paused") : t("np.on_air");
   return (
-    <HeroFrame cover={cover}>
-      <div className="stage-body">
-        <div className="stage-main">
-          <div className="stage-text">
-            <span className="stage-kicker"><span className={`lamp ${pb.is_playing && !stale ? "on" : ""}`} aria-hidden="true" />{kicker}{track?.explicit ? <Badge title={t("q.explicit_label")}>{t("q.explicit")}</Badge> : null}</span>
-            <h2 className="stage-title" title={title} style={{ ["--lw" as string]: Math.max(6, ...title.split(/\s+/).map((w) => w.length)) }}>{title}</h2>
-            <div className="stage-artist ellipsis" title={sub}>{sub}</div>
-            {kind === "track" && track!.album ? <div className="stage-album ellipsis">{track!.album}</div> : null}
-            {requester && (
-              <div className="stage-req">
-                <Avatar name={requester} size={36} />
+    <Frame art={kind === "ad" ? null : cover}>
+      <div className="hero-top">
+        <span className={`live-pill ${playing ? "" : "paused"}`}><span className={`lamp ${playing ? "on" : ""}`} aria-hidden="true" /> {state}</span>
+        <div className="row" style={{ gap: 8 }}>
+          {track?.explicit && <Badge tone="glass" title={t("q.explicit_label")}>{t("q.explicit")}</Badge>}
+          {pb.device && (
+            <button className="hero-device" onClick={() => setDevicesOpen(true)} disabled={!usable} title={t("sp.choose_device")}>
+              <MonitorSpeaker size={15} /> <span className="ellipsis">{pb.device.name}</span>
+            </button>
+          )}
+          {link && (
+            <button className="hero-device" style={{ padding: "0 10px" }} title={t("np.open_link")} aria-label={t("np.open_link")} onClick={() => api.openExternal(link).catch(toastError)}>
+              <ExternalLink size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="hero-main">
+        <div className="hero-text">
+          <div className="hero-date"><i />{kind === "track" && track!.album ? track!.album : today}</div>
+          <h2 className="hero-title stage-title" title={title} style={{ ["--lw" as string]: longest(title) }}>{title}</h2>
+          {sub && <div className="hero-artist" title={sub} style={{ ["--aw" as string]: Math.max(8, sub.length * 0.62) }}>{sub}</div>}
+          <div className="hero-meta">
+            {requester ? (
+              <span className="hero-req">
+                <Avatar name={requester} size={30} />
                 <span>{t("np.requested_from")} <b>{requester}</b></span>
-                {requestSource === "channel_points" ? <Sparkles size={14} className="subtle" aria-label={t("rc.points")} /> : null}
-              </div>
+                {requestSource === "channel_points" && <Sparkles size={14} aria-label={t("rc.points")} />}
+              </span>
+            ) : (
+              <span>{t("hero.own_music")}</span>
             )}
           </div>
-          <div className="stage-transport">
-            <div className="stage-buttons">
-              <button className="icon-btn lg" aria-label={t("np.prev")} title={controls && pb.actions.can_skip_prev ? t("np.prev") : disabledReason} disabled={!controls || !pb.actions.can_skip_prev} onClick={() => api.transport("previous").catch(toastError)}><SkipBack size={22} /></button>
-              {pb.is_playing ? (
-                <button className="play-btn" aria-label={t("np.pause")} title={controls ? t("np.pause") : disabledReason} disabled={!controls || !pb.actions.can_pause} onClick={() => api.transport("pause").catch(toastError)}><Pause size={26} /></button>
-              ) : (
-                <button className="play-btn" aria-label={t("np.play")} title={controls ? t("np.play") : disabledReason} disabled={!controls || !pb.actions.can_resume} onClick={() => api.transport("resume").catch(toastError)}><Play size={26} /></button>
-              )}
-              <button className="icon-btn lg" aria-label={t("np.next")} title={controls && pb.actions.can_skip_next ? t("np.next") : disabledReason} disabled={!controls || !pb.actions.can_skip_next} onClick={() => api.transport("next").catch(toastError)}><SkipForward size={22} /></button>
-            </div>
-            <div className="stage-progress">
-              {stale ? (
-                <div className="row small" style={{ color: "var(--warn)", gap: 6 }}><Info size={14} /> {t("np.stale_hint", { time: clockTime(pb.fetched_at_ms, getLang()) })}</div>
-              ) : kind !== "ad" && dur > 0 ? (
-                <>
-                  <div className="bar" role="progressbar" aria-label={`${duration(progress)} / ${duration(dur)}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-                    <i style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }} />
-                    <span className="knob-track" style={{ transform: `translateX(${Math.max(0, Math.min(100, pct))}%)` }}><span className="knob" /></span>
-                  </div>
-                  <div className="stage-times num"><span>{duration(progress)}</span><span>{duration(dur)}</span></div>
-                </>
-              ) : null}
-            </div>
-            <div className="stage-extra">
-              {pb.device && (
-                <button className="btn btn-ghost btn-sm" onClick={() => setDevicesOpen(true)} disabled={!usable} title={t("sp.choose_device")}>
-                  <MonitorSpeaker size={16} /> <span className="ellipsis" style={{ maxWidth: 150 }}>{pb.device.name}</span>
-                </button>
-              )}
-              {link && (
-                <a className="icon-btn" href={link} title={t("np.open_link")} aria-label={t("np.open_link")} onClick={(e) => { e.preventDefault(); void api.openExternal(link).catch(toastError); }}>
-                  <ExternalLink size={17} />
-                </a>
-              )}
-            </div>
+          <div className="hero-actions">
+            <button className="btn-white" aria-label={t("np.next")} title={controls && pb.actions.can_skip_next ? t("np.next") : disabledReason} disabled={!controls || !pb.actions.can_skip_next} onClick={() => api.transport("next").catch(toastError)}>
+              <SkipForward size={18} /> {t("np.next")}
+            </button>
+            {pb.is_playing ? (
+              <button className="btn-outline" aria-label={t("np.pause")} title={controls ? t("np.pause") : disabledReason} disabled={!controls || !pb.actions.can_pause} onClick={() => api.transport("pause").catch(toastError)}>
+                <Pause size={18} /> {t("np.pause")}
+              </button>
+            ) : (
+              <button className="btn-outline" aria-label={t("np.play")} title={controls ? t("np.play") : disabledReason} disabled={!controls || !pb.actions.can_resume} onClick={() => api.transport("resume").catch(toastError)}>
+                <Play size={18} /> {t("np.play")}
+              </button>
+            )}
+            <button className="btn-round" aria-label={t("np.prev")} title={controls && pb.actions.can_skip_prev ? t("np.prev") : disabledReason} disabled={!controls || !pb.actions.can_skip_prev} onClick={() => api.transport("previous").catch(toastError)}>
+              <SkipBack size={18} />
+            </button>
           </div>
         </div>
-        <div className="stage-cover">
+        <div className="hero-cover">
           {kind === "ad" ? <div className="cover-ph"><Megaphone size={48} /></div> : <Cover url={cover} alt={track?.album ?? ep?.show ?? ""} />}
         </div>
       </div>
+      {stale ? (
+        <div className="hero-stale"><Info size={15} /> {t("np.stale_hint", { time: clockTime(pb.fetched_at_ms, getLang()) })}</div>
+      ) : kind !== "ad" && dur > 0 ? (
+        <div className="hero-progress">
+          <span>{duration(progress)}</span>
+          <div className="bar" role="progressbar" aria-label={`${duration(progress)} / ${duration(dur)}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct * 100)}>
+            <i style={{ transform: `scaleX(${pct})` }} />
+            <span className="knob-track" style={{ transform: `translateX(${pct * 100}%)` }}><span className="knob" /></span>
+          </div>
+          <span>{duration(dur)}</span>
+        </div>
+      ) : null}
       {devicesOpen && <DevicesDialog onClose={() => setDevicesOpen(false)} />}
-    </HeroFrame>
+    </Frame>
   );
 }
 
@@ -169,7 +183,7 @@ export function DevicesDialog({ onClose }: { onClose: () => void }) {
       {!devices && !error && <div className="skeleton" style={{ height: 88 }} />}
       {devices && devices.length === 0 && <EmptyState icon={<MonitorSpeaker size={20} />} title={t("np.devices_empty")} />}
       {devices && devices.length > 0 && (
-        <div className="list card" style={{ boxShadow: "none" }}>
+        <div className="list">
           {devices.map((d) => (
             <div className="item" key={d.id ?? d.name}>
               <MonitorSpeaker size={18} className="subtle" />
