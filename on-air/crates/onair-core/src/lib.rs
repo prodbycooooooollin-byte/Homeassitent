@@ -22,6 +22,7 @@ pub mod clock;
 pub mod diagnostics;
 pub mod error;
 pub mod events;
+pub mod guardian;
 pub mod http;
 pub mod lock;
 pub mod model;

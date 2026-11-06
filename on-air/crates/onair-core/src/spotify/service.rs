@@ -278,8 +278,9 @@ impl SpotifyService {
                     s.link = LinkState::Blocked { code: e.code().into() };
                     s.last_error = Some(info);
                 });
-                // Nur noch selten prüfen – oder sofort nach „Verbindung prüfen“.
-                Duration::from_secs(600)
+                // Seltener prüfen – oder sofort nach „Verbindung prüfen“. Ein 403 kann auch
+                // vorübergehend sein (Kontostatus, Spotify-Störung): nach 3 min selbst neu versuchen.
+                Duration::from_secs(180)
             }
             Err(e) => {
                 self.breaker.on_failure(now);

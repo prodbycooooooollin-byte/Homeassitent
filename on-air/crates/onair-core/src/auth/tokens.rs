@@ -52,6 +52,15 @@ pub enum AuthStatus {
     ReauthRequired { reason: String },
 }
 
+/// Berechtigungen in fester Reihenfolge: Ein Refresh, der dieselben Scopes anders sortiert
+/// liefert, darf nicht als Statuswechsel gelten (sonst bauen alle Abonnenten neu auf).
+pub fn normalize_scope(scope: &str) -> String {
+    let mut v: Vec<&str> = scope.split_whitespace().collect();
+    v.sort_unstable();
+    v.dedup();
+    v.join(" ")
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccessToken {
     pub token: String,
@@ -138,7 +147,7 @@ impl TokenManager {
 
     fn status_of(s: &Inner) -> AuthStatus {
         match (&s.tokens, &s.reauth_reason) {
-            (Some(t), _) => AuthStatus::SignedIn { scope: t.scope.clone(), authorized_at_ms: t.authorized_at_ms },
+            (Some(t), _) => AuthStatus::SignedIn { scope: normalize_scope(&t.scope), authorized_at_ms: t.authorized_at_ms },
             (None, Some(r)) => AuthStatus::ReauthRequired { reason: r.clone() },
             (None, None) => AuthStatus::SignedOut,
         }
@@ -204,24 +213,28 @@ impl TokenManager {
 
     /// Gültiges Access Token (ggf. nach rechtzeitigem Refresh mit Sicherheitspuffer).
     pub async fn access_token(&self) -> Result<AccessToken, ApiError> {
+        self.access_token_ahead(self.skew_ms).await
+    }
+
+    async fn access_token_ahead(&self, lead_ms: i64) -> Result<AccessToken, ApiError> {
         self.retry_load();
         {
             let s = self.inner.lock_safe();
             match &s.tokens {
                 None => return Err(Self::missing_error(&s)),
-                Some(t) if t.expires_at_ms - self.clock.now_ms() > self.skew_ms => {
+                Some(t) if t.expires_at_ms - self.clock.now_ms() > lead_ms => {
                     return Ok(AccessToken { token: t.access_token.clone(), epoch: s.epoch });
                 }
                 Some(_) => {}
             }
         }
-        self.refresh_if_needed(None).await
+        self.refresh_if_needed(None, lead_ms).await
     }
 
     /// Nach HTTP 401 mit `rejected`: koordinierter Refresh. Hat ein anderer Aufrufer
     /// bereits erneuert, wird ohne weiteren Refresh das neue Token geliefert.
     pub async fn on_unauthorized(&self, rejected: &AccessToken) -> Result<AccessToken, ApiError> {
-        self.refresh_if_needed(Some(rejected)).await
+        self.refresh_if_needed(Some(rejected), self.skew_ms).await
     }
 
     /// Beim Start nicht lesbarer Secret Store: bei Bedarf erneut laden.
@@ -248,7 +261,7 @@ impl TokenManager {
         }
     }
 
-    async fn refresh_if_needed(&self, rejected: Option<&AccessToken>) -> Result<AccessToken, ApiError> {
+    async fn refresh_if_needed(&self, rejected: Option<&AccessToken>, lead_ms: i64) -> Result<AccessToken, ApiError> {
         let _guard = self.refresh_lock.lock().await;
         let (refresh_token, epoch, prev) = {
             let s = self.inner.lock_safe();
@@ -261,7 +274,7 @@ impl TokenManager {
                     return Err(ApiError::SessionEnded);
                 }
             }
-            let fresh = t.expires_at_ms - self.clock.now_ms() > self.skew_ms;
+            let fresh = t.expires_at_ms - self.clock.now_ms() > lead_ms;
             let already_replaced = rejected.map(|r| r.token != t.access_token).unwrap_or(true);
             if fresh && already_replaced {
                 return Ok(AccessToken { token: t.access_token.clone(), epoch: s.epoch });
@@ -326,6 +339,60 @@ impl TokenManager {
         }
     }
 
+    /// Vorlauf, mit dem der Wächter erneuert: ein Viertel der Laufzeit, mindestens 5, höchstens
+    /// 15 Minuten. Ein Refresh im letzten Moment (bisher 60 s vorher) traf bei kurzem Netzaussetzer
+    /// genau den Zeitpunkt, an dem das alte Token ablief – danach scheiterte jede Anfrage.
+    pub fn keeper_lead_ms(lifetime_ms: i64) -> i64 {
+        (lifetime_ms / 4).clamp(5 * 60_000, 15 * 60_000)
+    }
+
+    /// Hintergrund-Wächter: erneuert das Access Token rechtzeitig vor Ablauf und wiederholt bei
+    /// Netzfehlern mit wachsendem Abstand, bis es klappt. Schläft nie länger als 60 s am Stück,
+    /// damit Standby und Uhrsprünge sofort auffallen. Endet, wenn der Manager verworfen wird.
+    pub async fn run_keeper(self: Arc<Self>) {
+        let mut status = self.subscribe();
+        let mut retry = crate::backoff::Backoff::new(std::time::Duration::from_secs(10), std::time::Duration::from_secs(300));
+        let mut wait = std::time::Duration::from_secs(5);
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(wait) => {}
+                r = status.changed() => if r.is_err() { return },
+            }
+            let (expires, lifetime) = {
+                let s = self.inner.lock_safe();
+                match &s.tokens {
+                    Some(t) if t.refresh_token.is_some() => (t.expires_at_ms, (t.expires_at_ms - t.authorized_at_ms).max(0)),
+                    _ => {
+                        wait = std::time::Duration::from_secs(60);
+                        continue;
+                    }
+                }
+            };
+            // Laufzeit des aktuellen Tokens ist unbekannt (nur Ablauf gespeichert) – Spotify 1 h,
+            // Twitch ~4 h. Ohne bessere Angabe mit einer Stunde rechnen.
+            let lead = Self::keeper_lead_ms(if lifetime > 0 { lifetime.min(3_600_000) } else { 3_600_000 });
+            let left = expires - self.clock.now_ms();
+            if left > lead {
+                retry.reset();
+                wait = std::time::Duration::from_millis((left - lead).clamp(1_000, 60_000) as u64);
+                continue;
+            }
+            match self.access_token_ahead(lead).await {
+                Ok(_) => {
+                    retry.reset();
+                    wait = std::time::Duration::from_secs(5);
+                }
+                Err(ApiError::ReauthRequired { .. } | ApiError::NotSignedIn | ApiError::SessionEnded) => {
+                    wait = std::time::Duration::from_secs(60);
+                }
+                Err(e) => {
+                    wait = retry.next_delay();
+                    tracing::info!(target: "auth", key = %self.key, code = e.code(), retry_s = wait.as_secs(), "Vorzeitige Erneuerung verschoben");
+                }
+            }
+        }
+    }
+
     fn fail_reauth(&self, reason: &str) -> ApiError {
         {
             let mut s = self.inner.lock_safe();
@@ -336,5 +403,23 @@ impl TokenManager {
         tracing::warn!(target: "auth", key = %self.key, "Autorisierung ungültig – erneute Anmeldung nötig");
         self.publish();
         ApiError::ReauthRequired { reason: reason.to_string() }
+    }
+}
+
+#[cfg(test)]
+mod keeper_tests {
+    use super::*;
+
+    #[test]
+    fn scope_order_does_not_change_status() {
+        assert_eq!(normalize_scope("b a  c a"), "a b c");
+        assert_eq!(normalize_scope("user-read-playback-state streaming"), normalize_scope("streaming user-read-playback-state"));
+    }
+
+    #[test]
+    fn keeper_refreshes_well_before_expiry() {
+        assert_eq!(TokenManager::keeper_lead_ms(3_600_000), 15 * 60_000, "Spotify: 45 min nach Ausstellung");
+        assert_eq!(TokenManager::keeper_lead_ms(600_000), 5 * 60_000, "kurze Tokens: mindestens 5 min Vorlauf");
+        assert_eq!(TokenManager::keeper_lead_ms(14_400_000), 15 * 60_000);
     }
 }

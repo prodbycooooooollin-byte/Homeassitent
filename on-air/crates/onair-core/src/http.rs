@@ -143,7 +143,14 @@ impl ReqwestTransport {
             reqwest::Client::builder()
                 .connect_timeout(Duration::from_secs(5))
                 .timeout(Duration::from_secs(12))
-                .pool_idle_timeout(Duration::from_secs(60))
+                // Lange Streams: Load-Balancer (Twitch/AWS: 60 s) schließen ruhende Verbindungen.
+                // Lag die eigene Leerlaufgrenze gleichauf, wurde gelegentlich eine bereits
+                // geschlossene Verbindung wiederverwendet → „connection closed before message
+                // completed“ ausgerechnet bei Chatantworten, Abos und Token-Refresh. Deutlich
+                // darunter bleiben und TCP-Keepalive aktivieren.
+                .pool_idle_timeout(Duration::from_secs(20))
+                .pool_max_idle_per_host(4)
+                .tcp_keepalive(Duration::from_secs(25))
                 .redirect(if redirects { reqwest::redirect::Policy::limited(5) } else { reqwest::redirect::Policy::none() })
                 .user_agent(concat!("ON-AIR/", env!("CARGO_PKG_VERSION")))
                 .build()
@@ -163,9 +170,31 @@ impl Default for ReqwestTransport {
     }
 }
 
+/// Fehlerbild, bei dem die Anfrage den Server nachweislich nicht vollständig erreicht hat
+/// (Schreiben in eine bereits geschlossene Verbindung). Nur dann darf auch eine schreibende
+/// Anfrage wiederholt werden – sonst droht z. B. ein doppelt eingereihter Song.
+pub fn is_stale_connection(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("broken pipe") || m.contains("connection was aborted") || m.contains("os error 10053")
+}
+
 #[async_trait]
 impl HttpTransport for ReqwestTransport {
     async fn send(&self, req: HttpRequest) -> Result<HttpResponse, TransportError> {
+        match self.send_once(req.clone()).await {
+            // Lesende Anfragen nach jedem Übertragungsfehler einmal mit frischer Verbindung,
+            // schreibende nur bei eindeutig toter Pool-Verbindung.
+            Err(TransportError::Other(m)) if !req.method.is_write() || is_stale_connection(&m) => {
+                tracing::debug!(target: "http", url = %req.url_for_log(), "Verbindung erneuert und wiederholt");
+                self.send_once(req).await
+            }
+            other => other,
+        }
+    }
+}
+
+impl ReqwestTransport {
+    async fn send_once(&self, req: HttpRequest) -> Result<HttpResponse, TransportError> {
         let method = match req.method {
             Method::Get => reqwest::Method::GET,
             Method::Post => reqwest::Method::POST,

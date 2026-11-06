@@ -110,6 +110,8 @@ pub struct AppSnapshot {
     pub awaiting: Vec<SongRequest>,
     /// Universal Request: Fähigkeiten der Anbieter (ohne Zugangsdaten).
     pub providers: Vec<crate::resolve::ProviderStatus>,
+    /// Verbindungswächter: automatische Wiederherstellungen, ununterbrochen gesund seit.
+    pub reliability: crate::guardian::ReliabilityInfo,
 }
 
 /// Höchstdauer der Update-Pause (siehe `update_pause_active`).
@@ -148,6 +150,7 @@ pub struct Runtime {
     update_pause_since: Mutex<Option<i64>>,
     last_acceptance: Mutex<Option<Acceptance>>,
     poll_tx: watch::Sender<PollConfig>,
+    reliability: Mutex<crate::guardian::ReliabilityInfo>,
     overlay_tx: watch::Sender<OverlayData>,
     overlay: tokio::sync::Mutex<Option<OverlayServer>>,
     overlay_error: Mutex<Option<String>>,
@@ -318,6 +321,7 @@ impl Runtime {
             update_pause_since: Mutex::new(None),
             last_acceptance: Mutex::new(None),
             poll_tx,
+            reliability: Mutex::new(Default::default()),
             overlay_tx,
             overlay: tokio::sync::Mutex::new(None),
             overlay_error: Mutex::new(None),
@@ -381,6 +385,10 @@ impl Runtime {
             tokio::spawn(rt.channel_points.clone().run(redemptions_rx)),
             tokio::spawn(rt.archive.clone().run()),
             tokio::spawn(supervised(&rt, "Annahme-Überwachung", &sink, acceptance_watcher)),
+            tokio::spawn(supervised(&rt, "Verbindungswächter", &sink, guardian_loop)),
+            // Tokens rechtzeitig im Hintergrund erneuern statt erst bei der nächsten Anfrage.
+            tokio::spawn(rt.spotify_tokens.clone().run_keeper()),
+            tokio::spawn(rt.twitch_tokens.clone().run_keeper()),
         ];
         let weak = Arc::downgrade(&rt);
         let clock = rt.clock.clone();
@@ -499,6 +507,7 @@ impl Runtime {
             update_pause: self.update_pause_active(),
             awaiting: self.queue.store.awaiting(),
             providers: self.queue.resolver.provider_status(),
+            reliability: self.reliability.lock_safe().clone(),
         }
     }
 
@@ -1260,6 +1269,47 @@ where
 {
     let weak = Arc::downgrade(rt);
     crate::supervise::keep_alive(name, sink.clone(), move || f(weak.clone()))
+}
+
+/// Verbindungswächter (siehe [`crate::guardian`]): greift ein, wenn ein Dienst trotz eigener
+/// Wiederholungslogik stehen bleibt, und protokolliert jeden Eingriff sichtbar.
+async fn guardian_loop(weak: Weak<Runtime>) {
+    let mut g = crate::guardian::Guardian::default();
+    let mut iv = tokio::time::interval(Duration::from_millis(crate::guardian::TICK_MS));
+    iv.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        iv.tick().await;
+        let Some(rt) = weak.upgrade() else { return };
+        let now = rt.clock.now_ms();
+        let sp = rt.spotify_state.borrow().clone();
+        let tw = rt.twitch_state.borrow().clone();
+        let poll = *rt.poll_tx.borrow();
+        let poll_max = if poll.low_demand { poll.idle_ms * 4 } else { poll.idle_ms.max(poll.paused_ms) };
+        let heals = g.observe(now, &sp, &tw, poll_max);
+        for h in &heals {
+            tracing::warn!(target: "guardian", service = ?h.service, reason = h.reason, "Automatische Wiederherstellung");
+            rt.activity.info("guardian.heal", crate::guardian::describe(h), json!({ "service": h.service, "reason": h.reason }));
+            match h.service {
+                crate::guardian::Service::Spotify => {
+                    let _ = rt.spotify_cmd.send(SyncCmd::Recover);
+                }
+                crate::guardian::Service::Twitch => {
+                    let _ = rt.twitch_cmd.send(TwitchCmd::Recover);
+                }
+            }
+        }
+        let changed = {
+            let mut cur = rt.reliability.lock_safe();
+            let changed = *cur != g.info;
+            if changed {
+                *cur = g.info.clone();
+            }
+            changed
+        };
+        if changed {
+            rt.bus.changed(Topic::Activity);
+        }
+    }
 }
 
 /// Beobachtet Spotify-Zustände: Queue-Abgleich, Aktivitätsmeldungen bei Statuswechseln.

@@ -178,7 +178,8 @@ impl TwitchService {
             connected_since_ms: None,
         });
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-        let (chat_tx, chat_rx) = mpsc::channel(5);
+        // Puffer für Antworten bei kurzem Twitch-Aussetzer (der Sender drosselt ohnehin).
+        let (chat_tx, chat_rx) = mpsc::channel(16);
         let crash = crate::supervise::activity_sink(deps.activity.clone());
         let shared = Arc::new(Shared {
             deps,
@@ -220,6 +221,9 @@ impl TwitchService {
         let mut auth_rx = sh.deps.tokens.subscribe();
         let mut backoff = Backoff::new(Duration::from_secs(2), Duration::from_secs(120));
         let mut proto = EventSubProtocol::new();
+        // Zuletzt gemeldete Sperre: Der Verbindungswächter versucht es in Abständen erneut –
+        // dieselbe Sperre wird dabei nicht jedes Mal neu ins Protokoll geschrieben.
+        let mut last_blocked: Option<String> = None;
         loop {
             let auth = sh.deps.tokens.status();
             sh.update(|s| s.auth = auth.clone());
@@ -249,6 +253,9 @@ impl TwitchService {
             if !self.quiet_next {
                 sh.update(|s| s.connected_since_ms = None);
             }
+            if !matches!(outcome, Disconnect::Blocked(_)) {
+                last_blocked = None;
+            }
             match outcome {
                 Disconnect::Stop => return,
                 Disconnect::Recover => {
@@ -265,7 +272,10 @@ impl TwitchService {
                 }
                 Disconnect::Blocked(code) => {
                     sh.update(|s| s.link = TwitchLink::Blocked { code: code.clone() });
-                    sh.deps.activity.error("twitch.blocked", "Twitch-Verbindung nicht möglich – Berechtigungen prüfen", json!({ "code": code }));
+                    if last_blocked.as_deref() != Some(code.as_str()) {
+                        sh.deps.activity.error("twitch.blocked", "Twitch-Verbindung nicht möglich – Berechtigungen prüfen", json!({ "code": code }));
+                        last_blocked = Some(code);
+                    }
                     tokio::select! {
                         r = auth_rx.changed() => if r.is_err() { return },
                         c = self.cmd_rx.recv() => if c.is_none() { return },
@@ -344,8 +354,20 @@ impl TwitchService {
                     return match c { None => Disconnect::Stop, Some(TwitchCmd::Recover) => Disconnect::Recover };
                 }
                 r = auth_rx.changed() => {
+                    if r.is_err() {
+                        let _ = ws.close(None).await;
+                        return Disconnect::Stop;
+                    }
+                    // Ein Token-Refresh ist kein Grund, eine funktionierende Verbindung zu kappen:
+                    // nur bei echter Ab-/Neuanmeldung neu aufbauen.
+                    let still_same = matches!(
+                        (&*auth_rx.borrow_and_update(), &sh.state_tx.borrow().auth),
+                        (AuthStatus::SignedIn { authorized_at_ms: a, .. }, AuthStatus::SignedIn { authorized_at_ms: b, .. }) if a == b
+                    );
+                    if still_same {
+                        continue;
+                    }
                     let _ = ws.close(None).await;
-                    if r.is_err() { return Disconnect::Stop; }
                     return Disconnect::Recover;
                 }
             };
@@ -888,7 +910,19 @@ async fn chat_sender(sh: &Arc<Shared>, rx: &mut mpsc::Receiver<(String, Option<S
             tokio::time::sleep(wait).await;
         }
         let Some(id) = sh.identity.lock_safe().clone() else { continue };
-        match sh.helix.send_chat(&id.user_id, &id.user_id, &text, reply_to.as_deref()).await {
+        let mut result = sh.helix.send_chat(&id.user_id, &id.user_id, &text, reply_to.as_deref()).await;
+        // Kurzer Aussetzer (Netz nicht erreicht, 5xx, 429): einmal nach kurzer Pause wiederholen,
+        // statt die Antwort still zu verlieren. Unklare Zustellung (Timeout) nicht – sonst doppelt.
+        let retry = match &result {
+            Err(ApiError::Network { possibly_delivered: false, .. }) | Err(ApiError::Server { .. }) => Some(Duration::from_millis(1_500)),
+            Err(ApiError::RateLimited { retry_after_ms }) => Some(Duration::from_millis((*retry_after_ms).min(5_000))),
+            _ => None,
+        };
+        if let Some(wait) = retry {
+            tokio::time::sleep(wait).await;
+            result = sh.helix.send_chat(&id.user_id, &id.user_id, &text, reply_to.as_deref()).await;
+        }
+        match result {
             Ok(mid) => {
                 failing = false;
                 if let Some(mid) = mid {
