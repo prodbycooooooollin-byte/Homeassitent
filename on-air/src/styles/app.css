@@ -963,8 +963,60 @@ html.is-hidden *, html.is-hidden *::before, html.is-hidden *::after { animation-
 .stack { max-height: none; }
 .stack-head { align-items: flex-start; padding: 22px 20px 12px; }
 .count { font-size: 12.5px; color: var(--text-3); }
+
+
+/* =====================================================================
+   Responsives Verhalten von Kopf- und Player-Leiste (gilt zuletzt)
+   Kopf: Marke | Navigation (mittig im freien Platz) | Werkzeuge – die Spalten
+   nehmen nur so viel Platz, wie ihr Inhalt braucht, nichts kann sich überlappen.
+   Stufen: Beschriftungen fallen weg, bevor etwas gequetscht wird.
+   ===================================================================== */
+.topbar { grid-template-columns: auto minmax(0, 1fr) auto; }
+.topbar .navpill { justify-self: center; min-width: 0; }
+.topbar .tools { min-width: 0; }
+.search-pill { width: auto; }
+.search-pill > span:not(.kbd) { display: none; }
+
+@media (min-width: 1760px) { .search-pill > span:not(.kbd) { display: inline; } }
+@media (max-width: 1520px) {
+  .search-pill .kbd { display: none; }
+  .search-pill { width: 44px; padding: 0; justify-content: center; }
+  .conn-chip > .lbl { display: none; }
+  .conn-chip { padding: 0 12px; }
+}
+@media (max-width: 1380px) { .brand-word { display: none; } }
+@media (max-width: 1180px) {
+  .navpill button > .lbl { display: none; }
+  .navpill button { padding: 0 14px; }
+}
+@media (max-width: 900px) {
+  .topbar { padding-left: 14px; gap: 10px; }
+  .tools { gap: 6px; }
+  .avatar-btn { display: none; }
+  .navpill button { padding: 0 11px; height: 40px; }
+  .tool, .search-pill { width: 40px; height: 40px; }
+  .conn-chip { height: 40px; padding: 0 10px; }
+}
+
+/* Player-Leiste: breit = symmetrisch wie Spotify, schmaler = Mitte nimmt den Rest. */
 .playerbar { grid-template-columns: minmax(0, 1fr) minmax(300px, 560px) minmax(0, 1fr); }
-.pb-right { overflow: hidden; }
-.req-pill { flex: 0 1 auto; }
+.pb-right { flex-wrap: nowrap; }
+.pb-right > * { flex: none; }
+.req-pill { max-width: 260px; }
 @media (max-width: 1640px) { .pb-chip .lbl { display: none; } .pb-chip { padding: 0 10px; } }
-@media (max-width: 1500px) { .req-pill .rp-text small { display: none; } }
+@media (max-width: 1500px) {
+  .playerbar { grid-template-columns: minmax(150px, 1fr) minmax(240px, 2fr) auto; }
+  .req-pill .rp-text small { display: none; }
+  .req-pill { height: 40px; }
+}
+@media (max-width: 1100px) {
+  .playerbar { grid-template-columns: auto minmax(200px, 1fr) auto; gap: 12px; padding: 0 12px; }
+  .pb-now > div:last-child { display: none; }
+}
+@media (max-width: 900px) {
+  .pb-right .svc, .pb-right .icon-btn { display: none; }
+  .req-pill .rp-text { display: none; }
+  .req-pill { padding: 0; width: 40px; justify-content: center; }
+  .pb-cover { width: 48px; height: 48px; }
+  .pb-progress { grid-template-columns: 34px minmax(0, 1fr) 34px; gap: 6px; }
+}

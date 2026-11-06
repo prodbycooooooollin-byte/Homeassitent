@@ -243,6 +243,7 @@ function PlayerBar({ snap, go, onDiag, onAdd }: { snap: AppSnapshot; go: (r: Nav
           type="button"
           className={`req-pill sb-req ${manualOpen ? e.tone : "paused"}`}
           aria-pressed={manualOpen}
+          aria-label={`${e.label} – ${manualOpen ? t("acc.pause_btn") : t("acc.resume_btn")}`}
           title={`${e.label}${e.why ? ` – ${e.why}` : ""} · ${t("req.toggle_hint")}`}
           disabled={busy}
           onClick={() => void run(() => api.setRequestsOpen(!manualOpen))}

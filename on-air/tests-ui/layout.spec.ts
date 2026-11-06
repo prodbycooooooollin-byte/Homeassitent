@@ -420,3 +420,54 @@ test("Einstellungen: Musikquellen zeigen Fähigkeiten und maskierte Zugangsdaten
   expect(await secrets.count()).toBeGreaterThanOrEqual(3);
   await noHorizontalOverflow(page);
 });
+
+
+// Kopf- und Player-Leiste dürfen sich bei keiner Fenstergröße überlappen oder abschneiden.
+// Die Fensterknöpfe (nur in der Desktop-App vorhanden) werden simuliert, weil sie Platz kosten.
+const BAR_CHECK = `(() => {
+  if (!document.querySelector('.tools .winctl')) {
+    const w = document.createElement('div');
+    w.className = 'winctl';
+    w.innerHTML = '<button class="winctl-btn">_</button><button class="winctl-btn">o</button><button class="winctl-btn close">x</button>';
+    document.querySelector('.tools').appendChild(w);
+  }
+  const r = (sel) => document.querySelector(sel)?.getBoundingClientRect();
+  const issues = [];
+  const vw = innerWidth;
+  const brand = r('.topbar .brand'), nav = r('.topbar .navpill'), tools = r('.topbar .tools');
+  if (brand.right > nav.left + 1) issues.push('brand>nav');
+  if (nav.right > tools.left + 1) issues.push('nav>tools ' + Math.round(nav.right - tools.left));
+  const np = document.querySelector('.navpill');
+  if (np.scrollWidth > np.clientWidth + 1) issues.push('navpill overflow');
+  for (const el of document.querySelectorAll('.tools > *')) {
+    const b = el.getBoundingClientRect();
+    if (b.width > 0 && b.right > vw + 1) issues.push('tools offscreen ' + el.className);
+  }
+  const now = r('.pb-now'), center = r('.pb-center'), right = r('.pb-right');
+  if (now.right > center.left + 1) issues.push('now>center');
+  if (center.right > right.left + 1) issues.push('center>right ' + Math.round(center.right - right.left));
+  const pr = document.querySelector('.pb-right');
+  if (pr.scrollWidth > pr.clientWidth + 1) issues.push('pb-right overflow ' + (pr.scrollWidth - pr.clientWidth));
+  for (const el of pr.children) {
+    const b = el.getBoundingClientRect();
+    if (b.width > 0 && b.right > vw + 1) issues.push('pb offscreen ' + el.className);
+    if (el.scrollWidth > el.clientWidth + 2 && getComputedStyle(el).overflow !== 'visible') issues.push('clipped ' + el.className);
+  }
+  const rp = document.querySelector('.req-pill');
+  if (rp.scrollWidth > rp.clientWidth + 2) issues.push('req-pill text clipped');
+  if (center.width < 200) issues.push('center too small ' + Math.round(center.width));
+  return { vw, issues };
+})()`;
+for (const lang of ["de", "en"]) {
+  test(`Leisten ohne Überlappung bei allen Fenstergrößen (${lang})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await page.goto(`/?state=cp&lang=${lang}#/overview`);
+    await expect(page.locator(".playerbar")).toBeVisible();
+    for (const width of [720, 800, 900, 1000, 1100, 1200, 1280, 1366, 1440, 1520, 1600, 1760, 1920]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.waitForTimeout(80);
+      const res = await page.evaluate(BAR_CHECK);
+      expect(res.issues, `Breite ${width}`).toEqual([]);
+    }
+  });
+}

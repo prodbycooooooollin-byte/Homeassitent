@@ -102,6 +102,8 @@ export function createMockBackend(): Backend {
   const start = now() - 2 * 3_600_000 - 14 * 60_000;
   const settings = defaults();
   const creds = new Set<string>();
+  // Vorschau/Tests: ?lang=en zeigt die englische Oberfläche.
+  if (new URLSearchParams(window.location.search).get("lang") === "en") settings.language = "en";
   if (scenario === "onboarding") {
     settings.onboarding_done = false;
     settings.spotify.client_id = "";
