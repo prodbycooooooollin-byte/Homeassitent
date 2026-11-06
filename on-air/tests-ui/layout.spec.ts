@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 // Simuliert Windows-Skalierung 100/125/150/200 % über deviceScaleFactor und
 // verkleinert das Fenster auf die Mindestgröße der App (720×520).
 const SCALES = [1, 1.25, 1.5, 2];
-// Seit dem Nachtblau-Design: Navigation oben (Live, Warteschlange, Overlays, Verlauf), Statusleiste unten.
+// Seit dem Signal-Design (0.3): Navigation in der Seitenleiste links, schwebendes Dock unten.
 const ROUTES = ["overview", "queue", "widgets", "history", "settings"];
 
 async function noHorizontalOverflow(page: Page) {
@@ -36,7 +36,7 @@ for (const scale of SCALES) {
         await expect(page.locator(".statusbar")).toBeVisible();
         await noHorizontalOverflow(page);
         await inViewport(page, ".sb-req");
-        await inViewport(page, ".topnav [aria-current='page']");
+        await inViewport(page, ".side [aria-current='page']");
         expect(errors).toEqual([]);
       });
     }
@@ -64,7 +64,7 @@ test("Kompaktmodus auf zweitem Monitor", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 380 });
   await page.goto("/#/compact");
   await inViewport(page, ".req-switch");
-  await inViewport(page, "text=Überspringen");
+  await inViewport(page, "button[aria-label='Überspringen']");
   await noHorizontalOverflow(page);
 });
 
@@ -311,21 +311,44 @@ test("Sammel-Playlist: Einstellungen und Status", async ({ page }) => {
   await noHorizontalOverflow(page);
 });
 
-test("Als Nächstes: feste Kartenbreite, seitlich scrollbar per Mausrad und Pfeil", async ({ page }) => {
+test("Als Nächstes: Liste mit hervorgehobenem nächsten Song, Rest in der Warteschlange", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/?state=full#/overview");
-  const row = page.locator(".upnext-row");
-  const card = page.locator(".upnext-card").first();
-  const w = (await card.boundingBox())!.width;
-  expect(w).toBeGreaterThanOrEqual(290);
-  expect(w).toBeLessThanOrEqual(390);
-  expect(await row.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
-  await row.hover();
-  await page.mouse.wheel(0, 400);
-  await expect.poll(() => row.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
-  await page.locator(".strip-nav.prev").click();
-  await expect.poll(() => row.evaluate((el) => el.scrollLeft)).toBe(0);
+  const cards = page.locator(".upnext-card");
+  await expect(cards).toHaveCount(6);
+  await expect(cards.first()).toHaveClass(/active/);
+  await page.getByRole("button", { name: /Alle \d+ Songs ansehen/ }).click();
+  await expect(page).toHaveURL(/#\/queue$/);
   await noHorizontalOverflow(page);
+});
+
+test("Befehlspalette: Strg+K, Filter und Enter führen den Befehl aus", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/#/overview");
+  await expect(page.locator(".hero")).toBeVisible();
+  await page.keyboard.press("Control+k");
+  const input = page.getByRole("combobox", { name: "Suchen oder Befehl …" });
+  await expect(input).toBeFocused();
+  await input.fill("pausier");
+  await expect(page.locator(".palette-item").first()).toHaveText(/Requests pausieren/);
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".palette")).toHaveCount(0);
+  await expect(page.locator(".statusbar")).toContainText("Requests pausiert");
+});
+
+test("Session-Puls und Signal-Karte zeigen Werte", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/#/overview");
+  await expect(page.locator(".pulse-value")).not.toHaveText("0");
+  await expect(page.locator(".health")).toContainText("Stabil seit");
+  await expect(page.locator(".health")).toContainText("automatische Reparaturen");
+});
+
+test("Overlays: Neon-Stil ist Standard und einstellbar", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/#/widgets");
+  await expect(page.getByRole("tab", { name: "Neon" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("code, .code-box").filter({ hasText: "/widget/neon" }).first()).toBeVisible();
 });
 
 // Universal Request (Beispiel-Backend): Links werden erkannt, Versionen/Playlists verlangen eine Auswahl,

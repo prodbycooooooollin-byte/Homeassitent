@@ -248,6 +248,19 @@ impl QueueStore {
         )
     }
 
+    /// Session-Puls: Eingangszeit und Status aller Wünsche seit `since_ms` (für die Kurve auf der
+    /// Live-Seite). Höchstens 5000 Einträge – ein Marathon-Stream bleibt so leichtgewichtig.
+    pub fn session_timeline(&self, since_ms: i64) -> Vec<(i64, String)> {
+        let c = self.db.conn();
+        let mut st = match c.prepare("SELECT received_at, status FROM requests WHERE received_at >= ?1 ORDER BY received_at ASC LIMIT 5000") {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+        st.query_map(params![since_ms], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map(|rows| rows.filter_map(Result::ok).collect())
+            .unwrap_or_default()
+    }
+
     pub fn session_counts(&self, since_ms: i64) -> Vec<(String, i64)> {
         let c = self.db.conn();
         let mut st = match c.prepare("SELECT status, COUNT(*) FROM requests WHERE received_at >= ?1 GROUP BY status") {

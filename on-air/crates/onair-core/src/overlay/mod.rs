@@ -193,7 +193,7 @@ struct PresetQuery {
 }
 
 async fn widget_page(Path(preset): Path<String>, Query(q): Query<PresetQuery>) -> Response {
-    if !matches!(preset.as_str(), "minimal" | "glass" | "queue") {
+    if !matches!(preset.as_str(), "minimal" | "glass" | "queue" | "neon") {
         return (StatusCode::NOT_FOUND, "Unbekanntes Widget").into_response();
     }
     let preview = q.preview.as_deref() == Some("1");
@@ -223,6 +223,7 @@ fn payload(d: &OverlayData, preset: &str) -> WidgetPayload {
         "minimal" => Some(d.styles.minimal.clone()),
         "glass" => Some(d.styles.glass.clone()),
         "queue" => Some(d.styles.queue.clone()),
+        "neon" => Some(d.styles.neon.clone()),
         _ => None,
     };
     let n = style.as_ref().map(|s| s.queue_count as usize).unwrap_or(3);

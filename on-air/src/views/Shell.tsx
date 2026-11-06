@@ -1,13 +1,14 @@
-import { Clock, Coins, Music2, Pause, PictureInPicture2, Play, Settings, Stethoscope } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Clock, Coins, History, Layers, ListMusic, Music2, Pause, PictureInPicture2, Play, Radio, Search, Settings, Stethoscope } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Avatar } from "../components/Avatar";
 import { WindowControls } from "../components/WindowControls";
+import { CommandPalette, useCommandPaletteHotkey } from "../components/CommandPalette";
 import { DiagnosticsDialog } from "../components/Dialogs";
 import { startSpotifyLogin, startTwitchLogin } from "../components/Login";
 import { BrandMark, Dialog, Toggle, toastError } from "../components/ui";
 import { effective, rewardSyncText } from "../lib/acceptance";
 import { api } from "../lib/api";
-import { clockTime } from "../lib/format";
+import { clockTime, relative } from "../lib/format";
 import { getLang, t } from "../lib/i18n";
 import { spotifyStatus, twitchStatus, type StatusDesc } from "../lib/status";
 import { refresh, useNow } from "../lib/store";
@@ -214,6 +215,7 @@ function StatusBar({ snap, go, onDiag }: { snap: AppSnapshot; go: (r: Route) => 
         )}
       </div>
       <span className="sb-sep" aria-hidden="true" />
+      <span className="sb-clock num" aria-hidden="true">{clockTime(now, getLang())}</span>
       <div className="sb-group" style={{ gap: 6 }}>
         <button className={`sb-svc tone-${sp.tone}`} title={`${t("sp.label")}: ${sp.short}`} aria-label={`${t("sp.label")}: ${sp.short}`} onClick={() => onDiag("spotify")}><SpotifyGlyph /></button>
         <button className={`sb-svc tone-${tw.tone}`} title={`${t("tw.label")}: ${tw.short}`} aria-label={`${t("tw.label")}: ${tw.short}`} onClick={() => onDiag("twitch")}><TwitchGlyph /></button>
@@ -224,51 +226,139 @@ function StatusBar({ snap, go, onDiag }: { snap: AppSnapshot; go: (r: Route) => 
 
 export type NavRoute = Route | "history";
 
+/** Laufzeit kompakt: „2:13 h“, „47 Min“. */
+function upFor(ms: number): string {
+  const m = Math.max(0, Math.floor(ms / 60_000));
+  if (m < 60) return `${m} Min`;
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")} h`;
+}
+
+/** „Signal“-Karte: Zustand aller Verbindungen und was der Verbindungswächter repariert hat. */
+function HealthCard({ snap, onDiag }: { snap: AppSnapshot; onDiag: () => void }) {
+  const now = useNow(15_000);
+  const sp = spotifyStatus(snap, now);
+  const tw = twitchStatus(snap, now);
+  const rel = snap.reliability;
+  const ov = snap.overlay.running ? "ok" : "error";
+  const svc = [
+    { k: "sp", label: t("sp.label"), tone: sp.tone },
+    { k: "tw", label: t("tw.label"), tone: tw.tone },
+    { k: "ov", label: t("health.overlay"), tone: ov },
+  ];
+  const width = (tone: string) => (tone === "ok" ? "100%" : tone === "busy" || tone === "warn" ? "60%" : tone === "error" ? "30%" : "12%");
+  const anyBad = svc.some((x) => x.tone === "error" || x.tone === "warn");
+  const big = rel?.healthy_since_ms
+    ? t("health.stable_since", { time: upFor(now - rel.healthy_since_ms) })
+    : sp.tone === "neutral" && tw.tone === "neutral" ? t("health.offline") : t("health.checking");
+  const heals = rel?.heals ?? 0;
+  const sub = heals === 0 ? t("health.heals_none") : heals === 1 ? t("health.heals_one") : t("health.heals", { n: heals });
+  const last = rel?.last_heal_ms && rel.last_heal_service
+    ? t("health.last_heal", { what: rel.last_heal_service === "spotify" ? "Spotify" : "Twitch", time: relative(rel.last_heal_ms, now, getLang()) })
+    : null;
+  return (
+    <>
+      <button type="button" className="health" onClick={onDiag} title={last ?? sub}>
+        <div className="health-head">
+          <span className="eyebrow">{t("health.title")}</span>
+          <span className={`sdot ${anyBad ? "warn" : rel?.healthy_since_ms ? "ok" : "neutral"}`} aria-hidden="true" />
+        </div>
+        <div>
+          <div className="health-big">{big}</div>
+          <div className="health-sub">{sub}</div>
+        </div>
+        <div className="health-rows">
+          {svc.map((x) => (
+            <div className="health-svc" key={x.k}>
+              <span>{x.label}</span>
+              <div className={`meter ${x.tone}`}><i style={{ width: width(x.tone) }} /></div>
+            </div>
+          ))}
+        </div>
+      </button>
+      <button type="button" className="side-mini-health" onClick={onDiag} aria-label={t("health.title")} title={big}>
+        {svc.map((x) => <span key={x.k} className={`sdot ${x.tone}`} />)}
+      </button>
+    </>
+  );
+}
+
 export function Shell({ snap, route, go, children }: { snap: AppSnapshot; route: NavRoute; go: (r: NavRoute) => void; children: ReactNode }) {
   const [diag, setDiag] = useState<null | "all" | "spotify" | "twitch" | "overlay">(null);
+  const [palette, setPalette] = useState(false);
+  const openPalette = useCallback(() => setPalette(true), []);
+  const contentRef = useRef<HTMLElement>(null);
+  // Jede Seite beginnt oben (der Inhaltsbereich wird zwischen den Seiten geteilt).
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0 });
+  }, [route]);
+  useCommandPaletteHotkey(openPalette);
   const upd = useUpdateInfo();
   const updateReady = upd && (upd.state.state === "available" || upd.state.state === "ready");
   const pendingReview =
     snap.queue.filter((r) => r.status === "pending_review" || r.status === "uncertain").length + snap.channel_points.needs_review;
-  const nav: { id: NavRoute; label: string; badge?: number }[] = [
-    { id: "overview", label: t("nav.live") },
-    { id: "queue", label: t("nav.queue"), badge: pendingReview || undefined },
-    { id: "widgets", label: t("nav.overlays") },
-    { id: "history", label: t("nav.history") },
+  const nav: { id: NavRoute; label: string; icon: ReactNode; badge?: number; dot?: boolean }[] = [
+    { id: "overview", label: t("nav.live"), icon: <Radio size={19} /> },
+    { id: "queue", label: t("nav.queue"), icon: <ListMusic size={19} />, badge: pendingReview || undefined },
+    { id: "history", label: t("nav.history"), icon: <History size={19} /> },
+    { id: "widgets", label: t("nav.overlays"), icon: <Layers size={19} /> },
+    { id: "settings", label: t("nav.settings"), icon: <Settings size={19} />, dot: !!updateReady },
   ];
+  const current = nav.find((n) => n.id === route) ?? nav[0];
   const profile = snap.spotify_profile?.display_name ?? snap.spotify_profile?.id ?? null;
+  const live = effective(snap).tone === "open";
   return (
     <div className="app">
-      <header className="topnav" data-tauri-drag-region>
+      <aside className="side" aria-label="Navigation">
         <button className="brand" onClick={() => go("overview")} aria-label="ON AIR">
-          <BrandMark size={30} />
-          <b>ON AIR</b>
+          <BrandMark size={34} />
+          <span>
+            <b className="row" style={{ gap: 9 }}>ON AIR<span className={`lamp ${live ? "on" : ""}`} aria-hidden="true" /></b>
+            <small>{t("brand.tag")}</small>
+          </span>
         </button>
-        <nav className="navtabs" aria-label="Navigation" data-tauri-drag-region>
+        <nav className="navtabs">
+          <span className="nav-label">{t("nav.section")}</span>
           {nav.map((n) => (
-            <button key={n.id} className="navtab" aria-current={route === n.id ? "page" : undefined} onClick={() => go(n.id)}>
-              {n.label}
+            <button key={n.id} className="navtab" aria-current={route === n.id ? "page" : undefined} onClick={() => go(n.id)} title={n.label}>
+              {n.icon}
+              <span>{n.label}</span>
               {n.badge ? <span className="navtab-badge">{n.badge}</span> : null}
+              {n.dot ? <span className="gear-dot" style={{ position: "static", marginLeft: "auto" }} aria-hidden="true" title={t("up.badge")} /> : null}
             </button>
           ))}
         </nav>
-        <div className="topnav-right" data-tauri-drag-region>
-          <ConnectionSummary snap={snap} onDiag={setDiag} go={go} />
-          <button className="icon-btn" onClick={() => api.openCompact().catch(toastError)} title={t("nav.compact")} aria-label={t("nav.compact")}><PictureInPicture2 size={18} /></button>
-          <button className="icon-btn" onClick={() => setDiag("all")} title={t("nav.diagnostics")} aria-label={t("nav.diagnostics")}><Stethoscope size={18} /></button>
-          <button className="avatar-btn" onClick={() => go("settings")} title={profile ? t("s.signed_in_as", { name: profile }) : t("sp.connect")} aria-label={t("nav.account")}>
-            {profile ? <Avatar name={profile} size={34} /> : <span className="avatar ghost" style={{ width: 34, height: 34 }}><Music2 size={16} /></span>}
-          </button>
-          <button className="icon-btn gear" aria-current={route === "settings" ? "page" : undefined} onClick={() => go("settings")} title={t("nav.settings")} aria-label={t("nav.settings")}>
-            <Settings size={21} />
-            {updateReady && <span className="gear-dot" aria-label={t("up.badge")} />}
-          </button>
-          <WindowControls />
+        <div className="side-foot">
+          <HealthCard snap={snap} onDiag={() => setDiag("all")} />
+          <div className="side-actions">
+            <button className="btn btn-sm" onClick={() => api.openCompact().catch(toastError)} title={t("nav.compact")}><PictureInPicture2 size={15} /> <span>{t("nav.compact")}</span></button>
+          </div>
         </div>
-      </header>
-      <main className="content" id="main">{children}</main>
-      <StatusBar snap={snap} go={go} onDiag={(k) => setDiag(k)} />
+      </aside>
+      <div className="main">
+        <header className="topnav" data-tauri-drag-region>
+          <div className="page-kicker" data-tauri-drag-region>
+            <small data-tauri-drag-region>{t("nav.kicker")}</small>
+            {/* Unterseiten haben eine eigene große Überschrift – hier nicht doppelt. */}
+            {route === "overview" && <b data-tauri-drag-region>{current.label}</b>}
+          </div>
+          <div className="topnav-right" data-tauri-drag-region>
+            <button className="search-btn" onClick={openPalette} aria-label={t("cmd.open")} title={t("cmd.open")}>
+              <Search size={16} />
+              <span>{t("cmd.search")}</span>
+              <span className="kbd">{getLang() === "en" ? "Ctrl K" : "Strg K"}</span>
+            </button>
+            <ConnectionSummary snap={snap} onDiag={setDiag} go={go} />
+            <button className="avatar-btn" onClick={() => go("settings")} title={profile ? t("s.signed_in_as", { name: profile }) : t("sp.connect")} aria-label={t("nav.account")}>
+              {profile ? <Avatar name={profile} size={34} /> : <span className="avatar ghost" style={{ width: 34, height: 34 }}><Music2 size={16} /></span>}
+            </button>
+            <WindowControls />
+          </div>
+        </header>
+        <main className="content" id="main" ref={contentRef}>{children}</main>
+        <StatusBar snap={snap} go={go} onDiag={(k) => setDiag(k)} />
+      </div>
       {diag && <DiagnosticsDialog target={diag} onClose={() => setDiag(null)} />}
+      {palette && <CommandPalette snap={snap} onClose={() => setPalette(false)} go={(r) => go(r as NavRoute)} onDiag={() => setDiag("all")} />}
     </div>
   );
 }

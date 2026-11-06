@@ -16,7 +16,9 @@
 │   ├─ queue::service    ── Regeln, Moderation, Übergabe, Beobachtung, Abgleich         │
 │   ├─ storage (SQLite, WAL, Migrationen + Sicherung)                                   │
 │   ├─ overlay (axum, nur 127.0.0.1) ◄── OverlayData (watch) ◄── overlay_feeder         │
-│   └─ wake (Standby-Erkennung) → gezielte Wiederherstellung                            │
+│   ├─ wake (Standby-Erkennung) → gezielte Wiederherstellung                            │
+│   ├─ guardian (Verbindungswächter, alle 10 s) → Wiederherstellung hängender Dienste   │
+│   └─ TokenManager::run_keeper (je Dienst) → Refresh 15 min vor Ablauf                 │
 └───────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -86,10 +88,42 @@ received ─► pending_review ─(Freigabe / Spotify wieder erreichbar)─► a
 - Eigene Chatantworten werden anhand ihrer Message-ID ignoriert (keine Schleifen).
 - Token-Validierung beim Start und stündlich.
 
+## Verbindungswächter (`guardian.rs`)
+
+Zweite, unabhängige Instanz über Spotify- und Twitch-Dienst. Die Entscheidung ist eine reine
+Funktion (`Guardian::observe`), getestet ohne IO.
+
+| Zustand | Eingriff |
+|---|---|
+| Spotify angemeldet, `online`, letzte bestätigte Antwort älter als 4 × längstes Abfrageintervall (mind. 45 s) | `SyncCmd::Recover` |
+| Spotify `degraded`/`offline`, geplante Wiederholung > 30 s überfällig | `SyncCmd::Recover` |
+| Spotify `unknown` länger als 30 s | `SyncCmd::Recover` |
+| Spotify `rate_limited`/`quota_exhausted`/`blocked` | keiner (Anbieter-Sperre wird respektiert) |
+| Twitch `connecting` > 60 s, `disabled` trotz Anmeldung > 30 s, `reconnecting` > 45 s überfällig | `TwitchCmd::Recover` |
+| Twitch `blocked` | nach 5 min, dann alle 10 … 30 min `TwitchCmd::Recover` |
+
+Abstände zwischen Eingriffen wachsen (1, 2, 4 … max. 10 min) und werden zurückgesetzt, sobald der
+Dienst wieder gesund ist. Jeder Eingriff erscheint als `guardian.heal` im Aktivitätsprotokoll;
+`AppSnapshot.reliability` liefert Zähler, letzten Eingriff und „gesund seit“.
+
+## Token-Wächter
+
+`TokenManager::run_keeper` erneuert das Access Token 15 Minuten vor Ablauf (bei kurzen Tokens
+mindestens 5 Minuten vorher), wiederholt Netzfehler mit 10 s … 5 min Abstand und schläft nie
+länger als 60 s am Stück (Standby/Uhrsprünge). Der Status (`AuthStatus`) enthält die
+Berechtigungen sortiert – ein Refresh mit anders sortierten Scopes ist kein Statuswechsel.
+
+## HTTP-Transport
+
+`reqwest` mit 5 s Verbindungs- und 12 s Gesamt-Timeout, Leerlaufgrenze 20 s (unter der
+60-s-Grenze der Load-Balancer), TCP-Keepalive 25 s. Lesende Anfragen werden nach einem
+Übertragungsfehler einmal mit frischer Verbindung wiederholt; schreibende nur, wenn die Anfrage
+nachweislich nicht gesendet wurde (Broken Pipe).
+
 ## Overlay-Server
 
 - Bindet ausschließlich an `127.0.0.1`, `Host`-Header-Prüfung gegen DNS-Rebinding, keine CORS-Header.
-- Lesend: `/widget/{minimal|glass|queue}`, `/api/state`, `/api/events` (SSE mit 5-s-Herzschlag).
+- Lesend: `/widget/{minimal|glass|queue|neon}`, `/api/state`, `/api/events` (SSE mit 5-s-Herzschlag).
 - Schreibend: `POST /api/control/{skip|open_requests|close_requests}` – standardmäßig aus; verlangt `X-OnAir-Token` (Vergleich in konstanter Zeit) und lehnt Anfragen mit `Origin`-Header ab.
 - Widgets blenden aus, wenn Daten älter als die konfigurierte Frist sind oder der Server > 12 s schweigt; `EventSource` verbindet nach App-Neustart selbstständig neu.
 - OBS-Dock: `GET /dock` (Seite ohne Geheimnis, eigene CSP), `GET /api/dock/state`, `POST /api/dock/{skip|play_pause|open_requests|close_requests|approve|reject|remove|extend_plan}`. Schlüssel = Steuer-Token aus dem Credential Store, steht im URL-Fragment (`#k=…`, nie an den Server/in Logs) und wird nur im Header `X-OnAir-Dock` gesendet; ein `Origin` muss die eigene Herkunft sein. Unabhängig vom Schalter „Fernsteuerung“.

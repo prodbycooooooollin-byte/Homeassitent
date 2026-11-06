@@ -7,7 +7,8 @@ a{color:#7FD6B5}code{background:#191B20;padding:.1rem .35rem;border-radius:6px}<
 <p>Dieser Server läuft nur auf deinem Rechner. Füge in OBS eine <b>Browser-Quelle</b> mit einer dieser Adressen hinzu:</p>
 <ul><li><a href="/widget/minimal">/widget/minimal</a> – Cover, Titel, Interpret</li>
 <li><a href="/widget/glass">/widget/glass</a> – transparente Karte mit Fortschritt</li>
-<li><a href="/widget/queue">/widget/queue</a> – aktueller Song und nächste Requests</li></ul>
+<li><a href="/widget/queue">/widget/queue</a> – aktueller Song und nächste Requests</li>
+<li><a href="/widget/neon">/widget/neon</a> – Signal-Look mit ON-AIR-Lampe und leuchtendem Fortschritt</li></ul>
 <p>Die Adressen kannst du in ON AIR unter <b>Widgets</b> mit einem Klick kopieren.</p></body></html>"#;
 
 pub const WIDGET_HTML: &str = r#"<!doctype html>
@@ -43,6 +44,21 @@ body{font-family:var(--font);color:var(--text);font-size:calc(16px*var(--scale))
 .q .qm{min-width:0;flex:1}
 .q .qt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .q .qr{color:var(--muted);font-size:.85em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.neon .card{position:relative;overflow:hidden;padding:calc(14px*var(--scale));border:1px solid rgba(255,255,255,.08);box-shadow:0 18px 50px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06)}
+.neon .card::before{content:"";position:absolute;inset:-40%;z-index:-1;background:radial-gradient(closest-side at 85% 30%,var(--accent),transparent 70%);opacity:.16}
+.neon .card{isolation:isolate}
+.neon .cover{width:calc(84px*var(--scale));height:calc(84px*var(--scale));border-radius:calc(var(--radius)*.6);box-shadow:0 10px 30px rgba(0,0,0,.45),0 0 26px var(--accent)}
+.neon .onair{display:inline-flex;align-items:center;gap:6px;font-size:.62em;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--text);margin-bottom:4px}
+.neon .onair i{width:7px;height:7px;border-radius:50%;background:#FF3D4F;box-shadow:0 0 10px #FF3D4F;animation:lamp 2.4s ease-in-out infinite}
+@keyframes lamp{50%{box-shadow:0 0 3px #FF3D4F}}
+.noanim .neon .onair i{animation:none}
+.neon .t{font-weight:800;text-transform:uppercase;letter-spacing:.005em;font-size:1.22em;line-height:1.05}
+.neon .a{color:var(--accent);font-weight:600;margin-top:3px}
+.neon .req{color:var(--muted)}
+.neon .bar{position:relative;height:4px;margin-top:10px;overflow:visible;background:rgba(255,255,255,.12)}
+.neon .bar>i{border-radius:4px;box-shadow:0 0 12px var(--accent)}
+.neon .knob{position:absolute;inset:0;pointer-events:none}
+.neon .knob b{position:absolute;left:-6px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.18),0 0 14px var(--accent)}
 .badge{position:fixed;right:8px;bottom:8px;font:600 11px system-ui;letter-spacing:.06em;color:#101114;background:#F2C66D;padding:3px 7px;border-radius:6px}
 </style></head>
 <body class="__PRESET__"><div id="root"></div>
@@ -74,9 +90,9 @@ function visible(){
  return true;}
 function build(){
  const s=st.style||{}, n=st.now, artist=esc((n.artists||[]).join(", "));
- let h=`<div class="card"><div class="row swap">${s.show_cover!==false?cover(n.image_url,"cover"):""}<div class="meta"><div class="t">${esc(n.title)}</div><div class="a">${artist}</div>`;
+ let h=`<div class="card"><div class="row swap">${s.show_cover!==false?cover(n.image_url,"cover"):""}<div class="meta">${PRESET==="neon"?`<div class="onair"><i></i>${n.is_playing?"On Air":"Pause"}</div>`:""}<div class="t">${esc(n.title)}</div><div class="a">${artist}</div>`;
  if(s.show_requester&&n.requester&&PRESET!=="minimal")h+=`<div class="req">Wunsch von ${esc(n.requester)}</div>`;
- if(s.show_progress&&PRESET!=="minimal")h+=`<div class="bar"><i id="p"></i></div>`;
+ if(s.show_progress&&PRESET!=="minimal")h+=`<div class="bar"><i id="p"></i>${PRESET==="neon"?`<span class="knob" id="k"><b></b></span>`:""}</div>`;
  h+=`</div></div>`;
  if(PRESET==="queue"){
   if(st.queue.length){h+=`<div class="label">Als Nächstes</div><ul class="q">`+st.queue.map(q=>`<li>${s.show_cover!==false?cover(q.image_url,"qc"):""}<div class="qm"><div class="qt">${esc(q.title)} – ${esc((q.artists||[]).join(", "))}</div>${s.show_requester?`<div class="qr">${esc(q.requester)}</div>`:""}</div></li>`).join("")+`</ul>`;}
@@ -98,7 +114,9 @@ function tick(){
  const p=document.getElementById("p"); if(!p||!st||!st.now)return;
  const n=st.now; let pr=n.progress_ms+(n.is_playing?Math.max(0,nowAge(n)):0);
  if(n.duration_ms>0)pr=Math.min(pr,n.duration_ms);
- p.style.transform="scaleX("+(n.duration_ms?Math.min(1,pr/n.duration_ms):0)+")";}
+ const f=n.duration_ms?Math.min(1,pr/n.duration_ms):0;
+ p.style.transform="scaleX("+f+")";
+ const k=document.getElementById("k"); if(k)k.style.transform="translateX("+(f*100)+"%)";}
 function onData(d){
  lastMsg=Date.now(); offset=d.server_time_ms-Date.now();
  st=PREVIEW?Object.assign({},SAMPLE,{style:d.style,stale_after_ms:d.stale_after_ms,now:Object.assign({},SAMPLE.now,{fetched_at_ms:d.server_time_ms})}):d;

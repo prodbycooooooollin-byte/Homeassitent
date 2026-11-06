@@ -1,4 +1,4 @@
-import { Maximize2, Megaphone, Pin, SkipForward } from "lucide-react";
+import { Maximize2, Megaphone, Pause, Pin, Play, SkipBack, SkipForward } from "lucide-react";
 import { playbackInfo } from "../components/NowPlaying";
 import { RequestList } from "../components/Requests";
 import { Cover, toastError } from "../components/ui";
@@ -42,30 +42,41 @@ export function CompactView({ snap }: { snap: AppSnapshot }) {
         </button>
         <WindowControls maximizable={false} />
       </div>
-      <div className="compact-np">
-        {kind === "ad" ? <div className="cover cover-ph" style={{ width: 64, height: 64 }}><Megaphone size={24} /></div> : <Cover url={track?.image_url ?? ep?.image_url} size={64} className="cover" />}
-        <div className="col" style={{ gap: 2, minWidth: 0 }}>
-          <div className="ellipsis" style={{ fontWeight: 650 }} title={title}>{title}</div>
-          {sub && <div className="small muted ellipsis" title={sub}>{sub}</div>}
-          {info && info.stale ? (
-            <div className="small" style={{ color: "var(--warn)" }} title={t("np.stale_hint", { time: clockTime(info.pb.fetched_at_ms, getLang()) })}>{t("np.stale", { time: clockTime(info.pb.fetched_at_ms, getLang()) })}</div>
-          ) : info && kind !== "ad" && info.dur > 0 ? (
-            <div className="row small subtle" style={{ gap: 8, fontVariantNumeric: "tabular-nums" }}>
-              <div className="bar grow"><i style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }} /></div>
-              <span>{info.pb.is_playing ? duration(info.progress) : t("np.paused")}</span>
-            </div>
-          ) : null}
+      <div className="compact-card">
+        <div className={`hero-bg ${track?.image_url ?? ep?.image_url ? "" : "none"}`} style={track?.image_url ?? ep?.image_url ? { backgroundImage: `url("${track?.image_url ?? ep?.image_url}")` } : undefined} aria-hidden="true" />
+        <div className="compact-brand">
+          <span className={`lamp ${acc.any_open ? "on" : ""}`} aria-hidden="true" /> ON AIR
+          <span className="time num">{clockTime(now, getLang())}</span>
+        </div>
+        <div className="compact-np">
+          {kind === "ad" ? <div className="cover cover-ph" style={{ width: 76, height: 76 }}><Megaphone size={24} /></div> : <Cover url={track?.image_url ?? ep?.image_url} size={76} className="cover" />}
+          <div className="col" style={{ gap: 2, minWidth: 0 }}>
+            <span className="c-kicker">{info?.requester ? `${t("np.requested_from")} ${info.requester}` : info?.pb.is_playing ? t("np.now_playing") : t("np.paused")}</span>
+            <div className="c-title ellipsis" title={title}>{title}</div>
+            {sub && <div className="c-sub ellipsis" title={sub}>{sub}</div>}
+          </div>
+        </div>
+        {info && info.stale ? (
+          <div className="compact-ctl" style={{ gridTemplateColumns: "1fr", color: "var(--warn)" }} title={t("np.stale_hint", { time: clockTime(info.pb.fetched_at_ms, getLang()) })}>{t("np.stale", { time: clockTime(info.pb.fetched_at_ms, getLang()) })}</div>
+        ) : info && kind !== "ad" && info.dur > 0 ? (
+          <div className="compact-ctl">
+            <span>{duration(info.progress)}</span>
+            <div className="bar"><i style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }} /></div>
+            <span>{duration(info.dur)}</span>
+          </div>
+        ) : null}
+        <div className="compact-buttons">
+          <button className="icon-btn" disabled={!usable || kind === "ad" || !info?.pb.actions.can_skip_prev} aria-label={t("np.prev")} title={t("np.prev")} onClick={() => api.transport("previous").catch(toastError)}><SkipBack size={18} /></button>
+          {info?.pb.is_playing ? (
+            <button className="play-btn" disabled={!usable || kind === "ad" || !info?.pb.actions.can_pause} aria-label={t("np.pause")} title={t("np.pause")} onClick={() => api.transport("pause").catch(toastError)}><Pause size={20} /></button>
+          ) : (
+            <button className="play-btn" disabled={!usable || kind === "ad" || !info?.pb.actions.can_resume} aria-label={t("np.play")} title={t("np.play")} onClick={() => api.transport("resume").catch(toastError)}><Play size={20} /></button>
+          )}
+          <button className="icon-btn" disabled={!usable || kind === "ad" || !info?.pb.actions.can_skip_next} aria-label={t("np.next")} title={usable ? t("np.next") : t("np.disabled_offline")} onClick={() => api.transport("next").catch(toastError)}><SkipForward size={18} /></button>
+          <button className="icon-btn" title={t("compact.open_main")} aria-label={t("compact.open_main")} onClick={() => showMainWindow().catch(toastError)}><Maximize2 size={16} /></button>
         </div>
       </div>
-      <div className="row" style={{ padding: "0 14px 12px", gap: 8 }}>
-        <button className="btn grow" disabled={!usable || kind === "ad" || !info?.pb.actions.can_skip_next} title={usable ? t("np.next") : t("np.disabled_offline")} onClick={() => api.transport("next").catch(toastError)}>
-          <SkipForward size={16} /> {t("np.next")}
-        </button>
-        <button className="icon-btn" title={t("compact.open_main")} aria-label={t("compact.open_main")} onClick={() => showMainWindow().catch(toastError)}>
-          <Maximize2 size={16} />
-        </button>
-      </div>
-      <div className="section-label" style={{ paddingTop: 4 }}>{t("compact.next")} · {upcoming.length}</div>
+      <div className="section-label" style={{ paddingTop: 14 }}>{t("compact.next")} · {upcoming.length}</div>
       <div className="compact-list">
         {upcoming.length === 0 ? <div className="subtle small" style={{ padding: "4px 14px" }}>{t("q.empty")}</div> : <RequestList items={upcoming} compact />}
       </div>

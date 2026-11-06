@@ -85,7 +85,7 @@ function defaults(): Settings {
       top_requesters: cmd("topwuenscher", "everyone", 30, ["topwünscher", "toprequester", "toprequesters", "top wünscher", "top requester"]),
       stats_global_cooldown_s: 15,
     },
-    overlay: { port: 43822, stale_after_s: 20, minimal: style({}), glass: style({ background_opacity: 0.55, show_progress: true }), queue: style({ background_opacity: 0.7, width: 420, queue_count: 4 }), control_enabled: false },
+    overlay: { port: 43822, stale_after_s: 20, minimal: style({}), glass: style({ background_opacity: 0.55, show_progress: true }), queue: style({ background_opacity: 0.7, width: 420, queue_count: 4 }), neon: style({ font_family: "'Jost', 'Futura', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif", accent_color: "#B6F94C", secondary_color: "#A5ACA3", text_color: "#F3F6F0", background_color: "#07090A", background_opacity: 0.86, radius: 22, width: 560, show_progress: true }), control_enabled: false },
     nowplaying_file: { enabled: false, path: "", template: "{artist} – {title}" },
     profiles: [], active_profile: null, hotkey_skip: "", compact_on_top: true,
     channel_points: { enabled: false, title: "Song wünschen", cost: 500, prompt: "Spotify-Link oder Titel und Interpret", global_cooldown_s: 0, max_per_stream: 0, max_per_user_per_stream: 0, mode: "auto", external_reward: null },
@@ -98,7 +98,8 @@ function defaults(): Settings {
 export function createMockBackend(): Backend {
   const scenario = new URLSearchParams(window.location.search).get("state") ?? "";
   const now = () => Date.now();
-  const start = now();
+  // Vorschau: Die Session läuft schon gut zwei Stunden (für Session-Puls und Stabilität).
+  const start = now() - 2 * 3_600_000 - 14 * 60_000;
   const settings = defaults();
   const creds = new Set<string>();
   if (scenario === "onboarding") {
@@ -148,6 +149,18 @@ export function createMockBackend(): Backend {
     updateListeners.forEach((l) => l(updateInfo()));
   };
   let recent: SongRequest[] = [mkReq(TRACKS[5], "alex", "completed"), mkReq(TRACKS[3], "spam_bot", "rejected", { reason: "user_cooldown", reason_text: "bitte warte noch 40 s" })];
+  // Verlauf der Session: Wünsche über gut zwei Stunden verteilt, mit einem Höhepunkt in der Mitte.
+  if (scenario !== "empty") {
+    const curve = [1, 2, 2, 3, 5, 8, 11, 7, 4, 3, 4, 2, 3];
+    const names = ["alex", "Lumi", "kalle", "Mara", "jonas", "nachteule_92", "Kira", "Tom", "pixelfuchs", "Noa"];
+    curve.forEach((n, slot) => {
+      for (let k = 0; k < n; k++) {
+        const at = start + slot * 10 * 60_000 + Math.round(((k + 0.5) / n) * 10 * 60_000);
+        if (at > now()) continue;
+        recent.push(mkReq(TRACKS[(slot + k) % TRACKS.length], names[(slot * 3 + k) % names.length], k % 7 === 6 ? "rejected" : "completed", { received_at: at, finished_at: at + 200_000 }));
+      }
+    });
+  }
   if (cpOn) recent = [mkReq(TRACKS[1], "Kira", "completed", { source: "channel_points", reason: "not_observed", redemption: red("r-c", "review") }), mkReq(TRACKS[4], "Tom", "rejected", { source: "channel_points", redemption: red("r-d", "canceled") }), ...recent];
   let activity: Activity[] = [
     { id: 5, ts: now() - 20_000, level: "success", kind: "request.accepted", message: "Request angenommen: „Low Tide“ von Kairo Beach (für kalle)", params: null, corr: null },
@@ -256,7 +269,9 @@ export function createMockBackend(): Backend {
         ? { enabled: true, scope_ok: scenario !== "rp-scope", playlists: [{ id: "pl1", url: "https://open.spotify.com/playlist/pl1", name: settings.request_playlist.name, count: 1287 }], total: 1287, pending: 0, last_added_ms: start - 3 * 60_000, last_error: null }
         : { enabled: false, scope_ok: true, playlists: [], total: 0, pending: 0, last_added_ms: null, last_error: null },
       update_pause: false,
+      reliability: { heals: scenario === "offline" ? 3 : 2, last_heal_ms: now() - 47 * 60_000, last_heal_service: "twitch", last_heal_reason: "retry_overdue", healthy_since_ms: scenario === "offline" ? null : now() - 47 * 60_000 },
       awaiting: [],
+      timeline: [...queue, ...recent].filter((r) => r.received_at >= start).map((r): [number, boolean] => [r.received_at, r.status === "rejected"]).sort((a, b) => a[0] - b[0]),
       providers: [
         { provider: "spotify", enabled: true, configured: true, tracks: "full", playlists: true, albums: true },
         { provider: "youtube", enabled: settings.sources.youtube, configured: creds.has("youtube"), tracks: creds.has("youtube") ? "full" : "basic", playlists: creds.has("youtube"), albums: false },
@@ -427,6 +442,19 @@ export function createMockBackend(): Backend {
     update_later: () => undefined,
     update_postpone: () => { autoAt = null; postponed = true; setUpdate(updatePhase); },
   };
+
+  // Wie der echte Spotify-Worker: regelmäßig neu „abfragen“, sonst wirkt die Vorschau nach 20 s veraltet.
+  if (scenario !== "offline") {
+    setInterval(() => {
+      if (isPlaying) {
+        const cur = queue.find((r) => r.status === "playing")?.track ?? TRACKS[0];
+        progressBase += now() - fetchedAt;
+        if (progressBase > cur.duration_ms) progressBase = 0;
+      }
+      fetchedAt = now();
+      push();
+    }, 3000);
+  }
 
   return {
     isPreview: true,

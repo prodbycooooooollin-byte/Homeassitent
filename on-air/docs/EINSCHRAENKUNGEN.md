@@ -5,6 +5,10 @@
   keine Zugangsdaten zur Verfügung; alle Integrationszustände wurden mit Fake-Providern
   **simuliert**. Der erste echte Login kann Abweichungen zur recherchierten Dokumentation zeigen
   (siehe Funktionsmatrix – Primärquellen waren aus der Umgebung nicht direkt abrufbar).
+- **Verbindungswächter und Token-Wächter (0.3)** sind mit Unit-Tests und Fake-Providern geprüft,
+  aber nicht in einem echten mehrstündigen Stream. Die Ursachenanalyse für „nach einer Stunde neu
+  verbinden“ stützt sich auf den Code (Token-Laufzeit 1 h, Leerlaufgrenze der Load-Balancer), nicht
+  auf Logs betroffener Streamer – Rückmeldungen mit Log (`%LOCALAPPDATA%\app.onair.desktop\logs`) helfen.
 - **Kein achtstündiger Dauertest durchgeführt.** Plan und Messskript: [TESTS.md](TESTS.md).
   Es gibt keine gemessenen CPU-/Speicher-/Reconnect-Werte und keine Stabilitätsgarantie.
 - **Windows-Installer**: wird über GitHub Actions (`windows-latest`) gebaut. Auf einem echten

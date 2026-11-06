@@ -6,12 +6,17 @@ import { t } from "../lib/i18n";
 import { useSettingsDraft } from "../lib/useSettings";
 import type { AppSnapshot, WidgetStyle } from "../lib/types";
 
-type Preset = "minimal" | "glass" | "queue";
+type Preset = "minimal" | "glass" | "queue" | "neon";
 
 const PRESET_DEFAULTS: Record<Preset, Partial<WidgetStyle>> = {
   minimal: { background_opacity: 0, show_progress: false, width: 520, queue_count: 3 },
   glass: { background_opacity: 0.55, show_progress: true, width: 520, queue_count: 3 },
   queue: { background_opacity: 0.7, show_progress: false, width: 420, queue_count: 4 },
+  neon: {
+    font_family: "'Jost', 'Futura', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif",
+    accent_color: "#B6F94C", secondary_color: "#A5ACA3", text_color: "#F3F6F0", background_color: "#07090A",
+    background_opacity: 0.86, radius: 22, show_progress: true, width: 560, queue_count: 3,
+  },
 };
 const BASE: WidgetStyle = {
   font_family: "Inter, 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif",
@@ -37,15 +42,16 @@ export function widgetUrl(port: number, preset: Preset) {
 
 export function WidgetsView({ snap }: { snap: AppSnapshot }) {
   const { draft, update } = useSettingsDraft(snap, 250);
-  const [preset, setPreset] = useState<Preset>("glass");
+  const [preset, setPreset] = useState<Preset>("neon");
   const [sample, setSample] = useState(true);
   const [token, setToken] = useState<string | null>(null);
-  const style = draft.overlay[preset];
-  const setStyle = (patch: Partial<WidgetStyle>) => update((s) => ({ ...s, overlay: { ...s.overlay, [preset]: { ...s.overlay[preset], ...patch } } }));
+  // Ältere Profile kennen „Neon“ noch nicht → Standardwerte des Stils.
+  const style = draft.overlay[preset] ?? { ...BASE, ...PRESET_DEFAULTS[preset] };
+  const setStyle = (patch: Partial<WidgetStyle>) => update((s) => ({ ...s, overlay: { ...s.overlay, [preset]: { ...(s.overlay[preset] ?? { ...BASE, ...PRESET_DEFAULTS[preset] }), ...patch } } }));
   const url = widgetUrl(snap.overlay.port, preset);
   const [frameKey, setFrameKey] = useState(0);
   useEffect(() => setFrameKey((k) => k + 1), [preset, sample, snap.overlay.port, snap.overlay.running]);
-  const height = preset === "queue" ? 120 + style.queue_count * 44 : preset === "glass" ? 130 : 110;
+  const height = preset === "queue" ? 120 + style.queue_count * 44 : preset === "neon" ? 150 : preset === "glass" ? 130 : 110;
 
   return (
     <div className="page">
@@ -57,7 +63,7 @@ export function WidgetsView({ snap }: { snap: AppSnapshot }) {
       </div>
 
       <div className="tabs" role="tablist" aria-label={t("w.title")}>
-        {(["minimal", "glass", "queue"] as Preset[]).map((p) => (
+        {(["neon", "glass", "minimal", "queue"] as Preset[]).map((p) => (
           <button key={p} role="tab" aria-selected={preset === p} onClick={() => setPreset(p)}>
             {t(`w.${p}` as const)}
           </button>

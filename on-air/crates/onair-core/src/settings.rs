@@ -365,6 +365,19 @@ impl WidgetStyle {
         match name {
             "glass" => Self { background_opacity: 0.55, show_progress: true, ..base },
             "queue" => Self { background_opacity: 0.7, width: 420, queue_count: 4, ..base },
+            // „Neon“: Signal-Look der App – dunkle Karte, Leuchtakzent, ON-AIR-Lampe, Kino-Titel.
+            "neon" => Self {
+                font_family: "'Jost', 'Futura', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif".into(),
+                accent_color: "#B6F94C".into(),
+                secondary_color: "#A5ACA3".into(),
+                text_color: "#F3F6F0".into(),
+                background_color: "#07090A".into(),
+                background_opacity: 0.86,
+                radius: 22,
+                width: 560,
+                show_progress: true,
+                ..base
+            },
             _ => base,
         }
     }
@@ -385,6 +398,7 @@ pub struct OverlaySettings {
     pub minimal: WidgetStyle,
     pub glass: WidgetStyle,
     pub queue: WidgetStyle,
+    pub neon: WidgetStyle,
     /// Schreibende Steuer-Endpunkte (z. B. Stream Deck) – standardmäßig aus.
     pub control_enabled: bool,
 }
@@ -397,6 +411,7 @@ impl Default for OverlaySettings {
             minimal: WidgetStyle::preset("minimal"),
             glass: WidgetStyle::preset("glass"),
             queue: WidgetStyle::preset("queue"),
+            neon: WidgetStyle::preset("neon"),
             control_enabled: false,
         }
     }

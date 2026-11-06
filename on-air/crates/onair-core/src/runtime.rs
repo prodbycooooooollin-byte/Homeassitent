@@ -112,6 +112,8 @@ pub struct AppSnapshot {
     pub providers: Vec<crate::resolve::ProviderStatus>,
     /// Verbindungswächter: automatische Wiederherstellungen, ununterbrochen gesund seit.
     pub reliability: crate::guardian::ReliabilityInfo,
+    /// Session-Puls: Eingangszeitpunkte aller Wünsche dieser Session (ms) und ob abgelehnt.
+    pub timeline: Vec<(i64, bool)>,
 }
 
 /// Höchstdauer der Update-Pause (siehe `update_pause_active`).
@@ -508,6 +510,13 @@ impl Runtime {
             awaiting: self.queue.store.awaiting(),
             providers: self.queue.resolver.provider_status(),
             reliability: self.reliability.lock_safe().clone(),
+            timeline: self
+                .queue
+                .store
+                .session_timeline(self.queue.session_started_ms())
+                .into_iter()
+                .map(|(t, st)| (t, st == "rejected"))
+                .collect(),
         }
     }
 

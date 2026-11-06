@@ -62,7 +62,7 @@ export function NowPlayingCard({ snap, onConnect }: { snap: AppSnapshot; onConne
       <HeroFrame>
         <div className="stage-body">
           <div className="stage-text">
-            <span className="stage-kicker">{t("np.now_playing")}</span>
+            <span className="stage-kicker"><span className="lamp" aria-hidden="true" />{t("np.now_playing")}</span>
             <h2 className="stage-title">{unknown ? t("np.unknown") : t("np.inactive")}</h2>
             {!unknown && <span className="muted">{t("np.nothing_hint")}</span>}
             {!unknown && (
@@ -94,7 +94,7 @@ export function NowPlayingCard({ snap, onConnect }: { snap: AppSnapshot; onConne
       <div className="stage-body">
         <div className="stage-main">
           <div className="stage-text">
-            <span className="stage-kicker">{kicker}{track?.explicit ? <Badge title={t("q.explicit_label")}>{t("q.explicit")}</Badge> : null}</span>
+            <span className="stage-kicker"><span className={`lamp ${pb.is_playing && !stale ? "on" : ""}`} aria-hidden="true" />{kicker}{track?.explicit ? <Badge title={t("q.explicit_label")}>{t("q.explicit")}</Badge> : null}</span>
             <h2 className="stage-title" title={title} style={{ ["--lw" as string]: Math.max(6, ...title.split(/\s+/).map((w) => w.length)) }}>{title}</h2>
             <div className="stage-artist ellipsis" title={sub}>{sub}</div>
             {kind === "track" && track!.album ? <div className="stage-album ellipsis">{track!.album}</div> : null}
@@ -123,6 +123,7 @@ export function NowPlayingCard({ snap, onConnect }: { snap: AppSnapshot; onConne
                 <>
                   <div className="bar" role="progressbar" aria-label={`${duration(progress)} / ${duration(dur)}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
                     <i style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }} />
+                    <span className="knob-track" style={{ transform: `translateX(${Math.max(0, Math.min(100, pct))}%)` }}><span className="knob" /></span>
                   </div>
                   <div className="stage-times num"><span>{duration(progress)}</span><span>{duration(dur)}</span></div>
                 </>

@@ -312,6 +312,8 @@ export interface OverlaySettings {
   minimal: WidgetStyle;
   glass: WidgetStyle;
   queue: WidgetStyle;
+  /** Ab 0.3: Signal-Look. Fehlt bei älteren Einstellungen (Backend ergänzt Standardwerte). */
+  neon: WidgetStyle;
   control_enabled: boolean;
 }
 
@@ -582,6 +584,18 @@ export interface AppSnapshot {
   update_pause: boolean;
   awaiting?: SongRequest[];
   providers?: ProviderStatus[];
+  /** Verbindungswächter: automatische Wiederherstellungen seit App-Start. */
+  reliability?: ReliabilityInfo;
+  /** Session-Puls: [Eingang (ms), abgelehnt] für jeden Wunsch dieser Session. */
+  timeline?: [number, boolean][];
+}
+
+export interface ReliabilityInfo {
+  heals: number;
+  last_heal_ms: number | null;
+  last_heal_service: "spotify" | "twitch" | null;
+  last_heal_reason: string | null;
+  healthy_since_ms: number | null;
 }
 
 export interface Check {

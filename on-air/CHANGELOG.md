@@ -1,5 +1,29 @@
 # Änderungen
 
+## 0.3.0 – Großes Update „Signal“
+
+**Zuverlässigkeit: nie wieder von Hand neu verbinden**
+- Neuer Verbindungswächter: prüft alle 10 Sekunden Spotify und Twitch unabhängig von deren eigener Wiederholungslogik. Hängende Zustände (keine neuen Daten, überfällige Wiederholung, hängender Verbindungsaufbau, Dienst steht still) werden selbst repariert – mit wachsenden Abständen (1, 2, 4 … höchstens 10 Minuten), damit nie eine Schleife entsteht. Rate-Limits und Sperren von Spotify werden respektiert. Jeder Eingriff steht im Aktivitätsprotokoll.
+- Twitch „gesperrt“ ist keine Sackgasse mehr: nach 5 Minuten neuer Versuch, danach alle 10 bis 30 Minuten – vorher half nur ein Neustart.
+- Tokens werden im Hintergrund 15 Minuten vor Ablauf erneuert (vorher 60 Sekunden, und nur bei der nächsten Anfrage). Ein kurzer Netzaussetzer genau zum Ablauf nach einer Stunde führte bisher dazu, dass Spotify-Anfragen scheiterten – die typische „nach einer Stunde neu verbinden“-Situation.
+- HTTP-Verbindungen werden nach 20 statt 60 Sekunden Leerlauf verworfen, mit TCP-Keepalive. Bisher konnte die App eine Verbindung wiederverwenden, die der Load-Balancer von Twitch (60 s) gerade geschlossen hatte → Chatantworten, Abos oder Token-Refresh schlugen sporadisch fehl. Lesende Anfragen werden bei einem Übertragungsfehler einmal mit frischer Verbindung wiederholt.
+- Ein Token-Refresh kappt keine laufende Twitch-Verbindung mehr (auch nicht, wenn Twitch die Berechtigungen in anderer Reihenfolge liefert).
+- Chatantworten werden bei einem kurzen Aussetzer (Netz, 5xx, 429) einmal wiederholt statt still verloren; Puffer für 16 statt 5 Antworten.
+- Spotify-Sperre (403) wird nach 3 statt 10 Minuten selbst erneut geprüft.
+
+**Neues Design „Signal“ für die ganze App**
+- Fast schwarzer Studio-Grund, ein Signal-Akzent in Neon-Limette mit Leuchtlinien, die rote ON-AIR-Lampe für „live/offen“, große Kino-Typografie.
+- Neue Navigation: Seitenleiste mit allen Bereichen und der „Signal“-Karte (Zustand aller Verbindungen, „stabil seit …“, automatische Reparaturen). Schwebendes Dock unten mit Requests, Kanalpunkten, Streamende, Uhr und Dienststatus.
+- Live-Seite: Bühne im Filmplakat-Stil (Titel groß, Interpret als Konturschrift, unscharfes Cover als Hintergrund, leuchtender Fortschritt mit Knopf); „Als Nächstes“ als Playlist-Karte mit hervorgehobenem nächsten Song.
+- Kompaktmodus als Mini-Player mit Cover-Hintergrund, Zurück/Play/Weiter und Uhr.
+- Alle Seiten (Warteschlange, Verlauf, Overlays, Einstellungen, Dialoge, Onboarding) im neuen Look; Hell-Modus angepasst.
+
+**Neue Funktionen**
+- Session-Puls auf der Live-Seite: Wünsche pro 10 Minuten als leuchtende Kurve mit markiertem Höhepunkt, Wünsche pro Stunde, aktivste Person; umschaltbar Session / letzte Stunde.
+- Befehlspalette (Strg+K): Seiten öffnen, Requests pausieren/öffnen, Song hinzufügen, Skip, Play/Pause, Streamende +15 Min, Kanalpunkte an/aus, Kompaktmodus, Verbindung prüfen, Hell/Dunkel – alles per Tastatur.
+- Neues OBS-Widget „Neon“ (`/widget/neon`) im Signal-Look: ON-AIR-Lampe, Kino-Titel, leuchtender Fortschritt mit Knopf; Farben und Größe wie gewohnt einstellbar.
+- Jede Seite beginnt beim Wechsel oben.
+
 ## 0.2.0
 
 - Zuverlässigkeit bei langen Streams (Bot reagiert nicht mehr, obwohl alles „verbunden“ aussieht): Hintergrundaufgaben (Twitch, Chat-Antworten, Spotify, Beobachter) laufen jetzt unter Aufsicht – ein interner Fehler erscheint im Aktivitätsprotokoll („Interner Fehler in …“) und die Aufgabe startet von selbst neu, statt still stehenzubleiben. Ein einzelner Fehler sperrt außerdem keine gemeinsam genutzten Daten mehr für den Rest der Sitzung. Kommt 20 Minuten lang keine Chatnachricht an, wird die Twitch-Verbindung unbemerkt erneuert (frische Verbindung mit frischem Abo, ohne Statuswechsel). Ist die Twitch-API drei Prüfungen in Folge (15 Minuten) nicht nutzbar, zeigt die App „Verbindung wird neu aufgebaut“ statt „verbunden“.
