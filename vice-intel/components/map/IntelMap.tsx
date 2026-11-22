@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Crosshair, Egg, Lock, MapPin, Minus, Plus, RotateCcw, Search, Wallet, X } from "lucide-react";
 import type { EntityKind } from "@/lib/content/schema";
 import type { MapPin as Pin } from "@/lib/map/points";
-import { KEYS, LAKE, LAND_PATH, MAP_DISCLAIMER, ROADS } from "@/lib/map/leonida";
+import { HAS_MAP_IMAGE, MapBase, mapDisclaimer } from "./MapBase";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { artUrl, KIND_META } from "@/lib/ui-meta";
 import { cn } from "@/lib/cn";
@@ -20,7 +20,8 @@ const KIND_STYLE: Record<EntityKind, { color: string; icon: typeof MapPin }> = {
 
 type View = { x: number; y: number; s: number }; // centre + zoom
 
-export function IntelMap({ pins, initialFocus, kinds, height = "h-[70vh]" }: { pins: Pin[]; initialFocus?: string; kinds?: EntityKind[]; height?: string }) {
+export function IntelMap({ pins, initialFocus, kinds, height = "h-[70vh]", calibrate = false }: { pins: Pin[]; initialFocus?: string; kinds?: EntityKind[]; height?: string; calibrate?: boolean }) {
+  const [probe, setProbe] = useState<{ x: number; y: number } | null>(null);
   const available = useMemo(() => (kinds ?? (Array.from(new Set(pins.map((p) => p.kind))) as EntityKind[])), [pins, kinds]);
   const [enabled, setEnabled] = useState<Set<EntityKind>>(new Set(available));
   const [q, setQ] = useState("");
@@ -31,6 +32,7 @@ export function IntelMap({ pins, initialFocus, kinds, height = "h-[70vh]" }: { p
   const drag = useRef<{ px: number; py: number; vx: number; vy: number; moved: boolean } | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchStart = useRef<{ d: number; s: number } | null>(null);
+  const lastMoved = useRef(false);
 
   const visible = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -152,7 +154,19 @@ export function IntelMap({ pins, initialFocus, kinds, height = "h-[70vh]" }: { p
             if (Math.abs(e.clientX - d.px) + Math.abs(e.clientY - d.py) > 4) d.moved = true;
             setView((v) => clamp({ ...v, x: d.vx - dx, y: d.vy - dy }));
           }}
+          onClick={(e) => {
+            if (!calibrate || lastMoved.current) return;
+            const svg = svgRef.current!;
+            const pt = svg.createSVGPoint();
+            pt.x = e.clientX;
+            pt.y = e.clientY;
+            const m = svg.getScreenCTM();
+            if (!m) return;
+            const p = pt.matrixTransform(m.inverse());
+            setProbe({ x: Math.round(p.x), y: Math.round(p.y) });
+          }}
           onPointerUp={(e) => {
+            lastMoved.current = Boolean(drag.current?.moved);
             pointers.current.delete(e.pointerId);
             if (pointers.current.size < 2) pinchStart.current = null;
             if (pointers.current.size === 0) drag.current = null;
@@ -163,28 +177,15 @@ export function IntelMap({ pins, initialFocus, kinds, height = "h-[70vh]" }: { p
           }}
         >
           <defs>
-            <pattern id="im-grid" width="25" height="25" patternUnits="userSpaceOnUse">
-              <path d="M25 0H0V25" fill="none" stroke="#fff" strokeOpacity=".035" />
-            </pattern>
             <radialGradient id="im-glow">
               <stop offset="0" stopColor="#a855f7" stopOpacity=".6" />
               <stop offset="1" stopColor="#a855f7" stopOpacity="0" />
             </radialGradient>
           </defs>
-          <rect x="-500" y="-500" width="2000" height="2000" fill="#0a1424" />
-          <rect x="-500" y="-500" width="2000" height="2000" fill="url(#im-grid)" />
-          <path d={LAND_PATH} fill="#173326" stroke="#3d6b55" strokeWidth="2.5" />
-          <path d={LAND_PATH} fill="none" stroke="#3d6b55" strokeOpacity=".25" strokeWidth="14" />
-          <ellipse {...LAKE} fill="#0f2338" stroke="#23466b" />
-          {KEYS.map((k, i) => (
-            <ellipse key={i} cx={k.cx} cy={k.cy} rx={k.rx} ry={k.ry} transform={`rotate(${k.rot} ${k.cx} ${k.cy})`} fill="#173326" stroke="#3d6b55" strokeWidth="2" />
-          ))}
-          {ROADS.map((d, i) => (
-            <path key={i} d={d} fill="none" stroke="#c9b8e8" strokeOpacity=".3" strokeWidth={2.5 / Math.sqrt(view.s)} strokeDasharray={i === 2 ? "6 6" : undefined} />
-          ))}
+          <MapBase zoom={view.s} id="im" />
 
           {/* Region labels from official locations */}
-          {pins
+          {!HAS_MAP_IMAGE && pins
             .filter((p) => p.kind === "location")
             .map((p) => (
               <text key={`l-${p.id}`} x={p.x} y={p.y - 24 / Math.sqrt(view.s)} textAnchor="middle" fill="#e2e8f0" fillOpacity=".55" fontSize={15 / Math.sqrt(view.s)} fontWeight={700} letterSpacing="2" className="pointer-events-none uppercase">
@@ -217,13 +218,19 @@ export function IntelMap({ pins, initialFocus, kinds, height = "h-[70vh]" }: { p
           })}
         </svg>
 
+        {calibrate ? (
+          <div className="absolute bottom-3 left-3 rounded-xl border border-violet-400/40 bg-ink-950/85 px-3 py-2 font-mono text-xs backdrop-blur">
+            {probe ? <>mapPoint: {"{"} x: {probe.x}, y: {probe.y} {"}"}</> : "Calibration: click the map to read coordinates"}
+          </div>
+        ) : null}
+
         {/* Controls */}
         <div className="absolute right-3 top-3 flex flex-col overflow-hidden rounded-xl border border-white/10 bg-ink-950/70 backdrop-blur">
           <button type="button" aria-label="Zoom in" onClick={() => zoom(1.4)} className="p-2.5 hover:bg-white/10"><Plus className="h-4 w-4" /></button>
           <button type="button" aria-label="Zoom out" onClick={() => zoom(1 / 1.4)} className="border-t border-white/10 p-2.5 hover:bg-white/10"><Minus className="h-4 w-4" /></button>
           <button type="button" aria-label="Reset view" onClick={() => setView({ x: 500, y: 520, s: 1 })} className="border-t border-white/10 p-2.5 hover:bg-white/10"><RotateCcw className="h-4 w-4" /></button>
         </div>
-        <p className="pointer-events-none absolute left-3 top-3 max-w-[60%] rounded-lg bg-ink-950/60 px-2 py-1 text-[10px] text-fg-faint backdrop-blur">{MAP_DISCLAIMER}</p>
+        <p className="pointer-events-none absolute left-3 top-3 max-w-[60%] rounded-lg bg-ink-950/60 px-2 py-1 text-[10px] text-fg-faint backdrop-blur">{mapDisclaimer()}</p>
 
         {/* Preview card */}
         {selected ? (

@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import { Media } from "./Media";
 import type { ArtScene } from "@/lib/content/schema";
+import type { SiteSlot } from "@/content/site-media";
+import { slotMedia } from "@/lib/site-media";
 
-export function PageIntro({ title, eyebrow, children, scene, seed, icon }: { title: string; eyebrow?: string; children?: ReactNode; scene: ArtScene; seed: number; icon?: ReactNode }) {
+export function PageIntro({ title, eyebrow, children, scene, seed, icon, slot }: { title: string; eyebrow?: string; children?: ReactNode; scene: ArtScene; seed: number; icon?: ReactNode; slot?: SiteSlot }) {
   return (
     <section className="relative isolate overflow-hidden border-b border-white/[0.06]">
-      <Media media={{ alt: "", art: { scene, seed } }} priority className="absolute inset-0 -z-10 h-full w-full opacity-60" />
+      <Media media={slot ? slotMedia(slot, scene, seed) : { alt: "", art: { scene, seed } }} priority className="absolute inset-0 -z-10 h-full w-full opacity-60" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-ink-950 via-ink-950/80 to-ink-950/30" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-ink-950 to-transparent" />
       <div className="container-page py-8 sm:py-12">

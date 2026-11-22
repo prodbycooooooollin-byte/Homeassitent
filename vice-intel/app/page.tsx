@@ -10,6 +10,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getByKind, hrefFor } from "@/lib/content/repository";
 import { STATUS_META } from "@/lib/ui-meta";
 import { cn } from "@/lib/cn";
+import { slotMedia } from "@/lib/site-media";
 
 const EXAMPLE_QUESTIONS = [
   "Where is the crashed saucer?",
@@ -31,7 +32,7 @@ export default function HomePage() {
       {/* Hero */}
       <section className="relative isolate overflow-hidden">
         <Media
-          media={{ alt: "", art: { scene: "skyline", seed: 11 } }}
+          media={slotMedia("hero", "skyline", 11)}
           priority
           className="absolute inset-0 -z-10 h-full w-full opacity-80 [&_img]:object-[50%_70%]"
         />
@@ -81,7 +82,7 @@ export default function HomePage() {
                   i === 0 && "lg:min-h-[420px]",
                 )}
               >
-                <Media media={{ alt: "", art: { scene: m.scene, seed: m.seed } }} className="absolute inset-0 -z-10 h-full w-full" priority={i < 2} />
+                <Media media={slotMedia(m.slot, m.scene, m.seed)} className="absolute inset-0 -z-10 h-full w-full" priority={i < 2} />
                 <div className="absolute inset-0 -z-10 bg-gradient-to-t from-ink-950/95 via-ink-950/35 to-transparent" />
                 <div className="flex items-center gap-2.5">
                   <span className="grid h-9 w-9 place-items-center rounded-xl border border-violet-400/30 bg-ink-950/50 text-violet-300 backdrop-blur">

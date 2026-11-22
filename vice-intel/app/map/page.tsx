@@ -5,7 +5,7 @@ import { getMapPins } from "@/lib/map/points";
 
 export const metadata: Metadata = { title: "Map", description: "Searchable map of locations, secrets, missions and activities in Leonida." };
 
-export default function MapPage({ searchParams }: { searchParams: { focus?: string } }) {
+export default function MapPage({ searchParams }: { searchParams: { focus?: string; calibrate?: string } }) {
   const pins = getMapPins();
   return (
     <div className="container-page pt-6">
@@ -18,7 +18,7 @@ export default function MapPage({ searchParams }: { searchParams: { focus?: stri
           <p className="text-sm text-fg-muted">Every place-based record in the knowledge base. Tap a pin for a preview.</p>
         </div>
       </div>
-      <IntelMap pins={pins} initialFocus={searchParams.focus} />
+      <IntelMap pins={pins} initialFocus={searchParams.focus} calibrate={searchParams.calibrate === "1"} />
     </div>
   );
 }

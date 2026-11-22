@@ -12,7 +12,7 @@ export default function UnlocksPage() {
   const unlocks = getByKind("unlock");
   return (
     <>
-      <PageIntro title="Unlocks" eyebrow="Module 03" scene="garage" seed={213} icon={<Lock className="h-6 w-6" />}>
+      <PageIntro slot="unlocks" title="Unlocks" eyebrow="Module 03" scene="garage" seed={213} icon={<Lock className="h-6 w-6" />}>
         Every card answers “how do I get this?” in one line. Open it for requirements, the unlock path and where to go.
       </PageIntro>
       <div className="container-page mt-6">

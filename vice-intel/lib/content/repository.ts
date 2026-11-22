@@ -9,6 +9,7 @@
 import { demoRecords } from "@/content/demo";
 import { officialRecords } from "@/content/official";
 import { sources as sourceList } from "@/content/sources";
+import { mediaOverrides } from "@/content/media-overrides";
 import {
   entitySchema,
   sourceSchema,
@@ -40,7 +41,9 @@ function build(): Store {
   const issues: IntegrityIssue[] = [];
   const all: Entity[] = [];
 
-  for (const raw of [...officialRecords, ...demoRecords]) {
+  for (const base of [...officialRecords, ...demoRecords]) {
+    const extra = mediaOverrides[(base as { id: string }).id];
+    const raw = extra ? { ...base, media: [...extra, ...((base as { media?: unknown[] }).media ?? [])] } : base;
     const parsed = entitySchema.safeParse(raw);
     if (!parsed.success) {
       const id = (raw as { id?: string }).id ?? "unknown";
@@ -69,6 +72,10 @@ function build(): Store {
     if (bySlug.has(slugKey)) issues.push({ level: "error", recordId: e.id, message: "duplicate slug" });
     byId.set(e.id, e);
     bySlug.set(slugKey, e);
+  }
+
+  for (const id of Object.keys(mediaOverrides)) {
+    if (!byId.has(id)) issues.push({ level: "error", recordId: id, message: "media override for unknown record" });
   }
 
   const backlinks = new Map<string, Set<string>>();

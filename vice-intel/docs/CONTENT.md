@@ -40,3 +40,17 @@ estimated payout.
 
 `mapPoint` uses the schematic 1000×1000 coordinate space (`lib/map/leonida.ts`). Set `precision` honestly: `exact`
 only when the position is verified, `approximate` for a nearby pin, `region` for a whole area.
+
+## Using your own images and a real map
+
+No code changes are needed:
+
+| What | Where |
+| --- | --- |
+| Home hero, module tiles, page headers | Put the image in `public/media/`, register it in `content/site-media.ts` |
+| Images for a specific record (header + gallery) | `public/media/` + `content/media-overrides.ts` (key = record id) |
+| Intel Map background | `public/map/` + `content/map.ts`, then use `/map?calibrate=1` to read pin coordinates |
+
+Only use images you have the right to publish, such as your own console captures. Material taken from Rockstar's
+trailers, website or press kits is copyrighted, and using it requires permission. Mark real in-game captures with
+`authenticGameplay: true` and always fill in `attribution`.
