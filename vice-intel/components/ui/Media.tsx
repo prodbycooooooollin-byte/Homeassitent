@@ -15,7 +15,7 @@ export function Media({
   priority = false,
   label = false,
 }: {
-  media: Pick<MediaT, "alt" | "src" | "art" | "focal" | "width" | "height">;
+  media: Pick<MediaT, "alt" | "src" | "art" | "focal" | "width" | "height"> & { fit?: MediaT["fit"]; authenticGameplay?: boolean };
   className?: string;
   sizes?: string;
   priority?: boolean;
@@ -24,7 +24,16 @@ export function Media({
 }) {
   const pos = media.focal ? `${media.focal.x * 100}% ${media.focal.y * 100}%` : "50% 50%";
   return (
-    <div className={cn(className?.includes("absolute") ? "" : "relative", "overflow-hidden bg-gradient-to-br from-violet-900/60 via-ink-800 to-ink-900", className)}>
+    <div
+      className={cn(
+        className?.includes("absolute") ? "" : "relative",
+        "overflow-hidden",
+        media.fit === "contain"
+          ? "bg-[radial-gradient(70%_60%_at_50%_45%,rgb(var(--violet-600)/0.35),transparent_70%),linear-gradient(180deg,rgb(var(--ink-800)),rgb(var(--ink-950)))]"
+          : "bg-gradient-to-br from-violet-900/60 via-ink-800 to-ink-900",
+        className,
+      )}
+    >
       {media.src ? (
         <Image
           src={media.src}
@@ -32,7 +41,7 @@ export function Media({
           fill
           sizes={sizes}
           priority={priority}
-          className="zoom-on-hover object-cover"
+          className={cn("zoom-on-hover", media.fit === "contain" ? "object-contain p-[8%] drop-shadow-[0_18px_24px_rgba(0,0,0,0.65)]" : "object-cover")}
           style={{ objectPosition: pos }}
         />
       ) : media.art ? (
@@ -47,9 +56,9 @@ export function Media({
           style={{ objectPosition: pos }}
         />
       ) : null}
-      {label && media.art && !media.src ? (
+      {label && !media.authenticGameplay ? (
         <span className="absolute bottom-2 right-2 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/70 backdrop-blur">
-          Illustration
+          {media.src ? "Concept art" : "Illustration"}
         </span>
       ) : null}
     </div>

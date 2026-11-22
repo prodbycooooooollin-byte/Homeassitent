@@ -39,7 +39,7 @@ export function DetailHero({
       </div>
       <div className="container-page mt-3">
         <div className="relative overflow-hidden rounded-3xl border border-white/[0.08]">
-          <Media media={e.media[0]} priority label className="aspect-[4/5] min-[480px]:aspect-[4/3] sm:aspect-[21/9]" sizes="100vw" />
+          <Media media={e.media[0]} priority label className="aspect-[4/5] min-[480px]:aspect-[4/3] sm:aspect-[21/9] sm:[&_img.object-contain]:px-[24%] sm:[&_img.object-contain]:pb-[12%]" sizes="100vw" />
           <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/40 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 p-4 sm:p-7">
             <div className="flex flex-wrap items-center gap-2">

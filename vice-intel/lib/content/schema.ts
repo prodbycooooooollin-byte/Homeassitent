@@ -89,6 +89,8 @@ export const mediaSchema = z
     height: z.number().int().positive().optional(),
     /** Original, procedurally generated illustration used when no licensed image exists. */
     art: z.object({ scene: z.enum(ART_SCENES), seed: z.number().int() }).optional(),
+    /** "contain" shows the whole object (cut-out / product shots) on a studio backdrop. */
+    fit: z.enum(["cover", "contain"]).optional(),
     /** Focal point for consistent cropping across aspect ratios (0–1). */
     focal: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }).optional(),
     attribution: z.object({

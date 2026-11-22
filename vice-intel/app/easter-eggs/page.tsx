@@ -17,7 +17,7 @@ export default function EggsPage({ searchParams }: { searchParams: { view?: stri
   const view = searchParams.view === "map" ? "map" : "grid";
   return (
     <>
-      <PageIntro slot="easter-eggs" title="Easter Egg Hunter" eyebrow="Module 04" scene="night-sky" seed={302} icon={<Egg className="h-6 w-6" />}>
+      <PageIntro slot="easter-eggs-header" title="Easter Egg Hunter" eyebrow="Module 04" scene="night-sky" seed={302} icon={<Egg className="h-6 w-6" />}>
         Confirmed secrets, theories and community claims — always kept apart and clearly labelled.
       </PageIntro>
       <div className="container-page mt-6">

@@ -13,7 +13,7 @@ export default function MissionsPage() {
   const missions = getByKind("mission");
   return (
     <>
-      <PageIntro slot="missions" title="Mission Solver" eyebrow="Module 02" scene="harbor" seed={101} icon={<Crosshair className="h-6 w-6" />}>
+      <PageIntro slot="missions-header" title="Mission Solver" eyebrow="Module 02" scene="harbor" seed={101} icon={<Crosshair className="h-6 w-6" />}>
         Open a mission and pick the objective you&apos;re on. You get the steps, the usual failure point and a backup plan — not a wall of text.
       </PageIntro>
       <div className="container-page mt-6">

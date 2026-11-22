@@ -24,7 +24,7 @@ export default function MoneyPage() {
   }));
   return (
     <>
-      <PageIntro slot="money" title="Money Intel" eyebrow="Module 05" scene="vault" seed={405} icon={<Wallet className="h-6 w-6" />}>
+      <PageIntro slot="money-header" title="Money Intel" eyebrow="Module 05" scene="vault" seed={405} icon={<Wallet className="h-6 w-6" />}>
         In-game cash only. Filter by what you can do right now, then compare payout against time. Values always show whether they&apos;re verified or estimated.
       </PageIntro>
       <div className="container-page mt-6">

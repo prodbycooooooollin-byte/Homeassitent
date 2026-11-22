@@ -32,3 +32,14 @@ describe("content repository", () => {
     expect(hrefFor(egg)).toBe("/easter-eggs/demo-crashed-saucer");
   });
 });
+
+describe("asset pack media", () => {
+  it("never labels concept art as authentic gameplay and always attributes it", () => {
+    for (const e of getAll())
+      for (const m of e.media)
+        if (m.src?.startsWith("/media/concept/")) {
+          expect(m.authenticGameplay).toBe(false);
+          expect(m.attribution.label).toMatch(/concept art/i);
+        }
+  });
+});
