@@ -1,0 +1,57 @@
+{
+  "key": "Malphite", "name": "Malphite", "profileVersion": "1.0.0",
+  "authoredAgainst": "Wissensstand Patch 25.x", "reviewStatus": "fachlich nicht validiert",
+  "supportLevel": "supported", "cls": "tank", "ranged": false, "attackRange": 125, "resource": "mana",
+  "base": { "hp": 665, "hpg": 104, "ar": 37, "arg": 4.95, "mr": 28, "mrg": 2.05, "ad": 62, "adg": 4, "as": 0.736, "asg": 0.03, "asRatio": 0.736, "mana": 280, "manag": 60 },
+  "skillOrder": ["Q", "E", "W"],
+  "abilities": {
+    "Q": { "name": "Seismic Shard", "damageType": "magic", "base": [70, 120, 170, 220, 270], "apRatio": 0.6, "cooldown": [8, 7.5, 7, 6.5, 6], "maxRank": 5 },
+    "E": { "name": "Ground Slam", "damageType": "magic", "base": [70, 110, 150, 190, 230], "apRatio": 0.6, "armorRatio": 0.4, "cooldown": [7, 6.5, 6, 5.5, 5], "maxRank": 5 },
+    "R": { "name": "Unstoppable Force", "damageType": "magic", "base": [200, 300, 400], "apRatio": 0.9, "cooldown": [130, 105, 80], "maxRank": 3 }
+  },
+  "selfMods": [
+    { "stat": "armor", "ability": "W", "byRank": [0.1, 0.15, 0.2, 0.25, 0.3], "pct": true, "note": "W-Passiv: prozentuale Rüstungserhöhung (Wert zu prüfen)" }
+  ],
+  "coverage": {
+    "modeled": ["R-Q-E-Combo inkl. Rüstungsskalierung von E", "prozentuale Rüstungserhöhung durch W", "Tank-Bewertung über effektive Lebenspunkte gegen gewichtete Bedrohung"],
+    "unmodeled": ["Passiv-Schild (9 % max. Leben)", "W-Autoangriffsschaden", "Angriffstempo-Reduktion durch E", "Engage-Wert von R (nur als Utility-Annahme)"]
+  },
+  "playstyles": [
+    {
+      "id": "tank", "name": "Tank / Engage",
+      "description": "Frontline mit R-Engage; skaliert über Rüstung, schützt das Team.",
+      "roles": ["TOP", "UTILITY"],
+      "weights": { "offense": 0.15, "defense": 0.62, "utility": 0.23 },
+      "itemTags": ["tank"],
+      "extraCandidates": [3047, 3111, 3158, 6665],
+      "excluded": [],
+      "targetAccess": { "frontline": 0.8, "backline": 0.7 },
+      "manaNeed": 0.25,
+      "scenarios": [
+        { "id": "engage", "name": "R-Engage-Combo", "duration": 3, "autoUptime": 0.3, "weight": 1.0, "casts": { "R": 1, "Q": 1, "E": 1 }, "targetMissingHp": 0.1 }
+      ],
+      "synergies": [
+        { "item": 3075, "note": "Rüstung erhöht zusätzlich den E-Schaden." },
+        { "item": 3110, "note": "Rüstung, Tempo und Mana – passt zu Rüstungsskalierung." }
+      ]
+    },
+    {
+      "id": "ap", "name": "AP-Burst",
+      "description": "One-Shot-Engage mit R; bewusst gewählte, riskantere Spielweise.",
+      "roles": ["TOP", "MIDDLE"],
+      "weights": { "offense": 0.62, "defense": 0.28, "utility": 0.1 },
+      "itemTags": ["ap-burst"],
+      "extraCandidates": [3020, 3047, 3111, 3157, 3102],
+      "excluded": [],
+      "targetAccess": { "frontline": 0.5, "backline": 0.95 },
+      "manaNeed": 0.25,
+      "scenarios": [
+        { "id": "engage", "name": "R-Engage-Combo", "duration": 3, "autoUptime": 0.2, "weight": 1.0, "casts": { "R": 1, "Q": 1, "E": 1 }, "targetMissingHp": 0.1 }
+      ],
+      "synergies": [
+        { "item": 3089, "note": "Hohe AP-Ratios auf R/Q/E." }
+      ]
+    }
+  ],
+  "defaultPlaystyle": { "TOP": "tank", "UTILITY": "tank", "MIDDLE": "ap" }
+}

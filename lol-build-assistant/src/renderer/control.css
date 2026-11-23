@@ -1,0 +1,33 @@
+:root {
+  --bg: #0f131b; --card: #161c27; --line: #263042; --text: #e6ebf2; --muted: #93a0b4;
+  --gold: #d8b45a; --accent: #6aa7ff; --ok: #4fc08d; --warn: #e7b04a; --err: #e2626a;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f3f5f9; --card: #ffffff; --line: #dde3ec; --text: #1a2230; --muted: #5d6a7d; --gold: #9a7420; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+h1 { font-size: 17px; margin: 0; font-weight: 600; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+main { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; padding: 16px 20px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+.wide { grid-column: 1 / -1; }
+footer { color: var(--muted); font-size: 12px; padding: 0 20px 18px; }
+label { display: block; margin: 8px 0 3px; color: var(--muted); font-size: 12px; }
+select, input[type=text], input[type=number] { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #07101f; }
+button.small { padding: 2px 8px; font-size: 12px; }
+button:disabled { opacity: .5; cursor: default; }
+.seg button.on { border-color: var(--gold); color: var(--gold); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.warn { border-left: 3px solid var(--warn); padding: 6px 10px; background: rgba(231,176,74,.08); margin: 8px 0; font-size: 13px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 99px; margin: 2px; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+td, th { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.ok { color: var(--ok); } .bad { color: var(--err); }
+.fav { font-size: 16px; font-weight: 600; color: var(--gold); }
+ul { margin: 4px 0; padding-left: 18px; }

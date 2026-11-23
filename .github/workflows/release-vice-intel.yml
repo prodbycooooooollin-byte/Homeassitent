@@ -1,0 +1,99 @@
+name: Release VICE INTEL (Windows)
+
+# Builds the Windows installer (VICE-INTEL-Setup.exe) and publishes it to GitHub Releases.
+#  - "vi-v<version>"      : versioned release (one per version in vice-intel/package.json)
+#  - "vice-intel-latest"  : rolling release the in-app auto-updater reads (latest.yml + installer)
+# The app only updates when the version in package.json goes up.
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'vice-intel/**'
+      - '.github/workflows/release-vice-intel.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-vice-intel
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: vice-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vice-intel/package-lock.json
+
+      - name: Version
+        shell: bash
+        run: echo "VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Install
+        run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Build installer
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vice-intel-windows
+          path: |
+            vice-intel/release/VICE-INTEL-Setup.exe
+            vice-intel/release/VICE-INTEL-Setup.exe.blockmap
+            vice-intel/release/latest.yml
+          if-no-files-found: error
+
+      - name: Versioned release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vi-v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: VICE INTEL ${{ env.VERSION }}
+          make_latest: false
+          body: |
+            **Download:** `VICE-INTEL-Setup.exe` → run it once. The app updates itself from then on.
+
+            Windows may show a SmartScreen warning because the installer is not code-signed: click
+            "More info" → "Run anyway".
+
+            Unofficial fan project — not affiliated with Rockstar Games or Take-Two Interactive.
+          files: |
+            vice-intel/release/VICE-INTEL-Setup.exe
+            vice-intel/release/VICE-INTEL-Setup.exe.blockmap
+            vice-intel/release/latest.yml
+          overwrite_files: true
+
+      - name: Rolling release for the auto-updater
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vice-intel-latest
+          target_commitish: ${{ github.sha }}
+          name: VICE INTEL (latest)
+          make_latest: false
+          body: |
+            Always the newest VICE INTEL for Windows (currently ${{ env.VERSION }}).
+            Download `VICE-INTEL-Setup.exe`. Installed apps update automatically.
+          files: |
+            vice-intel/release/VICE-INTEL-Setup.exe
+            vice-intel/release/VICE-INTEL-Setup.exe.blockmap
+            vice-intel/release/latest.yml
+          overwrite_files: true

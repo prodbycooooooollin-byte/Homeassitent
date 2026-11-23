@@ -1,0 +1,35 @@
+name: VICE INTEL CI
+
+# Lint, type-check, test, validate content and build vice-intel/ on every change to it.
+
+on:
+  push:
+    paths:
+      - 'vice-intel/**'
+      - '.github/workflows/ci-vice-intel.yml'
+  pull_request:
+    paths:
+      - 'vice-intel/**'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vice-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vice-intel/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run content:check
+      - run: npm run build

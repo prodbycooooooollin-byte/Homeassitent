@@ -1,0 +1,21 @@
+{
+  "id": "jinx-healers",
+  "name": "Jinx gegen starke Heilung",
+  "gameVersion": null,
+  "gameTime": 1200,
+  "goldRate": 6.4,
+  "me": { "champion": "Jinx", "role": "BOTTOM", "level": 13, "gold": 1500, "items": [3006, 3031, 6672] },
+  "allies": [
+    { "champion": "Malphite", "role": "TOP", "level": 12, "items": [3047, 3068] },
+    { "champion": "LeeSin", "role": "JUNGLE", "level": 12, "items": [3047, 3071] },
+    { "champion": "Orianna", "role": "MIDDLE", "level": 13, "items": [3020, 6655] },
+    { "champion": "Thresh", "role": "UTILITY", "level": 11, "items": [3111] }
+  ],
+  "enemies": [
+    { "champion": "Aatrox", "role": "TOP", "level": 13, "items": [3047, 3071, 3053] },
+    { "champion": "Warwick", "role": "JUNGLE", "level": 12, "items": [3047, 3153] },
+    { "champion": "Vladimir", "role": "MIDDLE", "level": 13, "items": [3020, 3116] },
+    { "champion": "Ezreal", "role": "BOTTOM", "level": 12, "items": [3158, 6692] },
+    { "champion": "Soraka", "role": "UTILITY", "level": 11, "items": [3158] }
+  ]
+}
