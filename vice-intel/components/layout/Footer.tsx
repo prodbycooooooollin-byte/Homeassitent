@@ -17,6 +17,7 @@ export function Footer() {
           <Link className="hover:text-fg" href="/map">Map</Link>
           <Link className="hover:text-fg" href="/scan">Intel Scan</Link>
           <Link className="hover:text-fg" href="/about">Sources &amp; trust</Link>
+          <Link className="hover:text-fg" href="/settings">Settings</Link>
           <Link className="hover:text-fg" href="/admin">Content desk</Link>
         </nav>
         <p className="text-xs leading-relaxed text-fg-faint">

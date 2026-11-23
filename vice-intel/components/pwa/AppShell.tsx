@@ -13,7 +13,7 @@ export function AppShell() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production" && !(window as unknown as { viceIntelDesktop?: unknown }).viceIntelDesktop) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
     const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone;
@@ -23,7 +23,8 @@ export function AppShell() {
     } catch {
       /* ignore */
     }
-    if (standalone || dismissed) return;
+    const desktop = Boolean((window as unknown as { viceIntelDesktop?: unknown }).viceIntelDesktop);
+    if (standalone || dismissed || desktop) return;
 
     const onBip = (e: Event) => {
       e.preventDefault();

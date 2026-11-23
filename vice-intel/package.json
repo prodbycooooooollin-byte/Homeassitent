@@ -1,8 +1,8 @@
 {
   "name": "vice-intel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "VICE INTEL — unofficial, AI-assisted GTA VI companion (fan project).",
+  "description": "VICE INTEL \u2014 unofficial, AI-assisted GTA VI companion (fan project).",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,7 +10,10 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "content:check": "tsx --tsconfig tsconfig.json scripts/check-content.ts"
+    "content:check": "tsx --tsconfig tsconfig.json scripts/check-content.ts",
+    "desktop:prepare": "next build && node scripts/prepare-desktop.mjs",
+    "desktop": "npm run desktop:prepare && electron .",
+    "dist:win": "npm run desktop:prepare && electron-builder --win --publish never"
   },
   "engines": {
     "node": ">=20"
@@ -20,6 +23,7 @@
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/sora": "^5.3.0",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.3.9",
     "lucide-react": "^0.460.0",
     "next": "^14.2.35",
     "react": "^18.3.1",
@@ -32,6 +36,8 @@
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.7.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.35",
     "postcss": "^8.5.33",
@@ -39,5 +45,58 @@
     "tsx": "^4.23.15",
     "typescript": "5.6",
     "vitest": "^3.2.7"
+  },
+  "main": "electron/main.cjs",
+  "author": "VICE INTEL",
+  "build": {
+    "appId": "com.viceintel.app",
+    "productName": "VICE INTEL",
+    "copyright": "Unofficial fan project \u2014 not affiliated with Rockstar Games or Take-Two Interactive",
+    "directories": {
+      "output": "release",
+      "buildResources": "electron/icons"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "app",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icons/icon.ico",
+      "artifactName": "VICE-INTEL-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VICE INTEL",
+      "installerIcon": "electron/icons/icon.ico",
+      "uninstallerIcon": "electron/icons/icon.ico"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/prodbycooooooollin-byte/Homeassitent/releases/download/vice-intel-latest"
+      }
+    ]
   }
 }

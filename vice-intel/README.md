@@ -57,6 +57,26 @@ npm run dev                   # http://localhost:3000
 
 CI (`.github/workflows/ci-vice-intel.yml`) runs all of these on changes to `vice-intel/`.
 
+## Windows app (.exe) with auto-updates
+
+- **Download:** GitHub → Releases → **VICE INTEL (latest)** → `VICE-INTEL-Setup.exe`. Install it once, and the app keeps
+  itself up to date from then on. It checks on start and every 4 hours, downloads in the background and asks to restart.
+- **How it's built:** Electron (`electron/main.cjs`) starts the bundled Next.js standalone server on a free local port and
+  shows it in a native window with a dark title bar. `.github/workflows/release-vice-intel.yml` builds the NSIS installer
+  on Windows for every push that changes `vice-intel/`, and uploads it with `latest.yml` to the releases `vi-v<version>`
+  and `vice-intel-latest`. The updater reads the rolling release.
+- **Shipping an update:** raise `version` in `vice-intel/package.json` and push. Installed apps only update when the
+  version goes up.
+- **AI key on desktop:** Settings → AI features. It is stored in the user profile (`%APPDATA%/VICE INTEL/settings.json`)
+  and passed only to the local server.
+- **Local build:** `npm run desktop` (run) or `npm run dist:win` (installer, on Windows).
+- The installer is not code-signed, so Windows SmartScreen may warn ("More info" → "Run anyway").
+
+## Install on a phone (PWA)
+
+Open the deployed site, then use "Add to Home Screen". The app runs full-screen, has its own icon and works offline for
+pages you've already opened.
+
 ## Environment
 
 | Variable | Default | |
