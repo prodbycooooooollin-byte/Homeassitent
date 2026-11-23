@@ -13,6 +13,7 @@ export interface MapPin {
   precision: MapPoint["precision"];
   region?: string;
   art?: { scene: string; seed: number };
+  src?: string;
 }
 
 export function getMapPins(kinds?: EntityKind[]): MapPin[] {
@@ -30,5 +31,6 @@ export function getMapPins(kinds?: EntityKind[]): MapPin[] {
       precision: e.mapPoint!.precision,
       region: e.locationId ? getById(e.locationId)?.title : undefined,
       art: e.media[0].art,
+      src: e.media[0].src,
     }));
 }

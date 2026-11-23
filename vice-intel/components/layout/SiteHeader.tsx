@@ -11,7 +11,7 @@ export function SiteHeader() {
   const path = usePathname();
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   return (
-    <header className="glass sticky top-0 z-40 border-x-0 border-t-0">
+    <header className="glass sticky top-0 z-40 border-x-0 border-t-0 pt-[env(safe-area-inset-top)]">
       <div className="container-page flex h-14 items-center gap-6 lg:h-16">
         <Logo />
         <nav aria-label="Main" className="hidden items-center gap-1 lg:flex">

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { MapPin, Sparkles } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { DetailHero, TrustPanel } from "@/components/detail/DetailParts";
 import { EntityCard } from "@/components/ui/EntityCard";
 import { MiniMap } from "@/components/map/MiniMap";
@@ -31,7 +31,7 @@ export default function LocationPage({ params }: { params: { slug: string } }) {
             <p className="text-[15px] leading-relaxed text-fg/90">{l.summary}</p>
             <p className="mt-3 text-sm text-fg-muted">{l.character}</p>
           </Panel>
-          <Panel title="Highlights" icon={<Sparkles className="h-4 w-4" />}>
+          <Panel title="Highlights">
             <ul className="flex flex-wrap gap-2">
               {l.highlights.map((h) => (
                 <li key={h} className="chip">{h}</li>

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import type { Media as MediaT } from "@/lib/content/schema";
-import { artUrl } from "@/lib/ui-meta";
+import { Poster } from "./Poster";
 import { cn } from "@/lib/cn";
 
 /**
@@ -14,6 +14,7 @@ export function Media({
   sizes = "(min-width: 1024px) 33vw, 100vw",
   priority = false,
   label = false,
+  posterText,
 }: {
   media: Pick<MediaT, "alt" | "src" | "art" | "focal" | "width" | "height"> & { fit?: MediaT["fit"]; authenticGameplay?: boolean };
   className?: string;
@@ -21,13 +22,15 @@ export function Media({
   priority?: boolean;
   /** Show a small "Illustration" marker so art is never mistaken for a screenshot. */
   label?: boolean;
+  /** Oversized word on the typographic poster shown when no image exists. */
+  posterText?: string;
 }) {
   const pos = media.focal ? `${media.focal.x * 100}% ${media.focal.y * 100}%` : "50% 50%";
   return (
     <div
       className={cn(
         className?.includes("absolute") ? "" : "relative",
-        "overflow-hidden",
+        "overflow-hidden [container-type:inline-size]",
         media.fit === "contain"
           ? "bg-[radial-gradient(70%_60%_at_50%_45%,rgb(var(--violet-600)/0.35),transparent_70%),linear-gradient(180deg,rgb(var(--ink-800)),rgb(var(--ink-950)))]"
           : "bg-gradient-to-br from-violet-900/60 via-ink-800 to-ink-900",
@@ -45,20 +48,11 @@ export function Media({
           style={{ objectPosition: pos }}
         />
       ) : media.art ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={artUrl(media.art.scene, media.art.seed)}
-          alt={media.alt}
-          loading={priority ? "eager" : "lazy"}
-          decoding="async"
-          fetchPriority={priority ? "high" : "auto"}
-          className="zoom-on-hover absolute inset-0 h-full w-full object-cover"
-          style={{ objectPosition: pos }}
-        />
+        <Poster scene={media.art.scene} seed={media.art.seed} text={posterText} />
       ) : null}
-      {label && !media.authenticGameplay ? (
+      {label && media.src && !media.authenticGameplay ? (
         <span className="absolute bottom-2 right-2 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/70 backdrop-blur">
-          {media.src ? "Concept art" : "Illustration"}
+          Concept art
         </span>
       ) : null}
     </div>

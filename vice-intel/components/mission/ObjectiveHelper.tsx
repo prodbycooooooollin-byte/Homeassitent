@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { AlertTriangle, LifeBuoy, Route, Sparkles } from "lucide-react";
+import { AlertTriangle, LifeBuoy, Route } from "lucide-react";
 import type { Mission } from "@/lib/content/schema";
 import { StepList } from "@/components/detail/StepList";
 import { Spoiler } from "@/components/detail/Spoiler";
@@ -93,7 +93,7 @@ export function ObjectiveHelper({ mission }: { mission: Pick<Mission, "id" | "ti
             onClick={() => setAskOpen(true)}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-violet-500 px-4 py-3 font-semibold text-white shadow-glow-sm transition hover:bg-violet-400"
           >
-            <Sparkles className="h-4 w-4" /> Still stuck? Ask Intel about this objective
+            Still stuck? Ask about this objective
           </button>
         )}
       </div>

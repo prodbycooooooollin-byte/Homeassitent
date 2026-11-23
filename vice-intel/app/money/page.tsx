@@ -21,6 +21,7 @@ export default function MoneyPage() {
     startupCost: m.startupCost,
     status: m.verification.status,
     art: m.media[0].art,
+    src: m.media[0].src,
   }));
   return (
     <>

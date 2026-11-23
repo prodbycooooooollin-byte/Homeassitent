@@ -1,11 +1,12 @@
 "use client";
+import { Thumb } from "@/components/ui/Thumb";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Camera, CircleHelp, ClipboardPaste, ImageUp, RotateCcw, ScanLine, Search, ShieldAlert, Sparkles } from "lucide-react";
+import { AlertTriangle, Camera, CircleHelp, ClipboardPaste, ImageUp, RotateCcw, ScanLine, Search, ShieldAlert } from "lucide-react";
 import type { SourceCard } from "@/lib/ai/retrieval";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { artUrl, KIND_META } from "@/lib/ui-meta";
+import { KIND_META } from "@/lib/ui-meta";
 import { cn } from "@/lib/cn";
 
 type Detection = { label: string; category: string; confidence: number; evidence: string; match: SourceCard | null };
@@ -120,10 +121,9 @@ export function ScanClient() {
           >
             <Brackets />
             <div className="relative mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-violet-500/15 text-violet-300">
-              <span className="absolute inset-0 animate-pulse-ring rounded-2xl border border-violet-400/50" />
               <ScanLine className="h-8 w-8" />
             </div>
-            <p className="font-display text-xl font-semibold">Point, shoot, know.</p>
+            <p className="font-display text-xl font-semibold">Scan your screen</p>
             <p className="mt-1 max-w-sm text-sm text-fg-muted">Photograph your TV or upload a screenshot. Vehicles, places, objectives and oddities — Intel tells you what it can see, and how sure it is.</p>
             <div className="mt-6 flex w-full max-w-sm flex-col gap-2 sm:flex-row">
               <button type="button" onClick={() => cameraRef.current?.click()} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-500 px-4 py-3 font-semibold text-white shadow-glow-sm hover:bg-violet-400">
@@ -210,7 +210,7 @@ function Tips() {
           ["Screenshots beat photos", "Share a console screenshot to your phone when you can."],
         ].map(([t, d]) => (
           <li key={t} className="flex gap-3">
-            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-violet-400" />
+            <span aria-hidden className="mt-2 h-1 w-3 shrink-0 rounded-full bg-violet-400" />
             <span>
               <span className="font-medium">{t}.</span> <span className="text-fg-muted">{d}</span>
             </span>
@@ -323,12 +323,7 @@ function DetectionRow({ d }: { d: Detection }) {
   const c = confidenceLabel(d.confidence);
   const inner = (
     <>
-      {d.match?.art ? (
-        <span className="h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-ink-700">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={artUrl(d.match.art.scene, d.match.art.seed)} alt="" className="h-full w-full object-cover" />
-        </span>
-      ) : null}
+      {d.match ? <Thumb src={d.match.src} art={d.match.art} className="h-16 w-20 shrink-0 rounded-xl" contain={d.match.kind === "unlock"} /> : null}
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{d.match ? d.match.title : d.label}</span>

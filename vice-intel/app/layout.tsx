@@ -6,6 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import { DemoBanner } from "@/components/layout/DemoBanner";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { SITE_URL } from "@/lib/site";
+import { AppShell } from "@/components/pwa/AppShell";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -13,9 +14,11 @@ export const metadata: Metadata = {
   description:
     "Unofficial GTA VI companion: search missions, unlocks, Easter eggs and money-making intel, or scan a screenshot. Every fact is labelled with how much you can trust it.",
   applicationName: "VICE INTEL",
-  openGraph: { type: "website", siteName: "VICE INTEL" },
   robots: { index: true, follow: true },
-  icons: { icon: "/icon.svg" },
+  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/icons/icon-192.png", sizes: "192x192" }], apple: "/icons/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "VICE INTEL", statusBarStyle: "black-translucent" },
+  formatDetection: { telephone: false },
+  openGraph: { type: "website", siteName: "VICE INTEL", images: [{ url: "/icons/og.png", width: 1200, height: 630 }] },
 };
 
 export const viewport: Viewport = {
@@ -40,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Footer />
         <MobileNav />
         <CommandPalette />
+        <AppShell />
       </body>
     </html>
   );

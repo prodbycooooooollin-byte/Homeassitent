@@ -7,6 +7,23 @@ import { Media } from "./Media";
 import { KindBadge, StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/cn";
 
+export function posterWord(e: Entity): string {
+  switch (e.kind) {
+    case "unlock":
+      return e.category;
+    case "easter-egg":
+      return "Secret";
+    case "money":
+      return "Cash";
+    case "location":
+      return e.title.split(" ")[0];
+    case "character":
+      return e.title.split(" ")[0];
+    default:
+      return "Mission";
+  }
+}
+
 function subtitle(e: Entity): string | undefined {
   switch (e.kind) {
     case "unlock":
@@ -38,7 +55,7 @@ export function EntityCard({ e, className, priority, variant = "default" }: { e:
       className={cn("group surface flex flex-col overflow-hidden transition duration-300 hover:-translate-y-0.5 hover:border-violet-500/30 hover:shadow-glow-sm", className)}
     >
       <div className="relative">
-        <Media media={e.media[0]} className={variant === "tall" ? "aspect-[4/5]" : "aspect-[16/10]"} priority={priority} sizes="(min-width:1024px) 25vw, (min-width:640px) 50vw, 100vw" />
+        <Media media={e.media[0]} posterText={posterWord(e)} className={variant === "tall" ? "aspect-[4/5]" : "aspect-[16/10]"} priority={priority} sizes="(min-width:1024px) 25vw, (min-width:640px) 50vw, 100vw" />
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-ink-850 to-transparent" />
         <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
           <KindBadge label={e.kind === "unlock" ? capitalize(e.category) : KIND_META[e.kind].label} />

@@ -1,11 +1,12 @@
 "use client";
+import { Thumb } from "@/components/ui/Thumb";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, BookOpenCheck, RotateCcw, Send, Sparkles } from "lucide-react";
+import { AlertTriangle, RotateCcw, Send } from "lucide-react";
 import type { SourceCard } from "@/lib/ai/retrieval";
 import { RichText } from "@/components/ui/RichText";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { artUrl, KIND_META } from "@/lib/ui-meta";
+import { KIND_META } from "@/lib/ui-meta";
 import { cn } from "@/lib/cn";
 
 type Meta = { mode: "ai" | "retrieval"; reason?: string; intent: string; sources: SourceCard[]; cached?: boolean };
@@ -106,8 +107,8 @@ export function AskPanel({
       <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-violet-500/20 blur-3xl" />
       <div className={cn("relative", compact ? "p-4" : "p-5 sm:p-6")}>
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-500/15 px-2 py-1 text-xs font-semibold text-violet-300">
-            {meta?.mode === "retrieval" ? <BookOpenCheck className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+          <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-300">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-violet-400" />
             {meta ? (meta.mode === "ai" ? "Intel answer" : "Knowledge-base answer") : "Intel answer"}
           </span>
           {meta ? <span className="text-xs text-fg-faint">{meta.intent} · grounded in {meta.sources.length} record{meta.sources.length === 1 ? "" : "s"}</span> : null}
@@ -155,10 +156,7 @@ export function AskPanel({
                 <li key={s.id}>
                   <Link href={s.href} className="flex w-52 items-center gap-2.5 rounded-xl border border-white/[0.07] bg-ink-900/70 p-2 hover:border-violet-500/30">
                     <span className="h-10 w-12 shrink-0 overflow-hidden rounded-lg bg-ink-700">
-                      {s.art ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={artUrl(s.art.scene, s.art.seed)} alt="" className="h-full w-full object-cover" loading="lazy" />
-                      ) : null}
+                      <Thumb src={s.src} art={s.art} className="h-full w-full" contain={s.kind === "unlock"} />
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium">{s.title}</span>

@@ -1,11 +1,11 @@
 "use client";
+import { Thumb } from "@/components/ui/Thumb";
 import Link from "next/link";
 import { Bookmark, Trash2 } from "lucide-react";
 import { actions, useStore } from "@/lib/client/store";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/Section";
 import { SpoilerToggle } from "@/components/detail/Spoiler";
-import { artUrl } from "@/lib/ui-meta";
 
 export function SavedList() {
   const bookmarks = useStore((s) => s.bookmarks);
@@ -21,10 +21,7 @@ export function SavedList() {
             <li key={b.id} className="surface flex items-center gap-3 p-2 pr-2">
               <Link href={b.href} className="flex min-w-0 flex-1 items-center gap-3">
                 <span className="h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-ink-700">
-                  {b.art ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={artUrl(b.art.scene, b.art.seed)} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : null}
+                  <Thumb src={b.src} art={b.art} className="h-full w-full" />
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{b.title}</span>

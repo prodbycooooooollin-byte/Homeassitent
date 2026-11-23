@@ -1,10 +1,11 @@
 "use client";
+import { Thumb } from "@/components/ui/Thumb";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowDownWideNarrow, Clock, Repeat, Wallet } from "lucide-react";
 import type { VerificationStatus } from "@/lib/content/schema";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { artUrl, formatMoney } from "@/lib/ui-meta";
+import { formatMoney } from "@/lib/ui-meta";
 import { cn } from "@/lib/cn";
 
 export interface MoneyRow {
@@ -21,6 +22,7 @@ export interface MoneyRow {
   startupCost: number;
   status: VerificationStatus;
   art?: { scene: string; seed: number };
+  src?: string;
 }
 
 const perHour = (r: MoneyRow) => ((r.payout.min + r.payout.max) / 2 / ((r.duration.min + r.duration.max) / 2)) * 60;
@@ -108,10 +110,7 @@ export function MoneyCompare({ rows }: { rows: MoneyRow[] }) {
             <li key={r.id} className="animate-fade-up" style={{ animationDelay: `${i * 30}ms` }}>
               <Link href={r.href} className="group surface flex flex-col gap-4 overflow-hidden p-3 transition hover:border-violet-500/30 sm:flex-row sm:items-center">
                 <span className="relative h-28 w-full shrink-0 overflow-hidden rounded-xl bg-ink-700 sm:h-24 sm:w-36">
-                  {r.art ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={artUrl(r.art.scene, r.art.seed)} alt="" loading="lazy" className="zoom-on-hover h-full w-full object-cover" />
-                  ) : null}
+                  <Thumb src={r.src} art={r.art} className="h-full w-full" />
                   {i === 0 ? <span className="absolute left-2 top-2 rounded-md bg-violet-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Top pick</span> : null}
                 </span>
                 <span className="min-w-0 flex-1">

@@ -1,9 +1,10 @@
 "use client";
+import { Thumb } from "@/components/ui/Thumb";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ArrowRight, CornerDownLeft, History, ScanLine, Search, Sparkles, X } from "lucide-react";
+import { ArrowRight, CornerDownLeft, History, ScanLine, Search, X } from "lucide-react";
 import { actions, useStore } from "@/lib/client/store";
-import { artUrl, KIND_META } from "@/lib/ui-meta";
+import { KIND_META } from "@/lib/ui-meta";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { cn } from "@/lib/cn";
 import type { SourceCard } from "@/lib/ai/retrieval";
@@ -158,10 +159,7 @@ export function CommandPalette() {
               return (
                 <li key={it.card.id} id={`${listId}-${i}`} role="option" aria-selected={on} className={base} onMouseEnter={() => setActive(i)} onClick={() => go(it)}>
                   <span className="relative h-10 w-14 shrink-0 overflow-hidden rounded-lg bg-ink-700">
-                    {it.card.art ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={artUrl(it.card.art.scene, it.card.art.seed)} alt="" className="h-full w-full object-cover" />
-                    ) : null}
+                    <Thumb src={it.card.src} art={it.card.art} className="h-full w-full" contain={it.card.kind === "unlock"} />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-fg">{it.card.title}</span>
@@ -174,7 +172,7 @@ export function CommandPalette() {
               return (
                 <li key={`q-${it.q}-${i}`} id={`${listId}-${i}`} role="option" aria-selected={on} className={base} onMouseEnter={() => setActive(i)} onClick={() => go(it)}>
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-violet-500/10 text-violet-300">
-                    {it.ai ? <Sparkles className="h-4 w-4" /> : <History className="h-4 w-4" />}
+                    {it.ai ? <ArrowRight className="h-4 w-4" /> : <History className="h-4 w-4" />}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-fg">
                     {it.ai ? (

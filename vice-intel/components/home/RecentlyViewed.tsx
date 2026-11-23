@@ -1,8 +1,8 @@
 "use client";
+import { Thumb } from "@/components/ui/Thumb";
 import Link from "next/link";
 import { History, X } from "lucide-react";
 import { actions, useStore } from "@/lib/client/store";
-import { artUrl } from "@/lib/ui-meta";
 
 export function RecentlyViewed() {
   const recents = useStore((s) => s.recents);
@@ -22,10 +22,7 @@ export function RecentlyViewed() {
           <li key={r.id} className="snap-start">
             <Link href={r.href} className="group surface flex w-56 items-center gap-3 p-2 pr-3 hover:border-violet-500/30">
               <span className="h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-ink-700">
-                {r.art ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={artUrl(r.art.scene, r.art.seed)} alt="" className="h-full w-full object-cover" loading="lazy" />
-                ) : null}
+                <Thumb src={r.src} art={r.art} className="h-full w-full" />
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">{r.title}</span>

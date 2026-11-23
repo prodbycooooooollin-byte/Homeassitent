@@ -3,7 +3,7 @@ import { FlaskConical } from "lucide-react";
 
 export function DemoBanner() {
   return (
-    <div className="border-b border-status-demo/20 bg-status-demo/[0.07] text-status-demo">
+    <div className="hide-standalone border-b border-status-demo/20 bg-status-demo/[0.07] text-status-demo">
       <p className="container-page flex items-center justify-center gap-2 py-1.5 text-center text-[12px] leading-snug">
         <FlaskConical aria-hidden className="h-3.5 w-3.5 shrink-0" />
         <span>
